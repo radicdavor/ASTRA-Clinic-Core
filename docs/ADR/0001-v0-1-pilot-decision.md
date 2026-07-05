@@ -20,13 +20,15 @@ V14 decision: keep the release Deferred. No human pilot evidence or maintainer w
 
 V15 decision: keep the release Deferred. Human pilot evidence is still missing, no waiver exists, and no product feature work should proceed before the pilot gate.
 
+Post-V15 update: maintainer/user completed an informal walkthrough and reported "Za sada dobro" with no issues reported. The release remains Deferred until structured pilot evidence fields are completed or explicitly waived.
+
 ## Decision Options
 
 1. Accepted - tag `v0.1-pilot` after the human pilot passes with no open P0/P1 issues.
 2. Deferred - do not tag because P0/P1 was found or the human pilot remains incomplete.
 3. Waived - maintainer explicitly permits tagging without a human pilot and documents the risk in this ADR and release notes.
 
-Current status is Deferred because human pilot results do not exist yet and no maintainer waiver has been recorded.
+Current status is Deferred because informal human feedback exists but structured pilot evidence is incomplete and no maintainer waiver has been recorded.
 
 ## Consequences
 

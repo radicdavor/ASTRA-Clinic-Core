@@ -2,9 +2,9 @@
 
 ## Current Block
 
-`v0.1-pilot` is blocked because the human participant browser pilot has not been completed and no maintainer waiver has been documented.
+`v0.1-pilot` is blocked because the informal human walkthrough has not yet been converted into a complete structured pilot report and no maintainer waiver has been documented.
 
-V15 inspection confirms this block is still active. No feature work should proceed before the human pilot is completed, except validated P0/P1 fixes.
+The maintainer/user reported that the program is "za sada dobro", with no issues reported so far. No broad feature work should proceed before the structured pilot evidence is completed, except validated P0/P1 fixes.
 
 ## Owner
 
@@ -17,8 +17,8 @@ V15 inspection confirms this block is still active. No feature work should proce
 3. Seed demo data.
 4. Confirm `/api/public-config` returns `real_data_allowed=false`.
 5. Open the frontend and confirm the demo banner is visible.
-6. Run the human pilot using `docs/pilot_sessions/HUMAN_PILOT_FACILITATOR_SHEET.md`.
-7. Record the session in `docs/pilot_sessions/2026-07-05_human_pilot_01.md`.
+6. Complete the remaining structured fields in `docs/pilot_sessions/2026-07-05_human_pilot_01.md`.
+7. Confirm task completion, friction notes, real-data confusion and fiscalization confusion.
 8. Update `docs/pilot_sessions/2026-07-05_human_pilot_01_triage.md`.
 9. Create GitHub issues for findings or document `to-create` payloads.
 10. Update `docs/V0_1_GO_NO_GO_MATRIX.md`.

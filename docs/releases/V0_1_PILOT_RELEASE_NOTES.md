@@ -4,7 +4,7 @@
 
 - Version: `v0.1-pilot`
 - Date: 05-07-2026
-- Commit SHA: `a4a757fae302d722ee9f2a83bdda5bf06955efee` at V15 review start; replace with final tag SHA before publishing.
+- Commit SHA: `fec1e394ca35344e3950aee4a3160551bf606540` at informal human walkthrough update; replace with final tag SHA before publishing.
 - Release type: pilot
 - Supported environment: local Docker Compose demo/pilot environment
 
@@ -58,6 +58,7 @@ This release candidate supports the core demo clinic operations flow with demo d
 - V13 release decision is Deferred until human pilot is completed or explicitly waived.
 - V14 keeps the release Deferred because human pilot evidence is still missing and no waiver exists.
 - V15 keeps the release Deferred for the same reason: no completed human pilot and no waiver.
+- Informal human walkthrough completed with no issues reported so far; structured pilot fields are still incomplete.
 - No full EMR charting.
 - No prescription system.
 - No clinical decision support.
@@ -92,9 +93,9 @@ Fiscalization mode is `noop`/stub for demo purposes only. It must not be used fo
 ## Open P0/P1 Issues
 
 - No P0/P1 blocker found during maintainer command-level dry-run.
-- Human participant dry-run remains pending before final tag decision.
+- Informal human walkthrough reported no issues, but structured human pilot evidence remains incomplete before final tag decision.
 - `v0.1-pilot` tag remains blocked unless human pilot completes or maintainer waiver is documented.
 
 ## Accepted P2/P3 Limitations
 
-- P2: human participant browser pilot remains pending; release tag is deferred unless maintainer waives this risk.
+- P2: structured human pilot evidence remains incomplete after informal walkthrough; release tag is deferred unless maintainer completes or waives this risk.
