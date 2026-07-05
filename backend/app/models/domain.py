@@ -4,7 +4,7 @@ from datetime import date, datetime, time
 from decimal import Decimal
 from enum import StrEnum
 
-from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Integer, JSON, Numeric, String, Table, Text, Time, Column, func
+from sqlalchemy import Boolean, CheckConstraint, Date, DateTime, ForeignKey, Integer, JSON, Numeric, String, Table, Text, Time, Column, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
@@ -203,6 +203,11 @@ class StockLocation(TimestampMixin, Base):
 
 class InventoryItem(TimestampMixin, Base):
     __tablename__ = "inventory_items"
+    __table_args__ = (
+        CheckConstraint("current_stock >= 0", name="ck_inventory_items_current_stock_non_negative"),
+        CheckConstraint("minimum_stock >= 0", name="ck_inventory_items_minimum_stock_non_negative"),
+        CheckConstraint("reorder_point >= 0", name="ck_inventory_items_reorder_point_non_negative"),
+    )
     id: Mapped[int] = mapped_column(primary_key=True)
     sku: Mapped[str] = mapped_column(String(80), unique=True, index=True)
     name: Mapped[str] = mapped_column(String(180), index=True)
@@ -222,6 +227,7 @@ class InventoryItem(TimestampMixin, Base):
 
 class InventoryBatch(TimestampMixin, Base):
     __tablename__ = "inventory_batches"
+    __table_args__ = (CheckConstraint("quantity >= 0", name="ck_inventory_batches_quantity_non_negative"),)
     id: Mapped[int] = mapped_column(primary_key=True)
     inventory_item_id: Mapped[int] = mapped_column(ForeignKey("inventory_items.id"))
     lot_number: Mapped[str | None] = mapped_column(String(100), index=True)
@@ -236,6 +242,7 @@ class InventoryBatch(TimestampMixin, Base):
 
 class StockMovement(Base):
     __tablename__ = "stock_movements"
+    __table_args__ = (CheckConstraint("quantity > 0", name="ck_stock_movements_quantity_positive"),)
     id: Mapped[int] = mapped_column(primary_key=True)
     inventory_item_id: Mapped[int] = mapped_column(ForeignKey("inventory_items.id"))
     batch_id: Mapped[int | None] = mapped_column(ForeignKey("inventory_batches.id"))
@@ -261,10 +268,15 @@ class PurchaseOrder(TimestampMixin, Base):
     total_amount: Mapped[Decimal] = mapped_column(Numeric(12, 2), default=0)
     notes: Mapped[str | None] = mapped_column(Text)
     supplier: Mapped[Supplier] = relationship()
+    lines: Mapped[list["PurchaseOrderLine"]] = relationship(cascade="all, delete-orphan", back_populates="order")
 
 
 class PurchaseOrderLine(Base):
     __tablename__ = "purchase_order_lines"
+    __table_args__ = (
+        CheckConstraint("quantity_ordered > 0", name="ck_purchase_order_lines_quantity_ordered_positive"),
+        CheckConstraint("quantity_received >= 0", name="ck_purchase_order_lines_quantity_received_non_negative"),
+    )
     id: Mapped[int] = mapped_column(primary_key=True)
     purchase_order_id: Mapped[int] = mapped_column(ForeignKey("purchase_orders.id"))
     inventory_item_id: Mapped[int] = mapped_column(ForeignKey("inventory_items.id"))
@@ -272,7 +284,7 @@ class PurchaseOrderLine(Base):
     quantity_received: Mapped[Decimal] = mapped_column(Numeric(12, 2), default=0)
     unit_price: Mapped[Decimal] = mapped_column(Numeric(12, 2), default=0)
     vat_rate: Mapped[Decimal] = mapped_column(Numeric(5, 2), default=25)
-    order: Mapped[PurchaseOrder] = relationship()
+    order: Mapped[PurchaseOrder] = relationship(back_populates="lines")
     item: Mapped[InventoryItem] = relationship()
 
 
@@ -287,12 +299,25 @@ class Invoice(TimestampMixin, Base):
     total_amount: Mapped[Decimal] = mapped_column(Numeric(12, 2), default=0)
     payment_status: Mapped[str] = mapped_column(String(60), default="unpaid")
     payment_method: Mapped[str | None] = mapped_column(String(80))
+    operator: Mapped[str | None] = mapped_column(String(120))
+    business_unit: Mapped[str | None] = mapped_column(String(120))
+    register_id: Mapped[str | None] = mapped_column(String(80))
+    vat_id: Mapped[str | None] = mapped_column(String(80))
+    fiscalization_status: Mapped[str | None] = mapped_column(String(60), default="not_applicable")
+    fiscalization_reference: Mapped[str | None] = mapped_column(String(160))
     notes: Mapped[str | None] = mapped_column(Text)
     patient: Mapped[Patient] = relationship()
+    appointment: Mapped[Appointment | None] = relationship()
+    lines: Mapped[list["InvoiceLine"]] = relationship(cascade="all, delete-orphan", back_populates="invoice")
+    payments: Mapped[list["PaymentTransaction"]] = relationship(cascade="all, delete-orphan", back_populates="invoice")
 
 
 class InvoiceLine(Base):
     __tablename__ = "invoice_lines"
+    __table_args__ = (
+        CheckConstraint("quantity > 0", name="ck_invoice_lines_quantity_positive"),
+        CheckConstraint("total >= 0", name="ck_invoice_lines_total_non_negative"),
+    )
     id: Mapped[int] = mapped_column(primary_key=True)
     invoice_id: Mapped[int] = mapped_column(ForeignKey("invoices.id"))
     service_id: Mapped[int | None] = mapped_column(ForeignKey("services.id"))
@@ -302,6 +327,22 @@ class InvoiceLine(Base):
     unit_price: Mapped[Decimal] = mapped_column(Numeric(12, 2), default=0)
     vat_rate: Mapped[Decimal] = mapped_column(Numeric(5, 2), default=25)
     total: Mapped[Decimal] = mapped_column(Numeric(12, 2), default=0)
+    invoice: Mapped[Invoice] = relationship(back_populates="lines")
+    service: Mapped[Service | None] = relationship()
+    inventory_item: Mapped[InventoryItem | None] = relationship()
+
+
+class PaymentTransaction(Base):
+    __tablename__ = "payment_transactions"
+    __table_args__ = (CheckConstraint("amount > 0", name="ck_payment_transactions_amount_positive"),)
+    id: Mapped[int] = mapped_column(primary_key=True)
+    invoice_id: Mapped[int] = mapped_column(ForeignKey("invoices.id"))
+    amount: Mapped[Decimal] = mapped_column(Numeric(12, 2))
+    method: Mapped[str] = mapped_column(String(80))
+    reference: Mapped[str | None] = mapped_column(String(160))
+    paid_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    created_by: Mapped[int | None] = mapped_column(ForeignKey("users.id"))
+    invoice: Mapped[Invoice] = relationship(back_populates="payments")
 
 
 class ServiceMaterialTemplate(TimestampMixin, Base):

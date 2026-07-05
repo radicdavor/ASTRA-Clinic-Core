@@ -35,6 +35,7 @@ PERMISSIONS = [
     "inventory.write",
     "inventory.adjust",
     "inventory.write_off",
+    "inventory.transfer",
     "procurement.read",
     "procurement.write",
     "billing.read",
@@ -52,7 +53,7 @@ ROLE_PERMISSIONS = {
     "physician": ["patients.read", "patients.write", "appointments.read", "appointments.write", "services.read", "inventory.read", "billing.read"],
     "nurse": ["patients.read", "appointments.read", "appointments.write", "inventory.read", "inventory.write"],
     "receptionist": ["patients.read", "patients.write", "appointments.read", "appointments.write", "services.read", "billing.read"],
-    "inventory_manager": ["inventory.read", "inventory.write", "inventory.adjust", "inventory.write_off", "procurement.read", "procurement.write"],
+    "inventory_manager": ["inventory.read", "inventory.write", "inventory.adjust", "inventory.write_off", "inventory.transfer", "procurement.read", "procurement.write"],
     "billing": ["billing.read", "billing.write", "billing.mark_paid", "patients.read", "appointments.read"],
     "ai_agent": ["ai.appointments.create", "ai.patients.create", "ai.free_slots.read"],
 }
@@ -122,8 +123,29 @@ def seed_catalog(db: Session) -> None:
     db.flush()
 
 
+def seed_security(db: Session) -> None:
+    permissions = {permission.name: permission for permission in db.scalars(select(Permission)).all()}
+    for name in PERMISSIONS:
+        if name not in permissions:
+            permission = Permission(name=name, description=name)
+            db.add(permission)
+            permissions[name] = permission
+    db.flush()
+
+    roles = {role.name: role for role in db.scalars(select(Role)).all()}
+    for role_name, permission_names in ROLE_PERMISSIONS.items():
+        role = roles.get(role_name)
+        if role is None:
+            role = Role(name=role_name, description=role_name.replace("_", " ").title())
+            db.add(role)
+            roles[role_name] = role
+        role.permissions = [permissions[name] for name in permission_names]
+    db.flush()
+
+
 def seed(db: Session) -> None:
     if db.scalar(select(User).limit(1)):
+        seed_security(db)
         seed_catalog(db)
         db.commit()
         return

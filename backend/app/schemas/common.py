@@ -119,6 +119,12 @@ class SupplierCreate(BaseModel):
     notes: str | None = None
 
 
+class SupplierOut(SupplierCreate, ORMModel):
+    id: int
+    created_at: DateTimeType
+    updated_at: DateTimeType
+
+
 class InventoryItemCreate(BaseModel):
     sku: str
     name: str
@@ -135,6 +141,12 @@ class InventoryItemCreate(BaseModel):
     active: bool = True
 
 
+class InventoryItemOut(InventoryItemCreate, ORMModel):
+    id: int
+    created_at: DateTimeType
+    updated_at: DateTimeType
+
+
 class InventoryBatchCreate(BaseModel):
     inventory_item_id: int
     lot_number: str | None = None
@@ -143,6 +155,12 @@ class InventoryBatchCreate(BaseModel):
     location_id: int
     purchase_price: Decimal = Decimal("0")
     supplier_id: int | None = None
+
+
+class InventoryBatchOut(InventoryBatchCreate, ORMModel):
+    id: int
+    created_at: DateTimeType
+    updated_at: DateTimeType
 
 
 class StockMovementCreate(BaseModel):
@@ -157,6 +175,12 @@ class StockMovementCreate(BaseModel):
     related_invoice_id: int | None = None
 
 
+class StockMovementOut(StockMovementCreate, ORMModel):
+    id: int
+    created_by: int | None = None
+    created_at: DateTimeType
+
+
 class PurchaseOrderCreate(BaseModel):
     supplier_id: int
     status: str = "draft"
@@ -164,6 +188,46 @@ class PurchaseOrderCreate(BaseModel):
     expected_delivery_date: DateType | None = None
     total_amount: Decimal = Decimal("0")
     notes: str | None = None
+
+
+class PurchaseOrderLineCreate(BaseModel):
+    inventory_item_id: int
+    quantity_ordered: Decimal
+    unit_price: Decimal = Decimal("0")
+    vat_rate: Decimal = Decimal("25")
+
+
+class PurchaseOrderLineUpdate(BaseModel):
+    inventory_item_id: int | None = None
+    quantity_ordered: Decimal | None = None
+    unit_price: Decimal | None = None
+    vat_rate: Decimal | None = None
+
+
+class PurchaseOrderReceiveLine(BaseModel):
+    purchase_order_line_id: int
+    quantity_received: Decimal
+    lot_number: str | None = None
+    expiration_date: DateType | None = None
+    location_id: int
+    purchase_price: Decimal | None = None
+
+
+class PurchaseOrderReceiveRequest(BaseModel):
+    lines: list[PurchaseOrderReceiveLine]
+
+
+class PurchaseOrderLineOut(PurchaseOrderLineCreate, ORMModel):
+    id: int
+    purchase_order_id: int
+    quantity_received: Decimal
+
+
+class PurchaseOrderOut(PurchaseOrderCreate, ORMModel):
+    id: int
+    created_at: DateTimeType
+    updated_at: DateTimeType
+    lines: list[PurchaseOrderLineOut] = []
 
 
 class InvoiceCreate(BaseModel):
@@ -175,7 +239,69 @@ class InvoiceCreate(BaseModel):
     total_amount: Decimal = Decimal("0")
     payment_status: str = "unpaid"
     payment_method: str | None = None
+    operator: str | None = None
+    business_unit: str | None = None
+    register_id: str | None = None
+    vat_id: str | None = None
+    fiscalization_status: str | None = "not_applicable"
+    fiscalization_reference: str | None = None
     notes: str | None = None
+
+
+class InvoiceLineCreate(BaseModel):
+    service_id: int | None = None
+    inventory_item_id: int | None = None
+    description: str
+    quantity: Decimal = Decimal("1")
+    unit_price: Decimal = Decimal("0")
+    vat_rate: Decimal = Decimal("25")
+
+
+class InvoiceLineUpdate(BaseModel):
+    service_id: int | None = None
+    inventory_item_id: int | None = None
+    description: str | None = None
+    quantity: Decimal | None = None
+    unit_price: Decimal | None = None
+    vat_rate: Decimal | None = None
+
+
+class PaymentTransactionCreate(BaseModel):
+    amount: Decimal
+    method: str
+    reference: str | None = None
+    paid_at: DateTimeType | None = None
+
+
+class AppointmentMaterialConsumptionLine(BaseModel):
+    inventory_item_id: int
+    quantity: Decimal
+    reason: str | None = None
+
+
+class AppointmentMaterialConsumptionRequest(BaseModel):
+    lines: list[AppointmentMaterialConsumptionLine] | None = None
+    allow_missing_optional: bool = True
+
+
+class InvoiceLineOut(InvoiceLineCreate, ORMModel):
+    id: int
+    invoice_id: int
+    total: Decimal
+
+
+class PaymentTransactionOut(PaymentTransactionCreate, ORMModel):
+    id: int
+    invoice_id: int
+    created_by: int | None = None
+
+
+class InvoiceOut(InvoiceCreate, ORMModel):
+    id: int
+    created_at: DateTimeType
+    updated_at: DateTimeType
+    lines: list[InvoiceLineOut] = []
+    payments: list[PaymentTransactionOut] = []
 
 
 class ServiceMaterialCreate(BaseModel):
