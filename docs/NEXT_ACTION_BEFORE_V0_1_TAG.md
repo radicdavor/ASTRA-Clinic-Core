@@ -6,6 +6,8 @@
 
 The maintainer/user reported that the program is "za sada dobro", with no issues reported so far. No broad feature work should proceed before the structured pilot evidence is completed, except validated P0/P1 fixes.
 
+V17 inspection confirms the walkthrough is still informal. The release remains Deferred until the missing structured fields below are answered or explicitly waived.
+
 ## Owner
 
 - Maintainer / pilot facilitator
@@ -38,6 +40,24 @@ Required evidence:
 - real-data confusion yes/no
 - fiscalization confusion yes/no
 - Go/No-Go recommendation
+
+Missing structured answers:
+
+1. Login completed: Yes / No
+2. Today's schedule found: Yes / No
+3. Appointment detail opened: Yes / No
+4. Appointment status changed: Yes / No
+5. Material suggestion reviewed: Yes / No
+6. Appointment completed with material consumption: Yes / No
+7. Stock movement verified: Yes / No
+8. Draft invoice created: Yes / No
+9. Invoice issued: Yes / No
+10. Payment recorded: Yes / No
+11. Purchase order received: Yes / No
+12. Audit trail found and understood: Yes / No
+13. Real-data confusion observed: Yes / No
+14. Fiscalization confusion observed: Yes / No
+15. Observed friction or requested changes:
 
 ## What Not To Build Yet
 

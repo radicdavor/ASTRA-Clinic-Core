@@ -4,7 +4,7 @@
 
 - Version: `v0.1-pilot`
 - Date: 05-07-2026
-- Commit SHA: `fec1e394ca35344e3950aee4a3160551bf606540` at informal human walkthrough update; replace with final tag SHA before publishing.
+- Commit SHA: `2fbe93c90e65a789465ce8ac99c266dc63614b90` at V17 structured completion gate review; replace with final tag SHA before publishing.
 - Release type: pilot
 - Supported environment: local Docker Compose demo/pilot environment
 
@@ -59,6 +59,7 @@ This release candidate supports the core demo clinic operations flow with demo d
 - V14 keeps the release Deferred because human pilot evidence is still missing and no waiver exists.
 - V15 keeps the release Deferred for the same reason: no completed human pilot and no waiver.
 - Informal human walkthrough completed with no issues reported so far; structured pilot fields are still incomplete.
+- V17 structured completion questions remain unanswered, so the release remains Deferred.
 - No full EMR charting.
 - No prescription system.
 - No clinical decision support.

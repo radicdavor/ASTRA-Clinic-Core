@@ -22,6 +22,8 @@ V15 decision: keep the release Deferred. Human pilot evidence is still missing, 
 
 Post-V15 update: maintainer/user completed an informal walkthrough and reported "Za sada dobro" with no issues reported. The release remains Deferred until structured pilot evidence fields are completed or explicitly waived.
 
+V17 update: release remains Deferred because the structured pilot completion questions are still unanswered.
+
 ## Decision Options
 
 1. Accepted - tag `v0.1-pilot` after the human pilot passes with no open P0/P1 issues.

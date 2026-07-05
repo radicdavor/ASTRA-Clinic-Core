@@ -4,7 +4,7 @@ Human pilot status: informal human walkthrough completed. No issues were reporte
 
 | ID | Severity | Area | Summary | Issue link or to-create | Owner | Status | Release decision impact |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| HP01-001 | P2 | docs/process | Informal human walkthrough completed with no issues reported, but structured evidence fields remain incomplete. | to-create | maintainer | open | Blocks tag unless maintainer completes or waives the remaining structured pilot evidence. |
+| HP01-001 | P2 | docs/process | Informal human walkthrough completed with no issues reported, but V17 structured completion questions remain unanswered. | to-create | maintainer | open | Blocks tag unless maintainer completes or waives the remaining structured pilot evidence. |
 
 ## P0/P1 Status
 
