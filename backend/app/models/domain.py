@@ -312,6 +312,14 @@ class Invoice(TimestampMixin, Base):
     payments: Mapped[list["PaymentTransaction"]] = relationship(cascade="all, delete-orphan", back_populates="invoice")
 
 
+class InvoiceNumberSequence(Base):
+    __tablename__ = "invoice_number_sequences"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    business_unit: Mapped[str] = mapped_column(String(120), default="default", unique=True)
+    next_number: Mapped[int] = mapped_column(Integer, default=1)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+
 class InvoiceLine(Base):
     __tablename__ = "invoice_lines"
     __table_args__ = (

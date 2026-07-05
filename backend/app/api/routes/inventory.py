@@ -1,4 +1,3 @@
-from datetime import date, datetime
 from decimal import Decimal
 
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -17,7 +16,6 @@ from app.models.domain import (
     PaymentTransaction,
     PurchaseOrder,
     PurchaseOrderLine,
-    Service,
     ServiceMaterialTemplate,
     StockLocation,
     StockMovement,
@@ -32,6 +30,7 @@ from app.schemas.common import (
     InventoryItemOut,
     InvoiceCreate,
     InvoiceLineCreate,
+    InvoiceIssueOut,
     InvoiceLineOut,
     InvoiceLineUpdate,
     InvoiceOut,
@@ -58,6 +57,21 @@ from app.services.inventory import (
     recalculate_stock,
     transfer_batch,
 )
+from app.services.billing import (
+    add_invoice_line,
+    delete_invoice_line as delete_invoice_line_service,
+    draft_invoice_number,
+    draft_invoice_from_appointment as draft_invoice_from_appointment_service,
+    issue_invoice,
+    load_invoice,
+    mark_invoice_paid,
+    record_payment,
+    update_invoice_line as update_invoice_line_service,
+)
+from app.services.procurement import (
+    receive_purchase_order as receive_purchase_order_service,
+    recalculate_purchase_order_total,
+)
 
 router = APIRouter(prefix="/api", tags=["inventory"])
 
@@ -71,42 +85,17 @@ def audit_actor(db: Session, action: str, entity_type: str, entity_id: int | Non
     audit(db, action, entity_type, entity_id, summary, actor.user_id, actor.actor_type, actor.api_key_id, before, after, request)
 
 
-def calculate_line_total(quantity: Decimal, unit_price: Decimal) -> Decimal:
-    return quantity * unit_price
-
-
-def recalculate_invoice_total(invoice: Invoice) -> None:
-    invoice.total_amount = sum((line.total for line in invoice.lines), Decimal("0"))
-    paid = sum((payment.amount for payment in invoice.payments), Decimal("0"))
-    if paid <= 0:
-        invoice.payment_status = "unpaid"
-        if invoice.status == "paid":
-            invoice.status = "issued"
-    elif paid < invoice.total_amount:
-        invoice.payment_status = "partially_paid"
-        invoice.status = "partially_paid"
-    else:
-        invoice.payment_status = "paid"
-        invoice.status = "paid"
-
-
-def derive_purchase_order_status(order: PurchaseOrder) -> str:
-    if not order.lines or all(line.quantity_received <= 0 for line in order.lines):
-        return order.status if order.status in {"draft", "ordered"} else "ordered"
-    if all(line.quantity_received >= line.quantity_ordered for line in order.lines):
-        return "received"
-    return "partially_received"
-
-
-def next_invoice_number(db: Session) -> str:
-    return f"ASTRA-{date.today():%Y%m%d}-{(db.scalar(select(Invoice.id).order_by(Invoice.id.desc()).limit(1)) or 0) + 1:05d}"
-
-
 def consume_appointment_materials(db: Session, appointment: Appointment, payload: AppointmentMaterialConsumptionRequest | None, actor: Actor, request: Request | None):
+    templates = db.scalars(select(ServiceMaterialTemplate).where(ServiceMaterialTemplate.service_id == appointment.service_id)).all()
     if payload and payload.lines is not None:
         requested = payload.lines
+        provided_item_ids = {line.inventory_item_id for line in requested}
+        missing_variable = [template for template in templates if template.required and template.variable_quantity_allowed and template.inventory_item_id not in provided_item_ids]
+        if missing_variable:
+            raise HTTPException(status_code=422, detail="Obavezni varijabilni materijal zahtijeva unesenu kolicinu")
     else:
-        templates = db.scalars(select(ServiceMaterialTemplate).where(ServiceMaterialTemplate.service_id == appointment.service_id)).all()
+        if any(template.required and template.variable_quantity_allowed for template in templates):
+            raise HTTPException(status_code=422, detail="Obavezni varijabilni materijal zahtijeva unesenu kolicinu")
         requested = [
             item
             for item in (
@@ -375,8 +364,8 @@ def create_purchase_order_line(order_id: int, payload: PurchaseOrderLineCreate, 
     ensure_positive(payload.quantity_ordered)
     line = PurchaseOrderLine(purchase_order_id=order_id, **payload.model_dump())
     db.add(line)
-    order.total_amount += calculate_line_total(line.quantity_ordered, line.unit_price)
     db.flush()
+    recalculate_purchase_order_total(order)
     audit_actor(db, "create", "PurchaseOrderLine", line.id, "Dodana stavka narudzbenice", actor, request, None, snapshot(line))
     db.commit()
     return line
@@ -391,7 +380,7 @@ def update_purchase_order_line(order_id: int, line_id: int, payload: PurchaseOrd
     update_from_payload(line, payload)
     ensure_positive(line.quantity_ordered)
     order = db.get(PurchaseOrder, order_id)
-    order.total_amount = sum(calculate_line_total(item.quantity_ordered, item.unit_price) for item in order.lines)
+    recalculate_purchase_order_total(order)
     db.flush()
     audit_actor(db, "update", "PurchaseOrderLine", line.id, "Azurirana stavka narudzbenice", actor, request, before, snapshot(line))
     db.commit()
@@ -409,7 +398,7 @@ def delete_purchase_order_line(order_id: int, line_id: int, request: Request, db
     order = db.get(PurchaseOrder, order_id)
     db.delete(line)
     db.flush()
-    order.total_amount = sum(calculate_line_total(item.quantity_ordered, item.unit_price) for item in order.lines)
+    recalculate_purchase_order_total(order)
     audit_actor(db, "delete", "PurchaseOrderLine", line_id, "Obrisana stavka narudzbenice", actor, request, before, None)
     db.commit()
     return {"ok": True}
@@ -421,39 +410,18 @@ def receive_purchase_order(order_id: int, payload: PurchaseOrderReceiveRequest, 
     if not order:
         raise HTTPException(404, detail="Narudzbenica nije pronadena")
     before_order = snapshot(order)
+    before_lines: dict[int, dict] = {}
     for receive_line in payload.lines:
-        ensure_positive(receive_line.quantity_received)
         line = db.get(PurchaseOrderLine, receive_line.purchase_order_line_id)
-        if not line or line.purchase_order_id != order_id:
-            raise HTTPException(422, detail="Stavka ne pripada narudzbenici")
-        if line.quantity_received + receive_line.quantity_received > line.quantity_ordered:
-            raise HTTPException(409, detail="Zaprimanje prelazi narucenu kolicinu")
-        item = db.get(InventoryItem, line.inventory_item_id)
-        if item.lot_tracking_enabled and not receive_line.lot_number:
-            raise HTTPException(422, detail="LOT broj je obavezan za ovaj artikl")
-        if item.expiration_tracking_enabled and not receive_line.expiration_date:
-            raise HTTPException(422, detail="Rok trajanja je obavezan za ovaj artikl")
+        if line:
+            before_lines[line.id] = snapshot(line)
+    received = receive_purchase_order_service(db, order, payload, actor.user_id)
+    db.flush()
+    for line, batch, movement in received:
         before_line = snapshot(line)
-        batch = InventoryBatch(
-            inventory_item_id=line.inventory_item_id,
-            lot_number=receive_line.lot_number,
-            expiration_date=receive_line.expiration_date,
-            quantity=receive_line.quantity_received,
-            location_id=receive_line.location_id,
-            purchase_price=receive_line.purchase_price if receive_line.purchase_price is not None else line.unit_price,
-            supplier_id=order.supplier_id,
-        )
-        db.add(batch)
-        db.flush()
-        movement = StockMovement(inventory_item_id=line.inventory_item_id, batch_id=batch.id, to_location_id=batch.location_id, quantity=batch.quantity, movement_type=StockMovementType.purchase_receipt.value, reason=f"Zaprimanje PO-{order.id}", created_by=actor.user_id)
-        db.add(movement)
-        line.quantity_received += receive_line.quantity_received
-        recalculate_stock(db, line.inventory_item_id)
-        db.flush()
-        audit_actor(db, "update", "PurchaseOrderLine", line.id, "Zaprimljena stavka narudzbenice", actor, request, before_line, snapshot(line))
+        audit_actor(db, "update", "PurchaseOrderLine", line.id, "Zaprimljena stavka narudzbenice", actor, request, before_lines.get(line.id, before_line), snapshot(line))
         audit_actor(db, "create", "InventoryBatch", batch.id, "Zaprimanje narudzbenice", actor, request, None, snapshot(batch))
         audit_actor(db, "create", "StockMovement", movement.id, "Zaprimanje narudzbenice", actor, request, None, snapshot(movement))
-    order.status = derive_purchase_order_status(order)
     db.flush()
     audit_actor(db, "update", "PurchaseOrder", order.id, "Zaprimljena narudzbenica", actor, request, before_order, snapshot(order))
     db.commit()
@@ -474,7 +442,9 @@ def invoices(db: Session = Depends(get_db), actor: Actor = Depends(require_permi
 
 @router.post("/invoices", response_model=InvoiceOut)
 def create_invoice(payload: InvoiceCreate, request: Request, db: Session = Depends(get_db), actor: Actor = Depends(require_permission("billing.write"))):
-    invoice = Invoice(**payload.model_dump(exclude_none=True))
+    data = payload.model_dump(exclude_none=True)
+    data["invoice_number"] = data.get("invoice_number") or draft_invoice_number()
+    invoice = Invoice(**data)
     db.add(invoice)
     db.flush()
     audit_actor(db, "create", "Invoice", invoice.id, invoice.invoice_number, actor, request, None, snapshot(invoice))
@@ -505,23 +475,27 @@ def update_invoice(invoice_id: int, payload: InvoiceCreate, request: Request, db
 
 @router.post("/appointments/{appointment_id}/draft-invoice", response_model=InvoiceOut)
 def draft_invoice_from_appointment(appointment_id: int, request: Request, db: Session = Depends(get_db), actor: Actor = Depends(require_permission("billing.write"))):
-    appointment = db.scalar(select(Appointment).options(joinedload(Appointment.service)).where(Appointment.id == appointment_id))
-    if not appointment:
-        raise HTTPException(404, detail="Termin nije pronaden")
-    existing = db.scalar(select(Invoice).where(Invoice.appointment_id == appointment_id))
-    if existing:
-        return existing
-    service: Service = appointment.service
-    invoice_obj = Invoice(patient_id=appointment.patient_id, appointment_id=appointment.id, invoice_number=next_invoice_number(db), status="draft", payment_status="unpaid", total_amount=service.price)
-    db.add(invoice_obj)
-    db.flush()
-    line = InvoiceLine(invoice_id=invoice_obj.id, service_id=service.id, description=service.name, quantity=Decimal("1"), unit_price=service.price, vat_rate=Decimal("25"), total=service.price)
-    db.add(line)
-    db.flush()
+    invoice_obj, line, created = draft_invoice_from_appointment_service(db, appointment_id)
+    if not created:
+        return invoice_obj
     audit_actor(db, "create", "Invoice", invoice_obj.id, "Nacrt racuna iz termina", actor, request, None, snapshot(invoice_obj))
-    audit_actor(db, "create", "InvoiceLine", line.id, "Stavka usluge iz termina", actor, request, None, snapshot(line))
+    if line:
+        audit_actor(db, "create", "InvoiceLine", line.id, "Stavka usluge iz termina", actor, request, None, snapshot(line))
     db.commit()
     return db.scalar(select(Invoice).options(selectinload(Invoice.lines), selectinload(Invoice.payments)).where(Invoice.id == invoice_obj.id))
+
+
+@router.post("/invoices/{invoice_id}/issue", response_model=InvoiceIssueOut)
+def issue_invoice_endpoint(invoice_id: int, request: Request, db: Session = Depends(get_db), actor: Actor = Depends(require_permission("billing.write"))):
+    invoice_obj = load_invoice(db, invoice_id)
+    if not invoice_obj:
+        raise HTTPException(404, detail="Racun nije pronaden")
+    before = snapshot(invoice_obj)
+    issue_invoice(db, invoice_obj)
+    db.flush()
+    audit_actor(db, "update", "Invoice", invoice_obj.id, "Izdan racun", actor, request, before, snapshot(invoice_obj))
+    db.commit()
+    return load_invoice(db, invoice_id)
 
 
 @router.get("/invoices/{invoice_id}/lines", response_model=list[InvoiceLineOut])
@@ -534,13 +508,12 @@ def create_invoice_line(invoice_id: int, payload: InvoiceLineCreate, request: Re
     invoice_obj = db.scalar(select(Invoice).options(selectinload(Invoice.lines), selectinload(Invoice.payments)).where(Invoice.id == invoice_id))
     if not invoice_obj:
         raise HTTPException(404, detail="Racun nije pronaden")
-    ensure_positive(payload.quantity)
-    line = InvoiceLine(invoice_id=invoice_id, **payload.model_dump(), total=calculate_line_total(payload.quantity, payload.unit_price))
+    before = snapshot(invoice_obj)
+    line = add_invoice_line(invoice_obj, payload)
     db.add(line)
     db.flush()
-    recalculate_invoice_total(invoice_obj)
     audit_actor(db, "create", "InvoiceLine", line.id, "Dodana stavka racuna", actor, request, None, snapshot(line))
-    audit_actor(db, "update", "Invoice", invoice_obj.id, "Preracunat racun", actor, request, None, snapshot(invoice_obj))
+    audit_actor(db, "update", "Invoice", invoice_obj.id, "Preracunat racun", actor, request, before, snapshot(invoice_obj))
     db.commit()
     return line
 
@@ -552,12 +525,11 @@ def update_invoice_line(invoice_id: int, line_id: int, payload: InvoiceLineUpdat
     if not invoice_obj or not line or line.invoice_id != invoice_id:
         raise HTTPException(404, detail="Stavka racuna nije pronadena")
     before = snapshot(line)
-    update_from_payload(line, payload)
-    ensure_positive(line.quantity)
-    line.total = calculate_line_total(line.quantity, line.unit_price)
+    before_invoice = snapshot(invoice_obj)
+    update_invoice_line_service(invoice_obj, line, payload)
     db.flush()
-    recalculate_invoice_total(invoice_obj)
     audit_actor(db, "update", "InvoiceLine", line.id, "Azurirana stavka racuna", actor, request, before, snapshot(line))
+    audit_actor(db, "update", "Invoice", invoice_obj.id, "Preracunat racun", actor, request, before_invoice, snapshot(invoice_obj))
     db.commit()
     return line
 
@@ -569,10 +541,12 @@ def delete_invoice_line(invoice_id: int, line_id: int, request: Request, db: Ses
     if not invoice_obj or not line or line.invoice_id != invoice_id:
         raise HTTPException(404, detail="Stavka racuna nije pronadena")
     before = snapshot(line)
+    before_invoice = snapshot(invoice_obj)
+    delete_invoice_line_service(invoice_obj, line)
     db.delete(line)
     db.flush()
-    recalculate_invoice_total(invoice_obj)
     audit_actor(db, "delete", "InvoiceLine", line_id, "Obrisana stavka racuna", actor, request, before, None)
+    audit_actor(db, "update", "Invoice", invoice_obj.id, "Preracunat racun", actor, request, before_invoice, snapshot(invoice_obj))
     db.commit()
     return {"ok": True}
 
@@ -582,13 +556,9 @@ def create_payment(invoice_id: int, payload: PaymentTransactionCreate, request: 
     invoice_obj = db.scalar(select(Invoice).options(selectinload(Invoice.lines), selectinload(Invoice.payments)).where(Invoice.id == invoice_id))
     if not invoice_obj:
         raise HTTPException(404, detail="Racun nije pronaden")
-    ensure_positive(payload.amount)
-    payment = PaymentTransaction(invoice_id=invoice_id, amount=payload.amount, method=payload.method, reference=payload.reference, paid_at=payload.paid_at or datetime.now(), created_by=actor.user_id)
     before = snapshot(invoice_obj)
+    payment = record_payment(invoice_obj, payload, actor.user_id)
     db.add(payment)
-    db.flush()
-    invoice_obj.payments.append(payment)
-    recalculate_invoice_total(invoice_obj)
     db.flush()
     audit_actor(db, "create", "PaymentTransaction", payment.id, "Evidentirano placanje", actor, request, None, snapshot(payment))
     audit_actor(db, "update", "Invoice", invoice_obj.id, "Azuriran status placanja", actor, request, before, snapshot(invoice_obj))
@@ -606,15 +576,15 @@ def mark_paid(invoice_id: int, request: Request, payment_method: str | None = No
     invoice_obj = db.scalar(select(Invoice).options(selectinload(Invoice.lines), selectinload(Invoice.payments)).where(Invoice.id == invoice_id))
     if not invoice_obj:
         raise HTTPException(404, detail="Racun nije pronaden")
-    remaining = invoice_obj.total_amount - sum((payment.amount for payment in invoice_obj.payments), Decimal("0"))
-    if remaining > 0:
-        create_payment(invoice_id, PaymentTransactionCreate(amount=remaining, method=payment_method or "manual"), request, db, actor)
-        return db.scalar(select(Invoice).options(selectinload(Invoice.lines), selectinload(Invoice.payments)).where(Invoice.id == invoice_id))
     before = snapshot(invoice_obj)
-    recalculate_invoice_total(invoice_obj)
+    payment = mark_invoice_paid(invoice_obj, payment_method, actor.user_id)
+    if payment:
+        db.add(payment)
+        db.flush()
+        audit_actor(db, "create", "PaymentTransaction", payment.id, "Evidentirano placanje", actor, request, None, snapshot(payment))
     audit_actor(db, "update", "Invoice", invoice_obj.id, "Oznaceno kao placeno", actor, request, before, snapshot(invoice_obj))
     db.commit()
-    return invoice_obj
+    return load_invoice(db, invoice_id)
 
 
 @router.get("/services/{service_id}/materials")
@@ -672,7 +642,11 @@ def suggest_material_consumption(appointment_id: int, db: Session = Depends(get_
             "quantity": template.default_quantity,
             "required": template.required,
             "variable_quantity_allowed": template.variable_quantity_allowed,
+            "auto_consumable": template.required and not template.variable_quantity_allowed,
+            "requires_user_quantity": template.required and template.variable_quantity_allowed,
+            "optional": not template.required,
             "available_stock": available,
+            "warning": "Nedovoljna zaliha" if template.required and available < template.default_quantity else None,
             "warnings": ["Nedovoljna zaliha"] if template.required and available < template.default_quantity else [],
         })
     return result

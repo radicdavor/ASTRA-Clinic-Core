@@ -8,7 +8,7 @@ seed:
 	docker compose run --rm backend python -m app.seed
 
 test:
-	cd backend && python -m compileall app
+	cd backend && pytest
 	cd frontend && npm run build
 
 lint:

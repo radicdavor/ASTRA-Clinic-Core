@@ -1,0 +1,167 @@
+from datetime import date, datetime
+from decimal import Decimal
+from uuid import uuid4
+
+from fastapi import HTTPException
+from sqlalchemy import select
+from sqlalchemy.orm import Session, selectinload
+
+from app.models.domain import Appointment, Invoice, InvoiceLine, InvoiceNumberSequence, PaymentTransaction, Service
+from app.schemas.common import InvoiceLineCreate, InvoiceLineUpdate, PaymentTransactionCreate
+from app.services.inventory import ensure_positive
+
+
+def calculate_line_total(quantity: Decimal, unit_price: Decimal) -> Decimal:
+    return quantity * unit_price
+
+
+def recalculate_invoice_total(invoice: Invoice) -> None:
+    invoice.total_amount = sum((line.total for line in invoice.lines), Decimal("0"))
+    paid = sum((payment.amount for payment in invoice.payments), Decimal("0"))
+    if paid <= 0:
+        invoice.payment_status = "unpaid"
+        if invoice.status in {"paid", "partially_paid"}:
+            invoice.status = "issued"
+    elif paid < invoice.total_amount:
+        invoice.payment_status = "partially_paid"
+        invoice.status = "partially_paid"
+    else:
+        invoice.payment_status = "paid"
+        invoice.status = "paid"
+
+
+def ensure_invoice_editable(invoice: Invoice) -> None:
+    if invoice.status != "draft":
+        raise HTTPException(status_code=409, detail="Stavke se mogu mijenjati samo na draft racunu")
+
+
+def ensure_invoice_payable(invoice: Invoice) -> None:
+    if invoice.status == "cancelled":
+        raise HTTPException(status_code=409, detail="Stornirani racun ne moze primiti placanje")
+
+
+def next_invoice_number(db: Session, business_unit: str = "default") -> str:
+    sequence = db.scalar(
+        select(InvoiceNumberSequence)
+        .where(InvoiceNumberSequence.business_unit == business_unit)
+        .with_for_update()
+    )
+    if sequence is None:
+        sequence = InvoiceNumberSequence(business_unit=business_unit, next_number=1)
+        db.add(sequence)
+        db.flush()
+    number = sequence.next_number
+    sequence.next_number += 1
+    return f"ASTRA-{date.today():%Y%m%d}-{number:05d}"
+
+
+def draft_invoice_number() -> str:
+    return f"DRAFT-{uuid4().hex[:12].upper()}"
+
+
+def load_invoice(db: Session, invoice_id: int) -> Invoice | None:
+    return db.scalar(
+        select(Invoice)
+        .options(selectinload(Invoice.lines), selectinload(Invoice.payments))
+        .where(Invoice.id == invoice_id)
+    )
+
+
+def draft_invoice_from_appointment(db: Session, appointment_id: int) -> tuple[Invoice, InvoiceLine | None, bool]:
+    existing = db.scalar(
+        select(Invoice)
+        .options(selectinload(Invoice.lines), selectinload(Invoice.payments))
+        .where(Invoice.appointment_id == appointment_id)
+    )
+    if existing:
+        return existing, None, False
+    appointment = db.scalar(select(Appointment).where(Appointment.id == appointment_id))
+    if not appointment:
+        raise HTTPException(status_code=404, detail="Termin nije pronaden")
+    service = db.get(Service, appointment.service_id)
+    if not service:
+        raise HTTPException(status_code=404, detail="Usluga nije pronadena")
+    invoice = Invoice(
+        patient_id=appointment.patient_id,
+        appointment_id=appointment.id,
+        invoice_number=draft_invoice_number(),
+        status="draft",
+        payment_status="unpaid",
+        total_amount=service.price,
+    )
+    db.add(invoice)
+    db.flush()
+    line = InvoiceLine(
+        invoice_id=invoice.id,
+        service_id=service.id,
+        description=service.name,
+        quantity=Decimal("1"),
+        unit_price=service.price,
+        vat_rate=Decimal("25"),
+        total=service.price,
+    )
+    db.add(line)
+    db.flush()
+    invoice.lines.append(line)
+    return invoice, line, True
+
+
+def issue_invoice(db: Session, invoice: Invoice) -> None:
+    if invoice.status != "draft":
+        raise HTTPException(status_code=409, detail="Samo draft racun se moze izdati")
+    if not invoice.lines:
+        raise HTTPException(status_code=422, detail="Racun mora imati barem jednu stavku")
+    invoice.invoice_number = next_invoice_number(db, invoice.business_unit or "default")
+    invoice.status = "issued"
+
+
+def add_invoice_line(invoice: Invoice, payload: InvoiceLineCreate) -> InvoiceLine:
+    ensure_invoice_editable(invoice)
+    ensure_positive(payload.quantity)
+    line = InvoiceLine(invoice_id=invoice.id, **payload.model_dump(), total=calculate_line_total(payload.quantity, payload.unit_price))
+    invoice.lines.append(line)
+    recalculate_invoice_total(invoice)
+    return line
+
+
+def update_invoice_line(invoice: Invoice, line: InvoiceLine, payload: InvoiceLineUpdate) -> None:
+    ensure_invoice_editable(invoice)
+    for key, value in payload.model_dump(exclude_unset=True).items():
+        setattr(line, key, value)
+    ensure_positive(line.quantity)
+    line.total = calculate_line_total(line.quantity, line.unit_price)
+    recalculate_invoice_total(invoice)
+
+
+def delete_invoice_line(invoice: Invoice, line: InvoiceLine) -> None:
+    ensure_invoice_editable(invoice)
+    invoice.lines.remove(line)
+    recalculate_invoice_total(invoice)
+
+
+def record_payment(invoice: Invoice, payload: PaymentTransactionCreate, created_by: int | None) -> PaymentTransaction:
+    ensure_invoice_payable(invoice)
+    ensure_positive(payload.amount)
+    paid = sum((payment.amount for payment in invoice.payments), Decimal("0"))
+    if paid + payload.amount > invoice.total_amount:
+        raise HTTPException(status_code=409, detail="Uplata prelazi ukupni iznos racuna")
+    payment = PaymentTransaction(
+        invoice_id=invoice.id,
+        amount=payload.amount,
+        method=payload.method,
+        reference=payload.reference,
+        paid_at=payload.paid_at or datetime.now(),
+        created_by=created_by,
+    )
+    invoice.payments.append(payment)
+    recalculate_invoice_total(invoice)
+    return payment
+
+
+def mark_invoice_paid(invoice: Invoice, method: str | None, created_by: int | None) -> PaymentTransaction | None:
+    paid = sum((payment.amount for payment in invoice.payments), Decimal("0"))
+    remaining = invoice.total_amount - paid
+    if remaining <= 0:
+        recalculate_invoice_total(invoice)
+        return None
+    return record_payment(invoice, PaymentTransactionCreate(amount=remaining, method=method or "manual"), created_by)

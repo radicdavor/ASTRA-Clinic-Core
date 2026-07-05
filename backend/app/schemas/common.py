@@ -233,7 +233,7 @@ class PurchaseOrderOut(PurchaseOrderCreate, ORMModel):
 class InvoiceCreate(BaseModel):
     patient_id: int
     appointment_id: int | None = None
-    invoice_number: str
+    invoice_number: str | None = None
     invoice_date: DateType | None = None
     status: str = "draft"
     total_amount: Decimal = Decimal("0")
@@ -302,6 +302,10 @@ class InvoiceOut(InvoiceCreate, ORMModel):
     updated_at: DateTimeType
     lines: list[InvoiceLineOut] = []
     payments: list[PaymentTransactionOut] = []
+
+
+class InvoiceIssueOut(InvoiceOut):
+    pass
 
 
 class ServiceMaterialCreate(BaseModel):
