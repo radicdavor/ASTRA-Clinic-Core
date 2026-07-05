@@ -6,6 +6,7 @@ import { DataTable } from "../components/DataTable";
 import { StatusBadge } from "../components/StatusBadge";
 import { useApi } from "../hooks/useApi";
 import { Appointment, AuditLog, Invoice, StockMovement } from "../types";
+import { formatDate, formatDateTime } from "../utils/date";
 
 export function AppointmentDetail() {
   const { id } = useParams();
@@ -79,7 +80,7 @@ export function AppointmentDetail() {
       <div className="page-header">
         <div>
           <h1>{appointment.data.patient?.first_name} {appointment.data.patient?.last_name}</h1>
-          <p>{appointment.data.date} {appointment.data.start_time.slice(0, 5)} - {appointment.data.end_time.slice(0, 5)}</p>
+          <p>{formatDate(appointment.data.date)} {appointment.data.start_time.slice(0, 5)} - {appointment.data.end_time.slice(0, 5)}</p>
         </div>
         <StatusBadge status={appointment.data.status} />
       </div>
@@ -121,7 +122,7 @@ export function AppointmentDetail() {
           { header: "Tip", render: (row) => row.movement_type },
           { header: "Artikl", render: (row) => row.item?.name ?? row.inventory_item_id },
           { header: "Kolicina", render: (row) => row.quantity },
-          { header: "Vrijeme", render: (row) => new Date(row.created_at).toLocaleString() }
+          { header: "Vrijeme", render: (row) => formatDateTime(row.created_at) }
         ]} />
       </section>
 

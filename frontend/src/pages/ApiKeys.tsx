@@ -3,6 +3,7 @@ import { api } from "../api/client";
 import { DataTable } from "../components/DataTable";
 import { useApi } from "../hooks/useApi";
 import { ApiKey } from "../types";
+import { formatDateTime } from "../utils/date";
 
 type ScopeInfo = { name: string; category: string; description: string };
 
@@ -70,7 +71,7 @@ export function ApiKeys() {
         { header: "Naziv", render: (row) => row.name },
         { header: "Scopeovi", render: (row) => row.scopes.join(", ") },
         { header: "Aktivan", render: (row) => row.active ? "Da" : "Ne" },
-        { header: "Zadnja upotreba", render: (row) => row.last_used_at ?? "-" },
+        { header: "Zadnja upotreba", render: (row) => formatDateTime(row.last_used_at) },
         { header: "Radnja", render: (row) => row.active ? <button onClick={() => deactivate(row)}>Deaktiviraj</button> : "-" }
       ]} />
     </section>

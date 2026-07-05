@@ -1,4 +1,5 @@
 import { AuditLog } from "../types";
+import { formatDateTime } from "../utils/date";
 
 const actionLabels: Record<string, string> = {
   create: "Kreirano",
@@ -30,7 +31,7 @@ export function AuditTimeline({ logs }: { logs: AuditLog[] }) {
       {logs.map((log) => (
         <article key={log.id}>
           <strong>{actionLabels[log.action] ?? log.action} {log.entity_type}{log.entity_id ? ` #${log.entity_id}` : ""}</strong>
-          <span>{new Date(log.created_at).toLocaleString()} / {actorLabel(log)}</span>
+          <span>{formatDateTime(log.created_at)} / {actorLabel(log)}</span>
           <p>{log.summary ?? "-"}{log.request_id ? ` (${log.request_id})` : ""}</p>
           <JsonDetails title="Prije" value={log.before_json} />
           <JsonDetails title="Poslije" value={log.after_json} />

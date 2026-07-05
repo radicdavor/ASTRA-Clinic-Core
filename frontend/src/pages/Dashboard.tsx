@@ -5,6 +5,7 @@ import { DataTable } from "../components/DataTable";
 import { StatusBadge, statusLabel } from "../components/StatusBadge";
 import { useApi } from "../hooks/useApi";
 import { Appointment, InventoryItem, Module, Provider, Room, Service } from "../types";
+import { formatDate } from "../utils/date";
 
 const today = new Date().toISOString().slice(0, 10);
 const quickStatuses = ["arrived", "in_progress", "completed", "cancelled"];
@@ -121,7 +122,7 @@ export function Dashboard() {
           <h3>Niska zaliha</h3>
           {lowStock.data.slice(0, 5).map((item) => <p key={item.id}>{item.name}: {item.current_stock} {item.unit_of_measure}</p>)}
           <h3>Rokovi trajanja</h3>
-          {expiring.data.slice(0, 5).map((batch) => <p key={batch.id}>{batch.item?.name ?? "Artikl"}: {batch.expiration_date}</p>)}
+          {expiring.data.slice(0, 5).map((batch) => <p key={batch.id}>{batch.item?.name ?? "Artikl"}: {formatDate(batch.expiration_date)}</p>)}
         </aside>
       </div>
       {workflowMessage && <p className="success-message">{workflowMessage}</p>}

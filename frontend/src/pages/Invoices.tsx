@@ -4,6 +4,7 @@ import { api } from "../api/client";
 import { DataTable } from "../components/DataTable";
 import { useApi } from "../hooks/useApi";
 import { Invoice } from "../types";
+import { formatDate, formatDateTime } from "../utils/date";
 
 export function Invoices() {
   const [params] = useSearchParams();
@@ -78,7 +79,7 @@ export function Invoices() {
       {error && <p className="form-error">{error}</p>}
       <DataTable rows={invoices.data} columns={[
         { header: "Broj racuna", render: (row) => <button onClick={() => setSelectedId(row.id)}>{row.invoice_number}</button> },
-        { header: "Datum", render: (row) => row.invoice_date },
+        { header: "Datum", render: (row) => formatDate(row.invoice_date) },
         { header: "Status", render: (row) => row.status },
         { header: "Placanje", render: (row) => row.payment_status },
         { header: "Iznos", render: (row) => `${row.total_amount} EUR` }
@@ -123,7 +124,7 @@ export function Invoices() {
             { header: "Iznos", render: (payment) => payment.amount },
             { header: "Metoda", render: (payment) => payment.method },
             { header: "Referenca", render: (payment) => payment.reference ?? "-" },
-            { header: "Vrijeme", render: (payment) => payment.paid_at ? new Date(payment.paid_at).toLocaleString() : "-" }
+            { header: "Vrijeme", render: (payment) => formatDateTime(payment.paid_at) }
           ]} />
 
           <div className="inline-form">

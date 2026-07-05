@@ -3,6 +3,7 @@ import { api } from "../api/client";
 import { DataTable } from "../components/DataTable";
 import { useApi } from "../hooks/useApi";
 import { InventoryItem, PurchaseOrder, StockLocation } from "../types";
+import { formatDate } from "../utils/date";
 
 type ReceiveDraft = Record<number, { quantity_received: string; lot_number: string; expiration_date: string; location_id: string }>;
 
@@ -87,7 +88,7 @@ export function PurchaseOrders() {
         { header: "Broj", render: (row) => `PO-${row.id}` },
         { header: "Dobavljac", render: (row) => row.supplier?.name ?? "-" },
         { header: "Status", render: (row) => row.status },
-        { header: "Datum", render: (row) => row.order_date },
+        { header: "Datum", render: (row) => formatDate(row.order_date) },
         { header: "Iznos", render: (row) => `${row.total_amount} EUR` },
         { header: "Radnja", render: (row) => <button onClick={() => selectOrder(row)}>Zaprimanje</button> }
       ]} />
@@ -95,7 +96,7 @@ export function PurchaseOrders() {
       {selected && (
         <section className="workflow-panel">
           <div className="page-header"><h2>Zaprimanje PO-{selected.id}</h2><p>Status: {selected.status}</p></div>
-          <p>Dobavljac: {selected.supplier?.name ?? "-"} / Iznos: {selected.total_amount} EUR / Ocekivano: {selected.expected_delivery_date ?? "-"}</p>
+          <p>Dobavljac: {selected.supplier?.name ?? "-"} / Iznos: {selected.total_amount} EUR / Ocekivano: {formatDate(selected.expected_delivery_date)}</p>
           <DataTable rows={selected.lines} columns={[
             { header: "Artikl", render: (line) => item(line.inventory_item_id)?.name ?? `Artikl ${line.inventory_item_id}` },
             { header: "Naruceno", render: (line) => line.quantity_ordered },
