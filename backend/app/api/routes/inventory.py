@@ -443,7 +443,7 @@ def invoices(db: Session = Depends(get_db), actor: Actor = Depends(require_permi
 @router.post("/invoices", response_model=InvoiceOut)
 def create_invoice(payload: InvoiceCreate, request: Request, db: Session = Depends(get_db), actor: Actor = Depends(require_permission("billing.write"))):
     data = payload.model_dump(exclude_none=True)
-    data["invoice_number"] = data.get("invoice_number") or draft_invoice_number()
+    data["invoice_number"] = draft_invoice_number()
     invoice = Invoice(**data)
     db.add(invoice)
     db.flush()
@@ -465,6 +465,11 @@ def update_invoice(invoice_id: int, payload: InvoiceCreate, request: Request, db
     invoice_obj = db.get(Invoice, invoice_id)
     if not invoice_obj:
         raise HTTPException(404, detail="Racun nije pronaden")
+    if invoice_obj.status != "draft":
+        allowed = {"notes", "operator", "business_unit", "register_id", "vat_id", "fiscalization_status", "fiscalization_reference"}
+        requested = set(payload.model_dump(exclude_unset=True).keys())
+        if requested - allowed:
+            raise HTTPException(409, detail="Izdani, placeni ili stornirani racun ne dopusta izmjenu zasticenih polja")
     before = snapshot(invoice_obj)
     update_from_payload(invoice_obj, payload)
     db.flush()

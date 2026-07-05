@@ -36,8 +36,8 @@ def ensure_invoice_editable(invoice: Invoice) -> None:
 
 
 def ensure_invoice_payable(invoice: Invoice) -> None:
-    if invoice.status == "cancelled":
-        raise HTTPException(status_code=409, detail="Stornirani racun ne moze primiti placanje")
+    if invoice.status not in {"issued", "partially_paid"}:
+        raise HTTPException(status_code=409, detail="Placanje je dopusteno samo za izdane racune")
 
 
 def next_invoice_number(db: Session, business_unit: str = "default") -> str:
@@ -111,8 +111,22 @@ def issue_invoice(db: Session, invoice: Invoice) -> None:
         raise HTTPException(status_code=409, detail="Samo draft racun se moze izdati")
     if not invoice.lines:
         raise HTTPException(status_code=422, detail="Racun mora imati barem jednu stavku")
+    if invoice.total_amount <= 0:
+        raise HTTPException(status_code=422, detail="Racun mora imati pozitivan iznos")
     invoice.invoice_number = next_invoice_number(db, invoice.business_unit or "default")
     invoice.status = "issued"
+
+
+def cancel_invoice(invoice: Invoice) -> None:
+    if invoice.status == "cancelled":
+        return
+    if invoice.status == "paid":
+        raise HTTPException(status_code=409, detail="Placeni racun se ne moze stornirati u MVP workflowu")
+    if invoice.payments:
+        raise HTTPException(status_code=409, detail="Racun s placanjima se ne moze stornirati")
+    if invoice.status not in {"draft", "issued"}:
+        raise HTTPException(status_code=409, detail="Racun se ne moze stornirati iz trenutnog statusa")
+    invoice.status = "cancelled"
 
 
 def add_invoice_line(invoice: Invoice, payload: InvoiceLineCreate) -> InvoiceLine:

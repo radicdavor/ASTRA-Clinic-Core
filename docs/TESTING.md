@@ -1,6 +1,6 @@
 # Testing
 
-V3 introduces backend pytest coverage and CI.
+V3 introduced backend pytest coverage and CI. V4 expands that safety net around scheduling conflicts, role/API-key permissions, billing state transitions and transaction boundaries.
 
 Run all local checks:
 
@@ -22,8 +22,15 @@ Current coverage focuses on:
 - FEFO consumption and insufficient-stock rollback behavior
 - transfer preserving total stock
 - purchase order partial receiving and over-receive rejection
+- failed purchase order receiving leaves no partial inventory mutation
+- appointment time validation, provider overlap and room overlap
+- cancelled appointments not blocking a new appointment slot
 - invoice total recalculation
-- partial/full payments and overpayment rejection
+- draft invoice creation from appointments
+- issued invoice line immutability
+- partial/full payments, draft payment rejection and overpayment rejection
 - official invoice number uniqueness through a sequence table
+- role-based permission denial for protected inventory and billing routes
+- API-key scoped access and audit logging
 
-CI runs backend pytest and frontend `npm run build` on push and pull request.
+CI runs database migrations against a test PostgreSQL service, backend pytest and frontend `npm run build` on push and pull request.

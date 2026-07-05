@@ -1,5 +1,7 @@
 # ASTRA Clinic Core
 
+> Sigurnosna napomena: zadani korisnik, lozinka i lokalne Docker postavke su samo za razvoj. Prije stvarne uporabe promijenite admin lozinku, postavite jak `JWT_SECRET`, ogranicite CORS, koristite HTTPS, podesite backup PostgreSQL baze i napravite GDPR/access-control provjeru. ASTRA Clinic Core nije certificirani EMR i nije certificirani medicinski uredaj.
+
 ASTRA Clinic Core je open-source modularna jezgra za rad klinike: naručivanje pacijenata, dnevni raspored, tijek pacijenta, API integracije, audit log, osnovni RBAC, inventar, nabava i priprema naplate.
 
 Ovo nije puni EMR ni veliki ERP. MVP je namjerno fokusiran na operativni tijek klinike i modularnu arhitekturu za buduće medicinske module.

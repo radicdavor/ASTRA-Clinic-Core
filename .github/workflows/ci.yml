@@ -7,6 +7,23 @@ on:
 jobs:
   backend:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: astra_ci
+          POSTGRES_USER: astra
+          POSTGRES_PASSWORD: astra
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U astra -d astra_ci"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      DATABASE_URL: postgresql+psycopg://astra:astra@localhost:5432/astra_ci
+      JWT_SECRET_KEY: ci-secret-key
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -15,6 +32,9 @@ jobs:
       - name: Install backend dependencies
         working-directory: backend
         run: pip install -r requirements.txt
+      - name: Run database migrations
+        working-directory: backend
+        run: alembic upgrade head
       - name: Run backend tests
         working-directory: backend
         run: pytest

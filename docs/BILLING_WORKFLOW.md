@@ -16,6 +16,7 @@ Rules:
 
 - only `draft` invoices can be issued
 - the invoice must have at least one line
+- the invoice total must be positive
 - official invoice numbers use `invoice_number_sequences`
 - official numbers are unique and allocated inside the database transaction
 
@@ -25,7 +26,8 @@ Payments are separate `PaymentTransaction` records.
 
 Rules:
 
-- cancelled invoices cannot receive payments
+- only issued and partially paid invoices can receive payments
+- draft, cancelled and already paid invoices cannot receive payments
 - overpayment is rejected
 - partial payment sets `payment_status=partially_paid`
 - full payment sets `payment_status=paid`

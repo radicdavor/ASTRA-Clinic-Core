@@ -25,7 +25,7 @@ def derive_purchase_order_status(order: PurchaseOrder) -> str:
 
 
 def receive_purchase_order(db: Session, order: PurchaseOrder, payload: PurchaseOrderReceiveRequest, user_id: int | None) -> list[tuple[PurchaseOrderLine, InventoryBatch, StockMovement]]:
-    received: list[tuple[PurchaseOrderLine, InventoryBatch, StockMovement]] = []
+    validated: list[tuple[PurchaseOrderLine, InventoryItem, object]] = []
     for receive_line in payload.lines:
         ensure_positive(receive_line.quantity_received)
         line = db.get(PurchaseOrderLine, receive_line.purchase_order_line_id)
@@ -40,6 +40,10 @@ def receive_purchase_order(db: Session, order: PurchaseOrder, payload: PurchaseO
             raise HTTPException(status_code=422, detail="LOT broj je obavezan za ovaj artikl")
         if item.expiration_tracking_enabled and not receive_line.expiration_date:
             raise HTTPException(status_code=422, detail="Rok trajanja je obavezan za ovaj artikl")
+        validated.append((line, item, receive_line))
+
+    received: list[tuple[PurchaseOrderLine, InventoryBatch, StockMovement]] = []
+    for line, _item, receive_line in validated:
         batch = InventoryBatch(
             inventory_item_id=line.inventory_item_id,
             lot_number=receive_line.lot_number,

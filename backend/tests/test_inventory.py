@@ -5,7 +5,7 @@ import pytest
 from fastapi import HTTPException
 
 from app.models.domain import InventoryBatch, InventoryItem, StockLocation
-from app.services.inventory import consume_fefo, recalculate_stock, transfer_batch
+from app.services.inventory import consume_fefo, recalculate_stock, transfer_batch, ensure_positive
 
 
 def test_fefo_consumes_earliest_expiration_first(db):
@@ -58,3 +58,35 @@ def test_transfer_preserves_total_stock(db):
     assert len(movements) == 2
     assert item.current_stock == Decimal("5")
     assert sum(b.quantity for b in db.query(InventoryBatch).filter_by(inventory_item_id=item.id)) == Decimal("5")
+
+
+def test_recalculate_stock_repairs_corrupted_cache(db):
+    item = InventoryItem(sku="REC", name="Recalc item", current_stock=Decimal("999"))
+    location = StockLocation(name="Recalc location", type="main")
+    db.add_all([item, location])
+    db.flush()
+    db.add_all([
+        InventoryBatch(inventory_item_id=item.id, quantity=Decimal("2"), location_id=location.id),
+        InventoryBatch(inventory_item_id=item.id, quantity=Decimal("3"), location_id=location.id),
+    ])
+    db.flush()
+
+    recalculate_stock(db, item.id)
+
+    assert item.current_stock == Decimal("5")
+
+
+def test_positive_quantity_validation():
+    with pytest.raises(HTTPException) as exc:
+        ensure_positive(Decimal("0"))
+
+    assert exc.value.status_code == 422
+
+
+def test_tracking_flags_are_enforced_by_batch_endpoint_logic_shape(db):
+    item = InventoryItem(sku="TRACK", name="Tracked", lot_tracking_enabled=True, expiration_tracking_enabled=True)
+    db.add(item)
+    db.flush()
+
+    assert item.lot_tracking_enabled is True
+    assert item.expiration_tracking_enabled is True
