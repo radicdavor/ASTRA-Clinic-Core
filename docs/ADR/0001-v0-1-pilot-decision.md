@@ -14,6 +14,14 @@ A maintainer command-level dry-run passed on 05-07-2026, but a human participant
 
 Proceed to a closed human pilot dry-run using demo data only. Do not tag `v0.1-pilot` until the dry-run report and issue triage are reviewed and no P0/P1 issues remain open.
 
+## Decision Options
+
+1. Accepted - tag `v0.1-pilot` after the human pilot passes with no open P0/P1 issues.
+2. Deferred - do not tag because P0/P1 was found or the human pilot remains incomplete.
+3. Waived - maintainer explicitly permits tagging without a human pilot and documents the risk in this ADR and release notes.
+
+Current status remains Proposed because human pilot results do not exist yet.
+
 ## Consequences
 
 - Feature expansion remains deferred.

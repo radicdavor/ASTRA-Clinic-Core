@@ -1,6 +1,8 @@
 # v11 Backlog From Pilot
 
-Derived from the 05-07-2026 maintainer dry-run. This backlog must be updated after the first human closed pilot.
+Derived from the 05-07-2026 maintainer dry-run. This backlog is provisional and must be updated after the first human closed pilot.
+
+Human pilot findings override maintainer speculation. No alpha hardening work starts until P0/P1 findings from the human pilot are reviewed and resolved or explicitly waived.
 
 ## P0/P1 Blockers
 
