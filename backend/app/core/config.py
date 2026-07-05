@@ -13,6 +13,7 @@ class Settings(BaseSettings):
     jwt_algorithm: str = "HS256"
     access_token_minutes: int = 480
     cors_origins: str = "http://localhost:5173,http://127.0.0.1:5173"
+    cors_origin_regex: str | None = r"^https?://(localhost|127\.0\.0\.1|10\.\d{1,3}\.\d{1,3}\.\d{1,3}|192\.168\.\d{1,3}\.\d{1,3}|172\.(1[6-9]|2\d|3[0-1])\.\d{1,3}\.\d{1,3})(:\d+)?$"
     demo_mode: bool = True
     real_data_allowed: bool = False
     fiscalization_mode: str = "noop"
@@ -31,6 +32,8 @@ class Settings(BaseSettings):
             raise RuntimeError("Production APP_ENV requires a strong JWT_SECRET with at least 32 characters.")
         if "*" in self.cors_origin_list or any("localhost" in origin or "127.0.0.1" in origin for origin in self.cors_origin_list):
             raise RuntimeError("Production APP_ENV requires explicit non-local CORS_ORIGINS.")
+        if self.cors_origin_regex:
+            raise RuntimeError("Production APP_ENV requires CORS_ORIGIN_REGEX to be empty and CORS_ORIGINS to list explicit domains.")
 
     @property
     def public_warnings(self) -> list[str]:

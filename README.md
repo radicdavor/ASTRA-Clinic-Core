@@ -70,6 +70,13 @@ docker compose up --build
 - API dokumentacija: http://localhost:8000/docs
 - Health check: http://localhost:8000/health
 
+Za pristup s drugog uredaja u istoj mrezi otvorite:
+
+- Aplikacija: `http://IP-ADRESA-RACUNALA:5173`
+- API: `http://IP-ADRESA-RACUNALA:8000`
+
+Frontend po defaultu koristi isti hostname na kojem je otvoren u browseru i port `8000`, pa `localhost` nije potreban za mrezni pristup.
+
 Početna prijava:
 
 - E-pošta: `admin@astra.local`
