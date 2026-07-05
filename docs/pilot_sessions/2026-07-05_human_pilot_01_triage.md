@@ -12,4 +12,4 @@ No P0/P1 findings are known from human pilot because the human pilot has not bee
 
 ## Next Action
 
-Run the human pilot with demo data, then replace this triage with actual findings and GitHub issue links.
+Run the human pilot with demo data, then replace this triage with actual findings and GitHub issue links. Until then, HP01-001 remains open P2 process debt and `v0.1-pilot` remains deferred unless the maintainer documents a waiver.

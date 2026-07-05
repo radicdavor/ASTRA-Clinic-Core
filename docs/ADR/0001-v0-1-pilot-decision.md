@@ -16,6 +16,8 @@ Proceed to a closed human pilot dry-run using demo data only. Do not tag `v0.1-p
 
 V13 decision: defer `v0.1-pilot` tagging because the human participant pilot remains incomplete and has not been waived by the maintainer.
 
+V14 decision: keep the release Deferred. No human pilot evidence or maintainer waiver was provided, so no feature work or tag should proceed.
+
 ## Decision Options
 
 1. Accepted - tag `v0.1-pilot` after the human pilot passes with no open P0/P1 issues.
