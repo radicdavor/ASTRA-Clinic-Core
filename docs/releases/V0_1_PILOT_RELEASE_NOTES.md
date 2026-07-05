@@ -3,8 +3,8 @@
 ## Version
 
 - Version: `v0.1-pilot`
-- Date: TBD
-- Commit SHA: TBD
+- Date: 05-07-2026
+- Commit SHA: `be629b8cd2336fccc49010ff6134b0cf93e75533` at maintainer dry-run start; replace with final tag SHA before publishing.
 - Release type: pilot
 - Supported environment: local Docker Compose demo/pilot environment
 
@@ -54,6 +54,7 @@ This release candidate supports the core demo clinic operations flow with demo d
 - This is not a certified medical device.
 - Module loader is basic and data-only.
 - Frontend browser e2e coverage is limited.
+- Human participant dry-run feedback is still pending after maintainer command-level validation.
 - No full EMR charting.
 - No prescription system.
 - No clinical decision support.
@@ -78,12 +79,14 @@ Fiscalization mode is `noop`/stub for demo purposes only. It must not be used fo
 
 ## QA Status
 
-- CI: TBD
-- Backend tests: TBD
-- Frontend typecheck/build: TBD
-- Pilot smoke: TBD
-- Demo seed/reset: TBD
+- CI: pending GitHub run after final V11 commit.
+- Backend tests: passed locally in Docker, `64 passed`.
+- Frontend typecheck/build: passed locally.
+- Pilot smoke: passed locally.
+- Release validation script: passed locally.
+- Demo seed/reset: demo seed restored after integration tests.
 
 ## Open P0/P1 Issues
 
-- TBD before tagging.
+- No P0/P1 blocker found during maintainer command-level dry-run.
+- Human participant dry-run remains pending before final tag decision.
