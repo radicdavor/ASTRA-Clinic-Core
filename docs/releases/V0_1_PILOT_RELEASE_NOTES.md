@@ -4,7 +4,7 @@
 
 - Version: `v0.1-pilot`
 - Date: 05-07-2026
-- Commit SHA: `be629b8cd2336fccc49010ff6134b0cf93e75533` at maintainer dry-run start; replace with final tag SHA before publishing.
+- Commit SHA: `f584506104dac2d79069013577e19a8f4897d8d8` at V13 review start; replace with final tag SHA before publishing.
 - Release type: pilot
 - Supported environment: local Docker Compose demo/pilot environment
 
@@ -55,6 +55,7 @@ This release candidate supports the core demo clinic operations flow with demo d
 - Module loader is basic and data-only.
 - Frontend browser e2e coverage is limited.
 - Human participant dry-run feedback is still pending after maintainer command-level validation.
+- V13 release decision is Deferred until human pilot is completed or explicitly waived.
 - No full EMR charting.
 - No prescription system.
 - No clinical decision support.
@@ -79,7 +80,7 @@ Fiscalization mode is `noop`/stub for demo purposes only. It must not be used fo
 
 ## QA Status
 
-- CI: pending GitHub run after final V11 commit.
+- CI: pending GitHub run after final V13 commit.
 - Backend tests: passed locally in Docker, `64 passed`.
 - Frontend typecheck/build: passed locally.
 - Pilot smoke: passed locally.
@@ -90,3 +91,7 @@ Fiscalization mode is `noop`/stub for demo purposes only. It must not be used fo
 
 - No P0/P1 blocker found during maintainer command-level dry-run.
 - Human participant dry-run remains pending before final tag decision.
+
+## Accepted P2/P3 Limitations
+
+- P2: human participant browser pilot remains pending; release tag is deferred unless maintainer waives this risk.

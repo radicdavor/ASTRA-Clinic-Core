@@ -8,6 +8,7 @@ Human pilot findings override maintainer speculation. No alpha hardening work st
 
 - None found during command-level maintainer dry-run.
 - Human browser pilot still required before final tag decision.
+- V13 decision is Deferred because human pilot remains pending; next sprint should focus on executing the human pilot, not alpha hardening.
 
 ## P2 Usability Fixes
 
@@ -21,6 +22,7 @@ Human pilot findings override maintainer speculation. No alpha hardening work st
 
 ## Alpha Hardening Candidates
 
+- Do not start alpha hardening until human pilot is completed or explicitly waived.
 - Minimal browser e2e flow: login, dashboard, appointment detail.
 - More readable audit before/after diff.
 - Clearer release health dashboard or admin status page.
