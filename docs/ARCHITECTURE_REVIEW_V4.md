@@ -5,208 +5,240 @@ Repozitorij: `radicdavor/ASTRA-Clinic-Core`
 
 ## Sažetak
 
-Projekt je nakon v3 prompta ponovno napredovao. Vidljiv je pomak iz “endpoint-heavy” MVP-a prema ozbiljnijoj arhitekturi sa service layerom.
+Repozitorij je sada u fazi ozbiljnog MVP-a. U odnosu na prethodne revizije, više nema smisla govoriti da je projekt samo ideja ili scaffold. Postoji konkretan backend model i poslovna logika za termine, inventar, nabavu, potrošnju materijala i račune.
 
-Najvažnije promjene koje su sada vidljive:
+Najvažniji zaključak ove revizije:
 
-- postoji `backend/app/services/billing.py`
-- postoji `backend/app/services/procurement.py`
-- billing logika je izvučena u funkcije kao što su `draft_invoice_from_appointment`, `issue_invoice`, `record_payment`, `mark_invoice_paid`
-- procurement receiving logika je izvučena u `receive_purchase_order`
-- dodan je `InvoiceNumberSequence`
-- draft račun sada dobiva `DRAFT-...` broj, a službeni broj tek pri izdavanju
-- issue invoice koristi zaključavanje sequence retka preko `with_for_update()`
-- invoice line editing je blokiran izvan draft statusa
-- payment overpay je blokiran
-- required variable material sada mora imati unesenu količinu prije completiona
+**ASTRA Clinic Core sada ima dobru domensku jezgru, ali nema dokaz pouzdanosti. Sljedeći rad mora biti testiranje, CI, transakcijska provjera i produkcijski hardening.**
 
-To je vrlo dobar pomak. Projekt sada sve više sliči na ozbiljan clinic operations core, a ne samo na brzinski CRUD.
+Drugim riječima: sada je opasno dodavati još featurea prije nego što se uvedu testovi.
 
-Međutim, sada je potpuno jasno da sljedeći sprint više ne smije dodavati poslovne funkcije. Mora dokazati ispravnost. Bez testova i CI-ja, svaka sljedeća iteracija može nehotice slomiti inventar, račune ili audit.
+## Što je vidljivo u zadnjem stanju
 
-## Što je sada dobro
+### 1. README jasno postavlja sigurnosnu granicu
 
-### 1. Billing service layer je dobar iskorak
+README ima eksplicitnu sigurnosnu napomenu: zadani korisnik, lozinka i Docker postavke su samo za razvoj; prije stvarne uporabe treba promijeniti admin lozinku, postaviti jak JWT secret, ograničiti CORS, koristiti HTTPS, podesiti backup PostgreSQL baze i napraviti GDPR/access-control provjeru. Također piše da ASTRA Clinic Core nije certificirani EMR ni certificirani medicinski uređaj.
 
-`billing.py` sada sadrži centralne funkcije:
+To je dobro i nužno. Projekt bi bez te napomene mogao djelovati zrelije nego što jest.
 
-- `calculate_line_total`
-- `recalculate_invoice_total`
-- `ensure_invoice_editable`
-- `ensure_invoice_payable`
-- `next_invoice_number`
-- `draft_invoice_number`
-- `draft_invoice_from_appointment`
-- `issue_invoice`
-- `add_invoice_line`
-- `update_invoice_line`
-- `delete_invoice_line`
-- `record_payment`
-- `mark_invoice_paid`
+### 2. Funkcionalni opseg je sada ambiciozan, ali smislen
 
-To je pravi smjer. Endpointi više ne bi trebali nositi svu poslovnu logiku.
+README navodi:
 
-### 2. Invoice numbering je bitno sigurniji
+- pacijente
+- termine
+- Alembic migracije
+- permission-based RBAC
+- strukturirani audit log
+- validaciju konflikta termina
+- scoped API key za AI agente
+- inventar
+- nabavu
+- naplatu
+- predloške potrošnje materijala
+- automatsku FEFO potrošnju
 
-Prethodna logika temeljena na zadnjem ID-u bila je rizična. Sada postoji `InvoiceNumberSequence`, a `next_invoice_number` zaključava sequence redak. To je znatno bolje.
+To je dobar smjer. ASTRA je sada jasnije definirana kao clinic-operations platforma, ne kao puni EMR.
 
-Dobra odluka je i to da draft invoice dobiva privremeni `DRAFT-...` broj, a službeni broj se dodjeljuje tek kod izdavanja.
+### 3. Inventory/procurement/billing rute su sada dosta zrelije
 
-### 3. Invoice status workflow je počeo dobivati oblik
+`backend/app/api/routes/inventory.py` koristi:
 
-`ensure_invoice_editable` dopušta izmjenu stavki samo na draft računu. To je vrlo važno. Nakon izdavanja računa ne smije se slobodno mijenjati sadržaj bez korekcijskog/storno workflowa.
+- `Actor`
+- `require_permission`
+- `response_model`
+- `audit_actor`
+- jasne permissione za inventory/procurement/billing
+- validaciju LOT-a i roka trajanja
+- audit prije/poslije promjena
+- izdvojene servise za appointment materials, billing i procurement
 
-`ensure_invoice_payable` blokira plaćanje cancelled računa.
+To je veliki arhitektonski napredak.
 
-### 4. Payment overpay je blokiran
+### 4. Potrošnja materijala po terminu izdvojena je u servis
 
-`record_payment` provjerava prelazi li uplata ukupni iznos računa. To je ispravna MVP politika. Kasnije se može dodati preplata kao poseban koncept, ali nije dobra ideja sada.
+`backend/app/services/appointment_materials.py` je dobar iskorak jer odvaja domensku logiku od route filea.
 
-### 5. Procurement service layer je uveden
+Servis sada:
 
-`procurement.py` sada centralizira:
+- čita `ServiceMaterialTemplate`
+- validira obavezni varijabilni materijal
+- zbraja tražene količine po artiklu
+- provjerava dostupnost prije mutacije
+- koristi FEFO potrošnju
+- auditira promjene na inventory itemu i stock movementima
 
-- izračun linije
-- recalculation total amount
-- derive purchase order status
-- receive purchase order
+To je točan smjer.
 
-To je dobar smjer jer receiving nije trivijalan CRUD.
+### 5. Procurement receiving je stvarni workflow
 
-### 6. Material consumption semantics su bolji
+`backend/app/services/procurement.py` validira stavke narudžbenice, sprječava over-receive, traži LOT/expiration kad artikl to zahtijeva, stvara `InventoryBatch`, stvara `StockMovement`, ažurira `quantity_received`, recalculira stock i derivira status narudžbenice.
 
-Kod sada blokira completion ako postoji obavezni varijabilni materijal bez unesene količine. To je važno za stvari poput propofola ili drugih potrošnih materijala koji se ne smiju naslijepo skidati kao fiksna količina.
+To je sada pravi početak nabavnog modula, ne samo placeholder.
 
-## Kritične rupe koje ostaju
+## Najveći problemi sada
 
-### 1. I dalje nema vidljivog test suitea
+### 1. Nema vidljivog test suitea
 
-Pretraživanje repozitorija ne pokazuje test infrastrukturu. Ovo je sada najveći tehnički rizik.
+Pretraga po repozitoriju nije našla pytest/test/CI artefakte. Ovo je sada najveća rupa.
 
-Kod već sadrži dovoljno poslovne logike da ručno testiranje nije dovoljno. Trebaju pytest testovi za:
+Bez testova ne smije se dalje širiti funkcionalnost.
 
-- permissions
-- appointment conflict
-- FEFO
-- rollback potrošnje materijala
-- PO partial receive
-- invoice issue numbering
-- payment partial/full
+Rizična područja bez testova:
+
+- preklapanje termina
+- RBAC i API key scopeovi
+- FEFO potrošnja
+- potrošnja materijala po terminu
+- rollback kod nedovoljne zalihe
+- zaprimanje više stavki narudžbenice
+- over-receive
+- izdavanje računa
+- parcijalne uplate
 - audit before/after
-- API key scopes
-
-Bez toga projekt ne smije ići u daljnje širenje.
 
 ### 2. Nema vidljivog CI-ja
 
-Nema dokaza da svaki push pokreće:
+Ako nema GitHub Actions workflowa, Codex može lako napraviti regresiju u backendu ili frontendu bez da se to odmah vidi.
 
-- backend testove
+Minimalno treba:
+
+- backend pytest
 - frontend build
-- type/lint check
-- migracije na praznoj bazi
+- Alembic migration smoke test
+- Docker compose smoke test
 
-Za projekt koji se gradi uz Codex, CI je obavezan. AI vrlo lako popravi jednu stvar i pokvari drugu.
+### 3. Frontend vjerojatno ne prati backend mogućnosti
 
-### 3. Transaction boundary još treba dokazati
+Backend sada ima više ozbiljne poslovne logike nego što prosječan UI obično prati u ovoj fazi.
 
-Service layer je dobar, ali treba testirati atomicity.
+Posebno treba provjeriti postoje li ekrani za:
 
-Kritični scenariji:
+- zaprimanje narudžbenice po stavkama
+- partial receive
+- otpis s razlogom
+- transfer skladišta
+- završetak termina s potvrdom potrošnje materijala
+- izdavanje računa
+- dodavanje uplata
+- pregled audit loga s filtrima
+- upravljanje API ključevima
 
-- appointment completion troši dva materijala; drugi nema zalihu; prvi se ne smije skinuti
-- PO receive ima dvije linije; druga prelazi naručenu količinu; prva ne smije ostati zaprimljena
-- payment creation pukne nakon promjene invoice statusa; status ne smije ostati polovičan
+Bez toga sustav ostaje tehnički jak, ali operativno nezgodan.
 
-Ako testovi ne potvrde rollback, sustav nije spreman za stvarne podatke.
+### 4. Nema fiskalizacijskog adaptera
 
-### 4. `record_payment` može imati relationship/double-count rizik
+Billing sada ima dobar MVP foundation, ali za Hrvatsku treba barem arhitektonski stub:
 
-`record_payment` kreira `PaymentTransaction`, append-a ga u `invoice.payments`, zatim recalculira total kroz relationship kolekciju.
+- `FiscalizationProvider`
+- `NoopFiscalizationProvider`
+- `CroatiaFiscalizationProviderStub`
+- audit pokušaja fiskalizacije
+- statusi: not_configured, pending, success, failed
 
-To može biti u redu, ali mora biti testirano. Posebno treba provjeriti:
+Ne treba još raditi stvarnu fiskalizaciju, ali mora postojati čista granica.
 
-- partial payment 50 na invoice 100 daje `partially_paid`
-- dodatnih 50 daje `paid`
-- `mark_invoice_paid` nakon toga ne kreira duplu uplatu
-- API response ne prikazuje duplicirane payments u istoj session kolekciji
+### 5. GDPR je samo upozorenje, ne funkcionalnost
 
-### 5. `issue_invoice` nema jasno zaključavanje cijelog invoice workflowa
+README dobro upozorava na GDPR/access-control, ali sustav treba stvarne alate:
 
-`issue_invoice` dodjeljuje broj i status `issued`, ali treba testirati i osigurati:
+- user management
+- disable user
+- token expiration
+- access log za čitanje pacijentovih podataka
+- export pacijentovih podataka
+- soft delete/retention politika
+- audit čitanja osjetljivih entiteta, barem opcionalno
 
-- invoice mora imati barem jednu stavku
-- total_amount mora biti > 0 ili policy jasno dopušta 0
-- invoice lines se nakon issue ne mogu dodavati/mijenjati/brisati
-- payment se smije dodati samo na issued/partially_paid, ne na draft ako tako odlučimo
+### 6. OpenAPI treba postati ugovor, ne samo automatska dokumentacija
 
-Trenutno `ensure_invoice_payable` blokira samo cancelled. Treba odlučiti smije li se plaćati draft. Moj stav: **ne smije**. Prvo issue, onda payment.
+`response_model` se koristi u inventory rutama, ali treba sustavno proći sve rute.
 
-### 6. `update_invoice` endpoint je preširok
+Vanjski sustavi, AI agenti i budući integracijski partneri trebaju stabilan API contract:
 
-Generic PATCH na invoice može mijenjati širok skup polja. To je opasno nakon issue.
+- jasne request sheme
+- jasne response sheme
+- error response model
+- examples
+- zabrana curenja hashiranih ključeva, lozinki ili internih podataka
 
-Treba ograničiti:
+### 7. Transakcijska disciplina mora biti dokazana testovima
 
-- draft: dopuštene administrativne izmjene
-- issued: samo vrlo ograničena polja, npr. notes ili fiscalization metadata
-- paid/cancelled: gotovo ništa bez posebnog workflowa
+Neki servisi već validiraju unaprijed, što je dobro, ali sada treba dokazati rollback ponašanje:
 
-### 7. `create_invoice` s korisničkim invoice_number je rizičan
+- ako potrošnja materijala ne uspije, appointment ne smije završiti kao completed
+- ako purchase receiving padne na jednoj stavci, prethodne stavke iz istog requesta ne smiju ostati zaprimljene
+- ako uplata iznad iznosa padne, invoice status se ne smije promijeniti
+- ako transfer padne, source batch mora ostati netaknut
 
-Endpoint dopušta payload invoice number ili generira draft. Za sigurnost je bolje:
+### 8. Modularnost još nije pravi engine
 
-- ignorirati korisnički invoice_number za draft
-- uvijek generirati `DRAFT-...`
-- službeni broj samo preko `/issue`
+Projekt ima `Module` i `Service`, ali za stvarnu modularnost treba manifest sustav:
 
-Inače vanjski API ili korisnik može slučajno napraviti nered u numeraciji.
+- module.json
+- services.json
+- material_templates.json
+- workflows.json
+- patient_instructions.json
+- ai_prompts.json
 
-### 8. Procurement receiving treba rollback test i možda service-level snapshots
+Moduli moraju biti podaci/konfiguracija, ne proizvoljan izvršni plugin kod.
 
-`receive_purchase_order` sada vraća tuple `(line, batch, movement)`, što je dobro za audit. Ali treba osigurati da se audit radi tek nakon svih validacija ili da rollback briše i audit ako nešto pukne.
+## Moja ocjena
 
-Preporuka:
+### Arhitektura
 
-- prvo validirati sve receive lines
-- zatim primijeniti promjene
-- zatim auditirati
+Vrlo dobra za ovaj stadij. Smjer je ispravan.
 
-Tako se smanjuje rizik polovičnih promjena.
+### Backend domena
 
-### 9. Nedostaje modularni documentation layer
+Snažna MVP jezgra.
 
-Projekt ima arhitektonske review dokumente i Codex promptove, ali treba dokumente koji su direktno operativni:
+### Inventory/procurement
 
-- `docs/TESTING.md`
-- `docs/SECURITY_MODEL.md`
-- `docs/INVENTORY_LEDGER.md`
-- `docs/BILLING_WORKFLOW.md`
-- `docs/PROCUREMENT_WORKFLOW.md`
+Najveća vrijednost projekta. Ovo već izgleda kao početak medicinskog ERP-light sustava.
 
-### 10. README i SECURITY još trebaju produkcijsko upozorenje
+### Billing
 
-README i dalje ima dev credentiale. To je OK, ali mora biti jasno označeno kao development-only. Treba dodati `SECURITY.md` i compliance disclaimere.
+Dobar temelj, ali nije spreman za Hrvatsku bez fiskalizacijskog adaptera.
 
-## Moj stav o prioritetu
+### AI integracija
 
-Sada više ne bih radio nove funkcije. Ne bih radio Google Calendar. Ne bih radio fiskalizaciju. Ne bih radio nove medicinske module.
+Dobro zamišljena kroz scoped API key, ali AI agent ne smije dobiti više ovlasti dok testovi ne pokriju permissione.
 
-Sljedeći sprint mora biti:
+### Testovi
+
+Najveći blocker.
+
+### Produkcija
+
+Nije spremno za stvarnu uporabu.
+
+## Preporučeni sljedeći Codex sprint
+
+Naziv sprinta:
+
+**Reliability First Sprint**
+
+Prioriteti:
 
 1. pytest infrastruktura
-2. business-rule testovi
-3. CI pipeline
-4. transaction rollback testovi
-5. invoice status/issue/payment policy
-6. security/compliance docs
-
-Tek nakon toga ima smisla razvijati frontend workflowe, integracije, module i fiskalizaciju.
+2. testovi za appointment overlap
+3. testovi za RBAC i AI API key scope
+4. testovi za FEFO i appointment material consumption
+5. testovi za purchase receiving i rollback
+6. testovi za invoice/payment workflow
+7. audit tests
+8. GitHub Actions CI
+9. OpenAPI cleanup
+10. fiscalization adapter stub
+11. production hardening docs
+12. tek onda frontend operational screens
 
 ## Zaključak
 
-Projekt je došao do vrlo dobre razvojne točke. Sada ima core scheduling, inventory, procurement i billing arhitekturu koja ima smisla.
+ASTRA Clinic Core sada ima dovoljno dobru jezgru da ga vrijedi ozbiljno graditi dalje.
 
-Najveća opasnost sada je lažni osjećaj sigurnosti: kod izgleda zrelo, ali bez testova i CI-ja nije dokazano zreo.
+Ali sada treba stati s dodavanjem novih funkcija. Sljedeći korak nije još jedan modul, još jedan AI feature ili ljepši dashboard. Sljedeći korak je dokazati da postojeće funkcije rade ispravno i da se neće raspasti kod prve promjene.
 
-Moj čvrst zaključak: **ASTRA Clinic Core sada treba postati test-driven i transaction-safe prije bilo kakvog daljnjeg širenja.**
+Moj stav: **bez testova i CI-ja ovaj projekt ne smije ići u širenje**. Nakon testova i CI-ja, ima potencijal postati jako zanimljiva open-source clinic operations platforma.
