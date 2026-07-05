@@ -57,9 +57,75 @@ ROLE_PERMISSIONS = {
     "ai_agent": ["ai.appointments.create", "ai.patients.create", "ai.free_slots.read"],
 }
 
+MODULE_SEEDS = [
+    {"key": "scheduling", "name": "Narucivanje", "description": "Pacijenti, termini i dnevni raspored"},
+    {"key": "inventory", "name": "Inventar", "description": "Zalihe, LOT i rokovi trajanja"},
+    {"key": "procurement", "name": "Nabava", "description": "Dobavljaci i narudzbenice"},
+    {"key": "billing", "name": "Naplata", "description": "Priprema racuna i stavki"},
+    {"key": "ai_agents", "name": "AI agenti", "description": "API rute za automatizaciju"},
+]
+
+GASTRO_SERVICE_SEEDS = [
+    {"name": "Prvi gastroenteroloski pregled", "code": "GASTRO-FIRST-EXAM", "duration": 30, "price": "90.00"},
+    {"name": "Kontrolni pregled", "code": "GASTRO-CHECK", "duration": 30, "price": "70.00"},
+    {"name": "Ultrazvuk abdomena", "code": "GASTRO-ABDOMEN-US", "duration": 30, "price": "80.00"},
+    {"name": "Pregled + ultrazvuk abdomena", "code": "GASTRO-EXAM-ABDOMEN-US", "duration": 45, "price": "140.00"},
+    {"name": "Ezofagogastroduodenoskopija", "code": "GASTRO-EGD", "duration": 30, "price": "150.00"},
+    {"name": "Ezofagogastroduodenoskopija u analgosedaciji", "code": "GASTRO-EGD-SED", "duration": 45, "price": "220.00"},
+    {"name": "Totalna kolonoskopija bez anestezije", "code": "GASTRO-COL-NO-AN", "duration": 45, "price": "260.00"},
+    {"name": "Kolonoskopija sa sedacijom", "code": "GASTRO-COL-SED", "duration": 45, "price": "220.00"},
+    {"name": "Totalna kolonoskopija - ileoskopija", "code": "GASTRO-COL-ILEO", "duration": 45, "price": "300.00"},
+    {"name": "Totalna kolonoskopija - ileoskopija u sedaciji", "code": "GASTRO-COL-ILEO-SED", "duration": 75, "price": "400.00"},
+    {"name": "Doppler hemoroidalnih arterija", "code": "GASTRO-HEM-DOPPLER", "duration": 30, "price": "100.00"},
+    {"name": "Polipektomija osnovna / do 2 polipa", "code": "GASTRO-POLYPECTOMY-BASIC", "duration": 15, "price": "250.00"},
+    {"name": "PH / biopsija, prvi uzorak", "code": "GASTRO-PH-BIOPSY-FIRST", "duration": 30, "price": "130.00"},
+    {"name": "H. pylori ureaza test", "code": "GASTRO-HP-UREASE", "duration": 30, "price": "35.00"},
+    {"name": "H. pylori antigen test", "code": "GASTRO-HP-ANTIGEN", "duration": 20, "price": "40.00"},
+    {"name": "UBT izdisajni test", "code": "GASTRO-UBT", "duration": 120, "price": "85.00"},
+    {"name": "Rektoskopija", "code": "GASTRO-RECTOSCOPY", "duration": 30, "price": "100.00"},
+    {"name": "Rektosigmoidoskopija", "code": "GASTRO-RECTOSIGMOIDOSCOPY", "duration": 30, "price": "125.00"},
+    {"name": "Parcijalna kolonoskopija", "code": "GASTRO-PARTIAL-COL", "duration": 45, "price": "160.00"},
+    {"name": "Gastroskopija", "code": "GASTRO-GASTRO", "duration": 30, "price": "120.00"},
+    {"name": "HarmonyCa tretman", "code": "AEST-HARMONYCA", "duration": 50, "price": "450.00"},
+]
+
+
+def seed_catalog(db: Session) -> None:
+    modules: dict[str, Module] = {}
+    for module_seed in MODULE_SEEDS:
+        module = db.scalar(select(Module).where(Module.key == module_seed["key"]))
+        if module is None:
+            module = Module(**module_seed)
+            db.add(module)
+        else:
+            module.name = module_seed["name"]
+            module.description = module_seed["description"]
+            module.enabled = True
+        modules[module_seed["key"]] = module
+    db.flush()
+
+    scheduling = modules["scheduling"]
+    for service_seed in GASTRO_SERVICE_SEEDS:
+        service = db.scalar(select(Service).where(Service.code == service_seed["code"]))
+        values = {
+            "name": service_seed["name"],
+            "duration_minutes": service_seed["duration"],
+            "price": Decimal(service_seed["price"]),
+            "module_id": scheduling.id,
+            "active": True,
+        }
+        if service is None:
+            db.add(Service(code=service_seed["code"], **values))
+        else:
+            for field, value in values.items():
+                setattr(service, field, value)
+    db.flush()
+
 
 def seed(db: Session) -> None:
     if db.scalar(select(User).limit(1)):
+        seed_catalog(db)
+        db.commit()
         return
 
     permissions = {name: Permission(name=name, description=name) for name in PERMISSIONS}
@@ -98,6 +164,8 @@ def seed(db: Session) -> None:
         Service(name="HarmonyCa tretman", code="AEST-HARMONYCA", duration_minutes=50, price=Decimal("450.00"), module_id=gastro.id),
     ]
     db.add_all(services)
+    db.flush()
+    seed_catalog(db)
 
     patient = Patient(first_name="Ivana", last_name="Horvat", date_of_birth=date(1984, 5, 12), phone="+385 91 234 5678", email="ivana.horvat@example.com")
     db.add(patient)
