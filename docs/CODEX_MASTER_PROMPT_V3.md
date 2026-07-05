@@ -1,76 +1,92 @@
-# Codex master prompt v3 — testing, transactions and production discipline
+# Codex master prompt v3 — ASTRA Clinic Core testing, CI and hardening sprint
 
 Use this prompt in Codex for the next development sprint of `radicdavor/ASTRA-Clinic-Core`.
 
 ---
 
-You are a senior full-stack software architect and developer.
+You are a senior full-stack architect and developer.
 
-You are working on `radicdavor/ASTRA-Clinic-Core`, an open-source modular clinic operations platform.
+You are continuing ASTRA Clinic Core, an open-source modular, API-first clinic operations platform.
 
-The project already has a meaningful MVP foundation:
+The project is no longer just a scaffold. It now has meaningful backend logic for:
 
-- FastAPI backend
-- PostgreSQL
-- Alembic workflow documented
-- React + TypeScript frontend
-- Docker Compose
-- JWT auth
-- permission-based RBAC
-- scoped API keys for AI agents
-- structured audit log
+- patients
+- appointments
 - appointment conflict validation
-- inventory items, batches and stock movements
-- FEFO consumption
+- RBAC permissions
+- scoped API keys for AI agents
+- structured audit
+- inventory items
+- batches and FEFO consumption
+- stock transfers
 - suppliers
-- purchase orders with lines
-- purchase receiving that creates inventory batches
-- invoices with invoice lines
+- purchase orders and purchase order lines
+- purchase receiving that creates inventory batches and stock movements
+- invoices
+- invoice lines
+- invoice draft from appointment
+- invoice issuing
 - payment transactions
-- draft invoice from appointment
-- appointment material consumption workflow
 
-Your task in this sprint is not to add new modules. Your task is to prove correctness and reduce risk.
+Your task is now to stop feature sprawl and stabilize the system.
 
-## Sprint theme
+## Main sprint objective
 
-**Stabilize before expanding.**
+Build confidence.
 
-Do not add Google Calendar, new medical modules, voice agents, fiscalization implementation or major UI redesign in this sprint.
+Do not add new medical modules yet. Do not add cosmetic UI features first. The next sprint must make the project testable, safer, and harder to break.
 
 Focus on:
 
-1. tests
-2. service-layer refactor
-3. atomic transactions
-4. invoice numbering correctness
-5. CI
-6. security/compliance documentation
+1. backend test suite
+2. CI baseline
+3. OpenAPI schema stabilization
+4. transaction/rollback correctness
+5. fiscalization adapter stub
+6. production hardening basics
+7. frontend operational gaps only after backend tests pass
+
+## Strategic rule
+
+ASTRA Clinic Core must remain a clinic operating system, not a bloated EMR and not a giant ERP.
+
+The core workflows are:
+
+- schedule patient
+- manage daily flow
+- consume material based on service
+- order stock
+- receive stock
+- invoice appointment
+- track payment
+- audit all critical changes
+- allow AI agent only within strict scopes
 
 ## Phase 1 — add backend test infrastructure
 
-Add pytest-based backend tests.
+Add pytest infrastructure for backend.
 
-Recommended tools:
+Tasks:
 
-- pytest
-- pytest-asyncio only if needed
-- httpx TestClient or FastAPI TestClient
-- a dedicated test database
-- SQLAlchemy transaction rollback fixture
-
-Create structure:
-
-```text
-backend/tests/
-  conftest.py
-  test_auth_permissions.py
-  test_appointments.py
-  test_inventory.py
-  test_procurement.py
-  test_billing.py
-  test_audit.py
-```
+- Add pytest dependencies.
+- Add test database configuration.
+- Add fixtures for:
+  - database session
+  - test client
+  - admin user
+  - physician user
+  - receptionist user
+  - inventory manager user
+  - billing user
+  - AI API key
+  - patient
+  - provider
+  - room
+  - services
+  - inventory item
+  - stock location
+- Tests must run isolated and repeatably.
+- Prefer PostgreSQL test service if practical; if using SQLite for speed, be careful because locking/check constraints may differ. For inventory concurrency/transaction tests, prefer PostgreSQL.
 
 Add command:
 
@@ -86,386 +102,388 @@ cd backend && pytest
 
 Acceptance criteria:
 
-- tests can be run locally with one command
-- test database is isolated from development database
-- tests do not depend on manual seed unless the fixture explicitly seeds data
+- Test suite runs with one command.
+- Tests do not require manual seed data.
+- Tests do not modify development database.
 
-## Phase 2 — critical permission tests
+## Phase 2 — appointment tests
 
-Test that RBAC and AI API keys actually work.
-
-Required tests:
-
-1. admin can access all critical endpoints
-2. user without `inventory.write_off` cannot call `/api/inventory/write-off`
-3. user without `billing.mark_paid` cannot create payment
-4. API key with only `ai.appointments.create` cannot mark invoice paid
-5. API key with only AI scopes cannot adjust stock
-6. API key action is audit logged as `api_key`
-
-Acceptance criteria:
-
-- destructive operations fail with 403 without explicit permission
-- API key scopes are enforced
-
-## Phase 3 — appointment tests
+Add tests for appointment correctness.
 
 Required tests:
 
-1. create appointment succeeds
-2. reject appointment if `end_time <= start_time`
-3. reject provider overlap
-4. reject room overlap
-5. cancelled appointment does not block slot
-6. no_show appointment does not block slot if configured as non-blocking
-7. update appointment revalidates conflicts
-8. audit log contains before/after after update
+1. create appointment success
+2. reject end_time <= start_time
+3. reject invalid appointment status
+4. reject invalid appointment source
+5. reject provider overlap
+6. reject room overlap
+7. allow cancelled appointment not to block slot
+8. allow no_show appointment not to block slot if configured as non-blocking
+9. schedule/day returns appointments ordered by start_time
+10. audit log is created for appointment create/update/delete
 
 Acceptance criteria:
 
-- double booking cannot pass tests
-- appointment conflict behavior is documented and stable
+- Conflict validation cannot regress silently.
+- Update appointment also checks conflicts.
+
+## Phase 3 — RBAC and AI API key tests
+
+Add tests for permission boundaries.
+
+Required tests:
+
+1. unauthenticated request is rejected
+2. user without permission is rejected
+3. admin can create API key
+4. API key is stored hashed, raw key returned only once
+5. AI API key with `ai.free_slots.read` can read free slots
+6. AI API key without `inventory.adjust` cannot adjust stock
+7. AI API key without `billing.mark_paid` cannot mark invoice paid
+8. receptionist cannot write off stock
+9. inventory manager cannot mark invoice paid
+10. billing user cannot write off stock
+
+Acceptance criteria:
+
+- AI agent cannot perform destructive or financial actions unless explicitly scoped.
+- Sensitive operations fail with 403, not 500.
 
 ## Phase 4 — inventory ledger tests
 
+Add tests for inventory correctness.
+
 Required tests:
 
-1. create inventory item
-2. create batch requires positive quantity
-3. item with lot tracking requires lot number
-4. item with expiration tracking requires expiration date
-5. FEFO consumes earliest expiration batch first
-6. insufficient stock raises 409 and does not change any batch
-7. transfer preserves total stock
+1. create item
+2. create batch
+3. batch requires LOT if lot_tracking_enabled
+4. batch requires expiration_date if expiration_tracking_enabled
+5. FEFO consumes earliest expiration first
+6. FEFO skips null expiration until later
+7. insufficient stock rolls back and leaves all batch quantities unchanged
 8. write-off requires reason
 9. adjustment requires reason
-10. recalculate stock repairs `current_stock`
-11. `current_stock` equals sum of all batch quantities after operations
+10. transfer requires reason
+11. transfer preserves total stock
+12. transfer merges into existing target batch when item + lot + expiration + location + purchase_price + supplier match
+13. recalculate stock fixes corrupted current_stock cache
+14. low-stock endpoint returns items below reorder point
+15. expiring endpoint returns batches within requested days
 
 Acceptance criteria:
 
-- all stock-changing paths are covered
-- negative stock cannot occur
-- rollback behavior is verified
+- InventoryItem.current_stock always matches sum of InventoryBatch.quantity after operations.
+- No operation can create negative quantity.
 
 ## Phase 5 — procurement tests
 
+Add tests for purchase order workflow.
+
 Required tests:
 
-1. create supplier
-2. create purchase order
-3. add purchase order line
-4. update purchase order line recalculates total
-5. delete unreceived purchase order line recalculates total
-6. cannot delete received purchase order line
-7. partial receive creates InventoryBatch and StockMovement
-8. full receive changes PO status to `received`
-9. over-receive is rejected
-10. tracked item requires LOT/expiration on receiving
-11. receiving recalculates inventory stock
+1. create purchase order
+2. add purchase order line
+3. update purchase order line
+4. delete purchase order line only while allowed
+5. recalculate PO total
+6. partial receive creates InventoryBatch
+7. partial receive creates StockMovement purchase_receipt
+8. partial receive updates quantity_received
+9. partial receive sets status partially_received
+10. full receive sets status received
+11. reject over-receive
+12. require LOT/expiration on receive when item tracking requires it
+13. receiving multiple lines is atomic: if one line fails, no batches are created
 
 Acceptance criteria:
 
-- purchase receiving is proven to be real stock receiving
-- PO status is derived from line quantities
+- Purchase receiving is trustworthy.
+- PO status is derived from line state.
 
 ## Phase 6 — billing tests
 
+Add tests for invoice workflow.
+
 Required tests:
 
-1. draft invoice from appointment creates invoice and service line
-2. second draft request for same appointment returns existing invoice
-3. add invoice line recalculates total
-4. update invoice line recalculates total
-5. delete invoice line recalculates total
-6. create partial payment sets status to `partially_paid`
-7. create full payment sets status to `paid`
-8. mark-paid creates remaining payment only once
-9. overpayment behavior is defined and tested: either reject or allow with explicit status
-10. user without `billing.mark_paid` cannot pay invoice
+1. draft invoice from appointment
+2. draft invoice includes service line
+3. repeated draft from same appointment returns existing invoice, does not duplicate
+4. add invoice line while draft
+5. update invoice line while draft
+6. delete invoice line while draft
+7. issue invoice generates final invoice number
+8. cannot edit invoice lines after issue
+9. record partial payment
+10. record final payment
+11. reject payment above total amount
+12. mark paid requires billing.mark_paid
+13. cannot cancel paid invoice in MVP workflow
+14. invoice total and payment_status are recalculated correctly
 
 Acceptance criteria:
 
-- invoice total and payment status are correct
-- payment logic cannot double count relationship objects
+- Billing state transitions are deterministic.
+- PaymentTransaction is the source of payment history.
 
-## Phase 7 — refactor endpoint logic into service layer
+## Phase 7 — audit tests
 
-Current risk:
+Add tests for audit consistency.
 
-Some endpoint functions call other endpoint functions or contain too much business logic.
+Required tests:
 
-Refactor into services:
-
-```text
-backend/app/services/
-  appointments.py
-  inventory.py
-  procurement.py
-  billing.py
-  audit.py
-```
-
-Required service functions:
-
-Appointments:
-
-- `validate_appointment_payload(...)`
-- `complete_appointment_with_consumption(...)`
-
-Inventory:
-
-- `consume_fefo(...)`
-- `transfer_batch(...)`
-- `recalculate_stock(...)`
-- `recalculate_all_stock(...)`
-
-Procurement:
-
-- `recalculate_purchase_order_total(order)`
-- `derive_purchase_order_status(order)`
-- `receive_purchase_order(order, payload, actor, request)`
-
-Billing:
-
-- `next_invoice_number(...)`
-- `draft_invoice_from_appointment(...)`
-- `recalculate_invoice_total(invoice)`
-- `record_payment(invoice, payment_payload, actor)`
-- `mark_invoice_paid(invoice, method, actor)`
-
-Important:
-
-- Do not call endpoint functions from endpoint functions.
-- Endpoint functions should validate request/auth, call service, commit/return.
-- Keep transaction boundaries explicit.
+1. patient update includes before_json and after_json
+2. appointment update includes before_json and after_json
+3. inventory batch create is audited
+4. stock write-off is audited with reason
+5. purchase order receive audits batch and movement creation
+6. invoice payment is audited
+7. API key actor appears as api_key, not user/system
+8. audit log requires audit.read permission
 
 Acceptance criteria:
 
-- `mark_paid` no longer calls `create_payment` endpoint function.
-- purchase receiving logic lives in service layer or is cleanly isolated.
-- tests still pass.
+- Every critical mutation can be reconstructed from audit log.
 
-## Phase 8 — atomic transaction behavior
+## Phase 8 — transaction rollback tests
 
-Test and enforce atomicity.
+Add explicit rollback tests.
 
-Critical scenario:
+Required tests:
 
-Appointment completion consumes multiple materials. If material 1 is available but material 2 is not, no material should be consumed and appointment should not be completed.
+1. appointment complete-with-consumption fails if stock insufficient and appointment remains not completed
+2. purchase order receive with two valid lines and one invalid line creates no batches and no movements
+3. invoice payment above total creates no payment and does not change invoice status
+4. stock transfer failure leaves source batch unchanged
+
+Acceptance criteria:
+
+- Multi-step domain operations are atomic.
+
+## Phase 9 — CI baseline
+
+Add GitHub Actions workflow.
+
+File:
+
+`.github/workflows/ci.yml`
+
+Workflow should run on push and pull_request.
+
+Jobs:
+
+Backend:
+
+- checkout
+- setup Python
+- install backend dependencies
+- run lint if configured
+- run pytest
+
+Frontend:
+
+- setup Node
+- install frontend dependencies
+- run TypeScript check if configured
+- run frontend build
+
+Optional integration job:
+
+- start PostgreSQL service
+- run Alembic migrations
+- run backend tests against PostgreSQL
+
+Acceptance criteria:
+
+- CI fails if tests fail.
+- CI fails if frontend does not build.
+- README documents CI status and local test command.
+
+## Phase 10 — OpenAPI and response models
+
+Stabilize API contracts.
 
 Tasks:
 
-- ensure service functions do not commit internally
-- endpoint commits only after all operations succeed
-- tests verify rollback on failure
+- Add response_model to remaining major routes.
+- Avoid returning raw SQLAlchemy objects where sensitive fields may leak.
+- Add ErrorResponse schema.
+- Add examples to important request schemas.
+- Ensure API key raw value is returned only at creation.
+- Ensure password_hash and key_hash never appear in responses.
 
-Required rollback tests:
+Priority endpoints:
 
-1. material consumption failure rolls back all batch changes
-2. PO receiving failure rolls back all received lines and batch creation
-3. invoice payment failure does not partially update invoice status
+- auth login
+- auth API key creation/listing
+- patients
+- appointments
+- schedule/day
+- ai/free-slots
+- inventory
+- purchase-orders
+- invoices
+- audit-log
 
 Acceptance criteria:
 
-- no partial business state after failure
+- `/docs` is usable as an integration contract for AI agents and external systems.
 
-## Phase 9 — invoice number safety
+## Phase 11 — fiscalization adapter stub
 
-Current risk:
+Do not implement Croatian fiscalization fully yet. Add architectural boundary.
 
-Generating invoice number from last ID is not concurrency safe.
+Add module:
 
-Implement safer strategy.
+`backend/app/services/fiscalization.py`
 
-Preferred design:
+Classes/interfaces:
 
-- draft invoice can exist without official invoice number OR with temporary internal draft number
-- official invoice number is assigned only on `issue` action
-- create `InvoiceNumberSequence` table or use a DB sequence
+- `FiscalizationResult`
+- `FiscalizationProvider`
+- `NoopFiscalizationProvider`
+- `CroatiaFiscalizationProviderStub`
 
-Add invoice issue endpoint:
+Behavior:
+
+- Issued invoice can optionally call provider.
+- Noop provider returns status `not_configured`.
+- Stub should not call real external services.
+- Store fiscalization_status and fiscalization_reference if fields exist.
+- Audit fiscalization attempts.
+
+Acceptance criteria:
+
+- Future Croatian fiscalization can be added without rewriting invoice logic.
+- Current local development remains safe and offline.
+
+## Phase 12 — production hardening basics
+
+Add basic security hardening.
+
+Tasks:
+
+- Document required production env vars.
+- Enforce warning/error if JWT_SECRET is default in production mode.
+- Add token expiration configuration.
+- Add simple login rate limiting or document TODO if too large.
+- Add CORS per environment.
+- Add backup script:
+  - `scripts/backup_postgres.sh`
+- Add restore instructions.
+- Add `SECURITY.md`.
+- Add `docs/DEPLOYMENT_GOOGLE_CLOUD.md` with Cloud Run + Cloud SQL direction.
+
+Acceptance criteria:
+
+- Project clearly distinguishes local/dev from production.
+- No one can accidentally deploy with `change-this-local-secret` in production.
+
+## Phase 13 — frontend operational flows after backend tests pass
+
+Only after tests and CI are green.
+
+Add or improve UI for:
+
+- receive purchase order lines
+- show ordered/received/remaining quantities
+- stock transfer with mandatory reason
+- write-off with mandatory reason
+- appointment completion with material consumption
+- invoice draft from appointment
+- issue invoice
+- record payment
+- audit filters
+- API key management
+
+Acceptance criteria:
+
+- A clinic user can perform daily workflows without curl.
+- Dangerous actions ask for confirmation.
+- Form validation mirrors backend validation.
+
+## Phase 14 — modular workflow engine foundation
+
+Only after hardening.
+
+Add manifest structure:
 
 ```text
-POST /api/invoices/{invoice_id}/issue
+backend/app/modules/catalog/
+  gastroenterology/
+    module.json
+    services.json
+    material_templates.json
+    workflows.json
+    patient_instructions.json
+    ai_prompts.json
 ```
 
-Rules:
+Initial modules:
 
-- only draft invoice can be issued
-- issued invoice gets official invoice_number
-- invoice_number must be unique and concurrency safe
-- issued invoice lines should not be freely editable without special correction/storno workflow
+- gastroenterology
+- endoscopy
+- dermatology_aesthetics
+- colonoscopy_prep
+- h_pylori
+- sibo_imo
+- mounjaro
 
-Acceptance criteria:
+Start simple:
 
-- test concurrent-ish issuing or sequence uniqueness
-- no duplicate invoice numbers
-- draft invoices do not consume official fiscal numbering if that is the chosen policy
-
-## Phase 10 — invoice status transition rules
-
-Define allowed transitions:
-
-- draft -> issued
-- draft -> cancelled
-- issued -> partially_paid
-- issued -> paid
-- issued -> cancelled only if no payments and if policy allows
-- paid -> refunded later, not necessarily implemented now
-- cancelled is terminal
-
-Rules:
-
-- cannot add payment to cancelled invoice
-- cannot edit issued invoice lines without explicit permission or correction flow
-- cannot delete paid invoice
+- load services
+- load material templates
+- expose modules via API
+- no dynamic code execution
 
 Acceptance criteria:
 
-- invalid transitions return 409 or 422
-- tests cover invalid transitions
+- Adding a new module does not require editing core models.
+- Module manifests are data/config, not arbitrary executable plugins.
 
-## Phase 11 — improve material consumption semantics
+## Coding rules
 
-Clarify service material template behavior.
-
-Add explicit fields or derived behavior in suggestion response:
-
-- `auto_consumable`
-- `requires_user_quantity`
-- `optional`
-- `available_stock`
-- `warning`
-
-Rules:
-
-- required + non-variable item can be auto-consumed
-- required + variable item must have user-provided quantity before completion
-- optional item is only consumed if user selects it
-- if required item has insufficient stock, completion fails unless special override permission is later added
-
-Acceptance criteria:
-
-- propofol-like variable required material does not silently consume default quantity
-- required variable material without user quantity blocks completion with clear message
-
-## Phase 12 — CI pipeline
-
-Add GitHub Actions.
-
-Create:
-
-```text
-.github/workflows/ci.yml
-```
-
-Run:
-
-- backend install
-- backend lint if configured
-- backend pytest
-- frontend install
-- frontend build
-- optional Docker Compose smoke test
-
-Acceptance criteria:
-
-- pull requests and pushes run CI
-- failing tests block confidence immediately
-
-## Phase 13 — frontend smoke tests or build hardening
-
-If full frontend test setup is too much, at minimum ensure:
-
-- `npm run build` works in CI
-- TypeScript build has no errors
-- API client types are not obviously broken
-
-Optional:
-
-- add Vitest smoke tests for login/dashboard/inventory pages
-
-Acceptance criteria:
-
-- frontend build is part of CI
-
-## Phase 14 — README security and compliance update
-
-Update README with explicit warnings:
-
-- default credentials are development-only
-- change `JWT_SECRET` in any real deployment
-- change admin password immediately
-- configure production CORS
-- use HTTPS
-- back up PostgreSQL
-- this is not a certified EMR
-- this is not a certified medical device
-- real patient data requires GDPR-compliant deployment, DPA/vendor assessment and access controls
-
-Add `SECURITY.md`:
-
-- supported versions
-- vulnerability reporting
-- secret handling
-- PHI/PII warning
-
-Add `LICENSE` decision placeholder if not decided.
-
-Acceptance criteria:
-
-- no one can confuse local demo config with production-safe deployment
-
-## Phase 15 — architecture docs update
-
-Update or add:
-
-```text
-docs/TESTING.md
-docs/SECURITY_MODEL.md
-docs/BILLING_WORKFLOW.md
-docs/INVENTORY_LEDGER.md
-```
-
-Keep docs concise and operational.
-
-## Strict rules for this sprint
-
-- Do not add new medical modules.
-- Do not implement Croatian fiscalization yet; only prepare workflow safely.
-- Do not add voice agent functionality.
-- Do not add Google Calendar integration.
-- Do not perform large frontend redesign.
-- Do not hide failing tests.
-- Do not store raw API keys.
-- Do not introduce endpoint-to-endpoint calls.
-- Do not commit production secrets.
+- Keep commits small and coherent.
+- Add tests with every important business rule.
+- Do not weaken permission checks.
+- Do not allow AI API keys to do destructive operations by default.
+- Use transactions for multi-step domain operations.
+- Do not return secrets.
+- Do not add real external fiscalization calls yet.
+- Prefer PostgreSQL-compatible tests for locking/transactions.
+- Keep UI labels in Croatian when user-facing.
+- Keep code/API names in English.
 
 ## Suggested commit sequence
 
 1. `test: add backend pytest infrastructure`
-2. `test: cover permissions api keys and appointment conflicts`
-3. `test: cover inventory ledger fefo and rollback behavior`
-4. `test: cover procurement receiving and billing payments`
-5. `refactor: move procurement and billing logic into services`
-6. `fix: make appointment material consumption atomic`
-7. `feat: add safe invoice issuing and numbering workflow`
-8. `feat: enforce invoice status transitions`
-9. `ci: add backend and frontend continuous integration`
-10. `docs: add security compliance testing and workflow documentation`
+2. `test: cover appointment conflict and scheduling rules`
+3. `test: cover rbac and ai api key permissions`
+4. `test: cover inventory ledger and fefo behavior`
+5. `test: cover purchase order receiving workflow`
+6. `test: cover billing invoice and payment workflow`
+7. `test: cover structured audit logging`
+8. `ci: add backend and frontend github actions workflow`
+9. `docs: stabilize openapi response schemas and examples`
+10. `feat: add fiscalization provider stub`
+11. `chore: add production hardening docs and backup scripts`
+12. `feat: add frontend operational workflows for stock receiving and billing`
+13. `feat: add module manifest loader foundation`
 
-## Definition of done
+## Definition of done for this sprint
 
 This sprint is done when:
 
-- backend critical tests pass
-- CI runs tests and frontend build
-- endpoint business logic is moved into service functions where appropriate
-- appointment material consumption is atomic
-- PO receiving rollback behavior is tested
-- billing payment logic is tested
-- invoice numbering is concurrency safer
-- README and SECURITY.md warn clearly about production use
+- backend tests exist and pass
+- CI runs on push and PR
+- appointment/inventory/procurement/billing critical workflows are covered
+- AI API key boundaries are tested
+- audit before/after is tested
+- transaction rollback is tested
+- OpenAPI schemas are safer and clearer
+- fiscalization has a stub boundary
+- README documents testing, CI and production warnings
 
-Only after this sprint should the project move to new modules, Google Calendar, fiscalization, advanced frontend or AI voice workflows.
+Do not proceed to broad new feature work until this is complete.
