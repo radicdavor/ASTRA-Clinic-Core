@@ -1,6 +1,7 @@
 # Testing
 
 V3 introduced backend pytest coverage and CI. V4 expands that safety net around scheduling conflicts, role/API-key permissions, billing state transitions and transaction boundaries.
+V5 adds audit snapshot coverage and appointment material-consumption atomicity coverage.
 
 Run all local checks:
 
@@ -25,6 +26,9 @@ Current coverage focuses on:
 - failed purchase order receiving leaves no partial inventory mutation
 - appointment time validation, provider overlap and room overlap
 - cancelled appointments not blocking a new appointment slot
+- appointment update revalidating conflicts
+- appointment update audit before/after snapshots
+- appointment completion with material consumption failing atomically when stock is insufficient
 - invoice total recalculation
 - draft invoice creation from appointments
 - issued invoice line immutability

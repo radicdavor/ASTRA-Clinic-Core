@@ -1,27 +1,28 @@
 # Security Policy
 
-ASTRA Clinic Core is an early open-source clinic operations foundation. It is not a certified EMR and not a certified medical device.
+ASTRA Clinic Core is an early open-source clinic operations foundation. It is not a certified EMR, not a certified medical device and must not be used with real patient data without a production security and compliance review.
 
-## Production warning
+## Production Baseline
 
-- Default credentials are development-only.
-- Change `JWT_SECRET` before any non-local deployment.
-- Change the default admin password immediately.
-- Configure production CORS explicitly.
+- Change all default development credentials before deployment.
+- Set a strong `JWT_SECRET_KEY`.
+- Restrict CORS to trusted domains.
 - Use HTTPS only.
-- Back up PostgreSQL and test restore procedures.
-- Real patient data requires GDPR-compliant hosting, vendor assessment, access controls, logging and operational policies.
+- Store secrets outside the repository.
+- Configure encrypted backups and restore testing.
+- Review RBAC roles and API-key scopes before onboarding users or AI agents.
+- Deploy real patient data only in a GDPR-compliant environment with documented access control, audit retention and incident response.
 
-## Vulnerability reporting
+## Reporting
 
-Do not publish exploitable security details in public issues. Report vulnerabilities privately to the repository maintainer until a dedicated security advisory process is configured.
+For now, report security issues privately to the repository owner. Do not open public issues for vulnerabilities that expose patient, billing, authentication or infrastructure data.
 
-## Secret handling
+## Secret Handling
 
 - Never commit raw API keys, passwords, private keys or production `.env` files.
 - API keys are stored hashed.
 - Rotate keys immediately if exposure is suspected.
 
-## Supported versions
+## Supported Versions
 
 The project is pre-1.0. Security fixes target the current `main` branch.

@@ -49,7 +49,6 @@ from app.schemas.common import (
     SupplierOut,
 )
 from app.services.inventory import (
-    consume_fefo,
     ensure_batch_available,
     ensure_positive,
     expiring_batches,
@@ -57,6 +56,7 @@ from app.services.inventory import (
     recalculate_stock,
     transfer_batch,
 )
+from app.services.appointment_materials import consume_appointment_materials
 from app.services.billing import (
     add_invoice_line,
     delete_invoice_line as delete_invoice_line_service,
@@ -83,37 +83,6 @@ def update_from_payload(obj, payload) -> None:
 
 def audit_actor(db: Session, action: str, entity_type: str, entity_id: int | None, summary: str, actor: Actor, request: Request, before=None, after=None) -> None:
     audit(db, action, entity_type, entity_id, summary, actor.user_id, actor.actor_type, actor.api_key_id, before, after, request)
-
-
-def consume_appointment_materials(db: Session, appointment: Appointment, payload: AppointmentMaterialConsumptionRequest | None, actor: Actor, request: Request | None):
-    templates = db.scalars(select(ServiceMaterialTemplate).where(ServiceMaterialTemplate.service_id == appointment.service_id)).all()
-    if payload and payload.lines is not None:
-        requested = payload.lines
-        provided_item_ids = {line.inventory_item_id for line in requested}
-        missing_variable = [template for template in templates if template.required and template.variable_quantity_allowed and template.inventory_item_id not in provided_item_ids]
-        if missing_variable:
-            raise HTTPException(status_code=422, detail="Obavezni varijabilni materijal zahtijeva unesenu kolicinu")
-    else:
-        if any(template.required and template.variable_quantity_allowed for template in templates):
-            raise HTTPException(status_code=422, detail="Obavezni varijabilni materijal zahtijeva unesenu kolicinu")
-        requested = [
-            item
-            for item in (
-                type("ConsumptionLine", (), {"inventory_item_id": template.inventory_item_id, "quantity": template.default_quantity, "reason": "Potrosnja po terminu"})()
-                for template in templates
-                if template.required and not template.variable_quantity_allowed
-            )
-        ]
-    movements = []
-    for line in requested:
-        before_item = snapshot(db.get(InventoryItem, line.inventory_item_id))
-        movements.extend(consume_fefo(db, line.inventory_item_id, line.quantity, appointment.id, line.reason or "Potrosnja po terminu", actor.user_id))
-        after_item = snapshot(db.get(InventoryItem, line.inventory_item_id))
-        audit_actor(db, "update", "InventoryItem", line.inventory_item_id, "Potrosnja materijala po terminu", actor, request, before_item, after_item)
-    db.flush()
-    for movement in movements:
-        audit_actor(db, "create", "StockMovement", movement.id, "Potrosnja materijala po terminu", actor, request, None, snapshot(movement))
-    return movements
 
 
 @router.get("/inventory/items", response_model=list[InventoryItemOut])

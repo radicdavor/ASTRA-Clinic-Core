@@ -56,3 +56,33 @@ def test_create_appointment_succeeds(db):
     db.flush()
 
     assert obj.id is not None
+
+
+def test_update_appointment_revalidates_conflicts(db):
+    existing = appointment(db)
+    other_patient = patient(db, first_name="Other")
+    other_service = service(db, name="Other service")
+    candidate = appointment(
+        db,
+        patient_obj=other_patient,
+        provider_obj=provider(db, "dr. Candidate"),
+        room_obj=room(db, "Candidate room"),
+        service_obj=other_service,
+    )
+
+    candidate.provider_id = existing.provider_id
+
+    with pytest.raises(HTTPException) as exc:
+        validate_appointment_payload(
+            db,
+            candidate.date,
+            candidate.start_time,
+            candidate.end_time,
+            candidate.provider_id,
+            candidate.room_id,
+            candidate.status,
+            candidate.source,
+            appointment_id=candidate.id,
+        )
+
+    assert exc.value.status_code == 409
