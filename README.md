@@ -28,6 +28,20 @@ cp .env.example .env
 docker compose up --build
 ```
 
+Backend Docker entrypoint automatski pokreće:
+
+```bash
+alembic upgrade head
+python -m app.seed
+```
+
+Ako ste ranije pokretali prvu MVP verziju koja je bazu stvarala preko `create_all()`, resetirajte lokalni razvojni volume prije novog starta:
+
+```bash
+docker compose down -v
+docker compose up --build
+```
+
 3. Otvorite:
 
 - Aplikacija: http://localhost:5173
@@ -43,6 +57,11 @@ Početna prijava:
 
 - Pacijenti: unos, popis, detalj i ažuriranje preko API-ja
 - Termini: unos, popis, dnevni raspored, brza promjena statusa
+- Alembic migracije umjesto startup `create_all()`
+- Permission-based RBAC s eksplicitnim dozvolama po ulozi
+- Strukturirani audit log s before/after JSON snapshotima i request ID-jem
+- Validacija konflikta termina za liječnika i sobu
+- Scoped API key autentikacija za AI agente preko `X-ASTRA-API-Key`
 - Pretraživanje po pacijentu, usluzi i statusu
 - Katalog usluga i modularni registar
 - JWT prijava i osnovna kontrola uloga
@@ -115,6 +134,15 @@ Niska zaliha:
 ```bash
 curl http://localhost:8000/api/inventory/low-stock \
   -H "Authorization: Bearer $TOKEN"
+```
+
+Kreiranje ograničenog API ključa za AI agenta:
+
+```bash
+curl -X POST http://localhost:8000/auth/api-keys \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"name":"Booking agent","scopes":["ai.free_slots.read","ai.patients.create","ai.appointments.create"]}'
 ```
 
 ## Struktura

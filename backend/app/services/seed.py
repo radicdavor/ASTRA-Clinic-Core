@@ -11,6 +11,7 @@ from app.models.domain import (
     InventoryItem,
     Module,
     Patient,
+    Permission,
     Provider,
     Role,
     Room,
@@ -21,17 +22,60 @@ from app.models.domain import (
     User,
 )
 
+PERMISSIONS = [
+    "patients.read",
+    "patients.write",
+    "appointments.read",
+    "appointments.write",
+    "appointments.cancel",
+    "services.read",
+    "services.write",
+    "modules.read",
+    "inventory.read",
+    "inventory.write",
+    "inventory.adjust",
+    "inventory.write_off",
+    "procurement.read",
+    "procurement.write",
+    "billing.read",
+    "billing.write",
+    "billing.mark_paid",
+    "audit.read",
+    "admin.manage_users",
+    "ai.appointments.create",
+    "ai.patients.create",
+    "ai.free_slots.read",
+]
+
+ROLE_PERMISSIONS = {
+    "admin": PERMISSIONS,
+    "physician": ["patients.read", "patients.write", "appointments.read", "appointments.write", "services.read", "inventory.read", "billing.read"],
+    "nurse": ["patients.read", "appointments.read", "appointments.write", "inventory.read", "inventory.write"],
+    "receptionist": ["patients.read", "patients.write", "appointments.read", "appointments.write", "services.read", "billing.read"],
+    "inventory_manager": ["inventory.read", "inventory.write", "inventory.adjust", "inventory.write_off", "procurement.read", "procurement.write"],
+    "billing": ["billing.read", "billing.write", "billing.mark_paid", "patients.read", "appointments.read"],
+    "ai_agent": ["ai.appointments.create", "ai.patients.create", "ai.free_slots.read"],
+}
+
 
 def seed(db: Session) -> None:
     if db.scalar(select(User).limit(1)):
         return
 
-    admin_role = Role(name="admin", description="Administrator sustava")
-    staff_role = Role(name="staff", description="Recepcija i operativni tim")
-    db.add_all([admin_role, staff_role])
+    permissions = {name: Permission(name=name, description=name) for name in PERMISSIONS}
+    db.add_all(permissions.values())
     db.flush()
 
-    admin = User(email="admin@astra.local", full_name="ASTRA Administrator", password_hash=hash_password("astra123"), role_id=admin_role.id)
+    roles = {
+        name: Role(name=name, description=name.replace("_", " ").title())
+        for name in ROLE_PERMISSIONS
+    }
+    for role_name, permission_names in ROLE_PERMISSIONS.items():
+        roles[role_name].permissions = [permissions[name] for name in permission_names]
+    db.add_all(roles.values())
+    db.flush()
+
+    admin = User(email="admin@astra.local", full_name="ASTRA Administrator", password_hash=hash_password("astra123"), role_id=roles["admin"].id)
     provider = Provider(full_name="dr. Ana Kovač", specialty="Gastroenterologija")
     room = Room(name="Endoskopska sala 1", type="endoscopy_room")
     db.add_all([admin, provider, room])

@@ -21,6 +21,21 @@ class TokenResponse(BaseModel):
     user: dict
 
 
+class ApiKeyCreate(BaseModel):
+    name: str
+    scopes: list[str]
+    expires_at: DateTimeType | None = None
+
+
+class ApiKeyCreated(ORMModel):
+    id: int
+    name: str
+    scopes: list[str]
+    active: bool
+    expires_at: DateTimeType | None
+    key: str
+
+
 class PatientCreate(BaseModel):
     first_name: str
     last_name: str

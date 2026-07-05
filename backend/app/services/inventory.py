@@ -6,7 +6,12 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.audit.service import audit
-from app.models.domain import InventoryBatch, InventoryItem, StockMovement
+from app.models.domain import InventoryBatch, InventoryItem, StockMovement, StockMovementType
+
+
+def ensure_positive(quantity: Decimal) -> None:
+    if quantity <= 0:
+        raise HTTPException(status_code=422, detail="Količina mora biti veća od nule")
 
 
 def recalculate_stock(db: Session, item_id: int) -> None:
@@ -16,13 +21,25 @@ def recalculate_stock(db: Session, item_id: int) -> None:
         item.current_stock = total
 
 
+def ensure_batch_available(batch: InventoryBatch, quantity: Decimal) -> None:
+    ensure_positive(quantity)
+    if batch.quantity < quantity:
+        raise HTTPException(status_code=409, detail="Serija nema dovoljno zalihe")
+
+
 def consume_fefo(db: Session, item_id: int, quantity: Decimal, appointment_id: int | None = None, reason: str = "Potrošnja materijala") -> list[StockMovement]:
+    ensure_positive(quantity)
+    available = sum(batch.quantity for batch in db.scalars(select(InventoryBatch).where(InventoryBatch.inventory_item_id == item_id, InventoryBatch.quantity > 0)))
+    if available < quantity:
+        raise HTTPException(status_code=409, detail="Nedovoljno zaliha za FEFO potrošnju")
+
     remaining = quantity
     movements: list[StockMovement] = []
     batches = db.scalars(
         select(InventoryBatch)
         .where(InventoryBatch.inventory_item_id == item_id, InventoryBatch.quantity > 0)
         .order_by(InventoryBatch.expiration_date.asc().nulls_last(), InventoryBatch.id.asc())
+        .with_for_update()
     ).all()
     for batch in batches:
         if remaining <= 0:
@@ -35,16 +52,39 @@ def consume_fefo(db: Session, item_id: int, quantity: Decimal, appointment_id: i
             batch_id=batch.id,
             from_location_id=batch.location_id,
             quantity=take,
-            movement_type="consumption",
+            movement_type=StockMovementType.consumption.value,
             reason=reason,
             related_appointment_id=appointment_id,
         )
         db.add(movement)
         movements.append(movement)
-    if remaining > 0:
-        raise HTTPException(status_code=409, detail="Nedovoljno zaliha za FEFO potrošnju")
     recalculate_stock(db, item_id)
-    audit(db, "create", "StockMovement", item_id, f"FEFO potrošnja: {quantity}")
+    audit(db, "create", "StockMovement", item_id, f"FEFO potrošnja: {quantity}", actor_type="system")
+    return movements
+
+
+def transfer_batch(db: Session, batch: InventoryBatch, to_location_id: int, quantity: Decimal, reason: str | None, user_id: int | None = None) -> list[StockMovement]:
+    if not reason:
+        raise HTTPException(status_code=422, detail="Transfer mora imati razlog")
+    ensure_batch_available(batch, quantity)
+    batch.quantity -= quantity
+    target_batch = InventoryBatch(
+        inventory_item_id=batch.inventory_item_id,
+        lot_number=batch.lot_number,
+        expiration_date=batch.expiration_date,
+        quantity=quantity,
+        location_id=to_location_id,
+        purchase_price=batch.purchase_price,
+        supplier_id=batch.supplier_id,
+    )
+    db.add(target_batch)
+    db.flush()
+    movements = [
+        StockMovement(inventory_item_id=batch.inventory_item_id, batch_id=batch.id, from_location_id=batch.location_id, quantity=quantity, movement_type=StockMovementType.transfer_out.value, reason=reason, created_by=user_id),
+        StockMovement(inventory_item_id=batch.inventory_item_id, batch_id=target_batch.id, to_location_id=to_location_id, quantity=quantity, movement_type=StockMovementType.transfer_in.value, reason=reason, created_by=user_id),
+    ]
+    db.add_all(movements)
+    recalculate_stock(db, batch.inventory_item_id)
     return movements
 
 

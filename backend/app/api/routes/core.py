@@ -1,14 +1,15 @@
 from datetime import date
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy import or_, select
 from sqlalchemy.orm import Session, joinedload
 
-from app.audit.service import audit
-from app.auth.dependencies import get_current_user
+from app.audit.service import audit, snapshot
+from app.auth.dependencies import Actor, require_permission
 from app.core.database import get_db
-from app.models.domain import Appointment, AuditLog, Module, Patient, Provider, Room, Service, User
+from app.models.domain import Appointment, AuditLog, Module, Patient, Provider, Room, Service
 from app.schemas.common import AppointmentCreate, AppointmentUpdate, PatientCreate, PatientUpdate, ServiceCreate
+from app.services.appointments import validate_appointment_payload
 
 router = APIRouter(prefix="/api", tags=["clinic"])
 
@@ -19,18 +20,23 @@ def patch_model(obj, data: dict) -> None:
 
 
 @router.post("/patients")
-def create_patient(payload: PatientCreate, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+def create_patient(
+    payload: PatientCreate,
+    request: Request,
+    db: Session = Depends(get_db),
+    actor: Actor = Depends(require_permission("patients.write")),
+):
     patient = Patient(**payload.model_dump())
     db.add(patient)
     db.flush()
-    audit(db, "create", "Patient", patient.id, f"{patient.first_name} {patient.last_name}", user.id)
+    audit(db, "create", "Patient", patient.id, f"{patient.first_name} {patient.last_name}", actor.user_id, actor.actor_type, actor.api_key_id, None, snapshot(patient), request)
     db.commit()
     db.refresh(patient)
     return patient
 
 
 @router.get("/patients")
-def list_patients(q: str | None = None, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+def list_patients(q: str | None = None, db: Session = Depends(get_db), actor: Actor = Depends(require_permission("patients.read"))):
     stmt = select(Patient).order_by(Patient.last_name, Patient.first_name)
     if q:
         like = f"%{q}%"
@@ -39,7 +45,7 @@ def list_patients(q: str | None = None, db: Session = Depends(get_db), user: Use
 
 
 @router.get("/patients/{patient_id}")
-def get_patient(patient_id: int, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+def get_patient(patient_id: int, db: Session = Depends(get_db), actor: Actor = Depends(require_permission("patients.read"))):
     patient = db.get(Patient, patient_id)
     if not patient:
         raise HTTPException(404, detail="Pacijent nije pronađen")
@@ -47,23 +53,38 @@ def get_patient(patient_id: int, db: Session = Depends(get_db), user: User = Dep
 
 
 @router.patch("/patients/{patient_id}")
-def update_patient(patient_id: int, payload: PatientUpdate, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+def update_patient(
+    patient_id: int,
+    payload: PatientUpdate,
+    request: Request,
+    db: Session = Depends(get_db),
+    actor: Actor = Depends(require_permission("patients.write")),
+):
     patient = db.get(Patient, patient_id)
     if not patient:
         raise HTTPException(404, detail="Pacijent nije pronađen")
+    before = snapshot(patient)
     patch_model(patient, payload.model_dump(exclude_unset=True))
-    audit(db, "update", "Patient", patient.id, "Ažuriran pacijent", user.id)
+    db.flush()
+    audit(db, "update", "Patient", patient.id, "Ažuriran pacijent", actor.user_id, actor.actor_type, actor.api_key_id, before, snapshot(patient), request)
     db.commit()
     db.refresh(patient)
     return patient
 
 
 @router.post("/appointments")
-def create_appointment(payload: AppointmentCreate, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
-    appointment = Appointment(**payload.model_dump(), created_by=user.id)
+def create_appointment(
+    payload: AppointmentCreate,
+    request: Request,
+    db: Session = Depends(get_db),
+    actor: Actor = Depends(require_permission("appointments.write")),
+):
+    data = payload.model_dump()
+    data["duration_minutes"] = validate_appointment_payload(db, payload.date, payload.start_time, payload.end_time, payload.provider_id, payload.room_id, payload.status, payload.source)
+    appointment = Appointment(**data, created_by=actor.user_id)
     db.add(appointment)
     db.flush()
-    audit(db, "create", "Appointment", appointment.id, f"Termin {appointment.date}", user.id)
+    audit(db, "create", "Appointment", appointment.id, f"Termin {appointment.date}", actor.user_id, actor.actor_type, actor.api_key_id, None, snapshot(appointment), request)
     db.commit()
     db.refresh(appointment)
     return appointment
@@ -79,7 +100,7 @@ def list_appointments(
     room_id: int | None = None,
     status: str | None = None,
     db: Session = Depends(get_db),
-    user: User = Depends(get_current_user),
+    actor: Actor = Depends(require_permission("appointments.read")),
 ):
     stmt = select(Appointment).options(joinedload(Appointment.patient), joinedload(Appointment.service), joinedload(Appointment.provider), joinedload(Appointment.room)).order_by(Appointment.date, Appointment.start_time)
     if date_from:
@@ -100,7 +121,7 @@ def list_appointments(
 
 
 @router.get("/appointments/{appointment_id}")
-def get_appointment(appointment_id: int, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+def get_appointment(appointment_id: int, db: Session = Depends(get_db), actor: Actor = Depends(require_permission("appointments.read"))):
     appointment = db.scalar(select(Appointment).options(joinedload(Appointment.patient), joinedload(Appointment.service), joinedload(Appointment.provider), joinedload(Appointment.room)).where(Appointment.id == appointment_id))
     if not appointment:
         raise HTTPException(404, detail="Termin nije pronađen")
@@ -108,30 +129,45 @@ def get_appointment(appointment_id: int, db: Session = Depends(get_db), user: Us
 
 
 @router.patch("/appointments/{appointment_id}")
-def update_appointment(appointment_id: int, payload: AppointmentUpdate, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+def update_appointment(
+    appointment_id: int,
+    payload: AppointmentUpdate,
+    request: Request,
+    db: Session = Depends(get_db),
+    actor: Actor = Depends(require_permission("appointments.write")),
+):
     appointment = db.get(Appointment, appointment_id)
     if not appointment:
         raise HTTPException(404, detail="Termin nije pronađen")
+    before = snapshot(appointment)
     patch_model(appointment, payload.model_dump(exclude_unset=True))
-    audit(db, "update", "Appointment", appointment.id, "Ažuriran termin", user.id)
+    appointment.duration_minutes = validate_appointment_payload(db, appointment.date, appointment.start_time, appointment.end_time, appointment.provider_id, appointment.room_id, appointment.status, appointment.source, appointment_id=appointment.id)
+    db.flush()
+    audit(db, "update", "Appointment", appointment.id, "Ažuriran termin", actor.user_id, actor.actor_type, actor.api_key_id, before, snapshot(appointment), request)
     db.commit()
     db.refresh(appointment)
     return appointment
 
 
 @router.delete("/appointments/{appointment_id}")
-def delete_appointment(appointment_id: int, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+def delete_appointment(
+    appointment_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+    actor: Actor = Depends(require_permission("appointments.write")),
+):
     appointment = db.get(Appointment, appointment_id)
     if not appointment:
         raise HTTPException(404, detail="Termin nije pronađen")
+    before = snapshot(appointment)
     db.delete(appointment)
-    audit(db, "delete", "Appointment", appointment_id, "Obrisan termin", user.id)
+    audit(db, "delete", "Appointment", appointment_id, "Obrisan termin", actor.user_id, actor.actor_type, actor.api_key_id, before, None, request)
     db.commit()
     return {"ok": True}
 
 
 @router.get("/schedule/day")
-def day_schedule(date: date = Query(...), db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+def day_schedule(date: date = Query(...), db: Session = Depends(get_db), actor: Actor = Depends(require_permission("appointments.read"))):
     return db.scalars(
         select(Appointment)
         .options(joinedload(Appointment.patient), joinedload(Appointment.service), joinedload(Appointment.provider), joinedload(Appointment.room))
@@ -141,7 +177,7 @@ def day_schedule(date: date = Query(...), db: Session = Depends(get_db), user: U
 
 
 @router.get("/search")
-def search(q: str, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+def search(q: str, db: Session = Depends(get_db), actor: Actor = Depends(require_permission("patients.read"))):
     like = f"%{q}%"
     return {
         "patients": db.scalars(select(Patient).where(or_(Patient.first_name.ilike(like), Patient.last_name.ilike(like))).limit(10)).all(),
@@ -151,36 +187,49 @@ def search(q: str, db: Session = Depends(get_db), user: User = Depends(get_curre
 
 
 @router.get("/services")
-def list_services(db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+def list_services(db: Session = Depends(get_db), actor: Actor = Depends(require_permission("services.read"))):
     return db.scalars(select(Service).order_by(Service.name)).all()
 
 
 @router.post("/services")
-def create_service(payload: ServiceCreate, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+def create_service(payload: ServiceCreate, request: Request, db: Session = Depends(get_db), actor: Actor = Depends(require_permission("services.write"))):
     service = Service(**payload.model_dump())
     db.add(service)
     db.flush()
-    audit(db, "create", "Service", service.id, service.name, user.id)
+    audit(db, "create", "Service", service.id, service.name, actor.user_id, actor.actor_type, actor.api_key_id, None, snapshot(service), request)
     db.commit()
     db.refresh(service)
     return service
 
 
 @router.get("/modules")
-def list_modules(db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+def list_modules(db: Session = Depends(get_db), actor: Actor = Depends(require_permission("modules.read"))):
     return db.scalars(select(Module).order_by(Module.name)).all()
 
 
 @router.get("/providers")
-def list_providers(db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+def list_providers(db: Session = Depends(get_db), actor: Actor = Depends(require_permission("appointments.read"))):
     return db.scalars(select(Provider).order_by(Provider.full_name)).all()
 
 
 @router.get("/rooms")
-def list_rooms(db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+def list_rooms(db: Session = Depends(get_db), actor: Actor = Depends(require_permission("appointments.read"))):
     return db.scalars(select(Room).order_by(Room.name)).all()
 
 
 @router.get("/audit-log")
-def audit_log(db: Session = Depends(get_db), user: User = Depends(get_current_user)):
-    return db.scalars(select(AuditLog).order_by(AuditLog.created_at.desc()).limit(200)).all()
+def audit_log(
+    entity_type: str | None = None,
+    action: str | None = None,
+    actor_type: str | None = None,
+    db: Session = Depends(get_db),
+    actor: Actor = Depends(require_permission("audit.read")),
+):
+    stmt = select(AuditLog).order_by(AuditLog.created_at.desc()).limit(200)
+    if entity_type:
+        stmt = stmt.where(AuditLog.entity_type == entity_type)
+    if action:
+        stmt = stmt.where(AuditLog.action == action)
+    if actor_type:
+        stmt = stmt.where(AuditLog.actor_type == actor_type)
+    return db.scalars(stmt).all()

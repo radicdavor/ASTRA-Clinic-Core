@@ -4,10 +4,18 @@ from datetime import date, datetime, time
 from decimal import Decimal
 from enum import StrEnum
 
-from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Integer, Numeric, String, Text, Time, func
+from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Integer, JSON, Numeric, String, Table, Text, Time, Column, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
+
+
+role_permissions = Table(
+    "role_permissions",
+    Base.metadata,
+    Column("role_id", ForeignKey("roles.id"), primary_key=True),
+    Column("permission_id", ForeignKey("permissions.id"), primary_key=True),
+)
 
 
 class AppointmentStatus(StrEnum):
@@ -34,6 +42,16 @@ class AppointmentSource(StrEnum):
     external_emr = "external_emr"
 
 
+class StockMovementType(StrEnum):
+    purchase_receipt = "purchase_receipt"
+    consumption = "consumption"
+    transfer_out = "transfer_out"
+    transfer_in = "transfer_in"
+    adjustment = "adjustment"
+    write_off = "write_off"
+    return_to_supplier = "return_to_supplier"
+
+
 class TimestampMixin:
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
@@ -44,6 +62,15 @@ class Role(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     name: Mapped[str] = mapped_column(String(80), unique=True)
     description: Mapped[str | None] = mapped_column(Text)
+    permissions: Mapped[list["Permission"]] = relationship(secondary=role_permissions, back_populates="roles")
+
+
+class Permission(Base):
+    __tablename__ = "permissions"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    name: Mapped[str] = mapped_column(String(120), unique=True, index=True)
+    description: Mapped[str | None] = mapped_column(Text)
+    roles: Mapped[list[Role]] = relationship(secondary=role_permissions, back_populates="permissions")
 
 
 class User(TimestampMixin, Base):
@@ -131,17 +158,27 @@ class ApiKey(TimestampMixin, Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     name: Mapped[str] = mapped_column(String(120))
     key_hash: Mapped[str] = mapped_column(String(255), unique=True)
+    scopes: Mapped[list[str]] = mapped_column(JSON, default=list)
     active: Mapped[bool] = mapped_column(Boolean, default=True)
+    expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    last_used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
 class AuditLog(Base):
     __tablename__ = "audit_logs"
     id: Mapped[int] = mapped_column(primary_key=True)
+    actor_type: Mapped[str] = mapped_column(String(40), default="system", index=True)
     actor_user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"))
+    actor_api_key_id: Mapped[int | None] = mapped_column(ForeignKey("api_keys.id"))
     action: Mapped[str] = mapped_column(String(40), index=True)
     entity_type: Mapped[str] = mapped_column(String(120), index=True)
     entity_id: Mapped[int | None] = mapped_column(Integer)
+    before_json: Mapped[dict | None] = mapped_column(JSON)
+    after_json: Mapped[dict | None] = mapped_column(JSON)
     summary: Mapped[str | None] = mapped_column(Text)
+    request_id: Mapped[str | None] = mapped_column(String(80), index=True)
+    ip_address: Mapped[str | None] = mapped_column(String(80))
+    user_agent: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), index=True)
 
 

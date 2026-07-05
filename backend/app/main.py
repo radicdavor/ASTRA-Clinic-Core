@@ -1,11 +1,10 @@
-from fastapi import FastAPI
+from uuid import uuid4
+
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.routes import ai, auth, core, inventory
 from app.core.config import get_settings
-from app.core.database import Base, SessionLocal, engine
-from app.models import domain  # noqa: F401
-from app.services.seed import seed
 
 settings = get_settings()
 
@@ -29,11 +28,13 @@ app.include_router(inventory.router)
 app.include_router(ai.router)
 
 
-@app.on_event("startup")
-def startup() -> None:
-    Base.metadata.create_all(bind=engine)
-    with SessionLocal() as db:
-        seed(db)
+@app.middleware("http")
+async def add_request_id(request: Request, call_next):
+    request_id = request.headers.get("X-Request-ID", str(uuid4()))
+    request.state.request_id = request_id
+    response = await call_next(request)
+    response.headers["X-Request-ID"] = request_id
+    return response
 
 
 @app.get("/health")

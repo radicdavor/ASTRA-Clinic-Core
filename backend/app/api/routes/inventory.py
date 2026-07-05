@@ -17,6 +17,7 @@ from app.models.domain import (
     ServiceMaterialTemplate,
     StockLocation,
     StockMovement,
+    StockMovementType,
     Supplier,
     User,
 )
@@ -29,7 +30,7 @@ from app.schemas.common import (
     StockMovementCreate,
     SupplierCreate,
 )
-from app.services.inventory import consume_fefo, expiring_batches, recalculate_stock
+from app.services.inventory import consume_fefo, ensure_batch_available, ensure_positive, expiring_batches, recalculate_stock, transfer_batch
 
 router = APIRouter(prefix="/api", tags=["inventory"])
 
@@ -116,6 +117,11 @@ def stock_movements(db: Session = Depends(get_db), user: User = Depends(get_curr
 
 @router.post("/inventory/stock-movements")
 def create_stock_movement(payload: StockMovementCreate, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    if payload.movement_type not in {movement_type.value for movement_type in StockMovementType}:
+        raise HTTPException(422, detail="Neispravan tip skladišnog kretanja")
+    ensure_positive(payload.quantity)
+    if payload.movement_type in {StockMovementType.adjustment.value, StockMovementType.write_off.value} and not payload.reason:
+        raise HTTPException(422, detail="Adjustment i otpis moraju imati razlog")
     movement = StockMovement(**payload.model_dump(), created_by=user.id)
     db.add(movement)
     if payload.batch_id:
@@ -123,6 +129,7 @@ def create_stock_movement(payload: StockMovementCreate, db: Session = Depends(ge
         if not batch:
             raise HTTPException(404, detail="Serija nije pronađena")
         if payload.movement_type in {"consumption", "write_off"}:
+            ensure_batch_available(batch, payload.quantity)
             batch.quantity -= payload.quantity
         elif payload.movement_type in {"adjustment", "purchase_receipt"}:
             batch.quantity += payload.quantity
@@ -135,8 +142,15 @@ def create_stock_movement(payload: StockMovementCreate, db: Session = Depends(ge
 
 @router.post("/inventory/transfer")
 def transfer(payload: StockMovementCreate, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
-    payload.movement_type = "transfer"
-    return create_stock_movement(payload, db, user)
+    if not payload.batch_id or not payload.to_location_id:
+        raise HTTPException(422, detail="Transfer zahtijeva batch_id i to_location_id")
+    batch = db.get(InventoryBatch, payload.batch_id)
+    if not batch:
+        raise HTTPException(404, detail="Serija nije pronađena")
+    movements = transfer_batch(db, batch, payload.to_location_id, payload.quantity, payload.reason, user.id)
+    audit(db, "create", "StockMovement", payload.inventory_item_id, "Transfer zalihe", user.id)
+    db.commit()
+    return {"movements": movements}
 
 
 @router.post("/inventory/write-off")
