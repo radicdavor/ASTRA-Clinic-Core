@@ -14,7 +14,8 @@ export function Appointments() {
         { header: "Vrijeme", render: (row) => `${row.start_time.slice(0, 5)} - ${row.end_time.slice(0, 5)}` },
         { header: "Pacijent", render: (row) => `${row.patient?.first_name ?? ""} ${row.patient?.last_name ?? ""}` },
         { header: "Usluga", render: (row) => row.service?.name ?? row.service_id },
-        { header: "Status", render: (row) => <StatusBadge status={row.status} /> }
+        { header: "Status", render: (row) => <StatusBadge status={row.status} /> },
+        { header: "Detalj", render: (row) => <Link to={`/appointments/${row.id}`}>Otvori</Link> }
       ]} />
     </section>
   );

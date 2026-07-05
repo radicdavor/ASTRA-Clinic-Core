@@ -36,6 +36,12 @@ export function PurchaseOrders() {
     if (!selected) return;
     setError("");
     try {
+      const overReceived = selected.lines.some((line) => Number(draft[line.id]?.quantity_received || 0) > Math.max(0, Number(line.quantity_ordered) - Number(line.quantity_received)));
+      if (overReceived) {
+        setError("Kolicina zaprimanja ne smije biti veca od preostale kolicine.");
+        return;
+      }
+      if (!window.confirm("Potvrditi zaprimanje robe na zalihu?")) return;
       const lines = selected.lines
         .filter((line) => draft[line.id]?.quantity_received && Number(draft[line.id].quantity_received) > 0)
         .map((line) => ({
@@ -72,6 +78,7 @@ export function PurchaseOrders() {
       {selected && (
         <section className="workflow-panel">
           <div className="page-header"><h2>Zaprimanje PO-{selected.id}</h2><p>Status: {selected.status}</p></div>
+          <p>Dobavljac: {selected.supplier?.name ?? "-"} / Iznos: {selected.total_amount} EUR</p>
           <DataTable rows={selected.lines} columns={[
             { header: "Artikl", render: (line) => item(line.inventory_item_id)?.name ?? `Artikl ${line.inventory_item_id}` },
             { header: "Naruceno", render: (line) => line.quantity_ordered },

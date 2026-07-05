@@ -6,7 +6,7 @@ from pydantic import BaseModel, ConfigDict
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.models.domain import InventoryItem, Service, ServiceMaterialTemplate
+from app.models.domain import InventoryItem, Module, Service, ServiceMaterialTemplate
 
 
 class ModuleManifest(BaseModel):
@@ -37,7 +37,23 @@ def load_catalog_manifests(directory: Path) -> list[ModuleManifest]:
     ]
 
 
-def load_catalog_services(db: Session, module_directory: Path) -> list[Service]:
+def import_module_manifest(db: Session, module_directory: Path) -> Module | None:
+    manifest_path = module_directory / "module.json"
+    if not manifest_path.exists():
+        return None
+    manifest = ModuleManifest.model_validate_json(manifest_path.read_text(encoding="utf-8"))
+    module = db.scalar(select(Module).where(Module.key == manifest.name))
+    if module is None:
+        module = Module(key=manifest.name)
+        db.add(module)
+    module.name = manifest.display_name
+    module.description = f"Catalog module {manifest.name} v{manifest.version}"
+    module.enabled = manifest.enabled
+    db.flush()
+    return module
+
+
+def load_catalog_services(db: Session, module_directory: Path, module: Module | None = None) -> list[Service]:
     services_path = module_directory / "services.json"
     if not services_path.exists():
         return []
@@ -52,6 +68,8 @@ def load_catalog_services(db: Session, module_directory: Path) -> list[Service]:
         service.duration_minutes = int(data.get("duration_minutes", 30))
         service.price = Decimal(str(data.get("price", "0")))
         service.active = bool(data.get("active", True))
+        if module is not None:
+            service.module_id = module.id
         services.append(service)
     db.flush()
     return services
@@ -78,3 +96,19 @@ def load_catalog_material_templates(db: Session, module_directory: Path) -> list
         templates.append(template)
     db.flush()
     return templates
+
+
+def load_catalog_module(db: Session, module_directory: Path) -> dict[str, int]:
+    module = import_module_manifest(db, module_directory)
+    services = load_catalog_services(db, module_directory, module)
+    templates = load_catalog_material_templates(db, module_directory)
+    return {"modules": 1 if module else 0, "services": len(services), "material_templates": len(templates)}
+
+
+def load_catalog(db: Session, catalog_directory: Path) -> dict[str, int]:
+    result = {"modules": 0, "services": 0, "material_templates": 0}
+    for module_directory in sorted(path for path in catalog_directory.iterdir() if path.is_dir()):
+        loaded = load_catalog_module(db, module_directory)
+        for key, value in loaded.items():
+            result[key] += value
+    return result

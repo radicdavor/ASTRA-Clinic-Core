@@ -71,11 +71,16 @@ th { color: #667085; font-size: 0.78rem; text-transform: uppercase; letter-spaci
 .modal-panel { width: min(720px, 100%); max-height: 90vh; overflow: auto; background: white; border-radius: 8px; border: 1px solid #d9e2ec; padding: 20px; box-shadow: 0 24px 80px rgba(15, 23, 42, 0.22); }
 .material-list { display: grid; gap: 10px; margin: 14px 0; }
 .material-list label { display: grid; grid-template-columns: minmax(0, 1fr) 160px; gap: 12px; align-items: center; color: #405069; font-weight: 650; }
+.material-row { display: grid; grid-template-columns: minmax(0, 1fr) 160px; gap: 12px; align-items: center; margin-bottom: 10px; color: #405069; font-weight: 650; }
+.timeline { display: grid; gap: 10px; }
+.timeline div { border-left: 3px solid #0f766e; padding: 4px 0 8px 12px; }
+.timeline span { display: block; color: #667085; font-size: 0.84rem; }
 .secret-once { display: grid; gap: 8px; background: #fff7db; border: 1px solid #f1d27a; border-radius: 8px; padding: 14px; margin-bottom: 16px; }
 .secret-once code { word-break: break-all; color: #172033; }
 .scope-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
 .scope-grid label { display: flex; align-items: center; gap: 8px; }
 .scope-grid input { width: 18px; height: 18px; }
+.danger-scope { border: 1px solid #f1b7b7; background: #fff7f7; border-radius: 8px; padding: 10px; margin-top: 10px; }
 
 .login-page { min-height: 100vh; display: grid; place-items: center; padding: 20px; background: #eef6f5; }
 .login-panel { width: min(420px, 100%); background: white; border: 1px solid #d8e6e4; border-radius: 8px; padding: 28px; box-shadow: 0 18px 60px rgba(15, 23, 42, 0.08); }

@@ -2,6 +2,7 @@ import { Navigate, Route, Routes } from "react-router-dom";
 import { AppShell } from "../components/AppShell";
 import { getToken } from "../api/client";
 import { AppointmentForm } from "../pages/AppointmentForm";
+import { AppointmentDetail } from "../pages/AppointmentDetail";
 import { Appointments } from "../pages/Appointments";
 import { AuditLog } from "../pages/AuditLog";
 import { ApiKeys } from "../pages/ApiKeys";
@@ -32,6 +33,7 @@ export function AppRoutes() {
         <Route path="/patients/:id" element={<PatientDetail />} />
         <Route path="/appointments" element={<Appointments />} />
         <Route path="/appointments/new" element={<AppointmentForm />} />
+        <Route path="/appointments/:id" element={<AppointmentDetail />} />
         <Route path="/services" element={<Services />} />
         <Route path="/modules" element={<Modules />} />
         <Route path="/inventory" element={<Inventory />} />

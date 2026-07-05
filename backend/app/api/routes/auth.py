@@ -14,6 +14,21 @@ ERROR_RESPONSES = {400: {"model": ErrorResponse}, 401: {"model": ErrorResponse},
 
 router = APIRouter(prefix="/auth", tags=["auth"], responses=ERROR_RESPONSES)
 
+API_KEY_SCOPES = [
+    {"name": "ai.patients.create", "category": "AI safe scopes", "description": "AI agent can create patients through the AI endpoint."},
+    {"name": "ai.appointments.create", "category": "AI safe scopes", "description": "AI agent can create appointments through the AI endpoint."},
+    {"name": "ai.free_slots.read", "category": "AI safe scopes", "description": "AI agent can read today's schedule and free slots."},
+    {"name": "patients.read", "category": "Read-only scopes", "description": "Read patient records."},
+    {"name": "appointments.read", "category": "Read-only scopes", "description": "Read appointments and schedules."},
+    {"name": "inventory.read", "category": "Read-only scopes", "description": "Read inventory state."},
+    {"name": "patients.write", "category": "Operational write scopes", "description": "Create and update patients."},
+    {"name": "appointments.write", "category": "Operational write scopes", "description": "Create and update appointments."},
+    {"name": "inventory.adjust", "category": "Dangerous scopes", "description": "Adjust stock quantities."},
+    {"name": "inventory.write_off", "category": "Dangerous scopes", "description": "Write off stock."},
+    {"name": "billing.mark_paid", "category": "Dangerous scopes", "description": "Mark invoices paid or create payments."},
+    {"name": "audit.read", "category": "Dangerous scopes", "description": "Read audit log."},
+]
+
 
 @router.post("/login", response_model=TokenResponse)
 def login(payload: LoginRequest, db: Session = Depends(get_db)) -> TokenResponse:
@@ -32,6 +47,11 @@ def create_api_key(payload: ApiKeyCreate, db: Session = Depends(get_db), actor: 
     db.commit()
     db.refresh(api_key)
     return ApiKeyCreated(id=api_key.id, name=api_key.name, scopes=api_key.scopes, active=api_key.active, expires_at=api_key.expires_at, key=raw_key)
+
+
+@router.get("/api-key-scopes")
+def api_key_scopes(actor: Actor = Depends(require_permission("admin.manage_users"))):
+    return API_KEY_SCOPES
 
 
 @router.get("/api-keys", response_model=list[ApiKeyOut])

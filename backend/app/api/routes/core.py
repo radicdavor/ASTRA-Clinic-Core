@@ -222,6 +222,7 @@ def list_rooms(db: Session = Depends(get_db), actor: Actor = Depends(require_per
 @router.get("/audit-log")
 def audit_log(
     entity_type: str | None = None,
+    entity_id: int | None = None,
     action: str | None = None,
     actor_type: str | None = None,
     db: Session = Depends(get_db),
@@ -230,6 +231,8 @@ def audit_log(
     stmt = select(AuditLog).order_by(AuditLog.created_at.desc()).limit(200)
     if entity_type:
         stmt = stmt.where(AuditLog.entity_type == entity_type)
+    if entity_id:
+        stmt = stmt.where(AuditLog.entity_id == entity_id)
     if action:
         stmt = stmt.where(AuditLog.action == action)
     if actor_type:

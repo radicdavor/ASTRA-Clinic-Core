@@ -1,20 +1,30 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { api } from "../api/client";
 import { DataTable } from "../components/DataTable";
 import { useApi } from "../hooks/useApi";
 import { ApiKey } from "../types";
 
-const commonScopes = ["ai.patients.create", "ai.appointments.create", "ai.free_slots.read", "patients.read", "appointments.read"];
+type ScopeInfo = { name: string; category: string; description: string };
 
 export function ApiKeys() {
   const keys = useApi<ApiKey[]>("/auth/api-keys", []);
+  const scopeCatalog = useApi<ScopeInfo[]>("/auth/api-key-scopes", []);
   const [name, setName] = useState("");
   const [scopes, setScopes] = useState<string[]>(["ai.appointments.create"]);
   const [rawKey, setRawKey] = useState("");
   const [error, setError] = useState("");
 
+  const groupedScopes = useMemo(() => {
+    return scopeCatalog.data.reduce<Record<string, ScopeInfo[]>>((groups, scope) => {
+      groups[scope.category] = [...(groups[scope.category] ?? []), scope];
+      return groups;
+    }, {});
+  }, [scopeCatalog.data]);
+
   async function createKey() {
     setError("");
+    const dangerous = scopeCatalog.data.filter((scope) => scope.category === "Dangerous scopes" && scopes.includes(scope.name));
+    if (dangerous.length && !window.confirm("Odabrani su opasni scopeovi. Potvrditi kreiranje kljuca?")) return;
     try {
       const created = await api<ApiKey & { key: string }>("/auth/api-keys", { method: "POST", body: JSON.stringify({ name, scopes }) });
       setRawKey(created.key);
@@ -26,6 +36,7 @@ export function ApiKeys() {
   }
 
   async function deactivate(row: ApiKey) {
+    if (!window.confirm(`Deaktivirati API kljuc "${row.name}"?`)) return;
     const updated = await api<ApiKey>(`/auth/api-keys/${row.id}/deactivate`, { method: "PATCH" });
     keys.setData(keys.data.map((key) => (key.id === updated.id ? updated : key)));
   }
@@ -34,21 +45,26 @@ export function ApiKeys() {
     <section className="page">
       <div className="page-header"><h1>API kljucevi</h1><p>Koristite najmanji potreban skup scopeova za AI agente i vanjske sustave.</p></div>
       {error && <p className="form-error">{error}</p>}
-      {rawKey && <div className="secret-once"><strong>Novi kljuc prikazan je samo sada:</strong><code>{rawKey}</code></div>}
+      {rawKey && <div className="secret-once"><strong>Novi kljuc prikazan je samo sada:</strong><code>{rawKey}</code><button onClick={() => navigator.clipboard.writeText(rawKey)}>Kopiraj</button></div>}
       <div className="workflow-panel">
         <h2>Novi API kljuc</h2>
         <div className="inline-form">
           <input placeholder="Naziv kljuca" value={name} onChange={(event) => setName(event.target.value)} />
           <button className="primary" onClick={createKey}>Kreiraj</button>
         </div>
-        <div className="scope-grid">
-          {commonScopes.map((scope) => (
-            <label key={scope}>
-              <input type="checkbox" checked={scopes.includes(scope)} onChange={(event) => setScopes(event.target.checked ? [...scopes, scope] : scopes.filter((item) => item !== scope))} />
-              {scope}
-            </label>
-          ))}
-        </div>
+        {Object.entries(groupedScopes).map(([category, entries]) => (
+          <div key={category} className={category === "Dangerous scopes" ? "danger-scope" : ""}>
+            <h3>{category}</h3>
+            <div className="scope-grid">
+              {entries.map((scope) => (
+                <label key={scope.name} title={scope.description}>
+                  <input type="checkbox" checked={scopes.includes(scope.name)} onChange={(event) => setScopes(event.target.checked ? [...scopes, scope.name] : scopes.filter((item) => item !== scope.name))} />
+                  {scope.name}
+                </label>
+              ))}
+            </div>
+          </div>
+        ))}
       </div>
       <DataTable rows={keys.data} columns={[
         { header: "Naziv", render: (row) => row.name },

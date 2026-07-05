@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { api } from "../api/client";
 import { DataTable } from "../components/DataTable";
 import { StatusBadge, statusLabel } from "../components/StatusBadge";
@@ -110,7 +110,7 @@ export function Dashboard() {
           rows={filtered}
           columns={[
             { header: "Vrijeme", render: (row) => `${row.start_time.slice(0, 5)} - ${row.end_time.slice(0, 5)}` },
-            { header: "Pacijent", render: (row) => `${row.patient?.first_name ?? ""} ${row.patient?.last_name ?? ""}` },
+            { header: "Pacijent", render: (row) => <Link to={`/appointments/${row.id}`}>{row.patient?.first_name ?? ""} {row.patient?.last_name ?? ""}</Link> },
             { header: "Usluga", render: (row) => row.service?.name ?? row.service_id },
             { header: "Status", render: (row) => <StatusBadge status={row.status} /> },
             { header: "Brze radnje", render: (row) => <div className="quick-actions">{quickStatuses.map((s) => <button key={s} onClick={() => setAppointmentStatus(row, s)}>{statusLabel(s)}</button>)}<button onClick={() => openMaterialWorkflow(row)}>Materijal</button><button onClick={() => draftInvoice(row)}>Račun</button></div> }
