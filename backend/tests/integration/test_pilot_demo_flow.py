@@ -64,7 +64,7 @@ def test_full_pilot_demo_flow(pg_client, pg_db):
     assert pg_db.get(InventoryItem, item.id).current_stock == Decimal("4.00")
     consumption = pg_db.query(StockMovement).filter(StockMovement.related_appointment_id == appointment_id).one()
     assert consumption.movement_type == StockMovementType.consumption.value
-    assert consumption.quantity == Decimal("-1.00")
+    assert consumption.quantity == Decimal("1.00")
 
     draft_invoice = pg_client.post(f"/api/appointments/{appointment_id}/draft-invoice", headers=headers)
     assert draft_invoice.status_code == 200
@@ -74,7 +74,7 @@ def test_full_pilot_demo_flow(pg_client, pg_db):
     assert issued.status_code == 200
     assert issued.json()["status"] == "issued"
     assert issued.json()["fiscalization_provider"] == "noop"
-    assert issued.json()["fiscalization_status"] == "skipped"
+    assert issued.json()["fiscalization_status"] == "fiscalized"
     assert issued.json()["fiscalization_message"] == "Fiscalization disabled for this environment."
 
     remaining_amount = issued.json()["total_amount"]

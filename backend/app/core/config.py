@@ -13,6 +13,9 @@ class Settings(BaseSettings):
     jwt_algorithm: str = "HS256"
     access_token_minutes: int = 480
     cors_origins: str = "http://localhost:5173,http://127.0.0.1:5173"
+    demo_mode: bool = True
+    real_data_allowed: bool = False
+    fiscalization_mode: str = "noop"
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 
@@ -28,6 +31,17 @@ class Settings(BaseSettings):
             raise RuntimeError("Production APP_ENV requires a strong JWT_SECRET with at least 32 characters.")
         if "*" in self.cors_origin_list or any("localhost" in origin or "127.0.0.1" in origin for origin in self.cors_origin_list):
             raise RuntimeError("Production APP_ENV requires explicit non-local CORS_ORIGINS.")
+
+    @property
+    def public_warnings(self) -> list[str]:
+        warnings: list[str] = []
+        if self.demo_mode:
+            warnings.append("Demo mode is enabled. Do not enter real patient data.")
+        if not self.real_data_allowed:
+            warnings.append("Real patient data is not allowed in this environment.")
+        if self.app_env == "production" and self.demo_mode:
+            warnings.append("Production environment is still running with DEMO_MODE=true.")
+        return warnings
 
 
 @lru_cache

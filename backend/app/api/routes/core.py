@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session, joinedload
 
 from app.audit.service import audit, snapshot
 from app.auth.dependencies import Actor, require_permission
+from app.core.config import get_settings
 from app.core.database import get_db
 from app.models.domain import Appointment, AuditLog, Module, Patient, Provider, Room, Service
 from app.schemas.common import AppointmentCreate, AppointmentOut, AppointmentUpdate, ErrorResponse, PatientCreate, PatientOut, PatientUpdate, ServiceCreate, ServiceOut
@@ -19,6 +20,19 @@ router = APIRouter(prefix="/api", tags=["clinic"], responses=ERROR_RESPONSES)
 def patch_model(obj, data: dict) -> None:
     for key, value in data.items():
         setattr(obj, key, value)
+
+
+@router.get("/public-config")
+def public_config():
+    settings = get_settings()
+    return {
+        "app_name": settings.app_name,
+        "app_env": settings.app_env,
+        "demo_mode": settings.demo_mode,
+        "real_data_allowed": settings.real_data_allowed,
+        "fiscalization_mode": settings.fiscalization_mode,
+        "warnings": settings.public_warnings,
+    }
 
 
 @router.post("/patients", response_model=PatientOut)

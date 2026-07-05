@@ -1,0 +1,82 @@
+name: Pilot feedback
+description: Structured feedback from a closed ASTRA Clinic Core demo/pilot session.
+title: "[Pilot] "
+labels: ["pilot:P2"]
+body:
+  - type: dropdown
+    id: participant_role
+    attributes:
+      label: Participant role
+      options:
+        - Reception
+        - Physician
+        - Nurse
+        - Inventory
+        - Billing
+        - Admin
+        - Other
+    validations:
+      required: true
+  - type: input
+    id: demo_scenario
+    attributes:
+      label: Demo scenario
+      placeholder: "Example: Complete appointment with material consumption"
+    validations:
+      required: true
+  - type: input
+    id: task_attempted
+    attributes:
+      label: Task attempted
+    validations:
+      required: true
+  - type: dropdown
+    id: completed
+    attributes:
+      label: Completed?
+      options:
+        - "Yes"
+        - "No"
+    validations:
+      required: true
+  - type: textarea
+    id: worked
+    attributes:
+      label: What worked?
+    validations:
+      required: true
+  - type: textarea
+    id: confusing
+    attributes:
+      label: What was confusing?
+    validations:
+      required: true
+  - type: dropdown
+    id: severity
+    attributes:
+      label: Blocker severity
+      options:
+        - P0 - data corruption/security issue/demo cannot proceed
+        - P1 - core workflow blocked
+        - P2 - confusing but workaround exists
+        - P3 - cosmetic or minor wording issue
+    validations:
+      required: true
+  - type: input
+    id: screenshot_log_link
+    attributes:
+      label: Screenshot/log link
+      placeholder: Optional
+  - type: textarea
+    id: suggested_improvement
+    attributes:
+      label: Suggested improvement
+  - type: dropdown
+    id: real_data_readiness_concern
+    attributes:
+      label: Real-data readiness concern?
+      options:
+        - "No"
+        - "Yes"
+    validations:
+      required: true

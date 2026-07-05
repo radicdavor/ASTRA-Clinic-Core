@@ -23,6 +23,9 @@ services:
       DATABASE_URL: ${DATABASE_URL:-postgresql+psycopg://astra:astra@db:5432/astra_clinic}
       JWT_SECRET: ${JWT_SECRET:-change-this-local-secret}
       CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:5173,http://127.0.0.1:5173}
+      DEMO_MODE: ${DEMO_MODE:-true}
+      REAL_DATA_ALLOWED: ${REAL_DATA_ALLOWED:-false}
+      FISCALIZATION_MODE: ${FISCALIZATION_MODE:-noop}
     ports:
       - "8000:8000"
     depends_on:

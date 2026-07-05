@@ -27,7 +27,12 @@ function assertIncludes(file, value) {
 
 assertIncludes("src/routes/AppRoutes.tsx", "/appointments/:id");
 assertIncludes("src/routes/AppRoutes.tsx", "/api-keys");
+assertIncludes("src/components/AppShell.tsx", "/api/public-config");
 assertIncludes("src/components/AppShell.tsx", "Demo/development okruzenje");
+assertIncludes("src/pages/AppointmentDetail.tsx", "Obavezni varijabilni materijal mora imati kolicinu.");
+assertIncludes("src/pages/PurchaseOrders.tsx", "Kolicina zaprimanja ne smije biti veca od preostale kolicine.");
+assertIncludes("src/pages/Invoices.tsx", "remaining");
+assertIncludes("src/pages/ApiKeys.tsx", "opasni scopeovi");
 assertIncludes("src/pages/Invoices.tsx", "Demo fiskalizacija - nije stvarna fiskalizacija.");
 assertIncludes("src/components/AuditTimeline.tsx", "before_json");
 

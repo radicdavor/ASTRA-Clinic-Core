@@ -1,6 +1,7 @@
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import { Boxes, CalendarDays, ClipboardList, FileText, KeyRound, LayoutDashboard, LogOut, PackageSearch, Search, Settings, ShieldCheck, Stethoscope, Users } from "lucide-react";
 import { clearToken } from "../api/client";
+import { useApi } from "../hooks/useApi";
 
 const nav = [
   { to: "/", label: "Nadzorna ploča", icon: LayoutDashboard },
@@ -18,7 +19,10 @@ const nav = [
 
 export function AppShell() {
   const navigate = useNavigate();
-  const showDemoBanner = import.meta.env.VITE_APP_ENV !== "production";
+  const publicConfig = useApi<{ demo_mode: boolean; real_data_allowed: boolean; warnings?: string[] } | null>("/api/public-config", null);
+  const fallbackDemoMode = import.meta.env.VITE_APP_ENV !== "production";
+  const showDemoBanner = publicConfig.data ? publicConfig.data.demo_mode || !publicConfig.data.real_data_allowed : fallbackDemoMode;
+  const warningText = publicConfig.data?.warnings?.join(" ") || "Demo/development okruzenje - ne unositi stvarne podatke pacijenata.";
   return (
     <div className="shell">
       <aside className="sidebar">
@@ -44,7 +48,7 @@ export function AppShell() {
       <main>
         {showDemoBanner && (
           <div className="demo-banner">
-            Demo/development okruzenje - ne unositi stvarne podatke pacijenata.
+            {warningText}
           </div>
         )}
         <header className="topbar">
