@@ -94,6 +94,26 @@ docker compose exec backend python -m app.demo.seed
 
 Do not use the reset command against production data.
 
+## Go/No-Go
+
+Go if:
+
+- No P0/P1 issues are open.
+- Demo data only was used.
+- Fiscalization is clearly shown as noop/stub.
+- Audit trail is visible for the completed workflow.
+- Material, inventory and billing workflows completed successfully.
+- Demo banner and real-data warning are visible.
+
+No-Go if:
+
+- Any data corruption appears.
+- Any permission bypass appears.
+- Demo banner is missing.
+- Invoice/payment workflow is blocked.
+- Stock movement does not match material consumption or purchase receiving.
+- Participants are confused about whether real patient data is allowed.
+
 ## Backup Reminder
 
 Before any non-demo pilot, review `docs/BACKUP_RESTORE.md` and test restore.

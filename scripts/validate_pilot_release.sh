@@ -1,0 +1,44 @@
+#!/usr/bin/env sh
+set -eu
+
+fail() {
+  echo "FAIL: $1" >&2
+  exit 1
+}
+
+check_file() {
+  [ -f "$1" ] || fail "Missing required file: $1"
+}
+
+check_dir() {
+  [ -d "$1" ] || fail "Missing required directory: $1"
+}
+
+check_contains() {
+  file="$1"
+  text="$2"
+  grep -F "$text" "$file" >/dev/null || fail "$file does not mention: $text"
+}
+
+check_file "backend/requirements.txt"
+check_file "frontend/package.json"
+check_file "docs/PILOT_RUNBOOK.md"
+check_file "docs/PILOT_FEEDBACK_TEMPLATE.md"
+check_file "docs/REAL_DATA_READINESS_CHECKLIST.md"
+check_file "docs/V0_1_PILOT_RELEASE_CHECKLIST.md"
+check_file "docs/RELEASE_NOTES_TEMPLATE.md"
+check_file "docs/releases/V0_1_PILOT_RELEASE_NOTES.md"
+check_file "docs/pilot_sessions/V0_1_DRY_RUN_EXAMPLE.md"
+check_file "backend/app/demo/seed.py"
+check_file "backend/app/demo/reset.py"
+check_dir ".github/ISSUE_TEMPLATE"
+
+check_contains "README.md" "Pilot status"
+check_contains "frontend/package.json" "\"typecheck\""
+check_contains "frontend/package.json" "\"build\""
+check_contains "frontend/package.json" "\"smoke\""
+check_contains "docs/V0_1_PILOT_RELEASE_CHECKLIST.md" "No P0/P1 pilot issues open"
+check_contains "docs/REAL_DATA_READINESS_CHECKLIST.md" "not ready for real patient data"
+check_contains "docs/PILOT_RUNBOOK.md" "Go/No-Go"
+
+echo "Pilot release validation passed."

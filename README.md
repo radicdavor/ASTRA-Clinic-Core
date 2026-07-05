@@ -6,6 +6,26 @@ ASTRA Clinic Core je open-source modularna jezgra za rad klinike: naručivanje p
 
 Ovo nije puni EMR ni veliki ERP. MVP je namjerno fokusiran na operativni tijek klinike i modularnu arhitekturu za buduće medicinske module.
 
+## Pilot status
+
+Current stage: closed demo/pilot with demo data only.
+
+- Do not enter real patient data.
+- Real Croatian fiscalization is not implemented; current mode is noop/stub.
+- Use demo seed/reset for pilot sessions:
+
+```bash
+docker compose exec backend python -m app.demo.seed
+docker compose exec backend python -m app.demo.reset
+```
+
+Pilot documents:
+
+- [Pilot runbook](docs/PILOT_RUNBOOK.md)
+- [Real data readiness checklist](docs/REAL_DATA_READINESS_CHECKLIST.md)
+- [v0.1 pilot release checklist](docs/V0_1_PILOT_RELEASE_CHECKLIST.md)
+- [Known limitations](docs/KNOWN_LIMITATIONS.md)
+
 ## Tehnologije
 
 - Backend: Python FastAPI
