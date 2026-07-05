@@ -5,13 +5,17 @@ from app.core.database import SessionLocal
 from app.models.domain import Appointment, InventoryBatch, InventoryItem, Invoice, InvoiceLine, Patient, PaymentTransaction, PurchaseOrder, PurchaseOrderLine, Provider, Room, Service, ServiceMaterialTemplate, StockMovement, Supplier, User
 
 
+def demo_patient_filter():
+    return Patient.email.in_(["demo.patient@astra.local", "demo.patient@astra-clinic-core.com"])
+
+
 def main() -> None:
     settings = get_settings()
     if settings.app_env == "production":
         raise SystemExit("Demo reset is disabled in production.")
     with SessionLocal() as db:
         demo_users = db.scalars(select(User).where(User.email.like("demo.%@astra.local"))).all()
-        demo_patients = db.scalars(select(Patient.id).where(Patient.email.like("demo.%@astra.local"))).all()
+        demo_patients = db.scalars(select(Patient.id).where(demo_patient_filter())).all()
         demo_items = db.scalars(select(InventoryItem.id).where(InventoryItem.sku.like("DEMO-%"))).all()
         demo_services = db.scalars(select(Service.id).where(Service.code.like("DEMO-%"))).all()
         demo_suppliers = db.scalars(select(Supplier.id).where(Supplier.name.like("Demo%"))).all()
@@ -40,7 +44,7 @@ def main() -> None:
             db.execute(delete(Supplier).where(Supplier.id.in_(demo_suppliers)))
         db.execute(delete(Room).where(Room.name.like("Demo%")))
         db.execute(delete(Provider).where(Provider.full_name.like("dr. Demo%")))
-        db.execute(delete(Patient).where(Patient.email.like("demo.%@astra.local")))
+        db.execute(delete(Patient).where(demo_patient_filter()))
         for user in demo_users:
             db.delete(user)
         db.commit()

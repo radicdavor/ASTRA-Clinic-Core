@@ -32,6 +32,9 @@ DEMO_EMAILS = {
     "inventory_manager": "demo.inventory@astra.local",
 }
 
+DEMO_PATIENT_EMAIL = "demo.patient@astra-clinic-core.com"
+LEGACY_DEMO_PATIENT_EMAIL = "demo.patient@astra.local"
+
 
 def ensure_permissions(db):
     existing = {permission.name: permission for permission in db.scalars(select(Permission)).all()}
@@ -63,7 +66,8 @@ def main() -> None:
         for role_name, email in DEMO_EMAILS.items():
             ensure_demo_user(db, role_name, email, permissions)
 
-        patient = db.scalar(select(Patient).where(Patient.email == "demo.patient@astra.local")) or Patient(first_name="Demo", last_name="Pacijent", email="demo.patient@astra.local")
+        patient = db.scalar(select(Patient).where(Patient.email.in_([DEMO_PATIENT_EMAIL, LEGACY_DEMO_PATIENT_EMAIL]))) or Patient(first_name="Demo", last_name="Pacijent", email=DEMO_PATIENT_EMAIL)
+        patient.email = DEMO_PATIENT_EMAIL
         provider = db.scalar(select(Provider).where(Provider.full_name == "dr. Demo Gastro")) or Provider(full_name="dr. Demo Gastro", specialty="Gastroenterologija")
         room = db.scalar(select(Room).where(Room.name == "Demo ordinacija 1")) or Room(name="Demo ordinacija 1", type="ordinacija")
         service = db.scalar(select(Service).where(Service.code == "DEMO-GASTRO")) or Service(name="Demo gastroskopija", code="DEMO-GASTRO", duration_minutes=30, price=Decimal("120"))
