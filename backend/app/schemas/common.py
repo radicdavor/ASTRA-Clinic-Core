@@ -46,6 +46,17 @@ class ApiKeyCreated(ORMModel):
     key: str
 
 
+class ApiKeyOut(ORMModel):
+    id: int
+    name: str
+    scopes: list[str]
+    active: bool
+    expires_at: DateTimeType | None
+    last_used_at: DateTimeType | None = None
+    created_at: DateTimeType
+    updated_at: DateTimeType
+
+
 class PatientCreate(BaseModel):
     first_name: str
     last_name: str

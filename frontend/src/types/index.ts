@@ -52,7 +52,16 @@ export type InventoryItem = {
   reorder_point: string;
   purchase_price: string;
   selling_price: string;
+  lot_tracking_enabled?: boolean;
+  expiration_tracking_enabled?: boolean;
 };
 
 export type Supplier = { id: number; name: string; contact_person?: string; email?: string; phone?: string };
 export type AuditLog = { id: number; action: string; entity_type: string; entity_id?: number; summary?: string; created_at: string };
+export type StockLocation = { id: number; name: string; type: string };
+export type PurchaseOrderLine = { id: number; purchase_order_id: number; inventory_item_id: number; quantity_ordered: string; quantity_received: string; unit_price: string; vat_rate: string };
+export type PurchaseOrder = { id: number; status: string; order_date: string; expected_delivery_date?: string; total_amount: string; supplier?: Supplier; lines: PurchaseOrderLine[] };
+export type InvoiceLine = { id: number; invoice_id: number; description: string; quantity: string; unit_price: string; vat_rate: string; total: string };
+export type PaymentTransaction = { id: number; invoice_id: number; amount: string; method: string; reference?: string; paid_at?: string };
+export type Invoice = { id: number; appointment_id?: number; invoice_number: string; invoice_date: string; status: string; payment_status: string; total_amount: string; fiscalization_status?: string; fiscalization_provider?: string; fiscalization_message?: string; lines: InvoiceLine[]; payments: PaymentTransaction[] };
+export type ApiKey = { id: number; name: string; scopes: string[]; active: boolean; expires_at?: string; last_used_at?: string; created_at: string };

@@ -31,6 +31,15 @@ def test_admin_can_create_api_key_raw_key_is_returned_once_and_hash_is_stored(cl
     assert stored.key_hash != body["key"]
     assert stored.key_hash == hash_api_key(body["key"])
 
+    list_response = client.get("/auth/api-keys", headers={"Authorization": f"Bearer {token}"})
+    assert list_response.status_code == 200
+    assert "key_hash" not in list_response.text
+    assert body["key"] not in list_response.text
+
+    deactivate_response = client.patch(f"/auth/api-keys/{body['id']}/deactivate", headers={"Authorization": f"Bearer {token}"})
+    assert deactivate_response.status_code == 200
+    assert deactivate_response.json()["active"] is False
+
 
 def test_user_without_write_off_cannot_write_off_stock(client, db, auth_setup):
     token = login_token(client, "limited@test.local")

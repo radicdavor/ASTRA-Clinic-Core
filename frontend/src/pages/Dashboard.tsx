@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { api } from "../api/client";
 import { DataTable } from "../components/DataTable";
 import { StatusBadge, statusLabel } from "../components/StatusBadge";
@@ -9,6 +10,7 @@ const today = new Date().toISOString().slice(0, 10);
 const quickStatuses = ["arrived", "in_progress", "completed", "cancelled"];
 
 export function Dashboard() {
+  const navigate = useNavigate();
   const [day, setDay] = useState(today);
   const [provider, setProvider] = useState("");
   const [room, setRoom] = useState("");
@@ -21,6 +23,11 @@ export function Dashboard() {
   const modules = useApi<Module[]>("/api/modules", []);
   const lowStock = useApi<InventoryItem[]>("/api/inventory/low-stock", []);
   const expiring = useApi<any[]>("/api/inventory/expiring", []);
+  const [selectedAppointment, setSelectedAppointment] = useState<Appointment | null>(null);
+  const [materials, setMaterials] = useState<any[]>([]);
+  const [materialQuantities, setMaterialQuantities] = useState<Record<number, string>>({});
+  const [workflowMessage, setWorkflowMessage] = useState("");
+  const [workflowError, setWorkflowError] = useState("");
 
   const filtered = useMemo(() => {
     return schedule.data.filter((item) => {
@@ -34,6 +41,44 @@ export function Dashboard() {
       body: JSON.stringify({ status: nextStatus })
     });
     schedule.setData(schedule.data.map((item) => (item.id === updated.id ? { ...item, status: updated.status } : item)));
+  }
+
+  async function openMaterialWorkflow(appointment: Appointment) {
+    setWorkflowError("");
+    setWorkflowMessage("");
+    setSelectedAppointment(appointment);
+    const suggestions = await api<any[]>(`/api/appointments/${appointment.id}/suggest-material-consumption`);
+    setMaterials(suggestions);
+    const next: Record<number, string> = {};
+    suggestions.forEach((item) => {
+      next[item.item.id] = item.auto_consumable ? String(item.quantity) : "";
+    });
+    setMaterialQuantities(next);
+  }
+
+  async function completeWithMaterials() {
+    if (!selectedAppointment) return;
+    if (!window.confirm("Potvrditi završetak termina i skidanje materijala sa zalihe?")) return;
+    setWorkflowError("");
+    try {
+      const lines = materials
+        .map((item) => ({ inventory_item_id: item.item.id, quantity: materialQuantities[item.item.id], reason: "Potrosnja po terminu" }))
+        .filter((line) => line.quantity && Number(line.quantity) > 0);
+      const updated = await api<Appointment>(`/api/appointments/${selectedAppointment.id}/complete-with-consumption`, {
+        method: "POST",
+        body: JSON.stringify({ lines })
+      });
+      schedule.setData(schedule.data.map((item) => (item.id === updated.id ? { ...item, status: updated.status } : item)));
+      setWorkflowMessage("Termin je završen i materijal je skinut sa zalihe.");
+      setSelectedAppointment(null);
+    } catch (error) {
+      setWorkflowError(error instanceof Error ? error.message : "Greška kod završetka termina");
+    }
+  }
+
+  async function draftInvoice(appointment: Appointment) {
+    const invoice = await api<{ id: number }>(`/api/appointments/${appointment.id}/draft-invoice`, { method: "POST" });
+    navigate(`/invoices?invoice=${invoice.id}`);
   }
 
   return (
@@ -68,7 +113,7 @@ export function Dashboard() {
             { header: "Pacijent", render: (row) => `${row.patient?.first_name ?? ""} ${row.patient?.last_name ?? ""}` },
             { header: "Usluga", render: (row) => row.service?.name ?? row.service_id },
             { header: "Status", render: (row) => <StatusBadge status={row.status} /> },
-            { header: "Brze radnje", render: (row) => <div className="quick-actions">{quickStatuses.map((s) => <button key={s} onClick={() => setAppointmentStatus(row, s)}>{statusLabel(s)}</button>)}</div> }
+            { header: "Brze radnje", render: (row) => <div className="quick-actions">{quickStatuses.map((s) => <button key={s} onClick={() => setAppointmentStatus(row, s)}>{statusLabel(s)}</button>)}<button onClick={() => openMaterialWorkflow(row)}>Materijal</button><button onClick={() => draftInvoice(row)}>Račun</button></div> }
           ]}
         />
         <aside className="side-panel">
@@ -79,6 +124,34 @@ export function Dashboard() {
           {expiring.data.slice(0, 5).map((batch) => <p key={batch.id}>{batch.item?.name ?? "Artikl"}: {batch.expiration_date}</p>)}
         </aside>
       </div>
+      {workflowMessage && <p className="success-message">{workflowMessage}</p>}
+      {selectedAppointment && (
+        <div className="modal-backdrop">
+          <div className="modal-panel">
+            <h2>Završi uz potrošnju materijala</h2>
+            {workflowError && <p className="form-error">{workflowError}</p>}
+            <div className="material-list">
+              {materials.map((item) => (
+                <label key={item.template_id}>
+                  <span>{item.item.name} {item.required ? "(obavezno)" : "(opcionalno)"} {item.warning ? `- ${item.warning}` : ""}</span>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={materialQuantities[item.item.id] ?? ""}
+                    onChange={(event) => setMaterialQuantities({ ...materialQuantities, [item.item.id]: event.target.value })}
+                    placeholder={item.requires_user_quantity ? "Unesite količinu" : "0"}
+                  />
+                </label>
+              ))}
+            </div>
+            <div className="quick-actions">
+              <button className="primary" onClick={completeWithMaterials}>Potvrdi završetak</button>
+              <button onClick={() => setSelectedAppointment(null)}>Odustani</button>
+            </div>
+          </div>
+        </div>
+      )}
     </section>
   );
 }

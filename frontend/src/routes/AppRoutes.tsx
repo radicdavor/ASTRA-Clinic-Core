@@ -4,6 +4,7 @@ import { getToken } from "../api/client";
 import { AppointmentForm } from "../pages/AppointmentForm";
 import { Appointments } from "../pages/Appointments";
 import { AuditLog } from "../pages/AuditLog";
+import { ApiKeys } from "../pages/ApiKeys";
 import { Dashboard } from "../pages/Dashboard";
 import { Inventory } from "../pages/Inventory";
 import { Invoices } from "../pages/Invoices";
@@ -38,6 +39,7 @@ export function AppRoutes() {
         <Route path="/purchase-orders" element={<PurchaseOrders />} />
         <Route path="/invoices" element={<Invoices />} />
         <Route path="/audit-log" element={<AuditLog />} />
+        <Route path="/api-keys" element={<ApiKeys />} />
       </Route>
     </Routes>
   );

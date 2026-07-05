@@ -85,6 +85,17 @@ def test_api_permission_boundaries_and_api_key_actor(pg_client, pg_db):
         headers={"X-ASTRA-API-Key": raw_key},
         json={"inventory_item_id": 1, "quantity": 1, "movement_type": "write_off", "reason": "test"},
     )
+    forbidden_adjustment = pg_client.post(
+        "/api/inventory/adjustment",
+        headers={"X-ASTRA-API-Key": raw_key},
+        json={"inventory_item_id": 1, "quantity": 1, "movement_type": "adjustment", "reason": "test"},
+    )
+    forbidden_payment = pg_client.post(
+        "/api/invoices/1/mark-paid",
+        headers={"X-ASTRA-API-Key": raw_key},
+        json={},
+    )
+    forbidden_audit = pg_client.get("/api/audit-log", headers={"X-ASTRA-API-Key": raw_key})
     allowed_ai_action = pg_client.post(
         "/api/ai/patients/create",
         headers={"X-ASTRA-API-Key": raw_key, "X-Request-ID": "quality-gate-api-key"},
@@ -92,6 +103,9 @@ def test_api_permission_boundaries_and_api_key_actor(pg_client, pg_db):
     )
 
     assert forbidden_writeoff.status_code == 403
+    assert forbidden_adjustment.status_code == 403
+    assert forbidden_payment.status_code == 403
+    assert forbidden_audit.status_code == 403
     assert allowed_ai_action.status_code == 200
     log = pg_db.query(AuditLog).filter(AuditLog.request_id == "quality-gate-api-key").one()
     assert log.actor_type == "api_key"

@@ -51,5 +51,6 @@ Current coverage focuses on:
 - fiscalization provider boundary defaults to noop and Croatian provider remains a no-call stub
 - PostgreSQL migration smoke checks for key tables
 - PostgreSQL API-level permission, appointment and invoice issue/fiscalization workflows
+- PostgreSQL FEFO, transfer merge, procurement rollback and appointment-material rollback workflows
 
 CI runs database migrations against a test PostgreSQL service, backend pytest, frontend `npm run typecheck` and frontend `npm run build` on push and pull request.

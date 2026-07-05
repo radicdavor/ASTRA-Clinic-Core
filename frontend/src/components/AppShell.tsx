@@ -1,5 +1,5 @@
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
-import { Boxes, CalendarDays, ClipboardList, FileText, LayoutDashboard, LogOut, PackageSearch, Search, Settings, ShieldCheck, Stethoscope, Users } from "lucide-react";
+import { Boxes, CalendarDays, ClipboardList, FileText, KeyRound, LayoutDashboard, LogOut, PackageSearch, Search, Settings, ShieldCheck, Stethoscope, Users } from "lucide-react";
 import { clearToken } from "../api/client";
 
 const nav = [
@@ -12,7 +12,8 @@ const nav = [
   { to: "/suppliers", label: "Dobavljači", icon: PackageSearch },
   { to: "/purchase-orders", label: "Narudžbenice", icon: ClipboardList },
   { to: "/invoices", label: "Računi", icon: FileText },
-  { to: "/audit-log", label: "Audit log", icon: ShieldCheck }
+  { to: "/audit-log", label: "Audit log", icon: ShieldCheck },
+  { to: "/api-keys", label: "API kljucevi", icon: KeyRound }
 ];
 
 export function AppShell() {

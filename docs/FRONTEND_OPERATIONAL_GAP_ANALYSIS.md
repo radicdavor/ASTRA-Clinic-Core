@@ -27,3 +27,20 @@ Quality Gate Sprint review of the current React UI.
 3. Invoice issue and payment recording.
 
 These should be implemented after PostgreSQL-backed API quality gates remain green. No cosmetic redesign is recommended before these workflows are operational.
+
+## V6 Closure
+
+Implemented operational workflows:
+
+- Daily schedule action to complete an appointment with material consumption.
+- Daily schedule action to create a draft invoice from an appointment.
+- Purchase order receiving by line with location, LOT and expiration inputs.
+- Invoice detail operations for adding draft lines, issuing an invoice and recording payments.
+- Minimal API key management UI with create, one-time raw key display, list and deactivate.
+
+Remaining later improvements:
+
+- Dedicated appointment detail workflow polish.
+- Richer audit filters in the UI.
+- Stock transfer and write-off forms.
+- Stronger role-aware navigation.
