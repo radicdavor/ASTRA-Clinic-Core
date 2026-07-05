@@ -1,0 +1,7 @@
+{
+  "name": "dermatology_aesthetics",
+  "display_name": "Dermatology and Aesthetics",
+  "version": "0.1.0",
+  "enabled": false,
+  "permissions": ["services.read", "appointments.read", "inventory.read"]
+}

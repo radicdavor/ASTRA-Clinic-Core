@@ -2,7 +2,9 @@ import pytest
 from pydantic import ValidationError
 
 from app.core.config import Settings
-from app.modules.manifest import ModuleManifest
+from pathlib import Path
+
+from app.modules.manifest import ModuleManifest, load_catalog_manifests
 
 
 def test_production_rejects_default_jwt_secret():
@@ -31,3 +33,12 @@ def test_openapi_does_not_publish_sensitive_hash_fields(client):
 def test_module_manifest_forbids_unknown_fields():
     with pytest.raises(ValidationError):
         ModuleManifest.model_validate({"name": "x", "display_name": "X", "unexpected": True})
+
+
+def test_catalog_manifest_loader_reads_data_only_modules():
+    catalog_dir = Path(__file__).resolve().parents[1] / "app" / "modules" / "catalog"
+
+    manifests = load_catalog_manifests(catalog_dir)
+
+    names = {manifest.name for manifest in manifests}
+    assert {"gastroenterology", "endoscopy", "dermatology_aesthetics"}.issubset(names)

@@ -1,0 +1,4 @@
+[
+  {"name": "Gastroskopija", "code": "GASTRO", "duration_minutes": 30, "price": "120.00"},
+  {"name": "Kolonoskopija", "code": "COLONO", "duration_minutes": 45, "price": "180.00"}
+]

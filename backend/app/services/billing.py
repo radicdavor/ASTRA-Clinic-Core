@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session, selectinload
 
 from app.models.domain import Appointment, Invoice, InvoiceLine, InvoiceNumberSequence, PaymentTransaction, Service
 from app.schemas.common import InvoiceLineCreate, InvoiceLineUpdate, PaymentTransactionCreate
+from app.services.fiscalization import FiscalizationProvider, get_fiscalization_provider
 from app.services.inventory import ensure_positive
 
 
@@ -106,7 +107,17 @@ def draft_invoice_from_appointment(db: Session, appointment_id: int) -> tuple[In
     return invoice, line, True
 
 
-def issue_invoice(db: Session, invoice: Invoice) -> None:
+def apply_fiscalization_result(invoice: Invoice, provider: FiscalizationProvider | None = None) -> None:
+    provider = provider or get_fiscalization_provider()
+    result = provider.fiscalize_invoice(invoice)
+    invoice.fiscalization_provider = result.provider
+    invoice.fiscalization_reference = result.reference
+    invoice.fiscalization_message = result.message
+    invoice.fiscalized_at = result.fiscalized_at
+    invoice.fiscalization_status = "fiscalized" if result.success else "failed"
+
+
+def issue_invoice(db: Session, invoice: Invoice, fiscalization_provider: FiscalizationProvider | None = None) -> None:
     if invoice.status != "draft":
         raise HTTPException(status_code=409, detail="Samo draft racun se moze izdati")
     if not invoice.lines:
@@ -115,6 +126,7 @@ def issue_invoice(db: Session, invoice: Invoice) -> None:
         raise HTTPException(status_code=422, detail="Racun mora imati pozitivan iznos")
     invoice.invoice_number = next_invoice_number(db, invoice.business_unit or "default")
     invoice.status = "issued"
+    apply_fiscalization_result(invoice, fiscalization_provider)
 
 
 def cancel_invoice(invoice: Invoice) -> None:

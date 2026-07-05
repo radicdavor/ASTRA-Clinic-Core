@@ -1,0 +1,4 @@
+[
+  {"service_code": "GASTRO", "item_sku": "BIOPSY-FORCEPS", "default_quantity": "1", "required": false, "variable_quantity_allowed": false},
+  {"service_code": "COLONO", "item_sku": "SEDATION-MED", "default_quantity": "1", "required": true, "variable_quantity_allowed": true}
+]

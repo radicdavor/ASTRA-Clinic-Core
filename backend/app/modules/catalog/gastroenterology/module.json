@@ -1,0 +1,7 @@
+{
+  "name": "gastroenterology",
+  "display_name": "Gastroenterology",
+  "version": "0.1.0",
+  "enabled": true,
+  "permissions": ["services.read", "appointments.read", "inventory.read"]
+}

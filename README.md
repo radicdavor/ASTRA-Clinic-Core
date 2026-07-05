@@ -63,7 +63,9 @@ Lokalno pokretanje provjera:
 make test
 ```
 
-Backend testovi koriste izoliranu testnu bazu i ne ovise o ručnom seedanju razvojne baze. GitHub Actions CI se pokreće na svaki push i pull request, pokreće migracije nad testnim PostgreSQL-om, backend pytest suite i frontend production build.
+Backend testovi koriste izoliranu testnu bazu i ne ovise o ručnom seedanju razvojne baze. GitHub Actions CI se pokreće na svaki push i pull request, pokreće migracije nad testnim PostgreSQL-om, backend pytest suite, frontend typecheck i frontend production build.
+
+PostgreSQL integration testovi koriste `TEST_DATABASE_URL`. Lokalno se preskaču ako ta varijabla nije postavljena; u CI-ju je postavljena na testni PostgreSQL servis.
 
 Za produkciju postavite `APP_ENV=production`, jak `JWT_SECRET`, kraći `ACCESS_TOKEN_MINUTES` i eksplicitni `CORS_ORIGINS`. Aplikacija namjerno odbija startup u produkciji ako su JWT ili CORS postavke nesigurne.
 

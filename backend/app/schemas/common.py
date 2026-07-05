@@ -260,7 +260,10 @@ class InvoiceCreate(BaseModel):
     register_id: str | None = None
     vat_id: str | None = None
     fiscalization_status: str | None = "not_applicable"
+    fiscalization_provider: str | None = None
     fiscalization_reference: str | None = None
+    fiscalization_message: str | None = None
+    fiscalized_at: DateTimeType | None = None
     notes: str | None = None
 
 

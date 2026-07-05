@@ -438,7 +438,7 @@ def update_invoice(invoice_id: int, payload: InvoiceCreate, request: Request, db
     if not invoice_obj:
         raise HTTPException(404, detail="Racun nije pronaden")
     if invoice_obj.status != "draft":
-        allowed = {"notes", "operator", "business_unit", "register_id", "vat_id", "fiscalization_status", "fiscalization_reference"}
+        allowed = {"notes", "operator", "business_unit", "register_id", "vat_id", "fiscalization_status", "fiscalization_provider", "fiscalization_reference", "fiscalization_message", "fiscalized_at"}
         requested = set(payload.model_dump(exclude_unset=True).keys())
         if requested - allowed:
             raise HTTPException(409, detail="Izdani, placeni ili stornirani racun ne dopusta izmjenu zasticenih polja")
@@ -471,6 +471,7 @@ def issue_invoice_endpoint(invoice_id: int, request: Request, db: Session = Depe
     issue_invoice(db, invoice_obj)
     db.flush()
     audit_actor(db, "update", "Invoice", invoice_obj.id, "Izdan racun", actor, request, before, snapshot(invoice_obj))
+    audit_actor(db, "create", "FiscalizationAttempt", invoice_obj.id, "Noop fiskalizacija racuna", actor, request, None, {"provider": invoice_obj.fiscalization_provider, "status": invoice_obj.fiscalization_status, "reference": invoice_obj.fiscalization_reference, "message": invoice_obj.fiscalization_message})
     db.commit()
     return load_invoice(db, invoice_id)
 

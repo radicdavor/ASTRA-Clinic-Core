@@ -1,8 +1,9 @@
 from collections.abc import Generator
+import os
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
@@ -32,6 +33,31 @@ def db() -> Generator[Session, None, None]:
 def client(db: Session) -> Generator[TestClient, None, None]:
     def override_get_db() -> Generator[Session, None, None]:
         yield db
+
+    app.dependency_overrides[get_db] = override_get_db
+    with TestClient(app) as test_client:
+        yield test_client
+    app.dependency_overrides.clear()
+
+
+@pytest.fixture()
+def pg_db() -> Generator[Session, None, None]:
+    database_url = os.getenv("TEST_DATABASE_URL")
+    if not database_url:
+        pytest.skip("TEST_DATABASE_URL nije postavljen; PostgreSQL integration testovi se preskacu lokalno.")
+    engine = create_engine(database_url, pool_pre_ping=True)
+    with engine.begin() as connection:
+        for table in reversed(Base.metadata.sorted_tables):
+            connection.execute(text(f'TRUNCATE TABLE "{table.name}" RESTART IDENTITY CASCADE'))
+    SessionLocal = sessionmaker(bind=engine, expire_on_commit=False)
+    with SessionLocal() as session:
+        yield session
+
+
+@pytest.fixture()
+def pg_client(pg_db: Session) -> Generator[TestClient, None, None]:
+    def override_get_db() -> Generator[Session, None, None]:
+        yield pg_db
 
     app.dependency_overrides[get_db] = override_get_db
     with TestClient(app) as test_client:

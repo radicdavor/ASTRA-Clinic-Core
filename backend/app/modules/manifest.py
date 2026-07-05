@@ -20,3 +20,12 @@ def load_module_manifests(directory: Path) -> list[ModuleManifest]:
     for path in sorted(directory.glob("*.json")):
         manifests.append(ModuleManifest.model_validate_json(path.read_text(encoding="utf-8")))
     return manifests
+
+
+def load_catalog_manifests(directory: Path) -> list[ModuleManifest]:
+    if not directory.exists():
+        return []
+    return [
+        ModuleManifest.model_validate_json(path.read_text(encoding="utf-8"))
+        for path in sorted(directory.glob("*/module.json"))
+    ]

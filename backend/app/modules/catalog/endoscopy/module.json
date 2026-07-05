@@ -1,0 +1,7 @@
+{
+  "name": "endoscopy",
+  "display_name": "Endoscopy",
+  "version": "0.1.0",
+  "enabled": false,
+  "permissions": ["services.read", "appointments.read", "inventory.read"]
+}
