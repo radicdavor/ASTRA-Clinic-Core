@@ -1,8 +1,9 @@
 from decimal import Decimal
+from datetime import date
 
 import pytest
 
-from app.models.domain import AuditLog, InventoryBatch, InventoryItem, ServiceMaterialTemplate, StockMovement
+from app.models.domain import AuditLog, InventoryBatch, InventoryItem, ServiceMaterialTemplate, StockMovement, StockMovementType
 from tests.integration.test_quality_gate_api import create_user_with_permissions, login, seed_clinic_objects
 
 
@@ -10,6 +11,7 @@ pytestmark = pytest.mark.integration
 
 
 def test_full_pilot_demo_flow(pg_client, pg_db):
+    demo_day = date.today().isoformat()
     user = create_user_with_permissions(
         pg_db,
         "pilot-pg@test.local",
@@ -51,7 +53,7 @@ def test_full_pilot_demo_flow(pg_client, pg_db):
     appointment = pg_client.post(
         "/api/appointments",
         headers=headers,
-        json={"patient_id": patient.id, "provider_id": provider.id, "room_id": room.id, "service_id": service.id, "date": "2026-07-05", "start_time": "11:00", "end_time": "11:30", "duration_minutes": 30, "status": "scheduled", "source": "manual"},
+        json={"patient_id": patient.id, "provider_id": provider.id, "room_id": room.id, "service_id": service.id, "date": demo_day, "start_time": "11:00", "end_time": "11:30", "duration_minutes": 30, "status": "scheduled", "source": "manual"},
     )
     assert appointment.status_code == 200
     appointment_id = appointment.json()["id"]
@@ -60,7 +62,9 @@ def test_full_pilot_demo_flow(pg_client, pg_db):
     assert completed.status_code == 200
     assert completed.json()["status"] == "completed"
     assert pg_db.get(InventoryItem, item.id).current_stock == Decimal("4.00")
-    assert pg_db.query(StockMovement).filter(StockMovement.related_appointment_id == appointment_id).count() == 1
+    consumption = pg_db.query(StockMovement).filter(StockMovement.related_appointment_id == appointment_id).one()
+    assert consumption.movement_type == StockMovementType.consumption.value
+    assert consumption.quantity == Decimal("-1.00")
 
     draft_invoice = pg_client.post(f"/api/appointments/{appointment_id}/draft-invoice", headers=headers)
     assert draft_invoice.status_code == 200
@@ -70,8 +74,11 @@ def test_full_pilot_demo_flow(pg_client, pg_db):
     assert issued.status_code == 200
     assert issued.json()["status"] == "issued"
     assert issued.json()["fiscalization_provider"] == "noop"
+    assert issued.json()["fiscalization_status"] == "skipped"
+    assert issued.json()["fiscalization_message"] == "Fiscalization disabled for this environment."
 
-    payment = pg_client.post(f"/api/invoices/{invoice_id}/payments", headers=headers, json={"amount": "100", "method": "cash"})
+    remaining_amount = issued.json()["total_amount"]
+    payment = pg_client.post(f"/api/invoices/{invoice_id}/payments", headers=headers, json={"amount": remaining_amount, "method": "cash"})
     assert payment.status_code == 200
     invoice_after_payment = pg_client.get(f"/api/invoices/{invoice_id}", headers=headers)
     assert invoice_after_payment.json()["payment_status"] in {"paid", "partially_paid"}
@@ -89,5 +96,16 @@ def test_full_pilot_demo_flow(pg_client, pg_db):
     )
     assert receive.status_code == 200
     assert pg_db.get(InventoryItem, item.id).current_stock == Decimal("7.00")
+    receipt = pg_db.query(StockMovement).filter(StockMovement.movement_type == StockMovementType.purchase_receipt.value).one()
+    assert receipt.quantity == Decimal("3.00")
 
-    assert pg_db.query(AuditLog).filter(AuditLog.request_id == "pilot-demo-flow").count() >= 6
+    audit_events = {
+        (entry.entity_type, entry.action)
+        for entry in pg_db.query(AuditLog).filter(AuditLog.request_id == "pilot-demo-flow").all()
+    }
+    assert ("Appointment", "create") in audit_events
+    assert ("Appointment", "update") in audit_events
+    assert ("Invoice", "create") in audit_events
+    assert ("Invoice", "update") in audit_events
+    assert ("PaymentTransaction", "create") in audit_events
+    assert ("PurchaseOrder", "update") in audit_events

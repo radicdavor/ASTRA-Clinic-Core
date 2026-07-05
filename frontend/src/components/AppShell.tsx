@@ -18,6 +18,7 @@ const nav = [
 
 export function AppShell() {
   const navigate = useNavigate();
+  const showDemoBanner = import.meta.env.VITE_APP_ENV !== "production";
   return (
     <div className="shell">
       <aside className="sidebar">
@@ -41,6 +42,11 @@ export function AppShell() {
         </nav>
       </aside>
       <main>
+        {showDemoBanner && (
+          <div className="demo-banner">
+            Demo/development okruzenje - ne unositi stvarne podatke pacijenata.
+          </div>
+        )}
         <header className="topbar">
           <div className="search">
             <Search size={18} />

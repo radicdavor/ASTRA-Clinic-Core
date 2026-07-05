@@ -32,13 +32,28 @@ export function PurchaseOrders() {
     setError("");
   }
 
+  function receiveValidationError(order: PurchaseOrder) {
+    const activeLines = order.lines.filter((line) => Number(draft[line.id]?.quantity_received || 0) > 0);
+    if (activeLines.length === 0) return "Unesite barem jednu kolicinu za zaprimanje.";
+    for (const line of activeLines) {
+      const currentItem = item(line.inventory_item_id);
+      const remaining = Math.max(0, Number(line.quantity_ordered) - Number(line.quantity_received));
+      const lineDraft = draft[line.id];
+      if (Number(lineDraft?.quantity_received || 0) > remaining) return "Kolicina zaprimanja ne smije biti veca od preostale kolicine.";
+      if (!lineDraft?.location_id) return "Lokacija je obavezna za svaku zaprimljenu stavku.";
+      if (currentItem?.lot_tracking_enabled && !lineDraft?.lot_number.trim()) return `LOT je obavezan za ${currentItem.name}.`;
+      if (currentItem?.expiration_tracking_enabled && !lineDraft?.expiration_date) return `Rok valjanosti je obavezan za ${currentItem.name}.`;
+    }
+    return "";
+  }
+
   async function receiveSelected() {
     if (!selected) return;
     setError("");
     try {
-      const overReceived = selected.lines.some((line) => Number(draft[line.id]?.quantity_received || 0) > Math.max(0, Number(line.quantity_ordered) - Number(line.quantity_received)));
-      if (overReceived) {
-        setError("Kolicina zaprimanja ne smije biti veca od preostale kolicine.");
+      const validationError = receiveValidationError(selected);
+      if (validationError) {
+        setError(validationError);
         return;
       }
       if (!window.confirm("Potvrditi zaprimanje robe na zalihu?")) return;
@@ -61,6 +76,8 @@ export function PurchaseOrders() {
     }
   }
 
+  const selectedReceiveError = selected ? receiveValidationError(selected) : "";
+
   return (
     <section className="page">
       <div className="page-header"><h1>Narudzbenice</h1><p>Prijedlozi nabave: {suggestions.data.length}</p></div>
@@ -78,7 +95,7 @@ export function PurchaseOrders() {
       {selected && (
         <section className="workflow-panel">
           <div className="page-header"><h2>Zaprimanje PO-{selected.id}</h2><p>Status: {selected.status}</p></div>
-          <p>Dobavljac: {selected.supplier?.name ?? "-"} / Iznos: {selected.total_amount} EUR</p>
+          <p>Dobavljac: {selected.supplier?.name ?? "-"} / Iznos: {selected.total_amount} EUR / Ocekivano: {selected.expected_delivery_date ?? "-"}</p>
           <DataTable rows={selected.lines} columns={[
             { header: "Artikl", render: (line) => item(line.inventory_item_id)?.name ?? `Artikl ${line.inventory_item_id}` },
             { header: "Naruceno", render: (line) => line.quantity_ordered },
@@ -89,7 +106,8 @@ export function PurchaseOrders() {
             { header: "Rok", render: (line) => <input type="date" value={draft[line.id]?.expiration_date ?? ""} onChange={(event) => setDraft({ ...draft, [line.id]: { ...draft[line.id], expiration_date: event.target.value } })} /> },
             { header: "Lokacija", render: (line) => <select value={draft[line.id]?.location_id ?? ""} onChange={(event) => setDraft({ ...draft, [line.id]: { ...draft[line.id], location_id: event.target.value } })}>{locations.data.map((location) => <option key={location.id} value={location.id}>{location.name}</option>)}</select> }
           ]} />
-          <button className="primary" onClick={receiveSelected}>Potvrdi zaprimanje</button>
+          {selectedReceiveError && <p className="form-error">{selectedReceiveError}</p>}
+          <button className="primary" disabled={Boolean(selectedReceiveError)} onClick={receiveSelected}>Potvrdi zaprimanje</button>
         </section>
       )}
     </section>

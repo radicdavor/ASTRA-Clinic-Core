@@ -1,11 +1,21 @@
+from pathlib import Path
+import json
+
 import pytest
 from pydantic import ValidationError
 
 from app.core.config import Settings
-from pathlib import Path
 
-from app.models.domain import InventoryItem, Service, ServiceMaterialTemplate
-from app.modules.manifest import ModuleManifest, load_catalog_manifests, load_catalog_material_templates, load_catalog_services
+from app.models.domain import InventoryItem, Module, Service, ServiceMaterialTemplate
+from app.modules.manifest import (
+    ModuleManifest,
+    import_module_manifest,
+    load_catalog_manifests,
+    load_catalog_material_templates,
+    load_catalog_module,
+    load_catalog_services,
+    load_module_manifests,
+)
 
 
 def test_production_rejects_default_jwt_secret():
@@ -36,6 +46,29 @@ def test_module_manifest_forbids_unknown_fields():
         ModuleManifest.model_validate({"name": "x", "display_name": "X", "unexpected": True})
 
 
+def test_module_manifest_loader_returns_empty_for_missing_directory(tmp_path):
+    assert load_module_manifests(tmp_path / "missing") == []
+
+
+def test_module_manifest_loader_reads_json_without_code_execution(tmp_path):
+    marker = tmp_path / "executed.txt"
+    (tmp_path / "safe.json").write_text(
+        json.dumps({
+            "name": "safe_module",
+            "display_name": "Safe module",
+            "version": "1.0.0",
+            "enabled": True,
+            "permissions": [f"__import__('pathlib').Path(r'{marker}').write_text('bad')"],
+        }),
+        encoding="utf-8",
+    )
+
+    manifests = load_module_manifests(tmp_path)
+
+    assert manifests[0].name == "safe_module"
+    assert not marker.exists()
+
+
 def test_catalog_manifest_loader_reads_data_only_modules():
     catalog_dir = Path(__file__).resolve().parents[1] / "app" / "modules" / "catalog"
 
@@ -43,6 +76,22 @@ def test_catalog_manifest_loader_reads_data_only_modules():
 
     names = {manifest.name for manifest in manifests}
     assert {"gastroenterology", "endoscopy", "dermatology_aesthetics"}.issubset(names)
+
+
+def test_import_module_manifest_is_idempotent_and_updates_metadata(db, tmp_path):
+    module_dir = tmp_path / "module"
+    module_dir.mkdir()
+    manifest_path = module_dir / "module.json"
+    manifest_path.write_text(json.dumps({"name": "pilot", "display_name": "Pilot", "version": "1.0.0", "enabled": True}), encoding="utf-8")
+
+    first = import_module_manifest(db, module_dir)
+    manifest_path.write_text(json.dumps({"name": "pilot", "display_name": "Pilot updated", "version": "1.1.0", "enabled": False}), encoding="utf-8")
+    second = import_module_manifest(db, module_dir)
+
+    assert first.id == second.id
+    assert db.query(Module).filter(Module.key == "pilot").count() == 1
+    assert second.name == "Pilot updated"
+    assert second.enabled is False
 
 
 def test_catalog_loader_imports_services_and_templates_idempotently(db):
@@ -60,3 +109,32 @@ def test_catalog_loader_imports_services_and_templates_idempotently(db):
 
     assert db.query(Service).filter(Service.code.in_(["GASTRO", "COLONO"])).count() == 2
     assert db.query(ServiceMaterialTemplate).count() == 2
+
+
+def test_catalog_loader_updates_services_by_code(db, tmp_path):
+    module_dir = tmp_path / "pilot"
+    module_dir.mkdir()
+    (module_dir / "module.json").write_text(json.dumps({"name": "pilot", "display_name": "Pilot"}), encoding="utf-8")
+    services_path = module_dir / "services.json"
+    services_path.write_text(json.dumps([{"code": "PILOT", "name": "Pilot old", "duration_minutes": 20, "price": "10"}]), encoding="utf-8")
+
+    load_catalog_module(db, module_dir)
+    services_path.write_text(json.dumps([{"code": "PILOT", "name": "Pilot new", "duration_minutes": 45, "price": "25"}]), encoding="utf-8")
+    load_catalog_module(db, module_dir)
+
+    service = db.query(Service).filter(Service.code == "PILOT").one()
+    assert service.name == "Pilot new"
+    assert service.duration_minutes == 45
+    assert str(service.price) == "25.00"
+    assert db.query(Service).filter(Service.code == "PILOT").count() == 1
+
+
+def test_catalog_material_loader_skips_missing_dependencies(db, tmp_path):
+    module_dir = tmp_path / "pilot"
+    module_dir.mkdir()
+    (module_dir / "material_templates.json").write_text(
+        json.dumps([{"service_code": "MISSING", "item_sku": "MISSING", "default_quantity": "1"}]),
+        encoding="utf-8",
+    )
+
+    assert load_catalog_material_templates(db, module_dir) == []

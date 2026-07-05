@@ -21,6 +21,7 @@ export function AppointmentDetail() {
 
   const relatedInvoice = useMemo(() => invoices.data.find((invoice) => invoice.appointment_id === Number(id)), [invoices.data, id]);
   const relatedMovements = useMemo(() => movements.data.filter((movement) => movement.related_appointment_id === Number(id)), [movements.data, id]);
+  const terminalStatus = appointment.data ? ["completed", "cancelled"].includes(appointment.data.status) : false;
 
   async function loadMaterials() {
     if (!appointment.data) return;
@@ -35,10 +36,20 @@ export function AppointmentDetail() {
 
   const missingRequiredVariable = materials.some((entry) => entry.requires_user_quantity && (!quantities[entry.item.id] || Number(quantities[entry.item.id]) <= 0));
   const exceedsStock = materials.some((entry) => Number(quantities[entry.item.id] || 0) > Number(entry.available_stock || 0));
+  const belowReorderAfterUse = materials.some((entry) => {
+    const requested = Number(quantities[entry.item.id] || 0);
+    const remaining = Number(entry.available_stock || 0) - requested;
+    return requested > 0 && entry.item.reorder_point && remaining <= Number(entry.item.reorder_point);
+  });
+
+  function materialLabel(entry: any) {
+    if (!entry.required) return "opcionalno";
+    return entry.requires_user_quantity ? "obavezno varijabilno" : "obavezno fiksno";
+  }
 
   async function completeWithMaterials() {
     if (!appointment.data) return;
-    if (missingRequiredVariable || exceedsStock) return;
+    if (missingRequiredVariable || exceedsStock || terminalStatus) return;
     if (!window.confirm("Ovo ce skinuti materijal sa zalihe i zavrsiti termin.")) return;
     setError("");
     try {
@@ -47,6 +58,8 @@ export function AppointmentDetail() {
         .filter((line) => line.quantity && Number(line.quantity) > 0);
       const updated = await api<Appointment>(`/api/appointments/${appointment.data.id}/complete-with-consumption`, { method: "POST", body: JSON.stringify({ lines }) });
       appointment.setData(updated);
+      movements.setData(await api<StockMovement[]>("/api/inventory/stock-movements"));
+      audit.setData(await api<AuditLog[]>(`/api/audit-log?entity_type=Appointment&entity_id=${appointment.data.id}`));
       setMessage("Termin je zavrsen.");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Greska kod potrosnje materijala");
@@ -84,13 +97,18 @@ export function AppointmentDetail() {
         <div className="page-header"><h2>Materijali</h2><button onClick={loadMaterials}>Ucitaj prijedlog</button></div>
         {materials.map((entry) => (
           <label className="material-row" key={entry.template_id}>
-            <span>{entry.item.name} / {entry.required ? "obavezno" : "opcionalno"} / dostupno {entry.available_stock}</span>
+            <span>
+              <strong>{entry.item.name}</strong>
+              <small>{materialLabel(entry)} / jedinica {entry.item.unit_of_measure ?? "-"} / zadano {entry.quantity} / dostupno {entry.available_stock} / reorder {entry.item.reorder_point ?? "-"}</small>
+            </span>
             <input type="number" min="0" step="0.01" value={quantities[entry.item.id] ?? ""} onChange={(event) => setQuantities({ ...quantities, [entry.item.id]: event.target.value })} />
           </label>
         ))}
         {missingRequiredVariable && <p className="form-error">Obavezni varijabilni materijal mora imati kolicinu.</p>}
         {exceedsStock && <p className="form-error">Kolicina prelazi dostupnu zalihu.</p>}
-        <button className="primary" disabled={missingRequiredVariable || exceedsStock || materials.length === 0} onClick={completeWithMaterials}>Zavrsi uz potrosnju</button>
+        {belowReorderAfterUse && <p className="form-error">Upozorenje: nakon potrosnje zaliha pada na ili ispod reorder razine.</p>}
+        {terminalStatus && <p className="form-error">Termin je vec zavrsen ili otkazan, potrosnja se ne moze ponovno potvrditi.</p>}
+        <button className="primary" disabled={missingRequiredVariable || exceedsStock || terminalStatus || materials.length === 0} onClick={completeWithMaterials}>Zavrsi uz potrosnju</button>
       </section>
 
       <section className="workflow-panel">

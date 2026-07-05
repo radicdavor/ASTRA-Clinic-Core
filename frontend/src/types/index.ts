@@ -57,7 +57,20 @@ export type InventoryItem = {
 };
 
 export type Supplier = { id: number; name: string; contact_person?: string; email?: string; phone?: string };
-export type AuditLog = { id: number; action: string; entity_type: string; entity_id?: number; summary?: string; actor_type?: string; request_id?: string; created_at: string };
+export type AuditLog = {
+  id: number;
+  action: string;
+  entity_type: string;
+  entity_id?: number;
+  summary?: string;
+  actor_type?: string;
+  actor_user_id?: number;
+  actor_api_key_id?: number;
+  request_id?: string;
+  before_json?: Record<string, unknown> | null;
+  after_json?: Record<string, unknown> | null;
+  created_at: string;
+};
 export type StockMovement = { id: number; inventory_item_id: number; related_appointment_id?: number; movement_type: string; quantity: string; reason?: string; created_at: string; item?: InventoryItem };
 export type StockLocation = { id: number; name: string; type: string };
 export type PurchaseOrderLine = { id: number; purchase_order_id: number; inventory_item_id: number; quantity_ordered: string; quantity_received: string; unit_price: string; vat_rate: string };

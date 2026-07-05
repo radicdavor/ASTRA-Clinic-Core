@@ -18,6 +18,7 @@ export function Invoices() {
   const selected = useMemo(() => invoices.data.find((invoice) => invoice.id === selectedId) ?? invoices.data[0], [invoices.data, selectedId]);
   const paid = selected?.payments?.reduce((sum, payment) => sum + Number(payment.amount), 0) ?? 0;
   const remaining = Math.max(0, Number(selected?.total_amount ?? 0) - paid);
+  const paymentBlocked = !selected || ["draft", "cancelled"].includes(selected.status) || remaining <= 0 || Number(paymentAmount || 0) <= 0 || Number(paymentAmount || 0) > remaining;
 
   function updateInvoice(updated: Invoice) {
     invoices.setData(invoices.data.map((invoice) => (invoice.id === updated.id ? updated : invoice)));
@@ -41,6 +42,10 @@ export function Invoices() {
 
   async function addPayment(invoice: Invoice) {
     setError("");
+    if (["draft", "cancelled"].includes(invoice.status)) {
+      setError("Uplata se moze evidentirati samo za izdan racun.");
+      return;
+    }
     if (Number(paymentAmount) > remaining) {
       setError("Uplata ne smije biti veca od preostalog iznosa.");
       return;
@@ -90,11 +95,12 @@ export function Invoices() {
           </div>
           <div className="metrics">
             <div><span>Ukupno</span><strong>{selected.total_amount}</strong></div>
+            <div><span>Preostalo</span><strong>{remaining.toFixed(2)}</strong></div>
             <div><span>Fiskalizacija</span><strong>{selected.fiscalization_status ?? "-"}</strong></div>
             <div><span>Provider</span><strong>{selected.fiscalization_provider ?? "-"}</strong></div>
-            <div><span>Poruka</span><strong>{selected.fiscalization_message ?? "-"}</strong></div>
           </div>
-          {selected.fiscalization_provider === "noop" && <p className="form-error">Nije stvarna fiskalizacija.</p>}
+          <p>Fiskalizacija: {selected.fiscalization_message ?? "-"}</p>
+          {selected.fiscalization_provider === "noop" && <p className="form-error">Demo fiskalizacija - nije stvarna fiskalizacija.</p>}
 
           {selected.status === "draft" && (
             <div className="inline-form">
@@ -112,10 +118,18 @@ export function Invoices() {
             { header: "Ukupno", render: (line) => line.total }
           ]} />
 
+          <h3>Uplate</h3>
+          <DataTable rows={selected.payments ?? []} columns={[
+            { header: "Iznos", render: (payment) => payment.amount },
+            { header: "Metoda", render: (payment) => payment.method },
+            { header: "Referenca", render: (payment) => payment.reference ?? "-" },
+            { header: "Vrijeme", render: (payment) => payment.paid_at ? new Date(payment.paid_at).toLocaleString() : "-" }
+          ]} />
+
           <div className="inline-form">
             <input type="number" min="0.01" max={remaining} step="0.01" placeholder={`Preostalo ${remaining.toFixed(2)}`} value={paymentAmount} onFocus={() => !paymentAmount && setPaymentAmount(remaining.toFixed(2))} onChange={(event) => setPaymentAmount(event.target.value)} />
             <select value={paymentMethod} onChange={(event) => setPaymentMethod(event.target.value)}><option value="cash">Gotovina</option><option value="card">Kartica</option><option value="bank">Transakcija</option></select>
-            <button className="primary" onClick={() => addPayment(selected)}>Evidentiraj uplatu</button>
+            <button className="primary" disabled={paymentBlocked} onClick={() => addPayment(selected)}>Evidentiraj uplatu</button>
           </div>
         </section>
       )}
