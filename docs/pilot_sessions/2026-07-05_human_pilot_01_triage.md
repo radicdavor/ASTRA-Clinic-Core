@@ -1,6 +1,6 @@
 # 2026-07-05 Human Pilot 01 Triage
 
-Human pilot status: pending human execution.
+Human pilot status: pending human execution. V15 inspection found no completed human pilot evidence and no maintainer waiver.
 
 | ID | Severity | Area | Summary | Issue link or to-create | Owner | Status | Release decision impact |
 | --- | --- | --- | --- | --- | --- | --- | --- |

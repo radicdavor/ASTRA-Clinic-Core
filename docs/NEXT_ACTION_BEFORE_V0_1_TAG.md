@@ -4,6 +4,8 @@
 
 `v0.1-pilot` is blocked because the human participant browser pilot has not been completed and no maintainer waiver has been documented.
 
+V15 inspection confirms this block is still active. No feature work should proceed before the human pilot is completed, except validated P0/P1 fixes.
+
 ## Owner
 
 - Maintainer / pilot facilitator

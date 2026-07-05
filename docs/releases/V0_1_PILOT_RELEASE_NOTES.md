@@ -4,7 +4,7 @@
 
 - Version: `v0.1-pilot`
 - Date: 05-07-2026
-- Commit SHA: `e85adee1b2655d0f42c9e08c4c2a38035196950e` at V14 review start; replace with final tag SHA before publishing.
+- Commit SHA: `a4a757fae302d722ee9f2a83bdda5bf06955efee` at V15 review start; replace with final tag SHA before publishing.
 - Release type: pilot
 - Supported environment: local Docker Compose demo/pilot environment
 
@@ -57,6 +57,7 @@ This release candidate supports the core demo clinic operations flow with demo d
 - Human participant dry-run feedback is still pending after maintainer command-level validation.
 - V13 release decision is Deferred until human pilot is completed or explicitly waived.
 - V14 keeps the release Deferred because human pilot evidence is still missing and no waiver exists.
+- V15 keeps the release Deferred for the same reason: no completed human pilot and no waiver.
 - No full EMR charting.
 - No prescription system.
 - No clinical decision support.
@@ -81,7 +82,7 @@ Fiscalization mode is `noop`/stub for demo purposes only. It must not be used fo
 
 ## QA Status
 
-- CI: pending GitHub run after final V14 commit.
+- CI: pending GitHub run after final V15 commit.
 - Backend tests: passed locally in Docker, `64 passed`.
 - Frontend typecheck/build: passed locally.
 - Pilot smoke: passed locally.

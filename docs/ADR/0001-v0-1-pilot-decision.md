@@ -18,6 +18,8 @@ V13 decision: defer `v0.1-pilot` tagging because the human participant pilot rem
 
 V14 decision: keep the release Deferred. No human pilot evidence or maintainer waiver was provided, so no feature work or tag should proceed.
 
+V15 decision: keep the release Deferred. Human pilot evidence is still missing, no waiver exists, and no product feature work should proceed before the pilot gate.
+
 ## Decision Options
 
 1. Accepted - tag `v0.1-pilot` after the human pilot passes with no open P0/P1 issues.
