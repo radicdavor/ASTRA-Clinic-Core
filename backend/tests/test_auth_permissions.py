@@ -14,6 +14,24 @@ def test_admin_can_access_inventory(client, auth_setup):
     assert response.status_code == 200
 
 
+def test_admin_can_create_api_key_raw_key_is_returned_once_and_hash_is_stored(client, db, auth_setup):
+    token = login_token(client, "admin@test.local")
+
+    response = client.post(
+        "/auth/api-keys",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"name": "AI scheduler", "scopes": ["ai.appointments.create"]},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    stored = db.get(ApiKey, body["id"])
+    assert body["key"].startswith("astra_")
+    assert "key_hash" not in body
+    assert stored.key_hash != body["key"]
+    assert stored.key_hash == hash_api_key(body["key"])
+
+
 def test_user_without_write_off_cannot_write_off_stock(client, db, auth_setup):
     token = login_token(client, "limited@test.local")
     item = InventoryItem(sku="DENY-WO", name="Deny writeoff")

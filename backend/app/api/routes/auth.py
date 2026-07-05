@@ -8,9 +8,11 @@ from app.core.database import get_db
 from app.core.security import create_access_token, verify_password
 from app.auth.dependencies import Actor, hash_api_key, require_permission
 from app.models.domain import ApiKey, User
-from app.schemas.common import ApiKeyCreate, ApiKeyCreated, LoginRequest, TokenResponse
+from app.schemas.common import ApiKeyCreate, ApiKeyCreated, ErrorResponse, LoginRequest, TokenResponse
 
-router = APIRouter(prefix="/auth", tags=["auth"])
+ERROR_RESPONSES = {400: {"model": ErrorResponse}, 401: {"model": ErrorResponse}, 403: {"model": ErrorResponse}, 404: {"model": ErrorResponse}, 409: {"model": ErrorResponse}, 422: {"model": ErrorResponse}}
+
+router = APIRouter(prefix="/auth", tags=["auth"], responses=ERROR_RESPONSES)
 
 
 @router.post("/login", response_model=TokenResponse)

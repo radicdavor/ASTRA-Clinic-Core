@@ -7,6 +7,7 @@ from app.api.routes import ai, auth, core, inventory
 from app.core.config import get_settings
 
 settings = get_settings()
+settings.validate_production_safety()
 
 app = FastAPI(
     title="ASTRA Clinic Core API",

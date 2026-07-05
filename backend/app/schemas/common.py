@@ -10,9 +10,17 @@ class ORMModel(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+class ErrorResponse(BaseModel):
+    detail: str
+
+    model_config = ConfigDict(json_schema_extra={"example": {"detail": "Opis greske"}})
+
+
 class LoginRequest(BaseModel):
     email: str
     password: str
+
+    model_config = ConfigDict(json_schema_extra={"example": {"email": "admin@astra.local", "password": "astra123"}})
 
 
 class TokenResponse(BaseModel):
@@ -25,6 +33,8 @@ class ApiKeyCreate(BaseModel):
     name: str
     scopes: list[str]
     expires_at: DateTimeType | None = None
+
+    model_config = ConfigDict(json_schema_extra={"example": {"name": "AI scheduler", "scopes": ["ai.appointments.create", "ai.free_slots.read"], "expires_at": None}})
 
 
 class ApiKeyCreated(ORMModel):
@@ -43,6 +53,8 @@ class PatientCreate(BaseModel):
     email: EmailStr | None = None
     phone: str | None = None
     notes: str | None = None
+
+    model_config = ConfigDict(json_schema_extra={"example": {"first_name": "Petra", "last_name": "Novak", "date_of_birth": "1990-01-15", "email": "petra.novak@example.com", "phone": "+385 91 111 2222"}})
 
 
 class PatientUpdate(BaseModel):
@@ -68,6 +80,8 @@ class ServiceCreate(BaseModel):
     module_id: int | None = None
     active: bool = True
 
+    model_config = ConfigDict(json_schema_extra={"example": {"name": "Gastroskopija", "code": "GASTRO", "duration_minutes": 30, "price": "120.00", "module_id": None, "active": True}})
+
 
 class ServiceOut(ServiceCreate, ORMModel):
     id: int
@@ -85,6 +99,8 @@ class AppointmentCreate(BaseModel):
     status: str = "scheduled"
     source: str = "manual"
     notes: str | None = None
+
+    model_config = ConfigDict(json_schema_extra={"example": {"patient_id": 1, "service_id": 1, "provider_id": 1, "room_id": 1, "date": "2026-07-05", "start_time": "09:00", "end_time": "09:30", "duration_minutes": 30, "status": "scheduled", "source": "manual", "notes": "Kontrolni termin"}})
 
 
 class AppointmentUpdate(BaseModel):

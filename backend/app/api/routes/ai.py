@@ -8,13 +8,15 @@ from app.audit.service import audit, snapshot
 from app.auth.dependencies import Actor, require_permission
 from app.core.database import get_db
 from app.models.domain import Appointment, Patient
-from app.schemas.common import AppointmentCreate, PatientCreate
+from app.schemas.common import AppointmentCreate, AppointmentOut, ErrorResponse, PatientCreate, PatientOut
 from app.services.appointments import BLOCKING_STATUSES, validate_appointment_payload
 
-router = APIRouter(prefix="/api/ai", tags=["ai"])
+ERROR_RESPONSES = {400: {"model": ErrorResponse}, 401: {"model": ErrorResponse}, 403: {"model": ErrorResponse}, 404: {"model": ErrorResponse}, 409: {"model": ErrorResponse}, 422: {"model": ErrorResponse}}
+
+router = APIRouter(prefix="/api/ai", tags=["ai"], responses=ERROR_RESPONSES)
 
 
-@router.post("/patients/create")
+@router.post("/patients/create", response_model=PatientOut)
 def ai_create_patient(payload: PatientCreate, request: Request, db: Session = Depends(get_db), actor: Actor = Depends(require_permission("ai.patients.create"))):
     patient = Patient(**payload.model_dump())
     db.add(patient)
@@ -25,7 +27,7 @@ def ai_create_patient(payload: PatientCreate, request: Request, db: Session = De
     return patient
 
 
-@router.post("/appointments/create")
+@router.post("/appointments/create", response_model=AppointmentOut)
 def ai_create_appointment(payload: AppointmentCreate, request: Request, db: Session = Depends(get_db), actor: Actor = Depends(require_permission("ai.appointments.create"))):
     data = payload.model_dump()
     data["source"] = "ai_agent"

@@ -55,6 +55,18 @@ Početna prijava:
 - E-pošta: `admin@astra.local`
 - Lozinka: `astra123`
 
+## Testovi i CI
+
+Lokalno pokretanje provjera:
+
+```bash
+make test
+```
+
+Backend testovi koriste izoliranu testnu bazu i ne ovise o ručnom seedanju razvojne baze. GitHub Actions CI se pokreće na svaki push i pull request, pokreće migracije nad testnim PostgreSQL-om, backend pytest suite i frontend production build.
+
+Za produkciju postavite `APP_ENV=production`, jak `JWT_SECRET`, kraći `ACCESS_TOKEN_MINUTES` i eksplicitni `CORS_ORIGINS`. Aplikacija namjerno odbija startup u produkciji ako su JWT ili CORS postavke nesigurne.
+
 ## Što je uključeno
 
 - Pacijenti: unos, popis, detalj i ažuriranje preko API-ja

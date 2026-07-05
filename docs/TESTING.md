@@ -2,6 +2,7 @@
 
 V3 introduced backend pytest coverage and CI. V4 expands that safety net around scheduling conflicts, role/API-key permissions, billing state transitions and transaction boundaries.
 V5 adds audit snapshot coverage and appointment material-consumption atomicity coverage.
+Reliability First adds contract hardening, production guard and fiscalization boundary tests.
 
 Run all local checks:
 
@@ -36,5 +37,8 @@ Current coverage focuses on:
 - official invoice number uniqueness through a sequence table
 - role-based permission denial for protected inventory and billing routes
 - API-key scoped access and audit logging
+- OpenAPI schema does not expose `password_hash` or `key_hash`
+- production mode rejects weak JWT/CORS configuration
+- fiscalization provider boundary defaults to noop and Croatian provider remains a no-call stub
 
 CI runs database migrations against a test PostgreSQL service, backend pytest and frontend `npm run build` on push and pull request.

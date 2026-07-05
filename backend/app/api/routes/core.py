@@ -8,10 +8,12 @@ from app.audit.service import audit, snapshot
 from app.auth.dependencies import Actor, require_permission
 from app.core.database import get_db
 from app.models.domain import Appointment, AuditLog, Module, Patient, Provider, Room, Service
-from app.schemas.common import AppointmentCreate, AppointmentUpdate, PatientCreate, PatientUpdate, ServiceCreate
+from app.schemas.common import AppointmentCreate, AppointmentOut, AppointmentUpdate, ErrorResponse, PatientCreate, PatientOut, PatientUpdate, ServiceCreate, ServiceOut
 from app.services.appointments import validate_appointment_payload
 
-router = APIRouter(prefix="/api", tags=["clinic"])
+ERROR_RESPONSES = {400: {"model": ErrorResponse}, 401: {"model": ErrorResponse}, 403: {"model": ErrorResponse}, 404: {"model": ErrorResponse}, 409: {"model": ErrorResponse}, 422: {"model": ErrorResponse}}
+
+router = APIRouter(prefix="/api", tags=["clinic"], responses=ERROR_RESPONSES)
 
 
 def patch_model(obj, data: dict) -> None:
@@ -19,7 +21,7 @@ def patch_model(obj, data: dict) -> None:
         setattr(obj, key, value)
 
 
-@router.post("/patients")
+@router.post("/patients", response_model=PatientOut)
 def create_patient(
     payload: PatientCreate,
     request: Request,
@@ -35,7 +37,7 @@ def create_patient(
     return patient
 
 
-@router.get("/patients")
+@router.get("/patients", response_model=list[PatientOut])
 def list_patients(q: str | None = None, db: Session = Depends(get_db), actor: Actor = Depends(require_permission("patients.read"))):
     stmt = select(Patient).order_by(Patient.last_name, Patient.first_name)
     if q:
@@ -44,7 +46,7 @@ def list_patients(q: str | None = None, db: Session = Depends(get_db), actor: Ac
     return db.scalars(stmt).all()
 
 
-@router.get("/patients/{patient_id}")
+@router.get("/patients/{patient_id}", response_model=PatientOut)
 def get_patient(patient_id: int, db: Session = Depends(get_db), actor: Actor = Depends(require_permission("patients.read"))):
     patient = db.get(Patient, patient_id)
     if not patient:
@@ -52,7 +54,7 @@ def get_patient(patient_id: int, db: Session = Depends(get_db), actor: Actor = D
     return patient
 
 
-@router.patch("/patients/{patient_id}")
+@router.patch("/patients/{patient_id}", response_model=PatientOut)
 def update_patient(
     patient_id: int,
     payload: PatientUpdate,
@@ -72,7 +74,7 @@ def update_patient(
     return patient
 
 
-@router.post("/appointments")
+@router.post("/appointments", response_model=AppointmentOut)
 def create_appointment(
     payload: AppointmentCreate,
     request: Request,
@@ -90,7 +92,7 @@ def create_appointment(
     return appointment
 
 
-@router.get("/appointments")
+@router.get("/appointments", response_model=list[AppointmentOut])
 def list_appointments(
     date_from: date | None = None,
     date_to: date | None = None,
@@ -120,7 +122,7 @@ def list_appointments(
     return db.scalars(stmt).all()
 
 
-@router.get("/appointments/{appointment_id}")
+@router.get("/appointments/{appointment_id}", response_model=AppointmentOut)
 def get_appointment(appointment_id: int, db: Session = Depends(get_db), actor: Actor = Depends(require_permission("appointments.read"))):
     appointment = db.scalar(select(Appointment).options(joinedload(Appointment.patient), joinedload(Appointment.service), joinedload(Appointment.provider), joinedload(Appointment.room)).where(Appointment.id == appointment_id))
     if not appointment:
@@ -128,7 +130,7 @@ def get_appointment(appointment_id: int, db: Session = Depends(get_db), actor: A
     return appointment
 
 
-@router.patch("/appointments/{appointment_id}")
+@router.patch("/appointments/{appointment_id}", response_model=AppointmentOut)
 def update_appointment(
     appointment_id: int,
     payload: AppointmentUpdate,
@@ -166,7 +168,7 @@ def delete_appointment(
     return {"ok": True}
 
 
-@router.get("/schedule/day")
+@router.get("/schedule/day", response_model=list[AppointmentOut])
 def day_schedule(date: date = Query(...), db: Session = Depends(get_db), actor: Actor = Depends(require_permission("appointments.read"))):
     return db.scalars(
         select(Appointment)
@@ -186,12 +188,12 @@ def search(q: str, db: Session = Depends(get_db), actor: Actor = Depends(require
     }
 
 
-@router.get("/services")
+@router.get("/services", response_model=list[ServiceOut])
 def list_services(db: Session = Depends(get_db), actor: Actor = Depends(require_permission("services.read"))):
     return db.scalars(select(Service).order_by(Service.name)).all()
 
 
-@router.post("/services")
+@router.post("/services", response_model=ServiceOut)
 def create_service(payload: ServiceCreate, request: Request, db: Session = Depends(get_db), actor: Actor = Depends(require_permission("services.write"))):
     service = Service(**payload.model_dump())
     db.add(service)

@@ -24,6 +24,7 @@ from app.models.domain import (
 )
 from app.schemas.common import (
     AppointmentMaterialConsumptionRequest,
+    ErrorResponse,
     InventoryBatchCreate,
     InventoryBatchOut,
     InventoryItemCreate,
@@ -73,7 +74,9 @@ from app.services.procurement import (
     recalculate_purchase_order_total,
 )
 
-router = APIRouter(prefix="/api", tags=["inventory"])
+ERROR_RESPONSES = {400: {"model": ErrorResponse}, 401: {"model": ErrorResponse}, 403: {"model": ErrorResponse}, 404: {"model": ErrorResponse}, 409: {"model": ErrorResponse}, 422: {"model": ErrorResponse}}
+
+router = APIRouter(prefix="/api", tags=["inventory"], responses=ERROR_RESPONSES)
 
 
 def update_from_payload(obj, payload) -> None:
