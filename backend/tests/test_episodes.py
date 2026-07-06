@@ -126,4 +126,6 @@ def test_readiness_includes_clinical_episodes(client, auth_setup):
     response = client.get("/api/readiness", headers=headers)
 
     assert response.status_code == 200
-    assert any(check["key"] == "clinical_episodes" and check["target_path"] == "/episodes" for check in response.json()["checks"])
+    check = next(check for check in response.json()["checks"] if check["key"] == "clinical_episodes")
+    assert check["target_path"] == "/clinical-documents"
+    assert check["decision_impact"] == "none"

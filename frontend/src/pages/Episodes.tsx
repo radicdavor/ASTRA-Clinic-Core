@@ -28,13 +28,13 @@ export function Episodes() {
       <div className="page-header">
         <div>
           <h1>
-            Epizode <HelpHint title="Klinicke epizode">Epizoda je klinicki kontekst oko problema, cilja ili pracenja. Nije dijagnoza, racun ni automatizirani workflow.</HelpHint>
+            Epizode <HelpHint title="Eksperimentalno">Episode Engine je eksperimentalno/deferred podrucje. Primarni klinicki smjer je Patient Clinical Knowledge Layer.</HelpHint>
           </h1>
-          <p>Pacijent je osoba, epizoda je klinicka prica, termin je dogadaj u vremenu.</p>
+          <p>Eksperimentalni klinicki konteksti. Ne koristiti kao primarni workflow dok Patient Clinical Knowledge Layer nije stabilan.</p>
         </div>
         <span className="action-with-help">
           <Link className="primary link-button" to="/episodes/new">Nova epizoda</Link>
-          <HelpHint title="Nova epizoda">Otvara sigurni demo unos klinicke epizode. Ne unosite stvarne podatke pacijenata.</HelpHint>
+          <HelpHint title="Eksperimentalno">Ova funkcija ostaje dostupna samo radi kompatibilnosti s postojecim demo podacima.</HelpHint>
         </span>
       </div>
       <DataTable rows={episodes.data} columns={[

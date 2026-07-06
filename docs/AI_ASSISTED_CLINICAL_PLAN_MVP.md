@@ -1,6 +1,8 @@
 # AI Assisted Clinical Plan MVP
 
-Status: Episode Engine extension for demo/pilot use only.
+Status: experimental/deferred Episode Engine extension for demo/pilot compatibility only.
+
+Primary direction is Patient Clinical Knowledge Layer. Do not expand AI Assisted Clinical Plan into episode-centric workflow while Episode Engine is paused.
 
 ## Purpose
 

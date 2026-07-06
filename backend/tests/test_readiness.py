@@ -74,14 +74,13 @@ def test_readiness_checks_keep_operational_evidence_contract(client, db, auth_se
         "/readiness",
         "/patients",
         "/appointments/new",
-        "/episodes",
         "/services",
         "/modules",
         "/audit-log",
         "/inventory",
         "/invoices",
-            "/api-keys",
-            "/clinical-documents",
+        "/api-keys",
+        "/clinical-documents",
         }
 
     assert checks
@@ -91,3 +90,25 @@ def test_readiness_checks_keep_operational_evidence_contract(client, db, auth_se
         assert check["target_label"]
         if check["status"] in {"warning", "critical"}:
             assert check["action"] or check["target_path"]
+
+
+def test_readiness_does_not_block_or_warn_on_missing_episodes(client, db, auth_setup):
+    db.add_all(
+        [
+            Patient(first_name="Ana", last_name="Horvat"),
+            Provider(full_name="Dr. Demo", active=True),
+            Room(name="Soba 1", active=True),
+            Module(key="core", name="Clinic Core", enabled=True),
+            Service(name="Pregled", duration_minutes=30, price="50.00", active=True),
+        ]
+    )
+    db.commit()
+    token = login_token(client, "admin@test.local")
+
+    response = client.get("/api/readiness", headers={"Authorization": f"Bearer {token}"})
+
+    assert response.status_code == 200
+    episode_check = next(check for check in response.json()["checks"] if check["key"] == "clinical_episodes")
+    assert episode_check["status"] == "ok"
+    assert episode_check["decision_impact"] == "none"
+    assert episode_check["target_path"] == "/clinical-documents"

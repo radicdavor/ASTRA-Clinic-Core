@@ -87,6 +87,8 @@ Critical actions keep V19 `ActionButton` and `HelpHint` behavior.
 
 Episode Workspace gathers the clinical story around one patient context.
 
+Status: experimental/deferred. Episode Workspace remains available by direct route for compatibility, but it is hidden from primary navigation while Patient Clinical Knowledge Layer is the primary clinical direction.
+
 It includes:
 
 - episode title/status/type/priority
@@ -144,7 +146,7 @@ Future Purchase Order Workspace standard:
 
 - Shared workspace components live in `frontend/src/components/workspace/`.
 - Patient Workspace exists at `/patients/:id`.
-- Episode Workspace exists at `/episodes/:id`.
+- Episode Workspace exists at `/episodes/:id` as experimental/deferred compatibility surface.
 - Appointment detail follows the workspace pattern.
 - Patient related appointments are loaded through `GET /api/patients/{patient_id}/appointments`.
 - Patient related episodes are loaded through `GET /api/patients/{patient_id}/episodes`.

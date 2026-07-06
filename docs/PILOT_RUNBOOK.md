@@ -53,42 +53,46 @@ Steps:
 6. Open patients and enter a Patient Workspace from the patient list.
 7. Create or review a demo patient. If OIB is used, use only an invented demo OIB.
 8. If the possible-duplicate warning appears, compare name, birth date, OIB, phone and e-mail before confirming a new patient.
-9. From Patient Workspace, review appointments, invoices and audit context.
-10. Review the Epizode tab and open a demo Episode Workspace.
-11. Confirm the episode links back to Patient Workspace and shows related appointments/audit.
-12. Create a new appointment from Patient Workspace or open new appointment and search for the patient by name or OIB.
-13. Select the resolved patient from the search result; do not create an appointment from ambiguous free text.
-14. Select an active/open episode if appropriate, or leave `Bez epizode` only when intentionally testing the old optional flow.
-15. Select a service and review the service context card.
-16. Open daily dashboard.
-17. Select today's date and open the demo appointment.
-18. Use quick status actions: arrived, in progress.
-19. Open appointment detail.
-20. Confirm the appointment screen links back to Patient Workspace and shows episode context or a non-blocking warning.
-21. Load material suggestion.
-22. Review required fixed, required variable, and optional material labels.
-23. Complete appointment with material consumption and verify the confirmation prompt is clear.
-24. Verify the appointment status is completed.
-25. Verify stock movement appears on appointment detail.
-26. Create draft invoice from appointment.
-27. Open invoice detail.
-28. Issue invoice and verify the confirmation prompt is clear.
-29. Show demo fiscalization status and warning.
-30. Record payment for the remaining amount and verify the confirmation prompt is clear.
-31. Open purchase orders.
-32. Receive demo purchase order line and verify the confirmation prompt is clear.
-33. Open inventory and verify stock changed.
-34. Open audit log or appointment audit timeline and review traceability.
-35. Return to `/readiness` and review whether warnings changed or remain acceptable.
-36. Capture feedback in `docs/PILOT_FEEDBACK_TEMPLATE.md`.
+9. From Patient Workspace, review the Summary tab first: known problems, procedures, pathology, laboratory, imaging, therapy, open questions and latest recommendations.
+10. Open at least one source badge and confirm it opens the original Clinical Document.
+11. Open `/clinical-documents` and review documents awaiting physician review.
+12. Open a document detail page, run AI extraction placeholder if needed, then confirm or reject the proposed summary.
+13. Return to Patient Workspace and confirm reviewed document knowledge appears with source links.
+14. Review appointments, invoices and audit context.
+15. Create a new appointment from Patient Workspace or open new appointment and search for the patient by name or OIB.
+16. Select the resolved patient from the search result; do not create an appointment from ambiguous free text.
+17. Leave `Bez epizode` unless intentionally testing legacy/deferred Episode Engine compatibility.
+18. Select a service and review the service context card.
+19. Open daily dashboard.
+20. Select today's date and open the demo appointment.
+21. Use quick status actions: arrived, in progress.
+22. Open appointment detail.
+23. Confirm the appointment screen links back to Patient Workspace.
+24. Load material suggestion.
+25. Review required fixed, required variable, and optional material labels.
+26. Complete appointment with material consumption and verify the confirmation prompt is clear.
+27. Verify the appointment status is completed.
+28. Verify stock movement appears on appointment detail.
+29. Create draft invoice from appointment.
+30. Open invoice detail.
+31. Issue invoice and verify the confirmation prompt is clear.
+32. Show demo fiscalization status and warning.
+33. Record payment for the remaining amount and verify the confirmation prompt is clear.
+34. Open purchase orders.
+35. Receive demo purchase order line and verify the confirmation prompt is clear.
+36. Open inventory and verify stock changed.
+37. Open audit log or appointment audit timeline and review traceability.
+38. Return to `/readiness` and review whether warnings changed or remain acceptable.
+39. Capture feedback in `docs/PILOT_FEEDBACK_TEMPLATE.md`.
 
 ## Expected Outcomes
 
 - Material consumption reduces stock.
 - Appointment creation requires selecting a resolved patient from search results.
 - Patient creation warns about possible duplicates when identity data overlaps.
-- Patient Workspace shows clinical episodes.
-- Appointment may link to an episode, while appointments without an episode remain a reviewed warning only.
+- Patient Workspace shows source-linked clinical knowledge first.
+- Clinical documents awaiting review are visible and do not become official knowledge until reviewed.
+- Appointment may optionally link to an existing deferred episode, but appointments must not require episodes.
 - Critical workflow actions use contextual help and confirmation.
 - Patient OIB is optional and demo-only unless real-data readiness is approved.
 - Invoice receives an official number after issue.
@@ -107,7 +111,9 @@ Steps:
 - Demo data is not suitable for real patients.
 - Real OIB values must not be entered in demo mode.
 - Frontend browser e2e automation is intentionally deferred for the MVP; `npm run smoke` provides a lightweight route and screen guard.
-- Episode Engine is structural only; Workflow Engine, Knowledge Engine, AI automation, documents, labs and prescriptions are not implemented.
+- Episode Engine is experimental/deferred and hidden from primary navigation.
+- OCR is a placeholder; no real OCR engine is implemented.
+- AI extraction is a placeholder; no real AI provider is integrated.
 
 ## Fallback
 

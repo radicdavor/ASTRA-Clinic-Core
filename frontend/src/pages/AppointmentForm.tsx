@@ -113,7 +113,6 @@ export function AppointmentForm() {
               <option value="">Bez epizode</option>
               {activeEpisodes.map((episode) => <option key={episode.id} value={episode.id}>{episode.title} / {episode.status}</option>)}
             </select>
-            <small><Link to={`/episodes/new?patient_id=${selectedPatient.id}`}>Kreiraj novu epizodu za pacijenta</Link></small>
           </label>
         )}
         <label>
