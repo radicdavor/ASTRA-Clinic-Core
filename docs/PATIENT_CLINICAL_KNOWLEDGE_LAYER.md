@@ -84,6 +84,7 @@ The upload endpoint stores metadata, an attachment placeholder and optional raw 
 - `/clinical-documents`
 - `/clinical-documents/:id`
 - Patient Workspace Summary tab
+- Patient Workspace knowledge sidebar
 - internal/external document tabs
 - procedure/pathology/laboratory/imaging tabs
 - source badges linking summary statements to original documents

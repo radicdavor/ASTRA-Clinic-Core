@@ -60,6 +60,16 @@ export function PatientDetail() {
   const imaging = documents.data.filter((document) => document.document_type === "radiology");
   const openInvoices = invoices.data.filter((invoice) => invoice.payment_status !== "paid");
   const unpaidTotal = openInvoices.reduce((sum, invoice) => sum + Number(invoice.total_amount || 0), 0);
+  const knownItemCount = clinicalSummary.data
+    ? clinicalSummary.data.known_problems.length
+      + clinicalSummary.data.completed_procedures.length
+      + clinicalSummary.data.pathology.length
+      + clinicalSummary.data.laboratory.length
+      + clinicalSummary.data.imaging.length
+      + clinicalSummary.data.current_therapy.length
+      + clinicalSummary.data.latest_recommendations.length
+    : 0;
+  const openQuestionCount = clinicalSummary.data?.open_questions.length ?? 0;
 
   const documentColumns = [
     { header: "Dokument", render: (row: ClinicalDocument) => <Link to={`/clinical-documents/${row.id}`}>{row.title}</Link> },
@@ -146,63 +156,90 @@ export function PatientDetail() {
         </div>
       </WorkspaceSection>
 
-      <WorkspaceTabs
-        tabs={[
-          {
-            id: "summary",
-            label: "Sazetak",
-            content: (
-              <div className="knowledge-grid">
-                <KnowledgeCard title="Poznati problemi" items={clinicalSummary.data?.known_problems ?? []} />
-                <KnowledgeCard title="Zavrseni postupci" items={clinicalSummary.data?.completed_procedures ?? []} />
-                <KnowledgeCard title="Patologija" items={clinicalSummary.data?.pathology ?? []} />
-                <KnowledgeCard title="Laboratorij" items={clinicalSummary.data?.laboratory ?? []} />
-                <KnowledgeCard title="Radiologija" items={clinicalSummary.data?.imaging ?? []} />
-                <KnowledgeCard title="Terapija" items={clinicalSummary.data?.current_therapy ?? []} />
-                <KnowledgeCard title="Otvorena pitanja" items={clinicalSummary.data?.open_questions ?? []} />
-                <KnowledgeCard title="Zadnje preporuke" items={clinicalSummary.data?.latest_recommendations ?? []} />
-              </div>
-            )
-          },
-          { id: "internal-documents", label: "Interni dokumenti", content: <DataTable rows={internalDocuments} columns={documentColumns} /> },
-          { id: "external-documents", label: "Vanjski dokumenti", content: <DataTable rows={externalDocuments} columns={documentColumns} /> },
-          { id: "procedures", label: "Postupci", content: <DataTable rows={procedures} columns={documentColumns} /> },
-          { id: "pathology", label: "Patologija", content: <DataTable rows={pathology} columns={documentColumns} /> },
-          { id: "laboratory", label: "Laboratorij", content: <DataTable rows={laboratory} columns={documentColumns} /> },
-          { id: "imaging", label: "Slikovna obrada", content: <DataTable rows={imaging} columns={documentColumns} /> },
-          {
-            id: "appointments",
-            label: "Termini",
-            content: (
-              <DataTable rows={appointments.data} columns={[
-                { header: "Datum", render: (row) => formatDate(row.date) },
-                { header: "Vrijeme", render: (row) => `${row.start_time.slice(0, 5)} - ${row.end_time.slice(0, 5)}` },
-                { header: "Usluga", render: (row) => row.service?.name ?? row.service_id },
-                { header: "Status", render: (row) => <StatusBadge status={row.status} /> },
-                { header: "Detalj", render: (row) => <Link to={`/appointments/${row.id}`}>Otvori</Link> }
-              ]} />
-            )
-          },
-          {
-            id: "invoices",
-            label: "Racuni",
-            content: (
-              <DataTable rows={invoices.data} columns={[
-                { header: "Broj", render: (row) => <Link to={`/invoices?invoice=${row.id}`}>{row.invoice_number}</Link> },
-                { header: "Datum", render: (row) => formatDate(row.invoice_date) },
-                { header: "Status", render: (row) => row.status },
-                { header: "Placanje", render: (row) => row.payment_status },
-                { header: "Iznos", render: (row) => `${row.total_amount} EUR` }
-              ]} />
-            )
-          },
-          {
-            id: "audit",
-            label: "Audit",
-            content: <AuditTimeline logs={audit.data} />
-          }
-        ]}
-      />
+      <div className="patient-knowledge-layout">
+        <div>
+          <WorkspaceTabs
+            tabs={[
+              {
+                id: "summary",
+                label: "Sazetak",
+                content: (
+                  <div className="knowledge-grid">
+                    <KnowledgeCard title="Poznati problemi" items={clinicalSummary.data?.known_problems ?? []} />
+                    <KnowledgeCard title="Zavrseni postupci" items={clinicalSummary.data?.completed_procedures ?? []} />
+                    <KnowledgeCard title="Patologija" items={clinicalSummary.data?.pathology ?? []} />
+                    <KnowledgeCard title="Laboratorij" items={clinicalSummary.data?.laboratory ?? []} />
+                    <KnowledgeCard title="Radiologija" items={clinicalSummary.data?.imaging ?? []} />
+                    <KnowledgeCard title="Terapija" items={clinicalSummary.data?.current_therapy ?? []} />
+                    <KnowledgeCard title="Otvorena pitanja" items={clinicalSummary.data?.open_questions ?? []} />
+                    <KnowledgeCard title="Zadnje preporuke" items={clinicalSummary.data?.latest_recommendations ?? []} />
+                  </div>
+                )
+              },
+              { id: "internal-documents", label: "Interni dokumenti", content: <DataTable rows={internalDocuments} columns={documentColumns} /> },
+              { id: "external-documents", label: "Vanjski dokumenti", content: <DataTable rows={externalDocuments} columns={documentColumns} /> },
+              { id: "procedures", label: "Postupci", content: <DataTable rows={procedures} columns={documentColumns} /> },
+              { id: "pathology", label: "Patologija", content: <DataTable rows={pathology} columns={documentColumns} /> },
+              { id: "laboratory", label: "Laboratorij", content: <DataTable rows={laboratory} columns={documentColumns} /> },
+              { id: "imaging", label: "Slikovna obrada", content: <DataTable rows={imaging} columns={documentColumns} /> },
+              {
+                id: "appointments",
+                label: "Termini",
+                content: (
+                  <DataTable rows={appointments.data} columns={[
+                    { header: "Datum", render: (row) => formatDate(row.date) },
+                    { header: "Vrijeme", render: (row) => `${row.start_time.slice(0, 5)} - ${row.end_time.slice(0, 5)}` },
+                    { header: "Usluga", render: (row) => row.service?.name ?? row.service_id },
+                    { header: "Status", render: (row) => <StatusBadge status={row.status} /> },
+                    { header: "Detalj", render: (row) => <Link to={`/appointments/${row.id}`}>Otvori</Link> }
+                  ]} />
+                )
+              },
+              {
+                id: "invoices",
+                label: "Racuni",
+                content: (
+                  <DataTable rows={invoices.data} columns={[
+                    { header: "Broj", render: (row) => <Link to={`/invoices?invoice=${row.id}`}>{row.invoice_number}</Link> },
+                    { header: "Datum", render: (row) => formatDate(row.invoice_date) },
+                    { header: "Status", render: (row) => row.status },
+                    { header: "Placanje", render: (row) => row.payment_status },
+                    { header: "Iznos", render: (row) => `${row.total_amount} EUR` }
+                  ]} />
+                )
+              },
+              {
+                id: "audit",
+                label: "Audit",
+                content: <AuditTimeline logs={audit.data} />
+              }
+            ]}
+          />
+        </div>
+        <aside className="knowledge-sidebar">
+          <h2>Klinicko znanje</h2>
+          <div><span>Pregledani izvori</span><strong>{clinicalSummary.data?.generated_from_reviewed_documents ?? 0}</strong></div>
+          <div><span>Strukturirane stavke</span><strong>{knownItemCount}</strong></div>
+          <div><span>Otvorena pitanja</span><strong>{openQuestionCount}</strong></div>
+          <div><span>Ceka pregled</span><strong>{clinicalSummary.data?.awaiting_review_count ?? awaitingReview.length}</strong></div>
+          {awaitingReview.length > 0 && (
+            <section>
+              <h3>Dokumenti koji cekaju pregled</h3>
+              {awaitingReview.slice(0, 4).map((document) => (
+                <Link key={document.id} to={`/clinical-documents/${document.id}`}>{document.title}</Link>
+              ))}
+            </section>
+          )}
+          {(clinicalSummary.data?.open_questions ?? []).length > 0 && (
+            <section>
+              <h3>Nerijeseno</h3>
+              {clinicalSummary.data?.open_questions.slice(0, 3).map((item, index) => (
+                <p key={index}>{item.text}</p>
+              ))}
+            </section>
+          )}
+        </aside>
+      </div>
     </WorkspaceLayout>
   );
 }

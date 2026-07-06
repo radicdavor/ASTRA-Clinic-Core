@@ -113,6 +113,8 @@ assertIncludes("src/pages/PatientDetail.tsx", "WorkspaceHeader");
 assertIncludes("src/pages/PatientDetail.tsx", "/api/patients/${id}/clinical-documents");
 assertIncludes("src/pages/PatientDetail.tsx", "/api/patients/${id}/clinical-summary");
 assertIncludes("src/pages/PatientDetail.tsx", "KnowledgeCard");
+assertIncludes("src/pages/PatientDetail.tsx", "knowledge-sidebar");
+assertIncludes("src/pages/PatientDetail.tsx", "Dokumenti koji cekaju pregled");
 assertIncludes("src/pages/PatientDetail.tsx", "SourceBadge");
 assertIncludes("src/pages/PatientDetail.tsx", "/api/patients/${id}/appointments");
 assertIncludes("src/pages/PatientDetail.tsx", "/api/patients/${id}/invoices");
