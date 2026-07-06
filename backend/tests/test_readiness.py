@@ -31,3 +31,7 @@ def test_readiness_reports_demo_guardrails(client, db, auth_setup):
     assert payload["summary"]["critical"] == 0
     assert any(check["key"] == "demo_guardrail" and check["status"] == "ok" for check in payload["checks"])
     assert any(check["key"] == "fiscalization" and check["status"] == "warning" for check in payload["checks"])
+    assert any(check["key"] == "patients" and check["target_path"] == "/patients" for check in payload["checks"])
+    assert any(check["key"] == "services" and check["target_path"] == "/services" for check in payload["checks"])
+    assert any(check["key"] == "audit" and check["target_path"] == "/audit-log" for check in payload["checks"])
+    assert any(check["key"] == "human_pilot_evidence" and check["status"] == "warning" for check in payload["checks"])

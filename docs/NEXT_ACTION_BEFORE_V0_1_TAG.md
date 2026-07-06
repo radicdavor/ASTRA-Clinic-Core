@@ -18,12 +18,15 @@ V18 also implemented the patient identity/contextual help feedback: optional OIB
 2. Start the demo environment with Docker Compose.
 3. Seed demo data.
 4. Confirm `/api/public-config` returns `real_data_allowed=false`.
-5. Open the frontend and confirm the demo banner is visible.
-6. Run final validation checks.
-7. Confirm GitHub CI is green after the latest V18 commit. Current status: green after V18 implementation and readiness documentation updates.
-8. Review `docs/pilot_sessions/2026-07-05_human_pilot_01.md` and triage.
-9. Confirm there are no open P0/P1 findings.
-10. Tag `v0.1-pilot` only after explicit maintainer approval.
+5. Open `/readiness`.
+6. Confirm readiness has no critical blockers.
+7. Review readiness warnings and document any accepted warning.
+8. Open the frontend and confirm the demo banner is visible.
+9. Run final validation checks.
+10. Confirm GitHub CI is green after the latest commit.
+11. Review `docs/pilot_sessions/2026-07-05_human_pilot_01.md` and triage.
+12. Confirm there are no open P0/P1 findings.
+13. Tag `v0.1-pilot` only after explicit maintainer approval.
 
 ## Expected Evidence File
 
@@ -66,9 +69,10 @@ Structured answers received:
 - real Croatian fiscalization
 - alpha hardening not tied to pilot evidence
 - production/real-data enablement
+- treating readiness cockpit as compliance or human-evidence replacement
 
 ## Release Decision
 
-- Accepted if final validation still passes and no P0/P1 remain open.
+- Accepted if final validation still passes, readiness has no unwaived critical blockers, and no P0/P1 remain open.
 - Deferred while human pilot is pending or any P0/P1 exists.
 - Waived only if maintainer explicitly accepts and documents the risk.

@@ -15,12 +15,20 @@
 | Material workflow | Appointment detail/backend tests | Human check passed; backend tests passed | participant completes with correct stock movement | stock mismatch or workflow blocked |
 | Invoice/payment workflow | Invoice UI/backend tests | Human check passed; backend tests passed | participant issues invoice and records payment | invoice/payment workflow blocked or misleading |
 | Purchase receiving workflow | Purchase Orders UI/backend tests | Human check passed; backend tests passed | participant receives valid line and stock updates | receiving blocked or stock mismatch |
+| Readiness cockpit | `/readiness`, `docs/ASTRA_READINESS_MODEL.md` | Implemented as pilot support | no critical blockers, warnings reviewed or documented | critical readiness status without explicit waiver |
+| Human evidence governance | `docs/pilot_sessions/*`, ADR/release notes | Still governing release decision | evidence complete or explicitly waived | readiness cockpit treated as replacement for human evidence |
 
 Release decision:
 
 - Go: all Go conditions met and no P0/P1 open.
-- Deferred: structured human pilot evidence incomplete and not waived.
+- Deferred: structured human pilot evidence incomplete and not waived, or readiness warnings are not reviewed.
 - No-Go: any No-Go condition met.
 - Waiver: maintainer may waive human pilot only by updating ADR 0001 and release notes with explicit risk.
+
+Readiness note:
+
+- The readiness cockpit is pilot support, not production or compliance approval.
+- Readiness warnings may be acceptable for demo if they are reviewed and documented.
+- Critical readiness status blocks demo unless explicitly waived.
 
 Current decision state: Go candidate for explicit maintainer tag decision after final validation checks.

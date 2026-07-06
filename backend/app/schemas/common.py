@@ -23,6 +23,8 @@ class ReadinessCheck(BaseModel):
     message: str
     count: int | None = None
     action: str | None = None
+    target_path: str | None = None
+    target_label: str | None = None
 
 
 class ReadinessOut(BaseModel):

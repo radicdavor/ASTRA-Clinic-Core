@@ -1,3 +1,4 @@
+import { Link } from "react-router-dom";
 import { DataTable } from "../components/DataTable";
 import { HelpHint } from "../components/HelpHint";
 import { useApi } from "../hooks/useApi";
@@ -60,7 +61,8 @@ export function Readiness() {
               { header: "Status", render: (row) => <span className={`readiness-badge readiness-check-${row.status}`}>{statusLabels[row.status]}</span> },
               { header: "Broj", render: (row) => row.count ?? "-" },
               { header: "Poruka", render: (row) => row.message },
-              { header: "Sljedeci korak", render: (row) => row.action ?? "-" }
+              { header: "Sljedeci korak", render: (row) => row.action ?? "-" },
+              { header: "Otvori", render: (row) => row.target_path ? <Link to={row.target_path}>{row.target_label ?? "Otvori"}</Link> : "-" }
             ]} />
           </section>
         </>

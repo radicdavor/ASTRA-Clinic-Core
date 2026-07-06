@@ -6,6 +6,8 @@ Implemented as a product/output document.
 
 `docs/CODEX_MASTER_PROMPT_V20.md` is the official Codex master prompt for V20 and defines the Workspace Architecture and Clinical Navigation Sprint. This readiness cockpit is an additional operational output that complements the workspace direction.
 
+For the V21 readiness-workspace relationship, see `docs/ASTRA_READINESS_MODEL.md`.
+
 ## Purpose
 
 V20 adds a single readiness cockpit for demo and pilot operations. It is intentionally informational: it does not create, update or delete clinic data.

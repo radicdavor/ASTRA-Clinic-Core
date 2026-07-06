@@ -71,5 +71,8 @@ assertIncludes("src/pages/AppointmentDetail.tsx", "Potvrditi zavrsetak termina")
 assertIncludes("src/pages/PurchaseOrders.tsx", "Potvrditi zaprimanje robe");
 assertIncludes("src/pages/Readiness.tsx", "/api/readiness");
 assertIncludes("src/pages/Readiness.tsx", "Ne mijenja podatke");
+assertIncludes("src/pages/Readiness.tsx", "target_path");
+assertIncludes("src/pages/Readiness.tsx", "target_label");
+assertIncludes("src/pages/Readiness.tsx", "Sljedeci korak");
 
 console.log("Frontend pilot smoke passed.");

@@ -80,7 +80,7 @@ export type InvoiceLine = { id: number; invoice_id: number; description: string;
 export type PaymentTransaction = { id: number; invoice_id: number; amount: string; method: string; reference?: string; paid_at?: string };
 export type Invoice = { id: number; patient_id?: number; appointment_id?: number; invoice_number: string; invoice_date: string; status: string; payment_status: string; total_amount: string; fiscalization_status?: string; fiscalization_provider?: string; fiscalization_message?: string; lines: InvoiceLine[]; payments: PaymentTransaction[] };
 export type ApiKey = { id: number; name: string; scopes: string[]; active: boolean; expires_at?: string; last_used_at?: string; created_at: string };
-export type ReadinessCheck = { key: string; label: string; status: "ok" | "warning" | "critical"; message: string; count?: number | null; action?: string | null };
+export type ReadinessCheck = { key: string; label: string; status: "ok" | "warning" | "critical"; message: string; count?: number | null; action?: string | null; target_path?: string | null; target_label?: string | null };
 export type Readiness = {
   status: "ready_for_demo" | "attention_needed" | "blocked";
   demo_mode: boolean;
