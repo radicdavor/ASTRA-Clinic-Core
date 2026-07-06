@@ -20,7 +20,7 @@ V18 also implemented the patient identity/contextual help feedback: optional OIB
 4. Confirm `/api/public-config` returns `real_data_allowed=false`.
 5. Open the frontend and confirm the demo banner is visible.
 6. Run final validation checks.
-7. Confirm GitHub CI is green after the latest V18 commit. Current status: green on `bdc282c`.
+7. Confirm GitHub CI is green after the latest V18 commit. Current status: green after V18 implementation and readiness documentation updates.
 8. Review `docs/pilot_sessions/2026-07-05_human_pilot_01.md` and triage.
 9. Confirm there are no open P0/P1 findings.
 10. Tag `v0.1-pilot` only after explicit maintainer approval.
