@@ -42,6 +42,7 @@ Pilot documents:
 - [Pilot runbook](docs/PILOT_RUNBOOK.md)
 - [Program 1 Phase A hardening audit](docs/programs/PROGRAM_1_PHASE_A_HARDENING_AUDIT.md)
 - [Program 1 audit event naming](docs/programs/PROGRAM_1_AUDIT_EVENT_NAMING.md)
+- [Program 1 Phase A regression notes](docs/programs/PROGRAM_1_PHASE_A_REGRESSION_NOTES.md)
 - [Real data readiness checklist](docs/REAL_DATA_READINESS_CHECKLIST.md)
 - [v0.1 pilot release checklist](docs/V0_1_PILOT_RELEASE_CHECKLIST.md)
 - [Known limitations](docs/KNOWN_LIMITATIONS.md)
