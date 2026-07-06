@@ -4,7 +4,7 @@
 
 - Version: `v0.1-pilot`
 - Date: 05-07-2026
-- Commit SHA: pending final tag SHA before publishing.
+- Commit SHA: pending final tag SHA before publishing. The latest accepted pilot evidence before tag readiness documentation is `32fff9b`.
 - Release type: pilot
 - Supported environment: local Docker Compose demo/pilot environment
 
