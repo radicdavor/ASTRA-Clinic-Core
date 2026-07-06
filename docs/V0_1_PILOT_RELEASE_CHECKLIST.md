@@ -5,7 +5,7 @@ ASTRA Clinic Core can be tagged as `v0.1-pilot` only after every item below is r
 - [x] v0.1-pilot tag is blocked if any P0/P1 issue is open.
 - [x] P2 issues that remain open are documented in release notes.
 - [ ] P3 issues that remain open are accepted by the release maintainer.
-- [ ] CI green.
+- [x] CI green.
 - [x] Backend tests green.
 - [x] Frontend typecheck green.
 - [x] Frontend build green.

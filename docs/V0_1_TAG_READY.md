@@ -29,6 +29,7 @@ Pilot evidence status:
 
 Validation status:
 
+- GitHub CI passed on commit `bdc282c`.
 - Frontend typecheck passed.
 - Frontend smoke passed.
 - Frontend build passed.
