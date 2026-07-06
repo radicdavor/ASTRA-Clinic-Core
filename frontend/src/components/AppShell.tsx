@@ -1,21 +1,22 @@
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
-import { Boxes, CalendarDays, ClipboardList, FileText, KeyRound, LayoutDashboard, LogOut, PackageSearch, Search, Settings, ShieldCheck, Stethoscope, Users } from "lucide-react";
+import { Boxes, CalendarDays, ClipboardCheck, ClipboardList, FileText, KeyRound, LayoutDashboard, LogOut, PackageSearch, Search, Settings, ShieldCheck, Stethoscope, Users } from "lucide-react";
 import { clearToken } from "../api/client";
 import { useApi } from "../hooks/useApi";
 import { ToastHost } from "./ToastHost";
 
 const nav = [
-  { to: "/", label: "Nadzorna ploča", icon: LayoutDashboard },
+  { to: "/", label: "Nadzorna ploca", icon: LayoutDashboard },
   { to: "/patients", label: "Pacijenti", icon: Users },
   { to: "/appointments", label: "Termini", icon: CalendarDays },
   { to: "/services", label: "Usluge", icon: Stethoscope },
   { to: "/modules", label: "Moduli", icon: Settings },
   { to: "/inventory", label: "Inventar", icon: Boxes },
-  { to: "/suppliers", label: "Dobavljači", icon: PackageSearch },
-  { to: "/purchase-orders", label: "Narudžbenice", icon: ClipboardList },
-  { to: "/invoices", label: "Računi", icon: FileText },
+  { to: "/suppliers", label: "Dobavljaci", icon: PackageSearch },
+  { to: "/purchase-orders", label: "Narudzbenice", icon: ClipboardList },
+  { to: "/invoices", label: "Racuni", icon: FileText },
   { to: "/audit-log", label: "Audit log", icon: ShieldCheck },
-  { to: "/api-keys", label: "API kljucevi", icon: KeyRound }
+  { to: "/api-keys", label: "API kljucevi", icon: KeyRound },
+  { to: "/readiness", label: "Spremnost", icon: ClipboardCheck }
 ];
 
 export function AppShell() {
@@ -24,6 +25,7 @@ export function AppShell() {
   const fallbackDemoMode = import.meta.env.VITE_APP_ENV !== "production";
   const showDemoBanner = publicConfig.data ? publicConfig.data.demo_mode || !publicConfig.data.real_data_allowed : fallbackDemoMode;
   const warningText = publicConfig.data?.warnings?.join(" ") || "Demo/development okruzenje - ne unositi stvarne podatke pacijenata.";
+
   return (
     <div className="shell">
       <aside className="sidebar">
@@ -55,7 +57,7 @@ export function AppShell() {
         <header className="topbar">
           <div className="search">
             <Search size={18} />
-            <input placeholder="Pretraži pacijenta, uslugu, status..." />
+            <input placeholder="Pretrazi pacijenta, uslugu, status..." />
           </div>
           <button
             className="icon-button"

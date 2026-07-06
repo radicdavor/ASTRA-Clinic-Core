@@ -23,6 +23,8 @@ Pilot documents:
 
 - [ASTRA Architecture Bible](docs/ASTRA_ARCHITECTURE_BIBLE.md)
 - [ASTRA Design System](docs/ASTRA_DESIGN_SYSTEM.md)
+- [ASTRA Workspace Architecture](docs/ASTRA_WORKSPACE_ARCHITECTURE.md)
+- [V20 Readiness Cockpit](docs/V20_READINESS_COCKPIT.md)
 - [Codex Architecture Bible instructions](docs/CODEX_ARCHITECTURE_BIBLE_INSTRUCTIONS.md)
 - [V19 Architecture Bible compliance gate](docs/V19_ARCHITECTURE_BIBLE_COMPLIANCE_GATE.md)
 - [Pilot runbook](docs/PILOT_RUNBOOK.md)

@@ -16,6 +16,24 @@ class ErrorResponse(BaseModel):
     model_config = ConfigDict(json_schema_extra={"example": {"detail": "Opis greske"}})
 
 
+class ReadinessCheck(BaseModel):
+    key: str
+    label: str
+    status: str
+    message: str
+    count: int | None = None
+    action: str | None = None
+
+
+class ReadinessOut(BaseModel):
+    status: str
+    demo_mode: bool
+    real_data_allowed: bool
+    fiscalization_mode: str
+    summary: dict[str, int]
+    checks: list[ReadinessCheck]
+
+
 class LoginRequest(BaseModel):
     email: str
     password: str

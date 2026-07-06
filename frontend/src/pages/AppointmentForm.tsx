@@ -1,5 +1,5 @@
-import { FormEvent, useMemo, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { FormEvent, useEffect, useMemo, useState } from "react";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { api } from "../api/client";
 import { ActionButton } from "../components/ActionButton";
 import { HelpHint } from "../components/HelpHint";
@@ -9,6 +9,8 @@ import { formatPatientIdentity, formatPatientName, hasStrongPatientIdentifier } 
 
 export function AppointmentForm() {
   const navigate = useNavigate();
+  const [params] = useSearchParams();
+  const initialPatientId = params.get("patient_id");
   const [patientQuery, setPatientQuery] = useState("");
   const patientSearchPath = patientQuery.trim().length >= 2 ? `/api/patients?q=${encodeURIComponent(patientQuery.trim())}` : "/api/patients?q=__no_initial_results__";
   const patients = useApi<Patient[]>(patientSearchPath, []);
@@ -19,6 +21,18 @@ export function AppointmentForm() {
   const [form, setForm] = useState({ patient_id: "", service_id: "", provider_id: "", room_id: "", date: new Date().toISOString().slice(0, 10), start_time: "09:00", end_time: "09:30", duration_minutes: 30, status: "scheduled", source: "manual", notes: "" });
   const selectedService = useMemo(() => services.data.find((service) => String(service.id) === form.service_id), [form.service_id, services.data]);
   const similarPatientWarning = patients.data.length > 1 && !selectedPatient;
+
+  useEffect(() => {
+    if (!initialPatientId || selectedPatient) return;
+    let alive = true;
+    api<Patient>(`/api/patients/${initialPatientId}`).then((patient) => {
+      if (!alive) return;
+      selectPatient(patient);
+    }).catch(() => undefined);
+    return () => {
+      alive = false;
+    };
+  }, [initialPatientId, selectedPatient]);
 
   function selectPatient(patient: Patient) {
     setSelectedPatient(patient);

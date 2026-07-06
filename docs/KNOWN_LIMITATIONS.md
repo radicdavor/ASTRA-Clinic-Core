@@ -10,6 +10,7 @@ ASTRA Clinic Core is currently a closed demo/pilot system for demo data only.
 - No real Croatian fiscalization is implemented.
 - Frontend e2e coverage is limited.
 - Module loader is basic and data-only.
+- Dedicated Invoice Workspace, Inventory Item Workspace and Purchase Order Workspace are still future work; V20 implements Patient Workspace first.
 - OpenEMR integration is not implemented.
 - Google Calendar integration is not implemented.
 - No full EMR charting.

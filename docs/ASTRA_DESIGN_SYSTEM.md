@@ -6,6 +6,8 @@ ASTRA Design System reduces cognitive load in clinic work. Its job is to make ac
 
 This design system implements the Architecture Bible principles: human above software, one shared language, contextual help, auditability and safety by default.
 
+For object-centered screen structure, use `docs/ASTRA_WORKSPACE_ARCHITECTURE.md`.
+
 ## Action Categories
 
 - Information: reads or displays data without changing it.

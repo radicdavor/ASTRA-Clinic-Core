@@ -15,6 +15,7 @@ import { PatientDetail } from "../pages/PatientDetail";
 import { PatientForm } from "../pages/PatientForm";
 import { Patients } from "../pages/Patients";
 import { PurchaseOrders } from "../pages/PurchaseOrders";
+import { Readiness } from "../pages/Readiness";
 import { Services } from "../pages/Services";
 import { Suppliers } from "../pages/Suppliers";
 
@@ -42,6 +43,7 @@ export function AppRoutes() {
         <Route path="/invoices" element={<Invoices />} />
         <Route path="/audit-log" element={<AuditLog />} />
         <Route path="/api-keys" element={<ApiKeys />} />
+        <Route path="/readiness" element={<Readiness />} />
       </Route>
     </Routes>
   );

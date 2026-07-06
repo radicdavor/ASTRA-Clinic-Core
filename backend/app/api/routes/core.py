@@ -1,7 +1,7 @@
-from datetime import date
+from datetime import date, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
-from sqlalchemy import and_, or_, select
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, joinedload
 
@@ -9,8 +9,8 @@ from app.audit.service import audit, snapshot
 from app.auth.dependencies import Actor, require_permission
 from app.core.config import get_settings
 from app.core.database import get_db
-from app.models.domain import Appointment, AuditLog, Module, Patient, Provider, Room, Service
-from app.schemas.common import AppointmentCreate, AppointmentOut, AppointmentUpdate, ErrorResponse, PatientCreate, PatientOut, PatientUpdate, ServiceCreate, ServiceOut
+from app.models.domain import ApiKey, Appointment, AuditLog, InventoryBatch, InventoryItem, Invoice, Module, Patient, Provider, Room, Service
+from app.schemas.common import AppointmentCreate, AppointmentOut, AppointmentUpdate, ErrorResponse, InvoiceOut, PatientCreate, PatientOut, PatientUpdate, ReadinessCheck, ReadinessOut, ServiceCreate, ServiceOut
 from app.services.appointments import validate_appointment_payload
 
 ERROR_RESPONSES = {400: {"model": ErrorResponse}, 401: {"model": ErrorResponse}, 403: {"model": ErrorResponse}, 404: {"model": ErrorResponse}, 409: {"model": ErrorResponse}, 422: {"model": ErrorResponse}}
@@ -49,6 +49,74 @@ def public_config():
         "real_data_allowed": settings.real_data_allowed,
         "fiscalization_mode": settings.fiscalization_mode,
         "warnings": settings.public_warnings,
+    }
+
+
+def scalar_count(db: Session, stmt) -> int:
+    return int(db.scalar(stmt) or 0)
+
+
+@router.get("/readiness", response_model=ReadinessOut)
+def readiness(db: Session = Depends(get_db), actor: Actor = Depends(require_permission("audit.read"))):
+    settings = get_settings()
+    today = date.today()
+    critical = "critical"
+    warning = "warning"
+    ok = "ok"
+
+    patient_count = scalar_count(db, select(func.count(Patient.id)))
+    provider_count = scalar_count(db, select(func.count(Provider.id)).where(Provider.active.is_(True)))
+    room_count = scalar_count(db, select(func.count(Room.id)).where(Room.active.is_(True)))
+    service_count = scalar_count(db, select(func.count(Service.id)).where(Service.active.is_(True)))
+    module_count = scalar_count(db, select(func.count(Module.id)).where(Module.enabled.is_(True)))
+    audit_count = scalar_count(db, select(func.count(AuditLog.id)))
+    active_api_keys = scalar_count(db, select(func.count(ApiKey.id)).where(ApiKey.active.is_(True)))
+    low_stock_count = scalar_count(db, select(func.count(InventoryItem.id)).where(InventoryItem.active.is_(True), InventoryItem.current_stock <= InventoryItem.reorder_point))
+    expiring_count = scalar_count(db, select(func.count(InventoryBatch.id)).where(InventoryBatch.quantity > 0, InventoryBatch.expiration_date.is_not(None), InventoryBatch.expiration_date <= today + timedelta(days=30)))
+    draft_invoice_count = scalar_count(db, select(func.count(Invoice.id)).where(Invoice.status == "draft"))
+    unpaid_invoice_count = scalar_count(db, select(func.count(Invoice.id)).where(Invoice.status != "draft", Invoice.payment_status != "paid"))
+
+    checks = [
+        ReadinessCheck(
+            key="demo_guardrail",
+            label="Demo sigurnost",
+            status=ok if settings.demo_mode and not settings.real_data_allowed else critical,
+            message="Demo nacin je ukljucen i stvarni podaci nisu dopusteni." if settings.demo_mode and not settings.real_data_allowed else "Provjerite postavke demo/real-data zastite prije nastavka.",
+            action="Ne unositi stvarne podatke pacijenata dok real-data readiness nije odobren.",
+        ),
+        ReadinessCheck(
+            key="fiscalization",
+            label="Fiskalizacija",
+            status=warning if settings.fiscalization_mode == "noop" else ok,
+            message="Aktivna je demo/noop fiskalizacija." if settings.fiscalization_mode == "noop" else "Fiskalizacijski provider nije noop.",
+            action="Ne koristiti za stvarnu hrvatsku fiskalizaciju dok provider nije odobren." if settings.fiscalization_mode == "noop" else None,
+        ),
+        ReadinessCheck(key="patients", label="Pacijenti", status=ok if patient_count > 0 else warning, message="Demo pacijenti su dostupni." if patient_count > 0 else "Nema pacijenata za pilot prolaz.", count=patient_count),
+        ReadinessCheck(key="providers", label="Lijecnici", status=ok if provider_count > 0 else critical, message="Aktivan lijecnik je dostupan." if provider_count > 0 else "Nema aktivnog lijecnika za termine.", count=provider_count),
+        ReadinessCheck(key="rooms", label="Sobe", status=ok if room_count > 0 else critical, message="Aktivna soba je dostupna." if room_count > 0 else "Nema aktivne sobe za termine.", count=room_count),
+        ReadinessCheck(key="services", label="Usluge", status=ok if service_count > 0 else critical, message="Aktivne usluge su dostupne." if service_count > 0 else "Nema aktivnih usluga.", count=service_count),
+        ReadinessCheck(key="modules", label="Moduli", status=ok if module_count > 0 else warning, message="Modularni katalog je inicijaliziran." if module_count > 0 else "Nema aktivnih modula.", count=module_count),
+        ReadinessCheck(key="audit", label="Audit", status=ok if audit_count > 0 else warning, message="Audit log sadrzi zapise." if audit_count > 0 else "Audit log jos nema zapisa.", count=audit_count),
+        ReadinessCheck(key="inventory_low_stock", label="Niska zaliha", status=warning if low_stock_count > 0 else ok, message="Postoje artikli na ili ispod reorder razine." if low_stock_count > 0 else "Nema artikala ispod reorder razine.", count=low_stock_count, action="Provjeriti inventar i nabavu." if low_stock_count > 0 else None),
+        ReadinessCheck(key="inventory_expiring", label="Rokovi zalihe", status=warning if expiring_count > 0 else ok, message="Postoje serije kojima uskoro istjece rok." if expiring_count > 0 else "Nema serija s rokom unutar 30 dana.", count=expiring_count, action="Provjeriti artikle s rokom trajanja." if expiring_count > 0 else None),
+        ReadinessCheck(key="draft_invoices", label="Draft racuni", status=warning if draft_invoice_count > 0 else ok, message="Postoje neizdani draft racuni." if draft_invoice_count > 0 else "Nema neizdanih draft racuna.", count=draft_invoice_count),
+        ReadinessCheck(key="unpaid_invoices", label="Neplaceni racuni", status=warning if unpaid_invoice_count > 0 else ok, message="Postoje izdani racuni koji nisu placeni." if unpaid_invoice_count > 0 else "Nema otvorenih uplata.", count=unpaid_invoice_count),
+        ReadinessCheck(key="api_keys", label="API kljucevi", status=warning if active_api_keys > 0 else ok, message="Postoje aktivni API kljucevi." if active_api_keys > 0 else "Nema aktivnih API kljuceva.", count=active_api_keys, action="Provjeriti scopeove i deaktivirati nepotrebne kljuceve." if active_api_keys > 0 else None),
+    ]
+
+    summary = {
+        "ok": sum(1 for check in checks if check.status == ok),
+        "warning": sum(1 for check in checks if check.status == warning),
+        "critical": sum(1 for check in checks if check.status == critical),
+    }
+    status = "blocked" if summary["critical"] else "attention_needed" if summary["warning"] else "ready_for_demo"
+    return {
+        "status": status,
+        "demo_mode": settings.demo_mode,
+        "real_data_allowed": settings.real_data_allowed,
+        "fiscalization_mode": settings.fiscalization_mode,
+        "summary": summary,
+        "checks": checks,
     }
 
 
@@ -113,6 +181,25 @@ def get_patient(patient_id: int, db: Session = Depends(get_db), actor: Actor = D
     if not patient:
         raise HTTPException(404, detail="Pacijent nije pronađen")
     return patient
+
+
+@router.get("/patients/{patient_id}/appointments", response_model=list[AppointmentOut])
+def patient_appointments(patient_id: int, db: Session = Depends(get_db), actor: Actor = Depends(require_permission("appointments.read"))):
+    if not db.get(Patient, patient_id):
+        raise HTTPException(404, detail="Pacijent nije pronaden")
+    return db.scalars(
+        select(Appointment)
+        .options(joinedload(Appointment.patient), joinedload(Appointment.service), joinedload(Appointment.provider), joinedload(Appointment.room))
+        .where(Appointment.patient_id == patient_id)
+        .order_by(Appointment.date.desc(), Appointment.start_time.desc())
+    ).all()
+
+
+@router.get("/patients/{patient_id}/invoices", response_model=list[InvoiceOut])
+def patient_invoices(patient_id: int, db: Session = Depends(get_db), actor: Actor = Depends(require_permission("billing.read"))):
+    if not db.get(Patient, patient_id):
+        raise HTTPException(404, detail="Pacijent nije pronaden")
+    return db.scalars(select(Invoice).where(Invoice.patient_id == patient_id).order_by(Invoice.invoice_date.desc(), Invoice.id.desc())).all()
 
 
 @router.patch("/patients/{patient_id}", response_model=PatientOut)

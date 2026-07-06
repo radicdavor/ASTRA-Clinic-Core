@@ -20,6 +20,7 @@ Human pilot findings override maintainer speculation. No alpha hardening work st
 - Review Croatian wording after V19 action-language standardization.
 - Review table density and button labels after live observation.
 - Decide whether OIB checksum validation should enter the next real-data readiness sprint.
+- Patient Workspace is addressed in V20; dedicated invoice, inventory item and purchase order workspaces remain future polish.
 
 ## Alpha Hardening Candidates
 

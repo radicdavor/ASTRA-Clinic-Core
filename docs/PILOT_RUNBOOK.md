@@ -46,30 +46,34 @@ Recommended roles:
 Steps:
 
 1. Log in as demo admin.
-2. Open patients and create or review a demo patient. If OIB is used, use only an invented demo OIB.
-3. If the possible-duplicate warning appears, compare name, birth date, OIB, phone and e-mail before confirming a new patient.
-4. Open new appointment and search for the patient by name or OIB.
-5. Select the resolved patient from the search result; do not create an appointment from ambiguous free text.
-6. Select a service and review the service context card.
-7. Open daily dashboard.
-8. Select today's date and open the demo appointment.
-9. Use quick status actions: arrived, in progress.
-10. Open appointment detail.
-11. Load material suggestion.
-12. Review required fixed, required variable, and optional material labels.
-13. Complete appointment with material consumption and verify the confirmation prompt is clear.
-14. Verify the appointment status is completed.
-15. Verify stock movement appears on appointment detail.
-16. Create draft invoice from appointment.
-17. Open invoice detail.
-18. Issue invoice and verify the confirmation prompt is clear.
-19. Show demo fiscalization status and warning.
-20. Record payment for the remaining amount and verify the confirmation prompt is clear.
-21. Open purchase orders.
-22. Receive demo purchase order line and verify the confirmation prompt is clear.
-23. Open inventory and verify stock changed.
-24. Open audit log or appointment audit timeline and review traceability.
-25. Capture feedback in `docs/PILOT_FEEDBACK_TEMPLATE.md`.
+2. Open Spremnost and review demo guardrails, fiscalization, audit, inventory and billing warnings.
+3. Open patients and enter a Patient Workspace from the patient list.
+4. Create or review a demo patient. If OIB is used, use only an invented demo OIB.
+5. If the possible-duplicate warning appears, compare name, birth date, OIB, phone and e-mail before confirming a new patient.
+6. From Patient Workspace, review appointments, invoices and audit context.
+7. Create a new appointment from Patient Workspace or open new appointment and search for the patient by name or OIB.
+8. Select the resolved patient from the search result; do not create an appointment from ambiguous free text.
+9. Select a service and review the service context card.
+10. Open daily dashboard.
+11. Select today's date and open the demo appointment.
+12. Use quick status actions: arrived, in progress.
+13. Open appointment detail.
+14. Confirm the appointment screen links back to Patient Workspace.
+15. Load material suggestion.
+16. Review required fixed, required variable, and optional material labels.
+17. Complete appointment with material consumption and verify the confirmation prompt is clear.
+18. Verify the appointment status is completed.
+19. Verify stock movement appears on appointment detail.
+20. Create draft invoice from appointment.
+21. Open invoice detail.
+22. Issue invoice and verify the confirmation prompt is clear.
+23. Show demo fiscalization status and warning.
+24. Record payment for the remaining amount and verify the confirmation prompt is clear.
+25. Open purchase orders.
+26. Receive demo purchase order line and verify the confirmation prompt is clear.
+27. Open inventory and verify stock changed.
+28. Open audit log or appointment audit timeline and review traceability.
+29. Capture feedback in `docs/PILOT_FEEDBACK_TEMPLATE.md`.
 
 ## Expected Outcomes
 

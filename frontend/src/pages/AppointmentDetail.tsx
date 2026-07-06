@@ -5,9 +5,13 @@ import { ActionButton } from "../components/ActionButton";
 import { AuditTimeline } from "../components/AuditTimeline";
 import { DataTable } from "../components/DataTable";
 import { StatusBadge } from "../components/StatusBadge";
+import { WorkspaceHeader } from "../components/workspace/WorkspaceHeader";
+import { WorkspaceLayout } from "../components/workspace/WorkspaceLayout";
+import { WorkspaceSection } from "../components/workspace/WorkspaceSection";
 import { useApi } from "../hooks/useApi";
 import { Appointment, AuditLog, Invoice, StockMovement } from "../types";
 import { formatDate, formatDateTime } from "../utils/date";
+import { formatPatientIdentity, formatPatientName } from "../utils/patientIdentity";
 
 export function AppointmentDetail() {
   const { id } = useParams();
@@ -73,17 +77,15 @@ export function AppointmentDetail() {
     navigate(`/invoices?invoice=${invoice.id}`);
   }
 
-  if (!appointment.data) return <section className="page"><p>Ucitavanje termina...</p></section>;
+  if (!appointment.data) return <WorkspaceLayout><p>Ucitavanje termina...</p></WorkspaceLayout>;
 
   return (
-    <section className="page">
-      <div className="page-header">
-        <div>
-          <h1>{appointment.data.patient?.first_name} {appointment.data.patient?.last_name}</h1>
-          <p>{formatDate(appointment.data.date)} {appointment.data.start_time.slice(0, 5)} - {appointment.data.end_time.slice(0, 5)}</p>
-        </div>
-        <StatusBadge status={appointment.data.status} />
-      </div>
+    <WorkspaceLayout>
+      <WorkspaceHeader
+        title={appointment.data.patient ? <Link to={`/patients/${appointment.data.patient.id}`}>{formatPatientName(appointment.data.patient)}</Link> : `Pacijent ${appointment.data.patient_id}`}
+        subtitle={<>{appointment.data.patient ? formatPatientIdentity(appointment.data.patient) : "Nema detalja pacijenta"} / {formatDate(appointment.data.date)} {appointment.data.start_time.slice(0, 5)} - {appointment.data.end_time.slice(0, 5)}</>}
+        badge={<StatusBadge status={appointment.data.status} />}
+      />
       {message && <p className="success-message">{message}</p>}
       {error && <p className="form-error">{error}</p>}
 
@@ -94,8 +96,7 @@ export function AppointmentDetail() {
         <p><span>Napomena</span><strong>{appointment.data.notes ?? "-"}</strong></p>
       </div>
 
-      <section className="workflow-panel">
-        <div className="page-header"><h2>Materijali</h2><button onClick={loadMaterials}>Ucitaj prijedlog</button></div>
+      <WorkspaceSection title="Materijali" actions={<button onClick={loadMaterials}>Ucitaj prijedlog</button>}>
         {materials.map((entry) => (
           <label className="material-row" key={entry.template_id}>
             <span>
@@ -121,26 +122,24 @@ export function AppointmentDetail() {
         >
           Zavrsi uz potrosnju
         </ActionButton>
-      </section>
+      </WorkspaceSection>
 
-      <section className="workflow-panel">
-        <div className="page-header"><h2>Racun</h2>{relatedInvoice ? <Link className="primary link-button" to={`/invoices?invoice=${relatedInvoice.id}`}>Otvori racun</Link> : <ActionButton className="primary" variant="workflow" onClick={createInvoice} helpTitle="Kreiraj nacrt racuna" help="Stvara draft racun iz termina. Racun se jos mora pregledati i izdati.">Kreiraj nacrt racuna</ActionButton>}</div>
-      </section>
+      <WorkspaceSection title="Racun" actions={relatedInvoice ? <Link className="primary link-button" to={`/invoices?invoice=${relatedInvoice.id}`}>Otvori racun</Link> : <ActionButton className="primary" variant="workflow" onClick={createInvoice} helpTitle="Kreiraj nacrt racuna" help="Stvara draft racun iz termina. Racun se jos mora pregledati i izdati.">Kreiraj nacrt racuna</ActionButton>}>
+        <p>{relatedInvoice ? "Racun je povezan s ovim terminom." : "Nacrt racuna jos nije kreiran."}</p>
+      </WorkspaceSection>
 
-      <section className="workflow-panel">
-        <h2>Kretanja zalihe</h2>
+      <WorkspaceSection title="Kretanja zalihe">
         <DataTable rows={relatedMovements} columns={[
           { header: "Tip", render: (row) => row.movement_type },
           { header: "Artikl", render: (row) => row.item?.name ?? row.inventory_item_id },
           { header: "Kolicina", render: (row) => row.quantity },
           { header: "Vrijeme", render: (row) => formatDateTime(row.created_at) }
         ]} />
-      </section>
+      </WorkspaceSection>
 
-      <section className="workflow-panel">
-        <h2>Audit timeline</h2>
+      <WorkspaceSection title="Audit timeline">
         <AuditTimeline logs={audit.data} />
-      </section>
-    </section>
+      </WorkspaceSection>
+    </WorkspaceLayout>
   );
 }
