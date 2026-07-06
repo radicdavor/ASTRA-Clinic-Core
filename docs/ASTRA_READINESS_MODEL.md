@@ -57,3 +57,18 @@ Each readiness check should link to an operational screen when possible:
 - human pilot evidence -> `/readiness` for now; evidence remains documentation-governed
 
 Future object workspaces should replace generic list targets when they exist.
+
+## 6. Readiness Target Contract
+
+Every `target_path` returned by `/api/readiness` must point to an existing protected frontend route.
+
+This is a product contract, not only a technical convenience:
+
+- readiness identifies risk
+- the target link opens the place where the risk can be inspected
+- the workspace or list screen provides the next safe action
+- audit and pilot evidence close the loop
+
+If a readiness check has no real UI target yet, it should use `/readiness` and explain the documentation-governed next action in `action`.
+
+The frontend pilot smoke test verifies that backend readiness target paths remain registered in `AppRoutes.tsx`.

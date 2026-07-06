@@ -50,3 +50,42 @@ def test_readiness_missing_core_setup_blocks_demo(client, auth_setup):
     assert any(check["key"] == "providers" and check["decision_impact"] == "blocks_demo" for check in payload["checks"])
     assert any(check["key"] == "rooms" and check["decision_impact"] == "blocks_demo" for check in payload["checks"])
     assert any(check["key"] == "services" and check["decision_impact"] == "blocks_demo" for check in payload["checks"])
+
+
+def test_readiness_checks_keep_operational_evidence_contract(client, db, auth_setup):
+    db.add_all(
+        [
+            Patient(first_name="Ana", last_name="Horvat"),
+            Provider(full_name="Dr. Demo", active=True),
+            Room(name="Soba 1", active=True),
+            Module(key="core", name="Clinic Core", enabled=True),
+            Service(name="Pregled", duration_minutes=30, price="50.00", active=True),
+        ]
+    )
+    db.commit()
+    token = login_token(client, "admin@test.local")
+
+    response = client.get("/api/readiness", headers={"Authorization": f"Bearer {token}"})
+
+    assert response.status_code == 200
+    checks = response.json()["checks"]
+    allowed_impacts = {"none", "review", "blocks_demo", "blocks_release"}
+    allowed_targets = {
+        "/readiness",
+        "/patients",
+        "/appointments/new",
+        "/services",
+        "/modules",
+        "/audit-log",
+        "/inventory",
+        "/invoices",
+        "/api-keys",
+    }
+
+    assert checks
+    for check in checks:
+        assert check["decision_impact"] in allowed_impacts
+        assert check["target_path"] in allowed_targets
+        assert check["target_label"]
+        if check["status"] in {"warning", "critical"}:
+            assert check["action"] or check["target_path"]

@@ -15,6 +15,10 @@ function assertIncludes(file, value) {
   if (!content.includes(value)) throw new Error(`${file} does not include ${value}`);
 }
 
+function unique(values) {
+  return [...new Set(values)];
+}
+
 [
   "src/pages/Dashboard.tsx",
   "src/pages/AppointmentDetail.tsx",
@@ -82,5 +86,26 @@ assertIncludes("src/pages/Readiness.tsx", "Sljedeci korak");
 assertIncludes("src/pages/Readiness.tsx", "decision_impact");
 assertIncludes("src/pages/Readiness.tsx", "Blokira demo");
 assertIncludes("src/pages/Readiness.tsx", "readiness-detail");
+
+const backendCore = read("../backend/app/api/routes/core.py");
+const appRoutes = read("src/routes/AppRoutes.tsx");
+const readinessTargetPaths = unique([...backendCore.matchAll(/target_path="([^"]+)"/g)].map((match) => match[1]));
+const readinessTargetLabels = unique([...backendCore.matchAll(/target_label="([^"]+)"/g)].map((match) => match[1]));
+
+if (readinessTargetPaths.length === 0) {
+  throw new Error("No readiness target_path values found in backend readiness endpoint");
+}
+
+for (const targetPath of readinessTargetPaths) {
+  if (!appRoutes.includes(`path="${targetPath}"`)) {
+    throw new Error(`Readiness target path ${targetPath} is not registered in AppRoutes.tsx`);
+  }
+}
+
+for (const targetLabel of readinessTargetLabels) {
+  if (!targetLabel.trim()) {
+    throw new Error("Readiness target_label must not be empty");
+  }
+}
 
 console.log("Frontend pilot smoke passed.");
