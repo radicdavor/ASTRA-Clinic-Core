@@ -1,4 +1,5 @@
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone
+from decimal import Decimal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy import and_, func, or_, select
@@ -9,8 +10,8 @@ from app.audit.service import audit, snapshot
 from app.auth.dependencies import Actor, require_permission
 from app.core.config import get_settings
 from app.core.database import get_db
-from app.models.domain import ApiKey, Appointment, AuditLog, ClinicalEpisode, InventoryBatch, InventoryItem, Invoice, Module, Patient, Provider, Room, Service
-from app.schemas.common import AppointmentCreate, AppointmentOut, AppointmentUpdate, ClinicalEpisodeCreate, ClinicalEpisodeOut, ClinicalEpisodeUpdate, ErrorResponse, InvoiceOut, PatientCreate, PatientOut, PatientUpdate, ReadinessCheck, ReadinessOut, ServiceCreate, ServiceOut
+from app.models.domain import ApiKey, Appointment, AuditLog, ClinicalEpisode, ClinicalPlan, InventoryBatch, InventoryItem, Invoice, Module, Patient, Provider, Room, Service
+from app.schemas.common import AppointmentCreate, AppointmentOut, AppointmentUpdate, ClinicalDecisionTimelineItem, ClinicalEpisodeCreate, ClinicalEpisodeOut, ClinicalEpisodeUpdate, ClinicalPlanGenerate, ClinicalPlanOut, ClinicalPlanUpdate, ErrorResponse, InvoiceOut, PatientCreate, PatientOut, PatientUpdate, ReadinessCheck, ReadinessOut, ServiceCreate, ServiceOut
 from app.services.appointments import validate_appointment_payload
 
 ERROR_RESPONSES = {400: {"model": ErrorResponse}, 401: {"model": ErrorResponse}, 403: {"model": ErrorResponse}, 404: {"model": ErrorResponse}, 409: {"model": ErrorResponse}, 422: {"model": ErrorResponse}}
@@ -76,6 +77,77 @@ def validate_episode_for_patient(db: Session, episode_id: int | None, patient_id
     if episode.patient_id != patient_id:
         raise HTTPException(422, detail="Klinička epizoda mora pripadati istom pacijentu kao termin")
     return episode
+
+
+def get_plan_or_404(db: Session, plan_id: int) -> ClinicalPlan:
+    plan = db.get(ClinicalPlan, plan_id)
+    if not plan:
+        raise HTTPException(404, detail="Klinicki plan nije pronaden")
+    return plan
+
+
+def active_plan_for_episode(db: Session, episode_id: int) -> ClinicalPlan | None:
+    return db.scalar(select(ClinicalPlan).where(ClinicalPlan.episode_id == episode_id, ClinicalPlan.status == "active", ClinicalPlan.physician_confirmed.is_(True)).order_by(ClinicalPlan.confirmed_at.desc(), ClinicalPlan.id.desc()))
+
+
+def pending_plan_for_episode(db: Session, episode_id: int) -> ClinicalPlan | None:
+    return db.scalar(select(ClinicalPlan).where(ClinicalPlan.episode_id == episode_id, ClinicalPlan.physician_confirmed.is_(False), ClinicalPlan.status.in_(["draft", "waiting"])).order_by(ClinicalPlan.created_at.desc(), ClinicalPlan.id.desc()))
+
+
+def propose_plan(payload: ClinicalPlanGenerate, episode: ClinicalEpisode) -> dict:
+    text = " ".join([payload.procedure_type or "", payload.findings or "", payload.physician_conclusion or "", payload.episode_goal or "", episode.summary or "", episode.clinical_notes or ""]).lower()
+    confidence = Decimal("0.91")
+    if payload.pathology_ordered or "patolog" in text or "ph" in text or "biops" in text:
+        next_action = "wait_for_pathology"
+        proposed_status = "waiting"
+        due_date = date.today() + timedelta(days=14)
+        priority = "important"
+        rationale = "AI prijedlog: nalaz/patologija je oznacena kao otvorena stavka. Lijecnik mora pregledati nalaz prije odluke."
+        suggested_follow_up = "Nakon dolaska patologije pregledati rezultat i odrediti daljnji interval pracenja."
+    elif "kontrol" in text or "follow" in text:
+        next_action = "follow_up_visit"
+        proposed_status = "active"
+        due_date = date.today() + timedelta(days=30)
+        priority = "routine"
+        rationale = "AI prijedlog: zakazati kontrolni pregled prema zakljucku lijecnika."
+        suggested_follow_up = "Kontrolni pregled prema dogovoru lijecnika i pacijenta."
+    elif "ponov" in text or "repeat" in text or "endoskop" in text:
+        next_action = "repeat_endoscopy"
+        proposed_status = "active"
+        due_date = date.today() + timedelta(days=90)
+        priority = "important"
+        rationale = "AI prijedlog: tekst upucuje na ponavljanje endoskopskog postupka."
+        suggested_follow_up = "Planirati ponavljanje postupka nakon lijecnicke provjere indikacije."
+    elif "zavr" in text or "uredan" in text:
+        next_action = "episode_completed"
+        proposed_status = "completed"
+        due_date = None
+        priority = "routine"
+        rationale = "AI prijedlog: zakljucak djeluje zavrsno, ali epizodu smije zatvoriti samo lijecnik potvrdom plana."
+        suggested_follow_up = "Nema automatske kontrole bez potvrde lijecnika."
+    else:
+        next_action = "follow_up_visit"
+        proposed_status = "active"
+        due_date = date.today() + timedelta(days=30)
+        priority = "routine"
+        rationale = "AI prijedlog: nema dovoljno specificnog konteksta za precizniji plan. Manual review recommended."
+        suggested_follow_up = "Rucno odrediti daljnji korak."
+        confidence = Decimal("0.58")
+    if not payload.physician_conclusion and not payload.findings:
+        confidence = min(confidence, Decimal("0.55"))
+        rationale = f"{rationale} Manual review recommended."
+    return {
+        "source": "ai_suggestion",
+        "status": "draft",
+        "proposed_episode_status": proposed_status,
+        "next_action": next_action,
+        "due_date": due_date,
+        "priority": priority,
+        "rationale": rationale,
+        "suggested_follow_up": suggested_follow_up,
+        "ai_confidence": confidence,
+        "physician_confirmed": False,
+    }
 
 
 @router.get("/readiness", response_model=ReadinessOut)
@@ -270,6 +342,140 @@ def episode_appointments(episode_id: int, db: Session = Depends(get_db), actor: 
         .where(Appointment.episode_id == episode_id)
         .order_by(Appointment.date.desc(), Appointment.start_time.desc())
     ).all()
+
+
+@router.get("/episodes/{episode_id}/clinical-plans", response_model=list[ClinicalPlanOut])
+def episode_clinical_plans(episode_id: int, db: Session = Depends(get_db), actor: Actor = Depends(require_permission("clinical_plans.read"))):
+    get_episode_or_404(db, episode_id)
+    return db.scalars(select(ClinicalPlan).where(ClinicalPlan.episode_id == episode_id).order_by(ClinicalPlan.created_at.desc(), ClinicalPlan.id.desc())).all()
+
+
+@router.get("/episodes/{episode_id}/clinical-plans/active", response_model=ClinicalPlanOut | None)
+def episode_active_clinical_plan(episode_id: int, db: Session = Depends(get_db), actor: Actor = Depends(require_permission("clinical_plans.read"))):
+    get_episode_or_404(db, episode_id)
+    return active_plan_for_episode(db, episode_id)
+
+
+@router.post("/episodes/{episode_id}/clinical-plans/generate", response_model=ClinicalPlanOut)
+def generate_clinical_plan(
+    episode_id: int,
+    payload: ClinicalPlanGenerate,
+    request: Request,
+    db: Session = Depends(get_db),
+    actor: Actor = Depends(require_permission("clinical_plans.write")),
+):
+    episode = get_episode_or_404(db, episode_id)
+    if payload.appointment_id:
+        appointment = db.get(Appointment, payload.appointment_id)
+        if not appointment or appointment.episode_id != episode.id:
+            raise HTTPException(422, detail="Termin mora pripadati istoj epizodi")
+    plan = ClinicalPlan(episode_id=episode.id, **propose_plan(payload, episode))
+    db.add(plan)
+    db.flush()
+    audit(db, "ai_plan_generated", "ClinicalPlan", plan.id, f"AI prijedlog plana za epizodu #{episode.id}", actor.user_id, "ai_suggestion", actor.api_key_id, None, snapshot(plan), request)
+    db.commit()
+    db.refresh(plan)
+    return plan
+
+
+@router.patch("/clinical-plans/{plan_id}", response_model=ClinicalPlanOut)
+def edit_clinical_plan(
+    plan_id: int,
+    payload: ClinicalPlanUpdate,
+    request: Request,
+    db: Session = Depends(get_db),
+    actor: Actor = Depends(require_permission("clinical_plans.write")),
+):
+    plan = get_plan_or_404(db, plan_id)
+    if plan.physician_confirmed:
+        raise HTTPException(422, detail="Potvrdeni plan se ne ureduje. Kreirajte novi prijedlog plana.")
+    before = snapshot(plan)
+    patch_model(plan, payload.model_dump(exclude_unset=True))
+    plan.source = "physician"
+    db.flush()
+    audit(db, "ai_plan_edited", "ClinicalPlan", plan.id, "Lijecnik je uredio AI prijedlog plana", actor.user_id, actor.actor_type, actor.api_key_id, before, snapshot(plan), request)
+    db.commit()
+    db.refresh(plan)
+    return plan
+
+
+@router.post("/clinical-plans/{plan_id}/reject", response_model=ClinicalPlanOut)
+def reject_clinical_plan(
+    plan_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+    actor: Actor = Depends(require_permission("clinical_plans.write")),
+):
+    plan = get_plan_or_404(db, plan_id)
+    if plan.physician_confirmed:
+        raise HTTPException(422, detail="Potvrdeni plan se ne moze odbiti")
+    before = snapshot(plan)
+    plan.status = "cancelled"
+    db.flush()
+    audit(db, "ai_plan_rejected", "ClinicalPlan", plan.id, "AI prijedlog plana je odbijen", actor.user_id, actor.actor_type, actor.api_key_id, before, snapshot(plan), request)
+    db.commit()
+    db.refresh(plan)
+    return plan
+
+
+@router.post("/clinical-plans/{plan_id}/confirm", response_model=ClinicalPlanOut)
+def confirm_clinical_plan(
+    plan_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+    actor: Actor = Depends(require_permission("clinical_plans.write")),
+):
+    plan = get_plan_or_404(db, plan_id)
+    if plan.status == "cancelled":
+        raise HTTPException(422, detail="Odbijeni plan se ne moze potvrditi")
+    episode = get_episode_or_404(db, plan.episode_id)
+    plan_before = snapshot(plan)
+    episode_before = snapshot(episode)
+    previous_active = active_plan_for_episode(db, episode.id)
+    if previous_active and previous_active.id != plan.id:
+        previous_before = snapshot(previous_active)
+        previous_active.status = "archived"
+        db.flush()
+        audit(db, "clinical_plan_archived", "ClinicalPlan", previous_active.id, "Prethodni aktivni klinicki plan je arhiviran", actor.user_id, actor.actor_type, actor.api_key_id, previous_before, snapshot(previous_active), request)
+    plan.status = "active"
+    plan.physician_confirmed = True
+    plan.confirmed_by = actor.user_id
+    plan.confirmed_at = datetime.now(timezone.utc)
+    if plan.proposed_episode_status:
+        episode.status = plan.proposed_episode_status
+    episode.priority = plan.priority
+    if plan.rationale:
+        episode.summary = plan.rationale
+    db.flush()
+    audit(db, "ai_plan_confirmed", "ClinicalPlan", plan.id, "Lijecnik je potvrdio klinicki plan", actor.user_id, actor.actor_type, actor.api_key_id, plan_before, snapshot(plan), request)
+    audit(db, "update", "ClinicalEpisode", episode.id, "Epizoda azurirana potvrdenim klinickim planom", actor.user_id, actor.actor_type, actor.api_key_id, episode_before, snapshot(episode), request)
+    db.commit()
+    db.refresh(plan)
+    return plan
+
+
+@router.get("/episodes/{episode_id}/clinical-timeline", response_model=list[ClinicalDecisionTimelineItem])
+def episode_clinical_timeline(episode_id: int, db: Session = Depends(get_db), actor: Actor = Depends(require_permission("clinical_plans.read"))):
+    get_episode_or_404(db, episode_id)
+    plan_ids = db.scalars(select(ClinicalPlan.id).where(ClinicalPlan.episode_id == episode_id)).all()
+    conditions = [and_(AuditLog.entity_type == "ClinicalEpisode", AuditLog.entity_id == episode_id)]
+    if plan_ids:
+        conditions.append(and_(AuditLog.entity_type == "ClinicalPlan", AuditLog.entity_id.in_(plan_ids)))
+    logs = db.scalars(select(AuditLog).where(or_(*conditions)).order_by(AuditLog.created_at.desc()).limit(100)).all()
+    labels = {
+        "ai_plan_generated": "AI predlozio plan",
+        "ai_plan_edited": "Lijecnik uredio prijedlog",
+        "ai_plan_rejected": "Lijecnik odbio prijedlog",
+        "ai_plan_confirmed": "Lijecnik potvrdio plan",
+        "clinical_plan_archived": "Plan arhiviran",
+        "update": "Epizoda azurirana",
+        "close": "Epizoda zatvorena",
+        "create": "Epizoda kreirana",
+    }
+    return [
+        ClinicalDecisionTimelineItem(id=log.id, action=log.action, label=labels.get(log.action, log.action), summary=log.summary, source="AI Suggested" if log.actor_type == "ai_suggestion" else "Human Confirmed" if log.action == "ai_plan_confirmed" else log.actor_type, created_at=log.created_at)
+        for log in logs
+    ]
 
 
 @router.post("/patients", response_model=PatientOut)

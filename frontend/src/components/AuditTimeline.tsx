@@ -13,7 +13,12 @@ const actionLabels: Record<string, string> = {
   complete_with_consumption: "Zavrsetak s potrosnjom",
   close: "Zatvoreno",
   link_episode: "Povezano s epizodom",
-  unlink_episode: "Odvojeno od epizode"
+  unlink_episode: "Odvojeno od epizode",
+  ai_plan_generated: "AI prijedlog plana",
+  ai_plan_edited: "Plan uredjen",
+  ai_plan_rejected: "AI prijedlog odbijen",
+  ai_plan_confirmed: "Plan potvrdjen",
+  clinical_plan_archived: "Plan arhiviran"
 };
 
 const entityLabels: Record<string, string> = {
@@ -25,7 +30,8 @@ const entityLabels: Record<string, string> = {
   StockMovement: "Kretanje zalihe",
   PurchaseOrder: "Narudzbenica",
   ApiKey: "API kljuc",
-  ClinicalEpisode: "Klinicka epizoda"
+  ClinicalEpisode: "Klinicka epizoda",
+  ClinicalPlan: "Klinicki plan"
 };
 
 function actorLabel(log: AuditLog) {

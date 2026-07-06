@@ -12,6 +12,7 @@ const labels: Record<string, string> = {
   open: "Otvoreno",
   active: "Aktivno",
   waiting: "Ceka",
+  draft: "Nacrt",
   archived: "Arhivirano"
 };
 

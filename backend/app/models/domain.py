@@ -139,6 +139,26 @@ class ClinicalEpisode(TimestampMixin, Base):
     owner_provider: Mapped[Provider | None] = relationship()
 
 
+class ClinicalPlan(TimestampMixin, Base):
+    __tablename__ = "clinical_plans"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    episode_id: Mapped[int] = mapped_column(ForeignKey("clinical_episodes.id"), index=True)
+    source: Mapped[str] = mapped_column(String(40), default="ai_suggestion", index=True)
+    status: Mapped[str] = mapped_column(String(40), default="draft", index=True)
+    proposed_episode_status: Mapped[str | None] = mapped_column(String(40))
+    next_action: Mapped[str] = mapped_column(String(80), index=True)
+    due_date: Mapped[date | None] = mapped_column(Date)
+    priority: Mapped[str] = mapped_column(String(40), default="routine", index=True)
+    rationale: Mapped[str | None] = mapped_column(Text)
+    suggested_follow_up: Mapped[str | None] = mapped_column(Text)
+    ai_confidence: Mapped[Decimal | None] = mapped_column(Numeric(5, 2))
+    physician_confirmed: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
+    confirmed_by: Mapped[int | None] = mapped_column(ForeignKey("users.id"))
+    confirmed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    episode: Mapped[ClinicalEpisode] = relationship()
+    confirmer: Mapped[User | None] = relationship()
+
+
 class Service(TimestampMixin, Base):
     __tablename__ = "services"
     id: Mapped[int] = mapped_column(primary_key=True)

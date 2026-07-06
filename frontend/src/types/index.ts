@@ -43,6 +43,34 @@ export type ClinicalEpisode = {
   appointment_count?: number;
 };
 
+export type ClinicalPlan = {
+  id: number;
+  episode_id: number;
+  source: string;
+  status: string;
+  proposed_episode_status?: string | null;
+  next_action: string;
+  due_date?: string | null;
+  priority: string;
+  rationale?: string | null;
+  suggested_follow_up?: string | null;
+  ai_confidence?: string | null;
+  physician_confirmed: boolean;
+  confirmed_by?: number | null;
+  confirmed_at?: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type ClinicalDecisionTimelineItem = {
+  id: number;
+  action: string;
+  label: string;
+  summary?: string | null;
+  source?: string | null;
+  created_at: string;
+};
+
 export type Appointment = {
   id: number;
   patient_id: number;

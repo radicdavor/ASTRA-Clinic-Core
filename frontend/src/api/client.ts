@@ -20,6 +20,10 @@ function mutationSuccessMessage(path: string, method: string) {
   if (normalizedMethod === "POST" && path === "/api/episodes") return "Epizoda je spremljena.";
   if (normalizedMethod === "PATCH" && path.startsWith("/api/episodes/")) return "Epizoda je azurirana.";
   if (normalizedMethod === "POST" && path.includes("/close")) return "Epizoda je zatvorena.";
+  if (normalizedMethod === "POST" && path.includes("/clinical-plans/generate")) return "AI prijedlog plana je pripremljen.";
+  if (normalizedMethod === "PATCH" && path.startsWith("/api/clinical-plans/")) return "Prijedlog plana je uredjen.";
+  if (normalizedMethod === "POST" && path.includes("/confirm")) return "Klinicki plan je potvrdjen.";
+  if (normalizedMethod === "POST" && path.includes("/reject")) return "AI prijedlog plana je odbijen.";
   if (normalizedMethod === "PATCH" && path.startsWith("/api/appointments/")) return "Status termina je azuriran.";
   if (normalizedMethod === "POST" && path.includes("/complete-with-consumption")) return "Termin je zavrsen i materijal je skinut sa zalihe.";
   if (normalizedMethod === "POST" && path.includes("/draft-invoice")) return "Nacrt racuna je kreiran.";

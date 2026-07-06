@@ -13,6 +13,9 @@ Episode Engine adds Clinical Episode as the first clinical story object in ASTRA
 - Adds episode list, create page and Episode Workspace.
 - Shows episodes in Patient Workspace.
 - Shows episode context or a warning in Appointment Workspace.
+- Adds AI Assisted Clinical Plan proposal/review/confirm flow.
+- Stores only physician-confirmed plans as active.
+- Shows clinical decision timeline.
 - Adds readiness awareness for appointments without an episode.
 - Writes audit for create, update, close, link and unlink actions.
 - Seeds demo episodes.
@@ -22,7 +25,8 @@ Episode Engine adds Clinical Episode as the first clinical story object in ASTRA
 - Does not allow real patient data.
 - Does not implement Workflow Engine.
 - Does not implement Knowledge Engine.
-- Does not implement AI automation.
+- Does not implement AI automation or autonomous medical decisions.
+- Does not integrate a real AI provider yet.
 - Does not implement new clinical modules.
 - Does not implement documents, labs, prescriptions or diagnosis coding.
 - Does not implement real Croatian fiscalization.
@@ -37,6 +41,13 @@ Episode Engine adds Clinical Episode as the first clinical story object in ASTRA
 - `POST /api/episodes/{id}/close`
 - `GET /api/patients/{patient_id}/episodes`
 - `GET /api/episodes/{id}/appointments`
+- `POST /api/episodes/{id}/clinical-plans/generate`
+- `GET /api/episodes/{id}/clinical-plans`
+- `GET /api/episodes/{id}/clinical-plans/active`
+- `PATCH /api/clinical-plans/{id}`
+- `POST /api/clinical-plans/{id}/confirm`
+- `POST /api/clinical-plans/{id}/reject`
+- `GET /api/episodes/{id}/clinical-timeline`
 
 Appointment create/update accepts optional `episode_id`.
 
@@ -48,6 +59,7 @@ Appointment create/update accepts optional `episode_id`.
 - Patient Workspace has an `Epizode` tab and active episode count.
 - Appointment form can select an active/open episode after patient selection.
 - Appointment detail shows the episode link or a non-blocking warning.
+- Episode Workspace shows active confirmed plan, pending AI suggestion and decision timeline.
 
 ## Relationship To Future Workflow Engine
 
@@ -63,6 +75,6 @@ This MVP stores context only. It does not calculate guidelines, diagnoses or med
 
 ## Relationship To Future AI Layer
 
-AI may later help summarize, organize and suggest. It must remain visibly assistant-like and clinician-controlled.
+AI can prepare a structured suggestion. It must remain visibly assistant-like and clinician-controlled.
 
-This MVP adds no AI automation.
+This MVP adds no autonomous AI automation. Physician confirmation is required before an episode changes.

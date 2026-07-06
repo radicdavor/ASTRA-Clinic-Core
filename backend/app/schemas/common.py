@@ -192,6 +192,53 @@ class ClinicalEpisodeOut(ClinicalEpisodeCreate, ORMModel):
     appointment_count: int | None = None
 
 
+class ClinicalPlanGenerate(BaseModel):
+    appointment_id: int | None = None
+    procedure_type: str | None = None
+    findings: str | None = None
+    pathology_ordered: bool = False
+    physician_conclusion: str | None = None
+    episode_goal: str | None = None
+
+
+class ClinicalPlanUpdate(BaseModel):
+    proposed_episode_status: str | None = None
+    status: str | None = None
+    next_action: str | None = None
+    due_date: DateType | None = None
+    priority: str | None = None
+    rationale: str | None = None
+    suggested_follow_up: str | None = None
+
+
+class ClinicalPlanOut(ORMModel):
+    id: int
+    episode_id: int
+    source: str
+    status: str
+    proposed_episode_status: str | None = None
+    next_action: str
+    due_date: DateType | None = None
+    priority: str
+    rationale: str | None = None
+    suggested_follow_up: str | None = None
+    ai_confidence: Decimal | None = None
+    physician_confirmed: bool
+    confirmed_by: int | None = None
+    confirmed_at: DateTimeType | None = None
+    created_at: DateTimeType
+    updated_at: DateTimeType
+
+
+class ClinicalDecisionTimelineItem(BaseModel):
+    id: int
+    action: str
+    label: str
+    summary: str | None = None
+    source: str | None = None
+    created_at: DateTimeType
+
+
 class AppointmentCreate(BaseModel):
     patient_id: int
     service_id: int

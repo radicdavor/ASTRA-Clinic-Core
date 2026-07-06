@@ -74,6 +74,8 @@ def auth_setup(db: Session) -> dict[str, User]:
         "appointments.write",
         "episodes.read",
         "episodes.write",
+        "clinical_plans.read",
+        "clinical_plans.write",
         "inventory.read",
         "inventory.write",
         "inventory.adjust",

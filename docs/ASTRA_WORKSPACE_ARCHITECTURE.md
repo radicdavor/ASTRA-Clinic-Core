@@ -84,12 +84,15 @@ It includes:
 - start/end dates
 - owner provider
 - summary and clinical notes
+- active confirmed clinical plan
+- pending AI suggestion when awaiting physician confirmation
+- clinical decision timeline
 - related appointments
 - audit timeline
 - close episode action
 - create appointment for this episode action
 
-Episode Workspace is not Workflow Engine, Knowledge Engine, AI automation or a new clinical module.
+Episode Workspace is not Workflow Engine, Knowledge Engine, autonomous AI automation or a new clinical module.
 
 ## 6. Invoice Workspace
 

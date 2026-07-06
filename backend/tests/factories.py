@@ -1,7 +1,7 @@
 from datetime import date, time
 from decimal import Decimal
 
-from app.models.domain import Appointment, ClinicalEpisode, InventoryBatch, InventoryItem, Patient, Provider, Room, Service, StockLocation
+from app.models.domain import Appointment, ClinicalEpisode, ClinicalPlan, InventoryBatch, InventoryItem, Patient, Provider, Room, Service, StockLocation
 
 
 def patient(db, first_name="Test", last_name="Patient"):
@@ -64,6 +64,26 @@ def episode(db, patient_obj=None, provider_obj=None, title="Test episode"):
         priority="routine",
         start_date=date(2026, 7, 5),
         owner_provider_id=provider_obj.id,
+    )
+    db.add(obj)
+    db.flush()
+    return obj
+
+
+def clinical_plan(db, episode_obj=None, status="draft", physician_confirmed=False):
+    episode_obj = episode_obj or episode(db)
+    obj = ClinicalPlan(
+        episode_id=episode_obj.id,
+        source="ai_suggestion",
+        status=status,
+        proposed_episode_status="waiting",
+        next_action="wait_for_pathology",
+        due_date=date(2026, 7, 20),
+        priority="important",
+        rationale="Test plan",
+        suggested_follow_up="Test follow up",
+        ai_confidence=Decimal("0.91"),
+        physician_confirmed=physician_confirmed,
     )
     db.add(obj)
     db.flush()

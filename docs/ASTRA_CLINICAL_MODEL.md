@@ -48,7 +48,13 @@ In the MVP, goals are written in the episode summary/notes. Structured goal trac
 
 Plan is the clinician-approved direction for care.
 
-In this foundation version, plan remains narrative text. Workflow Engine is future operational automation and must not be inferred from the current episode model.
+In the AI Assisted Clinical Plan version, ASTRA stores a structured `ClinicalPlan`.
+
+AI may prepare a draft suggestion, but the official plan exists only after physician confirmation.
+
+The confirmed plan becomes the active state of the Clinical Episode. Unconfirmed AI suggestions must never be displayed as official clinical direction.
+
+Workflow Engine is still future operational automation and must not be inferred from the current plan model.
 
 ## 8. Appointment
 
@@ -90,6 +96,8 @@ Workflow Engine is future operational automation that may later attach tasks, st
 Knowledge Engine is future domain reasoning that may later provide structured medical knowledge, guidelines or safety checks.
 
 AI is a future assistant layer. It may suggest, organize, remind or summarize, but it must not hide uncertainty, invent data, make medical decisions or change critical data without permission.
+
+In the current plan MVP, AI suggestion is local and controlled. It is a preparation layer, not an autonomous clinical actor.
 
 ## 13. What ASTRA Must Not Do
 

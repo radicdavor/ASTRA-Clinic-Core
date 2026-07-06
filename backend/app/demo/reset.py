@@ -2,7 +2,7 @@ from sqlalchemy import delete, or_, select
 
 from app.core.config import get_settings
 from app.core.database import SessionLocal
-from app.models.domain import Appointment, ClinicalEpisode, InventoryBatch, InventoryItem, Invoice, InvoiceLine, Patient, PaymentTransaction, PurchaseOrder, PurchaseOrderLine, Provider, Room, Service, ServiceMaterialTemplate, StockMovement, Supplier
+from app.models.domain import Appointment, ClinicalEpisode, ClinicalPlan, InventoryBatch, InventoryItem, Invoice, InvoiceLine, Patient, PaymentTransaction, PurchaseOrder, PurchaseOrderLine, Provider, Room, Service, ServiceMaterialTemplate, StockMovement, Supplier
 
 
 def demo_patient_filter():
@@ -53,6 +53,9 @@ def main() -> None:
         if demo_suppliers:
             db.execute(delete(Supplier).where(Supplier.id.in_(demo_suppliers)))
         if demo_patients:
+            demo_episodes = db.scalars(select(ClinicalEpisode.id).where(ClinicalEpisode.patient_id.in_(demo_patients))).all()
+            if demo_episodes:
+                db.execute(delete(ClinicalPlan).where(ClinicalPlan.episode_id.in_(demo_episodes)))
             db.execute(delete(ClinicalEpisode).where(ClinicalEpisode.patient_id.in_(demo_patients)))
         db.execute(delete(Room).where(Room.name.like("Demo%")))
         db.execute(delete(Provider).where(Provider.full_name.like("dr. Demo%")))

@@ -366,6 +366,9 @@ Implemented scope:
 - episode API endpoints
 - patient/appointment validation for episode linking
 - episode audit events
+- `ClinicalPlan` model
+- AI Assisted Clinical Plan proposal/review/confirm flow
+- clinical decision timeline
 - `/episodes`, `/episodes/new` and `/episodes/:id`
 - Patient Workspace episode tab
 - Appointment form episode selection
@@ -374,12 +377,14 @@ Implemented scope:
 - demo seed episodes
 - `docs/ASTRA_CLINICAL_MODEL.md`
 - `docs/EPISODE_ENGINE_MVP.md`
+- `docs/AI_ASSISTED_CLINICAL_PLAN_MVP.md`
 
 Still deliberately deferred:
 
 - Workflow Engine
 - Knowledge Engine
-- AI automation
+- autonomous AI automation
+- real AI provider integration
 - new clinical modules
 - documents/labs/prescriptions
 - real-data approval
