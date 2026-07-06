@@ -28,6 +28,7 @@ function unique(values) {
   "src/pages/Readiness.tsx",
   "src/components/AppShell.tsx",
   "src/components/AuditTimeline.tsx",
+  "src/components/ToastHost.tsx",
   "src/components/HelpHint.tsx",
   "src/components/ActionButton.tsx",
   "src/components/workspace/WorkspaceLayout.tsx",
@@ -44,6 +45,13 @@ assertIncludes("src/routes/AppRoutes.tsx", "/readiness");
 assertIncludes("src/components/AppShell.tsx", "/api/public-config");
 assertIncludes("src/components/AppShell.tsx", "Demo/development okruzenje");
 assertIncludes("src/components/AppShell.tsx", "Spremnost");
+assertIncludes("src/components/ToastHost.tsx", "Radnja je spremljena");
+assertIncludes("src/components/ToastHost.tsx", "Zatvori obavijest");
+assertIncludes("src/api/client.ts", "Pacijent je spremljen.");
+assertIncludes("src/api/client.ts", "Uplata je evidentirana.");
+assertIncludes("src/api/client.ts", "Status termina je azuriran.");
+assertIncludes("src/api/client.ts", "Prijava je istekla");
+assertIncludes("src/api/client.ts", "window.location.href = \"/login\"");
 assertIncludes("src/pages/AppointmentDetail.tsx", "Obavezni varijabilni materijal mora imati kolicinu.");
 assertIncludes("src/pages/PurchaseOrders.tsx", "Kolicina zaprimanja ne smije biti veca od preostale kolicine.");
 assertIncludes("src/pages/Invoices.tsx", "remaining");

@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { api } from "../api/client";
+import { api, notifyUser } from "../api/client";
 import { ActionButton } from "../components/ActionButton";
 import { AuditTimeline } from "../components/AuditTimeline";
 import { DataTable } from "../components/DataTable";
@@ -55,7 +55,16 @@ export function AppointmentDetail() {
 
   async function completeWithMaterials() {
     if (!appointment.data) return;
-    if (missingRequiredVariable || exceedsStock || terminalStatus) return;
+    if (missingRequiredVariable || exceedsStock || terminalStatus) {
+      const message = missingRequiredVariable
+        ? "Obavezni varijabilni materijal mora imati kolicinu."
+        : exceedsStock
+          ? "Kolicina prelazi dostupnu zalihu."
+          : "Termin je vec zavrsen ili otkazan.";
+      setError(message);
+      notifyUser(message, "error");
+      return;
+    }
     setError("");
     try {
       const lines = materials

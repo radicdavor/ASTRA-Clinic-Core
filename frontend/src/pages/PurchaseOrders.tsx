@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { api } from "../api/client";
+import { api, notifyUser } from "../api/client";
 import { ActionButton } from "../components/ActionButton";
 import { DataTable } from "../components/DataTable";
 import { useApi } from "../hooks/useApi";
@@ -56,6 +56,7 @@ export function PurchaseOrders() {
       const validationError = receiveValidationError(selected);
       if (validationError) {
         setError(validationError);
+        notifyUser(validationError, "error");
         return;
       }
       const lines = selected.lines

@@ -1,6 +1,6 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { api } from "../api/client";
+import { api, notifyUser } from "../api/client";
 import { ActionButton } from "../components/ActionButton";
 import { HelpHint } from "../components/HelpHint";
 import { Patient } from "../types";
@@ -43,10 +43,12 @@ export function PatientForm() {
     setError("");
     if (form.oib && !/^\d{11}$/.test(form.oib.trim())) {
       setError("OIB mora imati tocno 11 znamenki.");
+      notifyUser("OIB mora imati tocno 11 znamenki.", "error");
       return;
     }
     if (possibleDuplicates.length > 0 && !duplicatesConfirmed) {
       setError("Pronadeni su moguci duplikati. Provjerite identitet pacijenta i potvrdite nastavak.");
+      notifyUser("Pronadeni su moguci duplikati. Provjerite identitet pacijenta i potvrdite nastavak.", "error");
       return;
     }
     await api("/api/patients", {

@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import { api } from "../api/client";
+import { api, notifyUser } from "../api/client";
 import { ActionButton } from "../components/ActionButton";
 import { DataTable } from "../components/DataTable";
 import { useApi } from "../hooks/useApi";
@@ -31,6 +31,7 @@ export function Invoices() {
     setError("");
     if (!invoice.lines?.length || Number(invoice.total_amount) <= 0) {
       setError("Racun mora imati stavke i pozitivan iznos prije izdavanja.");
+      notifyUser("Racun mora imati stavke i pozitivan iznos prije izdavanja.", "error");
       return;
     }
     try {
@@ -45,10 +46,12 @@ export function Invoices() {
     setError("");
     if (["draft", "cancelled"].includes(invoice.status)) {
       setError("Uplata se moze evidentirati samo za izdan racun.");
+      notifyUser("Uplata se moze evidentirati samo za izdan racun.", "error");
       return;
     }
     if (Number(paymentAmount) > remaining) {
       setError("Uplata ne smije biti veca od preostalog iznosa.");
+      notifyUser("Uplata ne smije biti veca od preostalog iznosa.", "error");
       return;
     }
     try {

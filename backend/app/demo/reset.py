@@ -2,7 +2,7 @@ from sqlalchemy import delete, select
 
 from app.core.config import get_settings
 from app.core.database import SessionLocal
-from app.models.domain import Appointment, InventoryBatch, InventoryItem, Invoice, InvoiceLine, Patient, PaymentTransaction, PurchaseOrder, PurchaseOrderLine, Provider, Room, Service, ServiceMaterialTemplate, StockMovement, Supplier, User
+from app.models.domain import Appointment, InventoryBatch, InventoryItem, Invoice, InvoiceLine, Patient, PaymentTransaction, PurchaseOrder, PurchaseOrderLine, Provider, Room, Service, ServiceMaterialTemplate, StockMovement, Supplier
 
 
 def demo_patient_filter():
@@ -14,7 +14,6 @@ def main() -> None:
     if settings.app_env == "production":
         raise SystemExit("Demo reset is disabled in production.")
     with SessionLocal() as db:
-        demo_users = db.scalars(select(User).where(User.email.like("demo.%@astra.local"))).all()
         demo_patients = db.scalars(select(Patient.id).where(demo_patient_filter())).all()
         demo_items = db.scalars(select(InventoryItem.id).where(InventoryItem.sku.like("DEMO-%"))).all()
         demo_services = db.scalars(select(Service.id).where(Service.code.like("DEMO-%"))).all()
@@ -45,8 +44,6 @@ def main() -> None:
         db.execute(delete(Room).where(Room.name.like("Demo%")))
         db.execute(delete(Provider).where(Provider.full_name.like("dr. Demo%")))
         db.execute(delete(Patient).where(demo_patient_filter()))
-        for user in demo_users:
-            db.delete(user)
         db.commit()
     print("Demo data reset complete.")
 
