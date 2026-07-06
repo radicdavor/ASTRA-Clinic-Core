@@ -70,6 +70,8 @@ Izvan scopea:
 - workflow automations
 - epizodni engine kao primarni tok
 
+Phase A planning reference: `PROGRAM_1_PHASE_A_PATIENT_KNOWLEDGE_STABILIZATION_PLAN.md`.
+
 ## 5. Faza 2 - Findings Lifecycle Foundation
 
 Cilj:

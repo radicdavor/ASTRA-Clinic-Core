@@ -31,6 +31,7 @@ Pilot documents:
 - [Program 1 - ASTRA Clinical Workflow](docs/programs/PROGRAM_1_ASTRA_CLINICAL_WORKFLOW.md)
 - [Program 1 Glossary](docs/programs/PROGRAM_1_GLOSSARY.md)
 - [Program 1 Domain Object Mapping](docs/programs/PROGRAM_1_DOMAIN_OBJECT_MAPPING.md)
+- [Program 1 Phase A - Patient Knowledge Stabilization Plan](docs/programs/PROGRAM_1_PHASE_A_PATIENT_KNOWLEDGE_STABILIZATION_PLAN.md)
 - [Program 1 Review Pass 1 - Architectural Consistency Audit](docs/programs/PROGRAM_1_REVIEW_PASS_1_ARCHITECTURAL_CONSISTENCY_AUDIT.md)
 - [ASTRA Readiness Model](docs/ASTRA_READINESS_MODEL.md)
 - [ASTRA Operational Evidence Loop](docs/ASTRA_OPERATIONAL_EVIDENCE_LOOP.md)
