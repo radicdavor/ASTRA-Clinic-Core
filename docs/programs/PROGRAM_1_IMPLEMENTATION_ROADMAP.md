@@ -8,6 +8,8 @@ Ovaj roadmap prevodi Program 1 - ASTRA Clinical Workflow u redoslijed buduće im
 
 Roadmap ne ovlašćuje automatsku implementaciju svih stavki.
 
+Buduće implementacijske faze moraju koristiti kanonski rječnik definiran u `PROGRAM_1_GLOSSARY.md`.
+
 Prije svakog sprinta treba ponovno provjeriti:
 
 - je li promjena u skladu s Architecture Bible
@@ -213,4 +215,3 @@ Prvo znamo što je poznato.
 Zatim znamo što je nerazriješeno.
 
 Tek nakon toga organiziramo skrb u epizode i workflowe.
-
