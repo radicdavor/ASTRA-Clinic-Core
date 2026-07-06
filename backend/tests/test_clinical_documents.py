@@ -484,6 +484,12 @@ def test_patient_summary_draft_excludes_rejected_and_superseded_documents(client
     headers = auth_headers(client)
     p = patient(db)
     reviewed = clinical_document(db, p, physician_reviewed=True)
+    draft_document = clinical_document(db, p, physician_reviewed=False)
+    draft_document.review_status = "draft"
+    draft_document.key_findings = ["Draft tvrdnja"]
+    needs_review = clinical_document(db, p, physician_reviewed=False)
+    needs_review.review_status = "needs_physician_review"
+    needs_review.key_findings = ["Tvrdnja koja ceka pregled"]
     rejected = clinical_document(db, p, physician_reviewed=False)
     rejected.review_status = "rejected"
     rejected.key_findings = ["Odbijena tvrdnja"]
@@ -496,6 +502,8 @@ def test_patient_summary_draft_excludes_rejected_and_superseded_documents(client
     assert draft.status_code == 200
     body = draft.json()
     assert body["source_document_ids"] == [reviewed.id]
+    assert "Draft tvrdnja" not in body["known_conditions"] + body["key_findings"]
+    assert "Tvrdnja koja ceka pregled" not in body["known_conditions"] + body["key_findings"]
     assert "Odbijena tvrdnja" not in body["known_conditions"] + body["key_findings"]
     assert "Zamijenjena tvrdnja" not in body["known_conditions"] + body["key_findings"]
 
@@ -646,6 +654,24 @@ def test_latest_reviewed_summary_selection_is_deterministic(client, db, auth_set
     assert summary.status_code == 200
     assert summary.json()["reviewed_summary"]["id"] == newer.id
     assert summary.json()["reviewed_summary"]["summary_text"] == "Noviji sazetak"
+
+
+def test_latest_reviewed_summary_selection_uses_id_when_timestamp_matches(client, db, auth_setup):
+    headers = auth_headers(client)
+    p = patient(db)
+    first = PatientClinicalSummaryRecord(patient_id=p.id, summary_text="Prvi sazetak", status="reviewed", generated_by="physician", reviewed_by=1, reviewed_at=datetime(2026, 7, 1))
+    second = PatientClinicalSummaryRecord(patient_id=p.id, summary_text="Drugi sazetak", status="reviewed", generated_by="physician", reviewed_by=1, reviewed_at=datetime(2026, 7, 1))
+    db.add_all([first, second])
+    db.flush()
+    same_time = datetime(2026, 7, 2, 9, 0)
+    first.updated_at = same_time
+    second.updated_at = same_time
+    db.commit()
+
+    summary = client.get(f"/api/patients/{p.id}/clinical-summary", headers=headers)
+    assert summary.status_code == 200
+    assert summary.json()["reviewed_summary"]["id"] == second.id
+    assert summary.json()["reviewed_summary"]["summary_text"] == "Drugi sazetak"
 
 
 def test_rejected_summary_not_selected_as_reviewed_summary_if_rejection_exists(client, db, auth_setup):
