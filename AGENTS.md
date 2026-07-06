@@ -20,6 +20,10 @@ Before implementing any change, verify:
 
 If a requested feature is not aligned with the Architecture Bible, do not implement it without first explaining the conflict.
 
+For larger changes, also check:
+
+- `docs/V19_ARCHITECTURE_BIBLE_COMPLIANCE_GATE.md`
+
 ## Architecture Bible Changes
 
 Do not edit `docs/ASTRA_ARCHITECTURE_BIBLE.md` directly unless the maintainer explicitly asks for that exact edit.
@@ -49,4 +53,3 @@ All new functionality, APIs, modules, UI components and AI agents must follow th
 - AI as assistant, never decision-maker
 - audit for all important changes
 - demo/real-data safety by default
-
