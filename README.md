@@ -28,6 +28,7 @@ Pilot documents:
 - [Patient Clinical Knowledge Layer MVP](docs/PATIENT_CLINICAL_KNOWLEDGE_LAYER_MVP.md)
 - [Patient Clinical Summary MVP](docs/PATIENT_CLINICAL_SUMMARY_MVP.md)
 - [Reception and Resource Scheduling](docs/RECEPTION_AND_RESOURCE_SCHEDULING.md)
+- [Program 1 - ASTRA Clinical Workflow](docs/programs/PROGRAM_1_ASTRA_CLINICAL_WORKFLOW.md)
 - [ASTRA Readiness Model](docs/ASTRA_READINESS_MODEL.md)
 - [ASTRA Operational Evidence Loop](docs/ASTRA_OPERATIONAL_EVIDENCE_LOOP.md)
 - [V20 Readiness Cockpit](docs/V20_READINESS_COCKPIT.md)
