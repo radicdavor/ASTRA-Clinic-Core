@@ -22,6 +22,7 @@ docker compose exec backend python -m app.demo.reset
 Pilot documents:
 
 - [ASTRA Architecture Bible](docs/ASTRA_ARCHITECTURE_BIBLE.md)
+- [Codex Architecture Bible instructions](docs/CODEX_ARCHITECTURE_BIBLE_INSTRUCTIONS.md)
 - [Pilot runbook](docs/PILOT_RUNBOOK.md)
 - [Real data readiness checklist](docs/REAL_DATA_READINESS_CHECKLIST.md)
 - [v0.1 pilot release checklist](docs/V0_1_PILOT_RELEASE_CHECKLIST.md)
