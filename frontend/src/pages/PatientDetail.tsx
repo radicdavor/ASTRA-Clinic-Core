@@ -3,21 +3,41 @@ import { ActionButton } from "../components/ActionButton";
 import { AuditTimeline } from "../components/AuditTimeline";
 import { DataTable } from "../components/DataTable";
 import { HelpHint } from "../components/HelpHint";
+import { SourceBadge } from "../components/SourceBadge";
 import { StatusBadge } from "../components/StatusBadge";
 import { WorkspaceHeader } from "../components/workspace/WorkspaceHeader";
 import { WorkspaceLayout } from "../components/workspace/WorkspaceLayout";
 import { WorkspaceSection } from "../components/workspace/WorkspaceSection";
 import { WorkspaceTabs } from "../components/workspace/WorkspaceTabs";
 import { useApi } from "../hooks/useApi";
-import { Appointment, AuditLog, ClinicalEpisode, Invoice, Patient } from "../types";
+import { Appointment, AuditLog, ClinicalDocument, Invoice, Patient, PatientClinicalSummary, PatientKnowledgeItem } from "../types";
 import { formatDate } from "../utils/date";
 import { formatPatientIdentity, formatPatientName } from "../utils/patientIdentity";
-import { episodeTypeLabel } from "./Episodes";
+import { documentTypeLabel, sourceTypeLabel } from "./ClinicalDocuments";
+
+function KnowledgeCard({ title, items }: { title: string; items: PatientKnowledgeItem[] }) {
+  return (
+    <article className="knowledge-card">
+      <h3>{title}</h3>
+      {items.length === 0 ? <p>Nema pregledanih stavki.</p> : (
+        <ul>
+          {items.map((item, index) => (
+            <li key={`${title}-${index}`}>
+              {item.text}
+              <small>{item.sources.map((source) => <SourceBadge key={`${source.document_id}-${item.text}`} source={source} />)}</small>
+            </li>
+          ))}
+        </ul>
+      )}
+    </article>
+  );
+}
 
 export function PatientDetail() {
   const { id } = useParams();
   const patient = useApi<Patient | null>(`/api/patients/${id}`, null);
-  const episodes = useApi<ClinicalEpisode[]>(`/api/patients/${id}/episodes`, []);
+  const documents = useApi<ClinicalDocument[]>(`/api/patients/${id}/clinical-documents`, []);
+  const clinicalSummary = useApi<PatientClinicalSummary | null>(`/api/patients/${id}/clinical-summary`, null);
   const appointments = useApi<Appointment[]>(`/api/patients/${id}/appointments`, []);
   const invoices = useApi<Invoice[]>(`/api/patients/${id}/invoices`, []);
   const audit = useApi<AuditLog[]>(`/api/audit-log?entity_type=Patient&entity_id=${id}`, []);
@@ -30,13 +50,24 @@ export function PatientDetail() {
   const today = new Date().toISOString().slice(0, 10);
   const lastAppointment = [...sortedAppointments].reverse().find((appointment) => appointment.date <= today);
   const nextAppointment = sortedAppointments.find((appointment) => appointment.date >= today && !["completed", "cancelled", "no_show"].includes(appointment.status));
-  const activeEpisodes = episodes.data.filter((episode) => ["open", "active", "waiting"].includes(episode.status));
-  const sortedEpisodes = [...episodes.data].sort((a, b) => {
-    const rank = (episode: ClinicalEpisode) => (["open", "active", "waiting"].includes(episode.status) ? 0 : 1);
-    return rank(a) - rank(b) || b.start_date.localeCompare(a.start_date);
-  });
+  const reviewedDocuments = documents.data.filter((document) => document.physician_reviewed);
+  const awaitingReview = documents.data.filter((document) => !document.physician_reviewed);
+  const internalDocuments = documents.data.filter((document) => document.source_type === "internal");
+  const externalDocuments = documents.data.filter((document) => ["external", "uploaded", "scanned"].includes(document.source_type));
+  const procedures = documents.data.filter((document) => ["gastroscopy", "colonoscopy"].includes(document.document_type));
+  const pathology = documents.data.filter((document) => document.document_type === "pathology");
+  const laboratory = documents.data.filter((document) => document.document_type === "laboratory");
+  const imaging = documents.data.filter((document) => document.document_type === "radiology");
   const openInvoices = invoices.data.filter((invoice) => invoice.payment_status !== "paid");
   const unpaidTotal = openInvoices.reduce((sum, invoice) => sum + Number(invoice.total_amount || 0), 0);
+
+  const documentColumns = [
+    { header: "Dokument", render: (row: ClinicalDocument) => <Link to={`/clinical-documents/${row.id}`}>{row.title}</Link> },
+    { header: "Datum", render: (row: ClinicalDocument) => formatDate(row.document_date) },
+    { header: "Tip", render: (row: ClinicalDocument) => documentTypeLabel(row.document_type) },
+    { header: "Izvor", render: (row: ClinicalDocument) => sourceTypeLabel(row.source_type) },
+    { header: "Pregled", render: (row: ClinicalDocument) => row.physician_reviewed ? "Pregledano" : "Ceka pregled" }
+  ];
 
   if (patient.loading || !patient.data) {
     return <WorkspaceLayout><p>Ucitavanje pacijenta...</p></WorkspaceLayout>;
@@ -53,11 +84,11 @@ export function PatientDetail() {
             <ActionButton
               variant="create"
               className="primary"
-              onClick={() => { window.location.href = `/episodes/new?patient_id=${patient.data?.id}`; }}
-              helpTitle="Nova epizoda"
-              help="Otvara klinicki kontekst za odabranog pacijenta. Epizoda nije dijagnoza ni medicinska odluka."
+              onClick={() => { window.location.href = `/clinical-documents?patient_id=${patient.data?.id}`; }}
+              helpTitle="Dodaj dokument"
+              help="Dodaje interni ili vanjski dokument u pacijentov sloj klinickog znanja. AI sazetak mora biti pregledan prije ulaska u sazetak."
             >
-              Nova epizoda
+              Dodaj dokument
             </ActionButton>
             <ActionButton
               variant="create"
@@ -85,15 +116,15 @@ export function PatientDetail() {
       )}
 
       <div className="summary-strip">
-        <div><span>Aktivne epizode</span><strong>{activeEpisodes.length}</strong></div>
+        <div><span>Pregledani dokumenti</span><strong>{reviewedDocuments.length}</strong></div>
+        <div><span>Ceka pregled</span><strong>{awaitingReview.length}</strong></div>
         <div><span>Zadnji termin</span><strong>{lastAppointment ? `${formatDate(lastAppointment.date)} / ${lastAppointment.status}` : "-"}</strong></div>
         <div><span>Sljedeci termin</span><strong>{nextAppointment ? `${formatDate(nextAppointment.date)} / ${nextAppointment.status}` : "-"}</strong></div>
         <div><span>Otvoreni racuni</span><strong>{openInvoices.length ? `${openInvoices.length} / ${unpaidTotal.toFixed(2)} EUR` : "Nema"}</strong></div>
-        <div><span>Moguci duplikati</span><strong>{duplicateCandidates.length}</strong></div>
       </div>
 
       <div className="metrics">
-        <div><span>Epizode</span><strong>{episodes.data.length}</strong></div>
+        <div><span>Klinicki dokumenti</span><strong>{documents.data.length}</strong></div>
         <div><span>Termini</span><strong>{appointments.data.length}</strong></div>
         <div><span>Racuni</span><strong>{invoices.data.length}</strong></div>
         <div><span>Audit zapisi</span><strong>{audit.data.length}</strong></div>
@@ -118,26 +149,27 @@ export function PatientDetail() {
       <WorkspaceTabs
         tabs={[
           {
-            id: "episodes",
-            label: "Epizode",
+            id: "summary",
+            label: "Sazetak",
             content: (
-              <>
-                <div className="filters">
-                  <Link className="primary link-button" to={`/episodes/new?patient_id=${patient.data.id}`}>Nova epizoda</Link>
-                </div>
-                <DataTable rows={sortedEpisodes} columns={[
-                  { header: "Naziv", render: (row) => <Link to={`/episodes/${row.id}`}>{row.title}</Link> },
-                  { header: "Status", render: (row) => <StatusBadge status={row.status} /> },
-                  { header: "Tip", render: (row) => episodeTypeLabel(row.episode_type) },
-                  { header: "Prioritet", render: (row) => row.priority ?? "-" },
-                  { header: "Pocetak", render: (row) => formatDate(row.start_date) },
-                  { header: "Kraj", render: (row) => formatDate(row.end_date) },
-                  { header: "Termini", render: (row) => row.appointment_count ?? 0 },
-                  { header: "Sazetak", render: (row) => row.summary ?? "-" }
-                ]} />
-              </>
+              <div className="knowledge-grid">
+                <KnowledgeCard title="Poznati problemi" items={clinicalSummary.data?.known_problems ?? []} />
+                <KnowledgeCard title="Zavrseni postupci" items={clinicalSummary.data?.completed_procedures ?? []} />
+                <KnowledgeCard title="Patologija" items={clinicalSummary.data?.pathology ?? []} />
+                <KnowledgeCard title="Laboratorij" items={clinicalSummary.data?.laboratory ?? []} />
+                <KnowledgeCard title="Radiologija" items={clinicalSummary.data?.imaging ?? []} />
+                <KnowledgeCard title="Terapija" items={clinicalSummary.data?.current_therapy ?? []} />
+                <KnowledgeCard title="Otvorena pitanja" items={clinicalSummary.data?.open_questions ?? []} />
+                <KnowledgeCard title="Zadnje preporuke" items={clinicalSummary.data?.latest_recommendations ?? []} />
+              </div>
             )
           },
+          { id: "internal-documents", label: "Interni dokumenti", content: <DataTable rows={internalDocuments} columns={documentColumns} /> },
+          { id: "external-documents", label: "Vanjski dokumenti", content: <DataTable rows={externalDocuments} columns={documentColumns} /> },
+          { id: "procedures", label: "Postupci", content: <DataTable rows={procedures} columns={documentColumns} /> },
+          { id: "pathology", label: "Patologija", content: <DataTable rows={pathology} columns={documentColumns} /> },
+          { id: "laboratory", label: "Laboratorij", content: <DataTable rows={laboratory} columns={documentColumns} /> },
+          { id: "imaging", label: "Slikovna obrada", content: <DataTable rows={imaging} columns={documentColumns} /> },
           {
             id: "appointments",
             label: "Termini",

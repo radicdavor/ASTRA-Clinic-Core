@@ -1,5 +1,5 @@
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
-import { BookOpenText, Boxes, CalendarDays, ClipboardCheck, ClipboardList, FileText, KeyRound, LayoutDashboard, LogOut, PackageSearch, Search, Settings, ShieldCheck, Stethoscope, Users } from "lucide-react";
+import { BookOpenText, Boxes, CalendarDays, ClipboardCheck, ClipboardList, FileSearch, FileText, KeyRound, LayoutDashboard, LogOut, PackageSearch, Search, Settings, ShieldCheck, Stethoscope, Users } from "lucide-react";
 import { clearToken } from "../api/client";
 import { useApi } from "../hooks/useApi";
 import { ToastHost } from "./ToastHost";
@@ -7,6 +7,7 @@ import { ToastHost } from "./ToastHost";
 const nav = [
   { to: "/", label: "Nadzorna ploca", icon: LayoutDashboard },
   { to: "/patients", label: "Pacijenti", icon: Users },
+  { to: "/clinical-documents", label: "Dokumenti", icon: FileSearch },
   { to: "/episodes", label: "Epizode", icon: BookOpenText },
   { to: "/appointments", label: "Termini", icon: CalendarDays },
   { to: "/services", label: "Usluge", icon: Stethoscope },

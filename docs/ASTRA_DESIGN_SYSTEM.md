@@ -93,3 +93,11 @@ Suggested label:
 > AI prijedlog
 
 AI may help organize, remind, analyze and speed up work. A human decides.
+
+## Source Transparency
+
+Clinical knowledge shown in Patient Workspace must link to source documents.
+
+AI-assisted clinical statements without a source document must not be shown as official patient knowledge.
+
+Unreviewed AI extraction is a pending proposal, not a clinical fact.

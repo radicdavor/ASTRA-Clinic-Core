@@ -160,6 +160,31 @@ class ClinicalPlan(TimestampMixin, Base):
     confirmer: Mapped[User | None] = relationship()
 
 
+class ClinicalDocument(TimestampMixin, Base):
+    __tablename__ = "clinical_documents"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    patient_id: Mapped[int] = mapped_column(ForeignKey("patients.id"), index=True)
+    source_type: Mapped[str] = mapped_column(String(40), index=True)
+    document_type: Mapped[str] = mapped_column(String(60), index=True)
+    origin: Mapped[str | None] = mapped_column(String(180))
+    document_date: Mapped[date | None] = mapped_column(Date, index=True)
+    title: Mapped[str] = mapped_column(String(220), index=True)
+    author: Mapped[str | None] = mapped_column(String(160))
+    institution: Mapped[str | None] = mapped_column(String(180))
+    raw_text: Mapped[str | None] = mapped_column(Text)
+    ai_summary: Mapped[str | None] = mapped_column(Text)
+    key_findings: Mapped[list | None] = mapped_column(JSON)
+    recommendations: Mapped[list | None] = mapped_column(JSON)
+    physician_reviewed: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
+    reviewed_by: Mapped[int | None] = mapped_column(ForeignKey("users.id"))
+    reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    attachment_path: Mapped[str | None] = mapped_column(Text)
+    appointment_id: Mapped[int | None] = mapped_column(ForeignKey("appointments.id"))
+    patient: Mapped[Patient] = relationship()
+    appointment: Mapped[Appointment | None] = relationship()
+    reviewer: Mapped[User | None] = relationship()
+
+
 class Service(TimestampMixin, Base):
     __tablename__ = "services"
     id: Mapped[int] = mapped_column(primary_key=True)

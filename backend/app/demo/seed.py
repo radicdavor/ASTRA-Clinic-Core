@@ -1,4 +1,4 @@
-from datetime import date, time, timedelta
+from datetime import date, datetime, time, timedelta, timezone
 from decimal import Decimal
 
 from sqlalchemy import select
@@ -7,6 +7,7 @@ from app.core.database import SessionLocal
 from app.core.security import hash_password
 from app.models.domain import (
     Appointment,
+    ClinicalDocument,
     ClinicalEpisode,
     ClinicalPlan,
     InventoryBatch,
@@ -127,6 +128,57 @@ def main() -> None:
 
         if db.scalar(select(Appointment).where(Appointment.patient_id == patient.id, Appointment.date == date.today())) is None:
             db.add(Appointment(patient_id=patient.id, provider_id=provider.id, room_id=room.id, service_id=service.id, episode_id=gerb_episode.id, date=date.today(), start_time=time(9, 0), end_time=time(9, 30), duration_minutes=30, status="scheduled", source="manual"))
+
+        demo_documents = [
+            {
+                "title": "Vanjska gastroskopija 03/2025",
+                "source_type": "external",
+                "document_type": "gastroscopy",
+                "origin": "Privatna poliklinika",
+                "document_date": date(2025, 3, 12),
+                "institution": "Privatna poliklinika",
+                "raw_text": "Demo vanjski nalaz: gastroskopija opisuje refluks/GERB. H. pylori negativan. Terapija esomeprazol.",
+                "ai_summary": "AI prijedlog pregledan od lijecnika: vanjski nalaz navodi GERB/refluks i H. pylori negativan status.",
+                "key_findings": ["GERB/refluks naveden u dokumentu", "H. pylori status naveden u dokumentu", "Terapija inhibitorom protonske pumpe spomenuta u dokumentu"],
+                "recommendations": ["Nastaviti pracenje simptoma i terapiju prema odluci lijecnika"],
+            },
+            {
+                "title": "Demo patologija polipa",
+                "source_type": "uploaded",
+                "document_type": "pathology",
+                "origin": "Uploaded by patient",
+                "document_date": date.today() - timedelta(days=7),
+                "institution": "Demo laboratorij",
+                "raw_text": "Demo patologija: tubularni adenom. Preporucena kontrola prema lijecnickoj procjeni.",
+                "ai_summary": "AI prijedlog pregledan od lijecnika: dokument navodi tubularni adenom i potrebu kontrole.",
+                "key_findings": ["Prethodni polip/adenom naveden u dokumentu", "Patologija/biopsija spomenuta u dokumentu"],
+                "recommendations": ["Dokument sadrzi preporuku ili kontrolu koju treba lijecnik pregledati"],
+            },
+            {
+                "title": "Demo laboratorij ceka pregled",
+                "source_type": "uploaded",
+                "document_type": "laboratory",
+                "origin": "Uploaded by patient",
+                "document_date": date.today(),
+                "institution": "Demo laboratorij",
+                "raw_text": "Demo laboratorijski nalaz ceka se lijecnicki pregled.",
+                "ai_summary": "AI prijedlog jos nije pregledan.",
+                "key_findings": ["Laboratorijski nalaz je zaprimljen"],
+                "recommendations": ["Postoji otvoreno pitanje koje ceka nalaz ili rucni pregled"],
+                "physician_reviewed": False,
+            },
+        ]
+        for values in demo_documents:
+            document = db.scalar(select(ClinicalDocument).where(ClinicalDocument.patient_id == patient.id, ClinicalDocument.title == values["title"]))
+            reviewed = values.pop("physician_reviewed", True)
+            if document is None:
+                document = ClinicalDocument(patient_id=patient.id, physician_reviewed=reviewed, reviewed_by=None, reviewed_at=datetime.now(timezone.utc) if reviewed else None, **values)
+                db.add(document)
+            else:
+                for field, value in values.items():
+                    setattr(document, field, value)
+                document.physician_reviewed = reviewed
+                document.reviewed_at = datetime.now(timezone.utc) if reviewed else None
 
         order = db.scalar(select(PurchaseOrder).where(PurchaseOrder.supplier_id == supplier.id, PurchaseOrder.notes == "DEMO_DATA"))
         if order is None:

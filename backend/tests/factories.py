@@ -1,7 +1,7 @@
 from datetime import date, time
 from decimal import Decimal
 
-from app.models.domain import Appointment, ClinicalEpisode, ClinicalPlan, InventoryBatch, InventoryItem, Patient, Provider, Room, Service, StockLocation
+from app.models.domain import Appointment, ClinicalDocument, ClinicalEpisode, ClinicalPlan, InventoryBatch, InventoryItem, Patient, Provider, Room, Service, StockLocation
 
 
 def patient(db, first_name="Test", last_name="Patient"):
@@ -85,6 +85,26 @@ def clinical_plan(db, episode_obj=None, status="draft", physician_confirmed=Fals
         physician_conclusion="Test physician conclusion",
         ai_confidence=Decimal("0.91"),
         physician_confirmed=physician_confirmed,
+    )
+    db.add(obj)
+    db.flush()
+    return obj
+
+
+def clinical_document(db, patient_obj=None, physician_reviewed=True):
+    patient_obj = patient_obj or patient(db)
+    obj = ClinicalDocument(
+        patient_id=patient_obj.id,
+        source_type="external",
+        document_type="gastroscopy",
+        origin="Test institution",
+        document_date=date(2026, 7, 5),
+        title="Test gastroscopy",
+        raw_text="GERB refluks. H. pylori negativan. Esomeprazol terapija.",
+        ai_summary="Reviewed test summary",
+        key_findings=["GERB/refluks naveden u dokumentu", "H. pylori status naveden u dokumentu"],
+        recommendations=["Kontrola prema odluci lijecnika"],
+        physician_reviewed=physician_reviewed,
     )
     db.add(obj)
     db.flush()

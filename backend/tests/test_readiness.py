@@ -80,8 +80,9 @@ def test_readiness_checks_keep_operational_evidence_contract(client, db, auth_se
         "/audit-log",
         "/inventory",
         "/invoices",
-        "/api-keys",
-    }
+            "/api-keys",
+            "/clinical-documents",
+        }
 
     assert checks
     for check in checks:

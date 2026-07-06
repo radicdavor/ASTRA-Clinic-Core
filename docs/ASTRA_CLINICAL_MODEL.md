@@ -1,14 +1,18 @@
 # ASTRA Clinical Model
 
-Status: Episode Engine Foundation
+Status: Patient Clinical Knowledge Layer foundation
 
 ASTRA Clinical Model defines how medicine exists inside ASTRA Clinic Core during demo/pilot development. It is not production approval, EMR certification, medical-device certification or permission to use real patient data.
+
+Direction update: Patient Clinical Knowledge Layer is the first active architectural program. Clinical Episodes remain a useful future structure, but patient knowledge from reviewed internal and external documents comes first.
 
 ## 1. Purpose
 
 The clinical model gives ASTRA one language for clinical context.
 
-Its first structural unit is Clinical Episode: a patient-centered story around a problem, goal, treatment path or follow-up process.
+Its first active structural unit is Clinical Document: a sourced statement of what is known about the patient.
+
+Clinical Episode is postponed as the primary product center until ASTRA can first answer what is known about the patient regardless of where the information originated.
 
 ASTRA organizes, documents and connects context. The clinician decides.
 
@@ -25,6 +29,16 @@ Clinical Episode is the clinical story.
 It is not an appointment, diagnosis, invoice or workflow. It gathers the context around why care is happening and what remains open.
 
 Examples include GERB/reflux follow-up, H. pylori eradication, colon polyp surveillance, post-polypectomy follow-up, metabolic care, aesthetic treatment or preventive check-up.
+
+## 3a. Clinical Document
+
+Clinical Document is a source of patient knowledge.
+
+It may be internal, external, scanned or uploaded. It may represent consultation, gastroscopy, colonoscopy, pathology, laboratory, radiology, discharge, referral or another clinical source.
+
+AI may extract a structured summary, key findings and recommendations from the document, but the information becomes part of the patient knowledge summary only after physician review.
+
+Every statement in the patient summary must link back to one or more Clinical Documents.
 
 ## 4. Problem
 

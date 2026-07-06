@@ -96,6 +96,13 @@ th { color: #667085; font-size: 0.78rem; text-transform: uppercase; letter-spaci
 .status-in_progress { background: #fff7db; color: #a16207; }
 .status-completed { background: #e7f8ed; color: #15803d; }
 .status-cancelled { background: #feecec; color: #b42318; }
+.source-badge { display: inline-flex; align-items: center; min-height: 26px; border: 1px solid #bfdbfe; border-radius: 8px; background: #eff6ff; color: #1d4ed8; padding: 0 8px; font-size: 0.8rem; font-weight: 800; margin: 3px 5px 3px 0; }
+.knowledge-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.knowledge-card { border: 1px solid #e3e8ef; border-radius: 8px; background: #ffffff; padding: 14px; display: grid; gap: 10px; align-content: start; }
+.knowledge-card h3 { margin: 0; color: #172033; font-size: 0.95rem; }
+.knowledge-card ul { margin: 0; padding-left: 18px; display: grid; gap: 8px; }
+.knowledge-card li { color: #172033; }
+.knowledge-card small { display: block; color: #667085; margin-top: 4px; }
 .readiness-pill, .readiness-badge { display: inline-flex; align-items: center; min-height: 30px; border-radius: 8px; padding: 0 10px; font-weight: 800; white-space: nowrap; }
 .readiness-pill { min-height: 38px; }
 .readiness-ready_for_demo, .readiness-check-ok { background: #e7f8ed; color: #15803d; }
@@ -182,6 +189,7 @@ th { color: #667085; font-size: 0.78rem; text-transform: uppercase; letter-spaci
   .sidebar { position: static; }
   .sidebar nav { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .dashboard-grid, .metrics, .summary-strip { grid-template-columns: 1fr; }
+  .knowledge-grid { grid-template-columns: 1fr; }
   .toast-host { top: 12px; }
   .topbar { padding: 0 16px; }
   .page { padding: 18px; }

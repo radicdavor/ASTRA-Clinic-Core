@@ -49,6 +49,14 @@ It includes:
 
 - patient identity
 - OIB/date/phone/email display
+- clinical knowledge summary from reviewed Clinical Documents
+- source links for every AI-assisted knowledge statement
+- internal documents
+- external documents
+- procedures
+- pathology
+- laboratory
+- imaging
 - appointments
 - invoices
 - stock/material context through appointments where feasible
@@ -58,6 +66,8 @@ It includes:
 - create appointment action
 
 Appointments must use a resolved `patient_id`; no appointment may be made for an unknown patient.
+
+The Patient Workspace now prioritizes knowledge before workflow. The first question is: what do we know about this patient, what remains unresolved, and where did each statement come from?
 
 ## 5. Appointment Workspace
 

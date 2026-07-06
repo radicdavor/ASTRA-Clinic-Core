@@ -23,6 +23,8 @@ CLINICAL_PLAN_NEXT_ACTIONS = {
     "stop_therapy",
     "episode_completed",
 }
+CLINICAL_DOCUMENT_SOURCE_TYPES = {"internal", "external", "scanned", "uploaded"}
+CLINICAL_DOCUMENT_TYPES = {"consultation", "gastroscopy", "colonoscopy", "pathology", "laboratory", "radiology", "discharge", "referral", "other"}
 
 
 class ORMModel(BaseModel):
@@ -306,6 +308,133 @@ class ClinicalDecisionTimelineItem(BaseModel):
     summary: str | None = None
     source: str | None = None
     created_at: DateTimeType
+
+
+class ClinicalDocumentBase(BaseModel):
+    patient_id: int
+    source_type: str = "uploaded"
+    document_type: str = "other"
+    origin: str | None = None
+    document_date: DateType | None = None
+    title: str
+    author: str | None = None
+    institution: str | None = None
+    raw_text: str | None = None
+    ai_summary: str | None = None
+    key_findings: list[str] | None = None
+    recommendations: list[str] | None = None
+    attachment_path: str | None = None
+    appointment_id: int | None = None
+
+    @field_validator("source_type")
+    @classmethod
+    def validate_source_type(cls, value: str) -> str:
+        if value not in CLINICAL_DOCUMENT_SOURCE_TYPES:
+            raise ValueError("Nepoznat izvor dokumenta")
+        return value
+
+    @field_validator("document_type")
+    @classmethod
+    def validate_document_type(cls, value: str) -> str:
+        if value not in CLINICAL_DOCUMENT_TYPES:
+            raise ValueError("Nepoznat tip dokumenta")
+        return value
+
+
+class ClinicalDocumentCreate(ClinicalDocumentBase):
+    pass
+
+
+class ClinicalDocumentUpload(BaseModel):
+    patient_id: int
+    title: str
+    source_type: str = "uploaded"
+    document_type: str = "other"
+    origin: str | None = "Uploaded by patient"
+    document_date: DateType | None = None
+    author: str | None = None
+    institution: str | None = None
+    raw_text: str | None = None
+    attachment_name: str | None = None
+    appointment_id: int | None = None
+
+    @field_validator("source_type")
+    @classmethod
+    def validate_source_type(cls, value: str) -> str:
+        return ClinicalDocumentBase.validate_source_type(value)
+
+    @field_validator("document_type")
+    @classmethod
+    def validate_document_type(cls, value: str) -> str:
+        return ClinicalDocumentBase.validate_document_type(value)
+
+
+class ClinicalDocumentUpdate(BaseModel):
+    source_type: str | None = None
+    document_type: str | None = None
+    origin: str | None = None
+    document_date: DateType | None = None
+    title: str | None = None
+    author: str | None = None
+    institution: str | None = None
+    raw_text: str | None = None
+    ai_summary: str | None = None
+    key_findings: list[str] | None = None
+    recommendations: list[str] | None = None
+    attachment_path: str | None = None
+    appointment_id: int | None = None
+
+    @field_validator("source_type")
+    @classmethod
+    def validate_source_type(cls, value: str | None) -> str | None:
+        if value is not None and value not in CLINICAL_DOCUMENT_SOURCE_TYPES:
+            raise ValueError("Nepoznat izvor dokumenta")
+        return value
+
+    @field_validator("document_type")
+    @classmethod
+    def validate_document_type(cls, value: str | None) -> str | None:
+        if value is not None and value not in CLINICAL_DOCUMENT_TYPES:
+            raise ValueError("Nepoznat tip dokumenta")
+        return value
+
+
+class ClinicalDocumentOut(ClinicalDocumentBase, ORMModel):
+    id: int
+    physician_reviewed: bool
+    reviewed_by: int | None = None
+    reviewed_at: DateTimeType | None = None
+    patient: PatientOut | None = None
+    created_at: DateTimeType
+    updated_at: DateTimeType
+
+
+class PatientKnowledgeSource(BaseModel):
+    document_id: int
+    title: str
+    document_type: str
+    source_type: str
+    origin: str | None = None
+    document_date: DateType | None = None
+
+
+class PatientKnowledgeItem(BaseModel):
+    text: str
+    sources: list[PatientKnowledgeSource]
+
+
+class PatientClinicalSummary(BaseModel):
+    patient_id: int
+    generated_from_reviewed_documents: int
+    awaiting_review_count: int
+    known_problems: list[PatientKnowledgeItem]
+    completed_procedures: list[PatientKnowledgeItem]
+    pathology: list[PatientKnowledgeItem]
+    laboratory: list[PatientKnowledgeItem]
+    imaging: list[PatientKnowledgeItem]
+    current_therapy: list[PatientKnowledgeItem]
+    open_questions: list[PatientKnowledgeItem]
+    latest_recommendations: list[PatientKnowledgeItem]
 
 
 class AppointmentCreate(BaseModel):

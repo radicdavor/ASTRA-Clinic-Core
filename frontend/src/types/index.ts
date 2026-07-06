@@ -72,6 +72,58 @@ export type ClinicalDecisionTimelineItem = {
   created_at: string;
 };
 
+export type ClinicalDocument = {
+  id: number;
+  patient_id: number;
+  source_type: string;
+  document_type: string;
+  origin?: string | null;
+  document_date?: string | null;
+  title: string;
+  author?: string | null;
+  institution?: string | null;
+  raw_text?: string | null;
+  ai_summary?: string | null;
+  key_findings?: string[] | null;
+  recommendations?: string[] | null;
+  physician_reviewed: boolean;
+  reviewed_by?: number | null;
+  reviewed_at?: string | null;
+  attachment_path?: string | null;
+  appointment_id?: number | null;
+  patient?: Patient;
+  created_at: string;
+  updated_at: string;
+};
+
+export type PatientKnowledgeSource = {
+  document_id: number;
+  title: string;
+  document_type: string;
+  source_type: string;
+  origin?: string | null;
+  document_date?: string | null;
+};
+
+export type PatientKnowledgeItem = {
+  text: string;
+  sources: PatientKnowledgeSource[];
+};
+
+export type PatientClinicalSummary = {
+  patient_id: number;
+  generated_from_reviewed_documents: number;
+  awaiting_review_count: number;
+  known_problems: PatientKnowledgeItem[];
+  completed_procedures: PatientKnowledgeItem[];
+  pathology: PatientKnowledgeItem[];
+  laboratory: PatientKnowledgeItem[];
+  imaging: PatientKnowledgeItem[];
+  current_therapy: PatientKnowledgeItem[];
+  open_questions: PatientKnowledgeItem[];
+  latest_recommendations: PatientKnowledgeItem[];
+};
+
 export type Appointment = {
   id: number;
   patient_id: number;

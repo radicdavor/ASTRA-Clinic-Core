@@ -389,3 +389,25 @@ Still deliberately deferred:
 - documents/labs/prescriptions
 - real-data approval
 - real Croatian fiscalization
+
+## 19. Direction Update: Patient Clinical Knowledge First
+
+The first active post-v0.1 architectural program is now **Patient Clinical Knowledge Layer**.
+
+Episode Engine remains present in the codebase as an already implemented structural layer, but it is not the primary product direction for the next program. Patient knowledge often originates outside the clinic: external gastroscopy, colonoscopy, pathology, laboratory, imaging, discharge letters and uploaded reports.
+
+ASTRA must first answer:
+
+> What do we currently know about this patient, and where did that knowledge come from?
+
+Only reviewed Clinical Documents may contribute to the official patient summary. Every AI-assisted statement must reference one or more source documents. Workflow Engine, Knowledge Engine, autonomous AI automation and new clinical modules remain deferred.
+
+Updated program sequence:
+
+1. ASTRA Patient Clinical Knowledge Layer
+2. ASTRA Episode Engine stabilization, only after patient knowledge is stable
+3. ASTRA Workflow Engine
+4. ASTRA Knowledge Engine
+5. Clinical Module SDK
+6. Gastroenterology Suite v1
+7. ASTRA AI Operating Layer
