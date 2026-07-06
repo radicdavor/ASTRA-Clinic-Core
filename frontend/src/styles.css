@@ -111,6 +111,12 @@ th { color: #667085; font-size: 0.78rem; text-transform: uppercase; letter-spaci
 .knowledge-sidebar strong { display: block; color: #172033; font-size: 1.2rem; }
 .knowledge-sidebar section { display: grid; gap: 8px; border-top: 1px solid #eef2f6; padding-top: 10px; }
 .knowledge-sidebar section a, .knowledge-sidebar section p { display: block; color: #172033; border: 1px solid #eef2f6; border-radius: 8px; background: #fbfcfe; padding: 8px; }
+.knowledge-sidebar small { display: block; margin-top: 6px; }
+.selected-patient-card, .patient-search-results { display: grid; gap: 8px; }
+.selected-patient-card { border: 1px solid #b7d8c2; border-radius: 8px; background: #f1fbf4; padding: 10px; }
+.selected-patient-card span, .patient-search-results span { display: block; color: #667085; font-size: 0.85rem; }
+.patient-search-results button { width: 100%; text-align: left; border: 1px solid #d9e2ec; border-radius: 8px; background: #ffffff; padding: 10px; cursor: pointer; }
+.patient-search-results button:hover { border-color: #0f766e; }
 .readiness-pill, .readiness-badge { display: inline-flex; align-items: center; min-height: 30px; border-radius: 8px; padding: 0 10px; font-weight: 800; white-space: nowrap; }
 .readiness-pill { min-height: 38px; }
 .readiness-ready_for_demo, .readiness-check-ok { background: #e7f8ed; color: #15803d; }

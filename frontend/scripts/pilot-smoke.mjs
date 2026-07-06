@@ -146,9 +146,13 @@ assertIncludes("src/pages/EpisodeDetail.tsx", "physician_conclusion");
 assertIncludes("src/types/index.ts", "physician_conclusion");
 assertIncludes("src/pages/EpisodeDetail.tsx", "Ne mijenja epizodu");
 assertIncludes("src/pages/ClinicalDocuments.tsx", "/api/clinical-documents/upload");
+assertIncludes("src/pages/ClinicalDocuments.tsx", "Pretraga po imenu, OIB-u, telefonu ili e-posti");
+assertIncludes("src/pages/ClinicalDocuments.tsx", "selectedPatient");
 assertIncludes("src/pages/ClinicalDocumentDetail.tsx", "/extract");
 assertIncludes("src/pages/ClinicalDocumentDetail.tsx", "/review");
 assertIncludes("src/pages/ClinicalDocumentDetail.tsx", "/reject-summary");
+assertIncludes("src/pages/ClinicalDocumentDetail.tsx", "Spremi izmjene");
+assertIncludes("src/pages/ClinicalDocumentDetail.tsx", "AI prijedlog, nije sluzbeno");
 assertIncludes("src/components/ActionButton.tsx", "requiresConfirm");
 assertIncludes("src/components/ActionButton.tsx", "confirmMessage");
 assertIncludes("src/utils/patientIdentity.ts", "formatPatientIdentity");
@@ -165,6 +169,8 @@ assertIncludes("src/pages/Readiness.tsx", "Sljedeci korak");
 assertIncludes("src/pages/Readiness.tsx", "decision_impact");
 assertIncludes("src/pages/Readiness.tsx", "Blokira demo");
 assertIncludes("src/pages/Readiness.tsx", "readiness-detail");
+assertIncludes("src/pages/Readiness.tsx", "Nepregledani dokumenti ne ulaze u sluzbeni sazetak pacijenta.");
+assertIncludes("../backend/app/api/routes/core.py", "/clinical-documents?physician_reviewed=false");
 
 const backendCore = read("../backend/app/api/routes/core.py");
 const appRoutes = read("src/routes/AppRoutes.tsx");
@@ -176,7 +182,8 @@ if (readinessTargetPaths.length === 0) {
 }
 
 for (const targetPath of readinessTargetPaths) {
-  if (!appRoutes.includes(`path="${targetPath}"`)) {
+  const routePath = targetPath.split("?")[0];
+  if (!appRoutes.includes(`path="${routePath}"`)) {
     throw new Error(`Readiness target path ${targetPath} is not registered in AppRoutes.tsx`);
   }
 }

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { api } from "../api/client";
 import { ActionButton } from "../components/ActionButton";
@@ -11,13 +11,24 @@ import { useApi } from "../hooks/useApi";
 import { AuditLog, ClinicalDocument } from "../types";
 import { formatDate, formatDateTime } from "../utils/date";
 import { formatPatientName } from "../utils/patientIdentity";
-import { documentTypeLabel, sourceTypeLabel } from "./ClinicalDocuments";
+import { documentTypeLabel, reviewStatusLabel, sourceTypeLabel } from "./ClinicalDocuments";
 
 export function ClinicalDocumentDetail() {
   const { id } = useParams();
   const document = useApi<ClinicalDocument | null>(`/api/clinical-documents/${id}`, null);
   const audit = useApi<AuditLog[]>(`/api/audit-log?entity_type=ClinicalDocument&entity_id=${id}`, []);
   const [rawText, setRawText] = useState("");
+  const [summaryDraft, setSummaryDraft] = useState("");
+  const [findingsDraft, setFindingsDraft] = useState("");
+  const [recommendationsDraft, setRecommendationsDraft] = useState("");
+
+  useEffect(() => {
+    if (!document.data) return;
+    setRawText(document.data.raw_text ?? "");
+    setSummaryDraft(document.data.ai_summary ?? "");
+    setFindingsDraft((document.data.key_findings ?? []).join("\n"));
+    setRecommendationsDraft((document.data.recommendations ?? []).join("\n"));
+  }, [document.data?.id, document.data?.updated_at]);
 
   async function refresh(updated: ClinicalDocument) {
     document.setData(updated);
@@ -32,6 +43,18 @@ export function ClinicalDocumentDetail() {
   async function runExtraction() {
     if (!document.data) return;
     await refresh(await api<ClinicalDocument>(`/api/clinical-documents/${document.data.id}/extract`, { method: "POST" }));
+  }
+
+  async function saveExtractionEdits() {
+    if (!document.data) return;
+    await refresh(await api<ClinicalDocument>(`/api/clinical-documents/${document.data.id}`, {
+      method: "PATCH",
+      body: JSON.stringify({
+        ai_summary: summaryDraft || null,
+        key_findings: findingsDraft.split("\n").map((item) => item.trim()).filter(Boolean),
+        recommendations: recommendationsDraft.split("\n").map((item) => item.trim()).filter(Boolean)
+      })
+    }));
   }
 
   async function review() {
@@ -52,7 +75,7 @@ export function ClinicalDocumentDetail() {
       <WorkspaceHeader
         title={current.title}
         subtitle={`${documentTypeLabel(current.document_type)} / ${sourceTypeLabel(current.source_type)} / ${formatDate(current.document_date)}`}
-        badge={<span className={`readiness-badge ${current.physician_reviewed ? "readiness-check-ok" : "readiness-check-warning"}`}>{current.physician_reviewed ? "Pregledano" : "Ceka pregled"}</span>}
+        badge={<span className={`readiness-badge ${current.physician_reviewed ? "readiness-check-ok" : "readiness-check-warning"}`}>{reviewStatusLabel(current.review_status)}</span>}
         actions={
           <>
             <ActionButton variant="ai" onClick={runExtraction} helpTitle="AI ekstrakcija" help="Pokrece placeholder ekstrakciju iz teksta. Rezultat nije sluzben dok ga lijecnik ne pregleda.">
@@ -82,13 +105,19 @@ export function ClinicalDocumentDetail() {
       <div className="dashboard-grid">
         <WorkspaceSection title="Strukturirano znanje">
           <div className="clinical-plan-card ai-suggestion">
-            <div><span>AI prijedlog</span><strong>{current.ai_summary ?? "Nema AI sazetka"}</strong></div>
-            <p><span>Kljucni nalazi</span><strong>{current.key_findings?.join("; ") || "-"}</strong></p>
-            <p><span>Preporuke</span><strong>{current.recommendations?.join("; ") || "-"}</strong></p>
+            <div><span>AI prijedlog, nije sluzbeno dok lijecnik ne potvrdi</span><strong>{current.physician_reviewed ? "Pregledano i potvrdeno" : "Ceka lijecnicki pregled"}</strong></div>
+            <label>AI sazetak<textarea rows={4} value={summaryDraft} onChange={(event) => setSummaryDraft(event.target.value)} /></label>
+            <label>Kljucni nalazi<textarea rows={5} value={findingsDraft} onChange={(event) => setFindingsDraft(event.target.value)} placeholder="Jedna stavka po retku" /></label>
+            <label>Preporuke<textarea rows={5} value={recommendationsDraft} onChange={(event) => setRecommendationsDraft(event.target.value)} placeholder="Jedna stavka po retku" /></label>
+            <div className="quick-actions">
+              <ActionButton variant="update" onClick={saveExtractionEdits} helpTitle="Spremi AI prijedlog" help="Sprema uredjene strukturirane stavke i vraca dokument u stanje koje ceka lijecnicku potvrdu.">
+                Spremi izmjene
+              </ActionButton>
+            </div>
           </div>
         </WorkspaceSection>
         <WorkspaceSection title="Originalni tekst">
-          <textarea rows={10} value={rawText || current.raw_text || ""} onChange={(event) => setRawText(event.target.value)} />
+          <textarea rows={10} value={rawText} onChange={(event) => setRawText(event.target.value)} />
           <div className="quick-actions">
             <ActionButton variant="update" onClick={updateText} helpTitle="Spremi tekst" help="Sprema OCR ili rucno uneseni tekst i vraca dokument u status koji ceka pregled.">
               Spremi tekst

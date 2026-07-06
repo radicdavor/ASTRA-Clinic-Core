@@ -4,6 +4,11 @@ Status: experimental/deferred. Foundation exists for compatibility with earlier 
 
 Primary direction is now Patient Clinical Knowledge Layer. Do not continue building episode-centric workflows until patient-centric knowledge, source-linked summaries and document review are stable.
 
+The governing patient knowledge documents are:
+
+- `docs/ASTRA_PATIENT_CLINICAL_KNOWLEDGE_MODEL.md`
+- `docs/PATIENT_CLINICAL_KNOWLEDGE_LAYER_MVP.md`
+
 Episode Engine adds Clinical Episode as an experimental clinical story object in ASTRA Clinic Core.
 
 ## What It Does Now

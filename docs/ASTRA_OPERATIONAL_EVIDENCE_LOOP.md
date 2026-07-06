@@ -29,7 +29,8 @@ A readiness check should guide the user to the most useful screen:
 - unpaid invoice -> Invoices
 - missing audit context -> Audit log
 - patient issue -> Patient Workspace
-- appointments without episode -> Episodes
+- clinical documents awaiting review -> Clinical Documents
+- patient issue -> Patient Workspace
 
 ## 3. User Performs Guided Action
 
@@ -75,9 +76,13 @@ Low stock -> Inventory -> purchase receive -> stock movement/audit -> readiness 
 
 Draft invoice -> invoice UI -> issue/payment -> audit -> readiness review.
 
+### Clinical Documents
+
+Documents awaiting review -> Clinical Documents -> edit extraction -> physician review or reject -> document audit -> Patient Workspace source-linked summary -> readiness review.
+
 ### Clinical Episodes
 
-Appointments without episode -> Episodes -> create/link episode -> episode/appointment audit -> readiness review.
+Episode Engine is experimental/deferred. Appointments without episode do not block readiness while Patient Clinical Knowledge Layer is the primary direction.
 
 ### Missing Human Pilot Evidence
 

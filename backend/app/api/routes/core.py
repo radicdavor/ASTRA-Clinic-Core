@@ -154,6 +154,22 @@ def knowledge_item(text: str, document: ClinicalDocument) -> PatientKnowledgeIte
     return PatientKnowledgeItem(text=text, sources=[source_for_document(document)])
 
 
+def add_knowledge_item(items: list[PatientKnowledgeItem], text: str | None, document: ClinicalDocument) -> None:
+    cleaned = (text or "").strip()
+    if not cleaned:
+        return
+    source = source_for_document(document)
+    if not source.document_id:
+        return
+    normalized = " ".join(cleaned.lower().split())
+    for item in items:
+        if " ".join(item.text.lower().split()) == normalized:
+            if all(existing.document_id != source.document_id for existing in item.sources):
+                item.sources.append(source)
+            return
+    items.append(PatientKnowledgeItem(text=cleaned, sources=[source]))
+
+
 def active_plan_for_episode(db: Session, episode_id: int) -> ClinicalPlan | None:
     return db.scalar(select(ClinicalPlan).where(ClinicalPlan.episode_id == episode_id, ClinicalPlan.status == "active", ClinicalPlan.physician_confirmed.is_(True)).order_by(ClinicalPlan.confirmed_at.desc(), ClinicalPlan.id.desc()))
 
@@ -295,8 +311,8 @@ def readiness(db: Session = Depends(get_db), actor: Actor = Depends(require_perm
             message=f"Postoje dokumenti koji cekaju lijecnicki pregled ({documents_awaiting_review})." if documents_awaiting_review > 0 else "Nema klinickih dokumenata koji cekaju pregled.",
             count=documents_awaiting_review,
             action="Pregledati dokumente i potvrditi samo provjerene sazetke." if documents_awaiting_review > 0 else None,
-            target_path="/clinical-documents",
-            target_label="Otvori dokumente",
+            target_path="/clinical-documents?physician_reviewed=false",
+            target_label="Pregledaj dokumente",
             decision_impact="review" if documents_awaiting_review > 0 else "none",
             severity_reason="Dokumenti bez pregleda ne ulaze u sluzbeni sazetak pacijenta." if documents_awaiting_review > 0 else None,
         ),
@@ -687,7 +703,10 @@ def update_clinical_document(
     document.reviewed_by = None
     document.reviewed_at = None
     db.flush()
-    audit(db, "update", "ClinicalDocument", document.id, f"Azuriran klinicki dokument: {document.title}", actor.user_id, actor.actor_type, actor.api_key_id, before, snapshot(document), request)
+    extraction_fields = {"ai_summary", "key_findings", "recommendations"}
+    action = "ai_document_extraction_edited" if extraction_fields.intersection(update_data) else "update"
+    summary = "Uredjen AI prijedlog prije lijecnicke potvrde" if action == "ai_document_extraction_edited" else f"Azuriran klinicki dokument: {document.title}"
+    audit(db, action, "ClinicalDocument", document.id, summary, actor.user_id, actor.actor_type, actor.api_key_id, before, snapshot(document), request)
     db.commit()
     db.refresh(document)
     return get_document_or_404(db, document.id)
@@ -785,31 +804,29 @@ def patient_clinical_summary(patient_id: int, db: Session = Depends(get_db), act
     for document in reviewed:
         text_blob = " ".join([document.raw_text or "", document.ai_summary or "", " ".join(document.key_findings or []), " ".join(document.recommendations or [])]).lower()
         for finding in document.key_findings or []:
-            item = knowledge_item(finding, document)
             lower = finding.lower()
             if document.document_type in {"gastroscopy", "colonoscopy"} or "gastroskop" in lower or "kolonoskop" in lower:
-                summary.completed_procedures.append(item)
+                add_knowledge_item(summary.completed_procedures, finding, document)
             elif document.document_type == "pathology" or "patolog" in lower or "biops" in lower:
-                summary.pathology.append(item)
+                add_knowledge_item(summary.pathology, finding, document)
             elif document.document_type == "laboratory":
-                summary.laboratory.append(item)
+                add_knowledge_item(summary.laboratory, finding, document)
             elif document.document_type == "radiology":
-                summary.imaging.append(item)
+                add_knowledge_item(summary.imaging, finding, document)
             elif "terap" in lower or "esomeprazol" in lower or "pantoprazol" in lower:
-                summary.current_therapy.append(item)
+                add_knowledge_item(summary.current_therapy, finding, document)
             else:
-                summary.known_problems.append(item)
+                add_knowledge_item(summary.known_problems, finding, document)
         for recommendation in document.recommendations or []:
-            item = knowledge_item(recommendation, document)
             if "ceka" in recommendation.lower() or "pending" in recommendation.lower() or "otvoreno" in recommendation.lower():
-                summary.open_questions.append(item)
+                add_knowledge_item(summary.open_questions, recommendation, document)
             else:
-                summary.latest_recommendations.append(item)
+                add_knowledge_item(summary.latest_recommendations, recommendation, document)
         if document.document_type in {"pathology", "laboratory", "radiology"} and not document.key_findings:
             target = summary.pathology if document.document_type == "pathology" else summary.laboratory if document.document_type == "laboratory" else summary.imaging
-            target.append(knowledge_item(document.ai_summary or document.title, document))
+            add_knowledge_item(target, document.ai_summary or document.title, document)
         if "ceka se" in text_blob or "pending" in text_blob:
-            summary.open_questions.append(knowledge_item("Dokument sadrzi otvoreno pitanje koje zahtijeva pregled.", document))
+            add_knowledge_item(summary.open_questions, "Dokument sadrzi otvoreno pitanje koje zahtijeva pregled.", document)
     return summary
 
 

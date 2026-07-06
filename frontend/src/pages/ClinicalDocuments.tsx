@@ -1,4 +1,4 @@
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { api } from "../api/client";
 import { ActionButton } from "../components/ActionButton";
@@ -6,7 +6,7 @@ import { DataTable } from "../components/DataTable";
 import { DateInput } from "../components/DateInput";
 import { HelpHint } from "../components/HelpHint";
 import { useApi } from "../hooks/useApi";
-import { ClinicalDocument } from "../types";
+import { ClinicalDocument, Patient } from "../types";
 import { formatDate } from "../utils/date";
 import { formatPatientName } from "../utils/patientIdentity";
 
@@ -33,13 +33,26 @@ export function sourceTypeLabel(value: string) {
   return labels[value] ?? value;
 }
 
+export function reviewStatusLabel(value: ClinicalDocument["review_status"]) {
+  const labels: Record<ClinicalDocument["review_status"], string> = {
+    uploaded: "Uploadano",
+    extraction_pending: "Ceka ekstrakciju",
+    ai_extracted: "AI prijedlog",
+    reviewed: "Pregledano",
+    summary_rejected: "Sazetak odbijen"
+  };
+  return labels[value] ?? value;
+}
+
 export function ClinicalDocuments() {
   const [params] = useSearchParams();
   const initialPatientId = params.get("patient_id") ?? "";
+  const initialReview = params.get("physician_reviewed") ?? "";
   const [showUpload, setShowUpload] = useState(Boolean(initialPatientId));
-  const [filter, setFilter] = useState({ q: "", patient_id: initialPatientId, document_type: "", review: "" });
+  const [filter, setFilter] = useState({ q: "", patient_id: initialPatientId, document_type: "", review: initialReview });
+  const [patientSearch, setPatientSearch] = useState("");
+  const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null);
   const [draft, setDraft] = useState({
-    patient_id: initialPatientId,
     title: "",
     source_type: "uploaded",
     document_type: "other",
@@ -50,6 +63,17 @@ export function ClinicalDocuments() {
     attachment_name: "",
     raw_text: ""
   });
+  const patientResults = useApi<Patient[]>(patientSearch.trim().length >= 2 ? `/api/patients?q=${encodeURIComponent(patientSearch.trim())}` : "/api/patients?q=__no_patient__", []);
+
+  useEffect(() => {
+    async function loadInitialPatient() {
+      if (!initialPatientId) return;
+      const patient = await api<Patient>(`/api/patients/${initialPatientId}`);
+      setSelectedPatient(patient);
+      setPatientSearch(formatPatientName(patient));
+    }
+    loadInitialPatient();
+  }, [initialPatientId]);
 
   const query = useMemo(() => {
     const next = new URLSearchParams();
@@ -67,7 +91,7 @@ export function ClinicalDocuments() {
       method: "POST",
       body: JSON.stringify({
         ...draft,
-        patient_id: Number(draft.patient_id),
+        patient_id: selectedPatient?.id,
         document_date: draft.document_date || null,
         institution: draft.institution || null,
         author: draft.author || null,
@@ -102,7 +126,25 @@ export function ClinicalDocuments() {
 
       {showUpload && (
         <form className="form-grid" onSubmit={upload}>
-          <label>Patient ID<input required value={draft.patient_id} onChange={(event) => setDraft({ ...draft, patient_id: event.target.value })} /></label>
+          <label className="wide-field">Pacijent
+            <input placeholder="Pretraga po imenu, OIB-u, telefonu ili e-posti" value={patientSearch} onChange={(event) => { setPatientSearch(event.target.value); setSelectedPatient(null); }} />
+          </label>
+          {selectedPatient ? (
+            <div className="selected-patient-card wide-field">
+              <strong>{formatPatientName(selectedPatient)}</strong>
+              <span>{[selectedPatient.date_of_birth ? formatDate(selectedPatient.date_of_birth) : null, selectedPatient.oib, selectedPatient.phone, selectedPatient.email].filter(Boolean).join(" / ") || "Identitet bez dodatnih podataka"}</span>
+            </div>
+          ) : (
+            <div className="patient-search-results wide-field">
+              {patientResults.data.slice(0, 5).map((patient) => (
+                <button type="button" key={patient.id} onClick={() => { setSelectedPatient(patient); setPatientSearch(formatPatientName(patient)); }}>
+                  <strong>{formatPatientName(patient)}</strong>
+                  <span>{[patient.date_of_birth ? formatDate(patient.date_of_birth) : null, patient.oib, patient.phone, patient.email].filter(Boolean).join(" / ") || "Identitet bez dodatnih podataka"}</span>
+                </button>
+              ))}
+              {patientSearch.trim().length >= 2 && patientResults.data.length === 0 && <p>Nema pronadenih pacijenata.</p>}
+            </div>
+          )}
           <label className="wide-field">Naslov<input required value={draft.title} onChange={(event) => setDraft({ ...draft, title: event.target.value })} /></label>
           <label>Izvor<select value={draft.source_type} onChange={(event) => setDraft({ ...draft, source_type: event.target.value })}>{sourceTypes.map((type) => <option key={type} value={type}>{sourceTypeLabel(type)}</option>)}</select></label>
           <label>Tip<select value={draft.document_type} onChange={(event) => setDraft({ ...draft, document_type: event.target.value })}>{documentTypes.map((type) => <option key={type} value={type}>{documentTypeLabel(type)}</option>)}</select></label>
@@ -111,7 +153,7 @@ export function ClinicalDocuments() {
           <label>Autor<input value={draft.author} onChange={(event) => setDraft({ ...draft, author: event.target.value })} /></label>
           <label>Datoteka placeholder<input value={draft.attachment_name} onChange={(event) => setDraft({ ...draft, attachment_name: event.target.value })} placeholder="nalaz.pdf" /></label>
           <label className="wide-field">OCR / tekst dokumenta<textarea rows={6} value={draft.raw_text} onChange={(event) => setDraft({ ...draft, raw_text: event.target.value })} /></label>
-          <ActionButton type="submit" className="primary" variant="create" helpTitle="Spremi dokument" help="Sprema metapodatke i tekst. OCR engine jos nije implementiran; ovo je placeholder arhitektura.">
+          <ActionButton type="submit" className="primary" variant="create" disabled={!selectedPatient} helpTitle="Spremi dokument" help="Sprema metapodatke i tekst. OCR engine jos nije implementiran; ovo je placeholder arhitektura.">
             Spremi dokument
           </ActionButton>
         </form>
@@ -123,7 +165,7 @@ export function ClinicalDocuments() {
         { header: "Datum", render: (row) => formatDate(row.document_date) },
         { header: "Tip", render: (row) => documentTypeLabel(row.document_type) },
         { header: "Izvor", render: (row) => sourceTypeLabel(row.source_type) },
-        { header: "Pregled", render: (row) => row.physician_reviewed ? "Pregledano" : "Ceka pregled" }
+        { header: "Status", render: (row) => reviewStatusLabel(row.review_status) }
       ]} />
     </section>
   );

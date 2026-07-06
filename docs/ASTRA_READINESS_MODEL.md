@@ -44,7 +44,7 @@ Real data readiness is governed by `docs/REAL_DATA_READINESS_CHECKLIST.md`.
 Each readiness check should link to an operational screen when possible:
 
 - patients -> `/patients`
-- clinical documents awaiting review -> `/clinical-documents`
+- clinical documents awaiting review -> `/clinical-documents?physician_reviewed=false`
 - clinical episodes are experimental/deferred and should not block readiness
 - providers -> `/appointments/new`
 - rooms -> `/appointments/new`

@@ -70,6 +70,7 @@ export function PatientDetail() {
       + clinicalSummary.data.latest_recommendations.length
     : 0;
   const openQuestionCount = clinicalSummary.data?.open_questions.length ?? 0;
+  const hasReviewedKnowledge = (clinicalSummary.data?.generated_from_reviewed_documents ?? 0) > 0;
 
   const documentColumns = [
     { header: "Dokument", render: (row: ClinicalDocument) => <Link to={`/clinical-documents/${row.id}`}>{row.title}</Link> },
@@ -222,6 +223,14 @@ export function PatientDetail() {
           <div><span>Strukturirane stavke</span><strong>{knownItemCount}</strong></div>
           <div><span>Otvorena pitanja</span><strong>{openQuestionCount}</strong></div>
           <div><span>Ceka pregled</span><strong>{clinicalSummary.data?.awaiting_review_count ?? awaitingReview.length}</strong></div>
+          {!hasReviewedKnowledge && (
+            <section>
+              <h3>Nema pregledanih dokumenata</h3>
+              <p>Sluzbeni sazetak nastaje tek nakon lijecnickog pregleda dokumenta.</p>
+              {awaitingReview.length > 0 && <p>Postoje dokumenti koji cekaju lijecnicki pregled.</p>}
+              <Link to={`/clinical-documents?patient_id=${patient.data.id}`}>Dodaj dokument</Link>
+            </section>
+          )}
           {awaitingReview.length > 0 && (
             <section>
               <h3>Dokumenti koji cekaju pregled</h3>
@@ -234,7 +243,10 @@ export function PatientDetail() {
             <section>
               <h3>Nerijeseno</h3>
               {clinicalSummary.data?.open_questions.slice(0, 3).map((item, index) => (
-                <p key={index}>{item.text}</p>
+                <p key={index}>
+                  {item.text}
+                  <small>{item.sources.map((source) => <SourceBadge key={`${source.document_id}-${item.text}`} source={source} />)}</small>
+                </p>
               ))}
             </section>
           )}

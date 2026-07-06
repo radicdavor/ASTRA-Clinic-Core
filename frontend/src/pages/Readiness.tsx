@@ -91,6 +91,9 @@ export function Readiness() {
                 <p><span>Status</span><strong>{statusLabels[selected.status]}</strong></p>
                 <p><span>Utjecaj</span><strong>{impactLabels[selected.decision_impact]}</strong></p>
                 <p><span>Razlog</span><strong>{selected.severity_reason ?? "Nema dodatnog razloga."}</strong></p>
+                {selected.key === "clinical_documents_review" && (
+                  <p><span>Klinicki sazetak</span><strong>Nepregledani dokumenti ne ulaze u sluzbeni sazetak pacijenta.</strong></p>
+                )}
                 <p><span>Sljedeci korak</span><strong>{selected.action ?? "Nije potrebna radnja."}</strong></p>
                 <p><span>Otvaranje</span><strong>{selected.target_path ? <Link to={selected.target_path}>{selected.target_label ?? "Otvori"}</Link> : "-"}</strong></p>
               </div>

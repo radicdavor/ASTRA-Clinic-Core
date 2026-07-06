@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import date as DateType, datetime as DateTimeType, time as TimeType
 from decimal import Decimal
 
-from pydantic import BaseModel, ConfigDict, EmailStr, field_validator
+from pydantic import BaseModel, ConfigDict, EmailStr, computed_field, field_validator
 
 
 EPISODE_STATUSES = {"open", "active", "waiting", "completed", "cancelled", "archived"}
@@ -407,6 +407,19 @@ class ClinicalDocumentOut(ClinicalDocumentBase, ORMModel):
     patient: PatientOut | None = None
     created_at: DateTimeType
     updated_at: DateTimeType
+
+    @computed_field
+    @property
+    def review_status(self) -> str:
+        if self.physician_reviewed:
+            return "reviewed"
+        if not self.ai_summary and not self.key_findings and not self.recommendations:
+            if self.raw_text:
+                return "extraction_pending"
+            return "uploaded"
+        if self.raw_text and not self.ai_summary and self.key_findings == [] and self.recommendations == []:
+            return "summary_rejected"
+        return "ai_extracted"
 
 
 class PatientKnowledgeSource(BaseModel):

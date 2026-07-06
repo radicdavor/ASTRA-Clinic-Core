@@ -24,6 +24,8 @@ Pilot documents:
 - [ASTRA Architecture Bible](docs/ASTRA_ARCHITECTURE_BIBLE.md)
 - [ASTRA Design System](docs/ASTRA_DESIGN_SYSTEM.md)
 - [ASTRA Workspace Architecture](docs/ASTRA_WORKSPACE_ARCHITECTURE.md)
+- [ASTRA Patient Clinical Knowledge Model](docs/ASTRA_PATIENT_CLINICAL_KNOWLEDGE_MODEL.md)
+- [Patient Clinical Knowledge Layer MVP](docs/PATIENT_CLINICAL_KNOWLEDGE_LAYER_MVP.md)
 - [ASTRA Readiness Model](docs/ASTRA_READINESS_MODEL.md)
 - [ASTRA Operational Evidence Loop](docs/ASTRA_OPERATIONAL_EVIDENCE_LOOP.md)
 - [V20 Readiness Cockpit](docs/V20_READINESS_COCKPIT.md)
@@ -122,6 +124,7 @@ Za produkciju postavite `APP_ENV=production`, jak `JWT_SECRET`, kraći `ACCESS_T
 - Inventar: artikli, serije, rokovi, niska zaliha, kretanja
 - Nabava: dobavljači, narudžbenice, prijedlozi ponovne narudžbe
 - Naplata: računi i označavanje plaćenog računa
+- Klinički dokumenti: interni/vanjski dokumenti, upload placeholder, AI extraction placeholder, liječnički pregled i source-linked sažetak pacijenta
 - Predlošci potrošnje materijala po usluzi
 - Automatska FEFO potrošnja materijala pri završetku termina
 

@@ -18,7 +18,12 @@ const actionLabels: Record<string, string> = {
   ai_plan_edited: "Plan uredjen",
   ai_plan_rejected: "AI prijedlog odbijen",
   ai_plan_confirmed: "Plan potvrdjen",
-  clinical_plan_archived: "Plan arhiviran"
+  clinical_plan_archived: "Plan arhiviran",
+  upload: "Dokument uploadan",
+  ai_document_extracted: "AI prijedlog izdvojen",
+  ai_document_extraction_edited: "AI prijedlog uredjen",
+  clinical_document_reviewed: "Dokument pregledan",
+  ai_document_summary_rejected: "AI sazetak odbijen"
 };
 
 const entityLabels: Record<string, string> = {
@@ -31,7 +36,8 @@ const entityLabels: Record<string, string> = {
   PurchaseOrder: "Narudzbenica",
   ApiKey: "API kljuc",
   ClinicalEpisode: "Klinicka epizoda",
-  ClinicalPlan: "Klinicki plan"
+  ClinicalPlan: "Klinicki plan",
+  ClinicalDocument: "Klinicki dokument"
 };
 
 function actorLabel(log: AuditLog) {
@@ -46,6 +52,7 @@ function entityRoute(log: AuditLog) {
   if (log.entity_type === "Appointment") return `/appointments/${log.entity_id}`;
   if (log.entity_type === "Invoice") return `/invoices?invoice=${log.entity_id}`;
   if (log.entity_type === "ClinicalEpisode") return `/episodes/${log.entity_id}`;
+  if (log.entity_type === "ClinicalDocument") return `/clinical-documents/${log.entity_id}`;
   return "";
 }
 

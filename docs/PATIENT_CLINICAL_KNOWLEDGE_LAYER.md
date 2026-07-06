@@ -2,6 +2,11 @@
 
 Status: implemented foundation
 
+See also:
+
+- `docs/ASTRA_PATIENT_CLINICAL_KNOWLEDGE_MODEL.md`
+- `docs/PATIENT_CLINICAL_KNOWLEDGE_LAYER_MVP.md`
+
 This document defines the first Patient Clinical Knowledge Layer inside ASTRA Clinic Core.
 
 It replaces the previous assumption that Episode Engine must be the first post-v0.1 clinical center. Episodes remain in the product, but patient knowledge now comes first.
@@ -59,6 +64,8 @@ Every summary item contains one or more source document references.
 
 The frontend renders those references as source badges that link to the original Clinical Document workspace.
 
+Duplicate statements are deduplicated per summary category and merged into one item with multiple source badges.
+
 ## OCR Scope
 
 This MVP does not implement a real OCR engine.
@@ -85,6 +92,9 @@ The upload endpoint stores metadata, an attachment placeholder and optional raw 
 - `/clinical-documents/:id`
 - Patient Workspace Summary tab
 - Patient Workspace knowledge sidebar
+- editable extraction review before physician confirmation
+- clear document review statuses
+- readiness deep link to documents awaiting review
 - internal/external document tabs
 - procedure/pathology/laboratory/imaging tabs
 - source badges linking summary statements to original documents
