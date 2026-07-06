@@ -1,6 +1,6 @@
 # Program 1 - Phase A: Patient Knowledge Stabilization Plan
 
-Status: implementacijski plan; Phase A1 djelomicno implementiran
+Status: implementacijski plan; Phase A1 i Phase A2 djelomicno implementirani
 
 ## 1. Svrha
 
@@ -431,10 +431,14 @@ Suggested statuses:
 
 Current support:
 
-- `generated` i `edited` su implicitni kroz AI fields i audit actione.
-- `accepted` je implicitno kroz document review.
-- `rejected` je djelomično kroz reject-summary.
+- `ai_extraction_status` postoji na `ClinicalDocument`.
+- `ai_extraction_generated_at` i `ai_extraction_updated_at` postoje kao lifecycle timestamps.
+- `generated` nastaje kroz extraction endpoint.
+- `edited` nastaje kada korisnik uredi `ai_summary`, `key_findings` ili `recommendations`, ili kada raw source promjena invalidira postojece extraction polje.
+- `accepted` nastaje kroz lijecnicki review ako extraction polja postoje.
+- `rejected` nastaje kroz reject-summary endpoint i ne hrani official knowledge.
 - `superseded` nije modeliran.
+- AI extraction je i dalje deterministicki placeholder, nije stvarni AI/OCR provider.
 
 ### Patient Clinical Summary status
 

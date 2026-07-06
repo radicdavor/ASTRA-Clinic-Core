@@ -8,6 +8,7 @@ Status: implemented foundation with hardening
 - Upload metadata and raw text placeholder.
 - OCR placeholder boundary through stored raw text.
 - AI extraction placeholder for summary, findings and recommendations.
+- Explicit AI extraction lifecycle metadata: `ai_extraction_status`, `ai_extraction_generated_at`, `ai_extraction_updated_at`.
 - Editable extraction review before physician confirmation.
 - Physician review and summary rejection.
 - Explicit ClinicalDocument `review_status` with `physician_reviewed` retained for compatibility.
@@ -38,6 +39,13 @@ After confirmation, the document becomes eligible for the official Patient Clini
 Rejecting the summary removes extracted structured items from official knowledge.
 
 Official knowledge requires `review_status=reviewed` and `physician_reviewed=true`. Draft, needs-review, rejected and superseded documents do not feed the official patient knowledge view.
+
+AI extraction status is separate from document review status:
+
+- `generated` and `edited` are suggestions.
+- `accepted` means extraction fields were accepted through physician review.
+- `rejected` means the AI suggestion was rejected.
+- `not_run` is valid for manually reviewed documents without AI extraction.
 
 ## Source Rule
 

@@ -25,6 +25,8 @@ def test_create_extract_review_document_updates_patient_summary(client, db, auth
     )
     assert created.status_code == 200
     assert created.json()["review_status"] == "draft"
+    assert created.json()["ai_extraction_status"] == "not_run"
+    assert created.json()["ai_extraction_generated_at"] is None
     assert created.json()["physician_reviewed"] is False
     document_id = created.json()["id"]
 
@@ -37,6 +39,9 @@ def test_create_extract_review_document_updates_patient_summary(client, db, auth
     assert extracted.status_code == 200
     assert extracted.json()["physician_reviewed"] is False
     assert extracted.json()["review_status"] == "needs_physician_review"
+    assert extracted.json()["ai_extraction_status"] == "generated"
+    assert extracted.json()["ai_extraction_generated_at"]
+    assert extracted.json()["ai_extraction_updated_at"]
     assert extracted.json()["key_findings"]
 
     summary_after_extraction = client.get(f"/api/patients/{p.id}/clinical-summary", headers=headers)
@@ -56,11 +61,14 @@ def test_create_extract_review_document_updates_patient_summary(client, db, auth
     assert edited.status_code == 200
     assert edited.json()["physician_reviewed"] is False
     assert edited.json()["review_status"] == "needs_physician_review"
+    assert edited.json()["ai_extraction_status"] == "edited"
+    assert edited.json()["ai_extraction_updated_at"]
 
     reviewed = client.post(f"/api/clinical-documents/{document_id}/review", headers=headers)
     assert reviewed.status_code == 200
     assert reviewed.json()["physician_reviewed"] is True
     assert reviewed.json()["review_status"] == "reviewed"
+    assert reviewed.json()["ai_extraction_status"] == "accepted"
 
     summary_after = client.get(f"/api/patients/{p.id}/clinical-summary", headers=headers)
     assert summary_after.status_code == 200
@@ -83,6 +91,8 @@ def test_reject_summary_removes_ai_items_from_patient_summary(client, db, auth_s
     assert rejected.json()["physician_reviewed"] is False
     assert rejected.json()["key_findings"] == []
     assert rejected.json()["review_status"] == "rejected"
+    assert rejected.json()["ai_extraction_status"] == "rejected"
+    assert rejected.json()["ai_extraction_updated_at"]
 
     summary = client.get(f"/api/patients/{p.id}/clinical-summary", headers=headers)
     assert summary.status_code == 200
@@ -143,6 +153,44 @@ def test_patient_summary_requires_reviewed_status_and_compatibility_flag(client,
     assert summary.json()["known_problems"] == []
 
 
+def test_review_without_ai_extraction_keeps_ai_status_not_run(client, db, auth_setup):
+    headers = auth_headers(client)
+    p = patient(db)
+    created = client.post(
+        "/api/clinical-documents",
+        headers=headers,
+        json={
+            "patient_id": p.id,
+            "source_type": "external",
+            "document_type": "other",
+            "title": "Rucno pregledani izvor bez AI ekstrakcije",
+            "raw_text": "Rucni izvor bez AI ekstrakcije.",
+        },
+    )
+    assert created.status_code == 200
+    document_id = created.json()["id"]
+
+    reviewed = client.post(f"/api/clinical-documents/{document_id}/review", headers=headers)
+    assert reviewed.status_code == 200
+    assert reviewed.json()["review_status"] == "reviewed"
+    assert reviewed.json()["physician_reviewed"] is True
+    assert reviewed.json()["ai_extraction_status"] == "not_run"
+    assert reviewed.json()["key_findings"] is None
+
+
+def test_official_knowledge_does_not_require_accepted_ai_status_for_manual_content(client, db, auth_setup):
+    headers = auth_headers(client)
+    p = patient(db)
+    doc = clinical_document(db, p, physician_reviewed=True)
+    doc.ai_extraction_status = "not_run"
+    db.commit()
+
+    summary = client.get(f"/api/patients/{p.id}/clinical-summary", headers=headers)
+    assert summary.status_code == 200
+    assert summary.json()["generated_from_reviewed_documents"] == 1
+    assert summary.json()["known_problems"] or summary.json()["completed_procedures"]
+
+
 def test_updating_raw_or_extracted_fields_resets_review_metadata(client, db, auth_setup):
     headers = auth_headers(client)
     p = patient(db)
@@ -157,6 +205,7 @@ def test_updating_raw_or_extracted_fields_resets_review_metadata(client, db, aut
     assert updated.status_code == 200
     body = updated.json()
     assert body["review_status"] == "needs_physician_review"
+    assert body["ai_extraction_status"] == "edited"
     assert body["physician_reviewed"] is False
     assert body["reviewed_by"] is None
     assert body["reviewed_at"] is None
@@ -172,6 +221,17 @@ def test_readiness_deep_links_to_unreviewed_documents(client, db, auth_setup):
     check = next(item for item in response.json()["checks"] if item["key"] == "clinical_documents_review")
     assert check["target_path"] == "/clinical-documents?review_status=needs_physician_review"
     assert check["target_label"] == "Pregledaj dokumente"
+
+
+def test_readiness_counts_generated_and_edited_extraction_awaiting_review(client, db, auth_setup):
+    headers = auth_headers(client)
+    p = patient(db)
+    clinical_document(db, p, physician_reviewed=False)
+
+    response = client.get("/api/readiness", headers=headers)
+    assert response.status_code == 200
+    check = next(item for item in response.json()["checks"] if item["key"] == "clinical_documents_review")
+    assert check["count"] == 1
 
 
 def test_generate_edit_and_review_patient_clinical_summary(client, db, auth_setup):

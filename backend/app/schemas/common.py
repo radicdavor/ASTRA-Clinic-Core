@@ -26,6 +26,7 @@ CLINICAL_PLAN_NEXT_ACTIONS = {
 CLINICAL_DOCUMENT_SOURCE_TYPES = {"internal", "external", "scanned", "uploaded"}
 CLINICAL_DOCUMENT_TYPES = {"consultation", "gastroscopy", "colonoscopy", "pathology", "laboratory", "radiology", "discharge", "referral", "other"}
 CLINICAL_DOCUMENT_REVIEW_STATUSES = {"draft", "extracted", "needs_physician_review", "reviewed", "rejected", "superseded"}
+CLINICAL_DOCUMENT_AI_EXTRACTION_STATUSES = {"not_run", "generated", "edited", "accepted", "rejected", "superseded"}
 
 
 class ORMModel(BaseModel):
@@ -416,6 +417,9 @@ class ClinicalDocumentUpdate(BaseModel):
 class ClinicalDocumentOut(ClinicalDocumentBase, ORMModel):
     id: int
     review_status: str
+    ai_extraction_status: str
+    ai_extraction_generated_at: DateTimeType | None = None
+    ai_extraction_updated_at: DateTimeType | None = None
     physician_reviewed: bool
     reviewed_by: int | None = None
     reviewed_at: DateTimeType | None = None
@@ -428,6 +432,13 @@ class ClinicalDocumentOut(ClinicalDocumentBase, ORMModel):
     def validate_review_status(cls, value: str) -> str:
         if value not in CLINICAL_DOCUMENT_REVIEW_STATUSES:
             raise ValueError("Nepoznat status pregleda dokumenta")
+        return value
+
+    @field_validator("ai_extraction_status")
+    @classmethod
+    def validate_ai_extraction_status(cls, value: str) -> str:
+        if value not in CLINICAL_DOCUMENT_AI_EXTRACTION_STATUSES:
+            raise ValueError("Nepoznat status AI ekstrakcije")
         return value
 
 

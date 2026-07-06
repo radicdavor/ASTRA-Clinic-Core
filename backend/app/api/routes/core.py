@@ -181,11 +181,22 @@ def initial_document_review_status(values: dict) -> str:
     return "draft"
 
 
+def initial_ai_extraction_status(values: dict) -> str:
+    if values.get("ai_summary") or values.get("key_findings") or values.get("recommendations"):
+        return "edited"
+    return "not_run"
+
+
 def mark_document_needs_review(document: ClinicalDocument) -> None:
     document.review_status = "needs_physician_review" if has_extracted_content(document) or document.raw_text else "draft"
     document.physician_reviewed = False
     document.reviewed_by = None
     document.reviewed_at = None
+
+
+def mark_document_ai_extraction_edited(document: ClinicalDocument, now: datetime) -> None:
+    document.ai_extraction_status = "edited" if has_extracted_content(document) else "not_run"
+    document.ai_extraction_updated_at = now if has_extracted_content(document) else None
 
 
 def is_official_clinical_document(document: ClinicalDocument) -> bool:
@@ -781,7 +792,16 @@ def create_clinical_document(
 ):
     validate_document_links(db, payload.patient_id, payload.appointment_id)
     values = payload.model_dump()
-    document = ClinicalDocument(**values, review_status=initial_document_review_status(values), physician_reviewed=False)
+    now = datetime.now(timezone.utc)
+    initial_ai_status = initial_ai_extraction_status(values)
+    document = ClinicalDocument(
+        **values,
+        review_status=initial_document_review_status(values),
+        ai_extraction_status=initial_ai_status,
+        ai_extraction_generated_at=now if initial_ai_status != "not_run" else None,
+        ai_extraction_updated_at=now if initial_ai_status != "not_run" else None,
+        physician_reviewed=False,
+    )
     db.add(document)
     db.flush()
     audit(db, "create", "ClinicalDocument", document.id, f"Dodan klinicki dokument: {document.title}", actor.user_id, actor.actor_type, actor.api_key_id, None, snapshot(document), request)
@@ -825,6 +845,7 @@ def upload_clinical_document(
         attachment_path=attachment_path,
         appointment_id=payload.appointment_id,
         review_status="draft",
+        ai_extraction_status="not_run",
         physician_reviewed=False,
     )
     db.add(document)
@@ -867,6 +888,10 @@ def update_clinical_document(
     patch_model(document, update_data)
     review_reset_fields = {"raw_text", "ai_summary", "key_findings", "recommendations"}
     if review_reset_fields.intersection(update_data):
+        now = datetime.now(timezone.utc)
+        extraction_fields = {"ai_summary", "key_findings", "recommendations"}
+        if extraction_fields.intersection(update_data) or "raw_text" in update_data:
+            mark_document_ai_extraction_edited(document, now)
         mark_document_needs_review(document)
     db.flush()
     extraction_fields = {"ai_summary", "key_findings", "recommendations"}
@@ -887,7 +912,11 @@ def extract_clinical_document(
 ):
     document = get_document_or_404(db, document_id)
     before = snapshot(document)
+    now = datetime.now(timezone.utc)
     patch_model(document, extract_document_knowledge(document))
+    document.ai_extraction_status = "generated"
+    document.ai_extraction_generated_at = now
+    document.ai_extraction_updated_at = now
     document.review_status = "needs_physician_review"
     document.physician_reviewed = False
     document.reviewed_by = None
@@ -908,12 +937,14 @@ def review_clinical_document(
 ):
     document = get_document_or_404(db, document_id)
     before = snapshot(document)
-    if document.ai_summary is None and (document.raw_text or document.key_findings or document.recommendations):
-        patch_model(document, extract_document_knowledge(document))
+    now = datetime.now(timezone.utc)
     document.review_status = "reviewed"
+    if has_extracted_content(document):
+        document.ai_extraction_status = "accepted"
+        document.ai_extraction_updated_at = now
     document.physician_reviewed = True
     document.reviewed_by = actor.user_id
-    document.reviewed_at = datetime.now(timezone.utc)
+    document.reviewed_at = now
     db.flush()
     audit(db, "clinical_document_reviewed", "ClinicalDocument", document.id, "Lijecnik je pregledao klinicki dokument", actor.user_id, actor.actor_type, actor.api_key_id, before, snapshot(document), request)
     db.commit()
@@ -933,6 +964,8 @@ def reject_clinical_document_summary(
     document.ai_summary = None
     document.key_findings = []
     document.recommendations = []
+    document.ai_extraction_status = "rejected"
+    document.ai_extraction_updated_at = datetime.now(timezone.utc)
     document.review_status = "rejected"
     document.physician_reviewed = False
     document.reviewed_by = None

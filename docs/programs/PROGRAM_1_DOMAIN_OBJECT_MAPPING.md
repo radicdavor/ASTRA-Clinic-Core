@@ -125,9 +125,9 @@ AI support je placeholder:
 | `Needs Missing Document` | Readiness warning and docs concepts | Partially implemented | Nepregledani documents postoje; missing specific source ne. | Potreban missing source model. |
 | `Needs Consent` | Documentation-only | Future concept | Consent nije formaliziran. | Consent lifecycle kasnije. |
 | `Needs Rescheduling` | Appointment status `rescheduled` | Partially implemented | Status termina postoji, ali nije clinical readiness outcome. | Razdvojiti scheduling status od gate statusa. |
-| `AI Suggestion` | ClinicalDocument extraction, ClinicalPlan generation, UI labels | Partially implemented | Placeholder output označen kao AI prijedlog. | Lifecycle treba formalizirati. |
+| `AI Suggestion` | ClinicalDocument extraction, ClinicalPlan generation, UI labels | Partially implemented | ClinicalDocument AI extraction lifecycle je eksplicitan; output ostaje prijedlog dok dokument nije pregledan. | Siru cross-domain AI suggestion taksonomiju jos treba uskladiti kasnije. |
 | `AI Draft` | PatientClinicalSummaryRecord `draft_ai`, summary card | Partially implemented | Draft status postoji. | Razdvojiti draft types po domainu. |
-| `AI Extraction` | `/clinical-documents/{id}/extract`, `extract_document_knowledge` | Partially implemented | Deterministički placeholder, nije real AI. | Integracija real AI providera nije dio sadašnjeg scopea. |
+| `AI Extraction` | `/clinical-documents/{id}/extract`, `extract_document_knowledge`, `ClinicalDocument.ai_extraction_status` | Partially implemented | Deterministički placeholder, nije real AI; lifecycle razlikuje `not_run`, `generated`, `edited`, `accepted`, `rejected`, `superseded`. | Integracija real AI providera nije dio sadašnjeg scopea; supersede workflow nije implementiran. |
 | `AI Confidence` | `ClinicalPlan.ai_confidence` | Partially implemented | Postoji za plan suggestion. | Nije za document extraction. |
 | `Physician Confirmation` | `confirm_clinical_plan`, summary/document review | Partially implemented | Potvrde postoje u više tokova. | Potrebna jedinstvena semantika confirmationa. |
 | `Human Confirmation` | Recepcija/identity/payment actions | Partially implemented | Operativne potvrde postoje, ali nisu nazvane ovim pojmom. | Granice s physician confirmation. |
@@ -357,7 +357,7 @@ AI support je placeholder:
 | `ClinicalPlan` | `domain.py`, routes, `EpisodeDetail.tsx` | Može izgledati kao full workflow engine. | Dokumentirati kao episode-bound plan suggestion/confirmation, not Workflow Engine. |
 | `key_findings` | `ClinicalDocument`, `PatientClinicalSummaryRecord`, frontend types | Može se zamijeniti s future `Finding` objectom. | Pojasniti da su to extracted/reviewed strings, ne zaseban Finding object. |
 | `PatientClinicalSummaryRecord` | `domain.py`, summary routes | Može se pogrešno shvatiti kao source of truth. | U docs/API opisima naglasiti summary view, source truth je source-linked knowledge. |
-| `ai_summary`, `generated_by=ai_placeholder` | ClinicalDocument/summary logic | Može zvučati kao real AI provider. | U UI/docs koristiti `AI placeholder draft` dok nema real providera. |
+| `ai_summary`, `generated_by=ai_placeholder`, `ai_extraction_status` | ClinicalDocument/summary logic | Može zvučati kao real AI provider. | U UI/docs koristiti `AI placeholder draft` dok nema real providera; status prati prijedlog, ne medicinsku istinu. |
 | `review_status` | `ClinicalDocument` | Eksplicitni lifecycle sada koristi `draft`, `extracted`, `needs_physician_review`, `reviewed`, `rejected`, `superseded`; `physician_reviewed` ostaje compatibility field. | Buduci task moze dodati supersede workflow ako audit pokaze potrebu. |
 | `close_episode` | `/episodes/{id}/close` | Može djelovati kao formal Episode Closure. | Dokumentirati kao simple compatibility close, ne full closure. |
 | `findings` form field in EpisodeDetail plan generation | `EpisodeDetail.tsx` | Uneseni tekst može se zamijeniti s reviewed Findingom. | Buduće labeliranje: `procedure_findings_text` ili "tekst nalaza za prijedlog". |

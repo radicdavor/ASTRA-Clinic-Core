@@ -11,7 +11,7 @@ import { useApi } from "../hooks/useApi";
 import { AuditLog, ClinicalDocument } from "../types";
 import { formatDate, formatDateTime } from "../utils/date";
 import { formatPatientName } from "../utils/patientIdentity";
-import { documentTypeLabel, reviewStatusLabel, sourceTypeLabel } from "./ClinicalDocuments";
+import { aiExtractionStatusLabel, documentTypeLabel, reviewStatusLabel, sourceTypeLabel } from "./ClinicalDocuments";
 
 export function ClinicalDocumentDetail() {
   const { id } = useParams();
@@ -99,13 +99,17 @@ export function ClinicalDocumentDetail() {
           <p><span>Autor</span><strong>{current.author ?? "-"}</strong></p>
           <p><span>Datoteka</span><strong>{current.attachment_path ?? "Nema datoteke"}</strong></p>
           <p><span>Pregledano</span><strong>{current.reviewed_at ? formatDateTime(current.reviewed_at) : "-"}</strong></p>
+          <p><span>Status pregleda</span><strong>{reviewStatusLabel(current.review_status)}</strong></p>
+          <p><span>Status AI ekstrakcije</span><strong>{aiExtractionStatusLabel(current.ai_extraction_status)}</strong></p>
         </div>
       </WorkspaceSection>
 
       <div className="dashboard-grid">
         <WorkspaceSection title="Strukturirano znanje">
           <div className="clinical-plan-card ai-suggestion">
-            <div><span>AI prijedlog, nije sluzbeno dok lijecnik ne potvrdi</span><strong>{reviewStatusLabel(current.review_status)}</strong></div>
+            <div><span>AI prijedlog, nije sluzbeno dok lijecnik ne potvrdi</span><strong>{aiExtractionStatusLabel(current.ai_extraction_status)}</strong></div>
+            <div><span>Lijecnicki pregled dokumenta</span><strong>{reviewStatusLabel(current.review_status)}</strong></div>
+            <div><span>Zadnja AI izmjena</span><strong>{current.ai_extraction_updated_at ? formatDateTime(current.ai_extraction_updated_at) : "-"}</strong></div>
             <label>AI sazetak<textarea rows={4} value={summaryDraft} onChange={(event) => setSummaryDraft(event.target.value)} /></label>
             <label>Kljucni nalazi<textarea rows={5} value={findingsDraft} onChange={(event) => setFindingsDraft(event.target.value)} placeholder="Jedna stavka po retku" /></label>
             <label>Preporuke<textarea rows={5} value={recommendationsDraft} onChange={(event) => setRecommendationsDraft(event.target.value)} placeholder="Jedna stavka po retku" /></label>

@@ -14,7 +14,7 @@ import { useApi } from "../hooks/useApi";
 import { Appointment, AuditLog, ClinicalDocument, Invoice, Patient, PatientClinicalSummary, PatientClinicalSummaryRecord, PatientKnowledgeItem } from "../types";
 import { formatDate, formatDateTime } from "../utils/date";
 import { formatPatientIdentity, formatPatientName } from "../utils/patientIdentity";
-import { documentTypeLabel, reviewStatusLabel, sourceTypeLabel } from "./ClinicalDocuments";
+import { aiExtractionStatusLabel, documentTypeLabel, reviewStatusLabel, sourceTypeLabel } from "./ClinicalDocuments";
 
 function KnowledgeCard({ title, items }: { title: string; items: PatientKnowledgeItem[] }) {
   return (
@@ -113,7 +113,8 @@ export function PatientDetail() {
     { header: "Datum", render: (row: ClinicalDocument) => formatDate(row.document_date) },
     { header: "Tip", render: (row: ClinicalDocument) => documentTypeLabel(row.document_type) },
     { header: "Izvor", render: (row: ClinicalDocument) => sourceTypeLabel(row.source_type) },
-    { header: "Pregled", render: (row: ClinicalDocument) => reviewStatusLabel(row.review_status) }
+    { header: "Pregled", render: (row: ClinicalDocument) => reviewStatusLabel(row.review_status) },
+    { header: "AI", render: (row: ClinicalDocument) => aiExtractionStatusLabel(row.ai_extraction_status) }
   ];
 
   if (patient.loading || !patient.data) {

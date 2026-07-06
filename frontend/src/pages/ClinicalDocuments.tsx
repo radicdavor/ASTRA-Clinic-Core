@@ -45,6 +45,18 @@ export function reviewStatusLabel(value: ClinicalDocument["review_status"]) {
   return labels[value] ?? value;
 }
 
+export function aiExtractionStatusLabel(value: ClinicalDocument["ai_extraction_status"]) {
+  const labels: Record<ClinicalDocument["ai_extraction_status"], string> = {
+    not_run: "AI ekstrakcija nije pokrenuta",
+    generated: "AI prijedlog generiran",
+    edited: "AI prijedlog rucno uredjen",
+    accepted: "AI prijedlog prihvacen kroz lijecnicki pregled",
+    rejected: "AI prijedlog odbijen",
+    superseded: "AI prijedlog zamijenjen"
+  };
+  return labels[value] ?? value;
+}
+
 export function ClinicalDocuments() {
   const [params] = useSearchParams();
   const initialPatientId = params.get("patient_id") ?? "";
@@ -175,7 +187,8 @@ export function ClinicalDocuments() {
         { header: "Datum", render: (row) => formatDate(row.document_date) },
         { header: "Tip", render: (row) => documentTypeLabel(row.document_type) },
         { header: "Izvor", render: (row) => sourceTypeLabel(row.source_type) },
-        { header: "Status", render: (row) => reviewStatusLabel(row.review_status) }
+        { header: "Pregled", render: (row) => reviewStatusLabel(row.review_status) },
+        { header: "AI ekstrakcija", render: (row) => aiExtractionStatusLabel(row.ai_extraction_status) }
       ]} />
     </section>
   );

@@ -52,6 +52,17 @@ It may produce:
 
 AI extracted knowledge is never official until physician-reviewed.
 
+ClinicalDocument also stores an explicit AI extraction lifecycle:
+
+- `not_run`
+- `generated`
+- `edited`
+- `accepted`
+- `rejected`
+- `superseded`
+
+`generated` and `edited` remain AI suggestion states. `accepted` only happens through physician review when extraction fields exist. `rejected` keeps extraction output out of official patient knowledge.
+
 ## 5. Physician Review
 
 The physician may edit extracted summary, findings and recommendations before confirming review.
