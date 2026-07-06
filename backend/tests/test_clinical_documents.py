@@ -110,17 +110,66 @@ def test_reject_summary_removes_ai_items_from_patient_summary(client, db, auth_s
     headers = auth_headers(client)
     p = patient(db)
     doc = clinical_document(db, p, physician_reviewed=True)
+    raw_text = doc.raw_text
     rejected = client.post(f"/api/clinical-documents/{doc.id}/reject-summary", headers=headers)
     assert rejected.status_code == 200
     assert rejected.json()["physician_reviewed"] is False
     assert rejected.json()["key_findings"] == []
-    assert rejected.json()["review_status"] == "rejected"
+    assert rejected.json()["raw_text"] == raw_text
+    assert rejected.json()["review_status"] == "draft"
     assert rejected.json()["ai_extraction_status"] == "rejected"
     assert rejected.json()["ai_extraction_updated_at"]
 
     summary = client.get(f"/api/patients/{p.id}/clinical-summary", headers=headers)
     assert summary.status_code == 200
     assert summary.json()["generated_from_reviewed_documents"] == 0
+
+
+def test_rejected_ai_extraction_can_be_generated_again(client, db, auth_setup):
+    headers = auth_headers(client)
+    p = patient(db)
+    doc = clinical_document(db, p, physician_reviewed=True)
+    rejected = client.post(f"/api/clinical-documents/{doc.id}/reject-summary", headers=headers)
+    assert rejected.status_code == 200
+    assert rejected.json()["ai_extraction_status"] == "rejected"
+
+    extracted = client.post(f"/api/clinical-documents/{doc.id}/extract", headers=headers)
+    assert extracted.status_code == 200
+    assert extracted.json()["review_status"] == "needs_physician_review"
+    assert extracted.json()["ai_extraction_status"] == "generated"
+    assert extracted.json()["key_findings"]
+
+
+def test_rejected_ai_extraction_requires_review_before_official_knowledge(client, db, auth_setup):
+    headers = auth_headers(client)
+    p = patient(db)
+    doc = clinical_document(db, p, physician_reviewed=True)
+    rejected = client.post(f"/api/clinical-documents/{doc.id}/reject-summary", headers=headers)
+    assert rejected.status_code == 200
+    assert rejected.json()["review_status"] == "draft"
+
+    edited = client.patch(
+        f"/api/clinical-documents/{doc.id}",
+        headers=headers,
+        json={"key_findings": ["Rucno strukturirana tvrdnja iz izvora"]},
+    )
+    assert edited.status_code == 200
+    assert edited.json()["review_status"] == "needs_physician_review"
+    assert edited.json()["ai_extraction_status"] == "edited"
+
+    summary_before_review = client.get(f"/api/patients/{p.id}/clinical-summary", headers=headers)
+    assert summary_before_review.status_code == 200
+    assert summary_before_review.json()["generated_from_reviewed_documents"] == 0
+
+    reviewed = client.post(f"/api/clinical-documents/{doc.id}/review", headers=headers)
+    assert reviewed.status_code == 200
+    assert reviewed.json()["review_status"] == "reviewed"
+
+    summary_after_review = client.get(f"/api/patients/{p.id}/clinical-summary", headers=headers)
+    assert summary_after_review.status_code == 200
+    body = summary_after_review.json()
+    assert body["generated_from_reviewed_documents"] == 1
+    assert any(item["text"] == "Rucno strukturirana tvrdnja iz izvora" for item in all_knowledge_items(body))
 
 
 def test_document_appointment_must_belong_to_same_patient(client, db, auth_setup):

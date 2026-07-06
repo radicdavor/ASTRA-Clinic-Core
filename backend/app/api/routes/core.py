@@ -890,7 +890,7 @@ def reject_clinical_document_summary(
     document.recommendations = []
     document.ai_extraction_status = "rejected"
     document.ai_extraction_updated_at = datetime.now(timezone.utc)
-    document.review_status = "rejected"
+    document.review_status = "draft"
     document.physician_reviewed = False
     document.reviewed_by = None
     document.reviewed_at = None

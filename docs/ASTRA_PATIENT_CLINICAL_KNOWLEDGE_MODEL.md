@@ -61,7 +61,7 @@ ClinicalDocument also stores an explicit AI extraction lifecycle:
 - `rejected`
 - `superseded`
 
-`generated` and `edited` remain AI suggestion states. `accepted` only happens through physician review when extraction fields exist. `rejected` keeps extraction output out of official patient knowledge.
+`generated` and `edited` remain AI suggestion states. `accepted` only happens through physician review when extraction fields exist. `rejected` keeps extraction output out of official patient knowledge while the raw `ClinicalDocument` source remains available for manual review.
 
 ## 5. Physician Review
 
@@ -69,7 +69,7 @@ The physician may edit extracted summary, findings and recommendations before co
 
 Only after review may the document contribute to the official patient summary.
 
-Rejecting a summary keeps it out of official patient knowledge.
+Rejecting an AI summary rejects the AI extraction/suggestion, not the raw source document. The document returns to a draft source state and can later be manually edited, re-extracted, and reviewed.
 
 ClinicalDocument now stores an explicit `review_status` lifecycle:
 

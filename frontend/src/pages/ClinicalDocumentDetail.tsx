@@ -84,8 +84,8 @@ export function ClinicalDocumentDetail() {
             <ActionButton variant="update" onClick={review} helpTitle="Potvrdi pregled" help="Oznacava dokument kao lijecnicki pregledan. Tek tada njegove stavke ulaze u pacijentov sazetak znanja.">
               Potvrdi pregled
             </ActionButton>
-            <ActionButton variant="danger" requiresConfirm confirmMessage="Odbiti AI sazetak dokumenta?" onClick={rejectSummary} helpTitle="Odbij sazetak" help="Uklanja AI sazetak i strukturirane stavke iz dokumenta.">
-              Odbij sazetak
+            <ActionButton variant="danger" requiresConfirm confirmMessage="Odbiti AI prijedlog dokumenta?" onClick={rejectSummary} helpTitle="Odbij AI prijedlog" help="Uklanja AI sazetak i strukturirane stavke, ali izvorni dokument ostaje dostupan kao draft.">
+              Odbij AI prijedlog
             </ActionButton>
           </>
         }
