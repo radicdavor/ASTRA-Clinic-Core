@@ -100,3 +100,38 @@ def test_update_appointment_revalidates_conflicts(db):
         )
 
     assert exc.value.status_code == 409
+
+
+def test_reject_service_in_incompatible_room(db):
+    pr = provider(db)
+    rm = room(db)
+    allowed_service = service(db, name="Allowed")
+    blocked_service = service(db, name="Blocked")
+    rm.allowed_services = [allowed_service]
+    db.flush()
+
+    with pytest.raises(HTTPException) as exc:
+        validate_appointment_payload(db, date(2026, 7, 5), time(11, 0), time(11, 30), pr.id, rm.id, "scheduled", "manual", service_id=blocked_service.id)
+
+    assert exc.value.status_code == 409
+
+
+def test_reception_list_and_arrival_action(client, db, auth_setup):
+    obj = appointment(db)
+    token = login_token(client, "admin@test.local")
+    headers = {"Authorization": f"Bearer {token}"}
+
+    slots = client.get(f"/api/reception/day?date={obj.date}", headers=headers)
+    assert slots.status_code == 200
+    assert any(slot["appointment"] and slot["appointment"]["id"] == obj.id for slot in slots.json())
+    assert any(slot["empty"] for slot in slots.json())
+
+    arrived = client.post(f"/api/appointments/{obj.id}/mark-arrived", headers=headers, json={"identity_verified": True})
+    assert arrived.status_code == 200
+    assert arrived.json()["status"] == "arrived"
+    assert arrived.json()["arrived_at"]
+    assert arrived.json()["identity_verified_at"]
+
+    audit = client.get(f"/api/audit-log?entity_type=Appointment&entity_id={obj.id}", headers=headers)
+    assert audit.status_code == 200
+    assert any(item["action"] == "mark_arrived" for item in audit.json())

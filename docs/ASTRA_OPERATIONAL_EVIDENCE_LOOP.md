@@ -28,6 +28,7 @@ A readiness check should guide the user to the most useful screen:
 - draft invoice -> Invoices
 - unpaid invoice -> Invoices
 - missing audit context -> Audit log
+- reception resource issue -> Reception
 - patient issue -> Patient Workspace
 - clinical documents awaiting review -> Clinical Documents
 - patient issue -> Patient Workspace
@@ -79,6 +80,10 @@ Draft invoice -> invoice UI -> issue/payment -> audit -> readiness review.
 ### Clinical Documents
 
 Documents awaiting review -> Clinical Documents -> edit extraction -> physician review or reject -> document audit -> Patient Workspace source-linked summary -> readiness review.
+
+### Reception Arrival
+
+Today's appointment -> Reception -> identity check -> mark arrived -> appointment audit -> dashboard/appointment workspace.
 
 ### Clinical Episodes
 

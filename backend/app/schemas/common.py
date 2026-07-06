@@ -160,22 +160,35 @@ class ServiceOut(ServiceCreate, ORMModel):
     id: int
 
 
+class ClinicOut(ORMModel):
+    id: int
+    name: str
+    active: bool
+    created_at: DateTimeType
+    updated_at: DateTimeType
+
+
 class ProviderOut(ORMModel):
     id: int
     full_name: str
     specialty: str | None = None
+    staff_role: str = "physician"
+    clinic_id: int | None = None
     active: bool
     created_at: DateTimeType
     updated_at: DateTimeType
+    clinic: ClinicOut | None = None
 
 
 class RoomOut(ORMModel):
     id: int
     name: str
     type: str | None = None
+    clinic_id: int | None = None
     active: bool
     created_at: DateTimeType
     updated_at: DateTimeType
+    clinic: ClinicOut | None = None
 
 
 class ClinicalEpisodeCreate(BaseModel):
@@ -522,6 +535,9 @@ class AppointmentUpdate(BaseModel):
 
 class AppointmentOut(AppointmentCreate, ORMModel):
     id: int
+    arrived_at: DateTimeType | None = None
+    identity_verified_at: DateTimeType | None = None
+    identity_verified_by: int | None = None
     created_at: DateTimeType
     updated_at: DateTimeType
     patient: PatientOut | None = None
@@ -529,6 +545,32 @@ class AppointmentOut(AppointmentCreate, ORMModel):
     provider: ProviderOut | None = None
     room: RoomOut | None = None
     episode: ClinicalEpisodeOut | None = None
+
+
+class ReceptionPatientUpdate(BaseModel):
+    first_name: str | None = None
+    last_name: str | None = None
+    date_of_birth: DateType | None = None
+    oib: str | None = None
+    phone: str | None = None
+    email: EmailStr | None = None
+
+    @field_validator("oib")
+    @classmethod
+    def validate_oib(cls, value: str | None) -> str | None:
+        return PatientCreate.validate_oib(value)
+
+
+class ReceptionArrivalRequest(BaseModel):
+    patient: ReceptionPatientUpdate | None = None
+    identity_verified: bool = True
+
+
+class ReceptionSlot(BaseModel):
+    time: str
+    appointment: AppointmentOut | None = None
+    span: int = 1
+    empty: bool = True
 
 
 class SupplierCreate(BaseModel):

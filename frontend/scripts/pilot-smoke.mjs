@@ -36,6 +36,7 @@ function unique(values) {
   "src/pages/Invoices.tsx",
   "src/pages/ApiKeys.tsx",
   "src/pages/Readiness.tsx",
+  "src/pages/Reception.tsx",
   "src/components/AppShell.tsx",
   "src/components/AuditTimeline.tsx",
   "src/components/ToastHost.tsx",
@@ -59,10 +60,12 @@ assertIncludes("src/routes/AppRoutes.tsx", "/clinical-documents");
 assertIncludes("src/routes/AppRoutes.tsx", "/clinical-documents/:id");
 assertIncludes("src/routes/AppRoutes.tsx", "/api-keys");
 assertIncludes("src/routes/AppRoutes.tsx", "/readiness");
+assertIncludes("src/routes/AppRoutes.tsx", "/reception");
 assertIncludes("src/components/AppShell.tsx", "/api/public-config");
 assertIncludes("src/components/AppShell.tsx", "Demo/development okruzenje");
 assertIncludes("src/components/AppShell.tsx", "Spremnost");
 assertIncludes("src/components/AppShell.tsx", "Dokumenti");
+assertIncludes("src/components/AppShell.tsx", "Prijem");
 assertNotIncludes("src/components/AppShell.tsx", "Epizode");
 assertIncludes("src/components/SourceBadge.tsx", "/clinical-documents/${source.document_id}");
 assertIncludes("src/components/ToastHost.tsx", "Radnja je spremljena");
@@ -173,6 +176,15 @@ assertIncludes("src/pages/Readiness.tsx", "Sljedeci korak");
 assertIncludes("src/pages/Readiness.tsx", "decision_impact");
 assertIncludes("src/pages/Readiness.tsx", "Blokira demo");
 assertIncludes("src/pages/Readiness.tsx", "readiness-detail");
+assertIncludes("src/pages/Reception.tsx", "/api/reception/day");
+assertIncludes("src/pages/Reception.tsx", "Dan");
+assertIncludes("src/pages/Reception.tsx", "Tjedan");
+assertIncludes("src/pages/Reception.tsx", "Sve klinike");
+assertIncludes("src/pages/Reception.tsx", "Slobodno");
+assertIncludes("src/pages/Reception.tsx", "reception-card");
+assertIncludes("src/pages/Reception.tsx", "Oznaci kao pristigao");
+assertIncludes("src/pages/Reception.tsx", "/patients/${selected.patient_id}");
+assertIncludes("src/pages/Reception.tsx", "/appointments/${selected.id}");
 assertIncludes("src/pages/Readiness.tsx", "Nepregledani dokumenti ne ulaze u sluzbeni sazetak pacijenta.");
 assertIncludes("../backend/app/api/routes/core.py", "/clinical-documents?physician_reviewed=false");
 assertIncludes("../backend/app/api/routes/core.py", "patient_summary_stale");

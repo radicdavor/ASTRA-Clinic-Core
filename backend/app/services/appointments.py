@@ -4,7 +4,7 @@ from fastapi import HTTPException
 from sqlalchemy import and_, select
 from sqlalchemy.orm import Session
 
-from app.models.domain import Appointment, AppointmentSource, AppointmentStatus
+from app.models.domain import Appointment, AppointmentSource, AppointmentStatus, Provider, Room, Service, room_services
 
 BLOCKING_STATUSES = {
     AppointmentStatus.scheduled.value,
@@ -42,11 +42,30 @@ def validate_appointment_payload(
     room_id: int,
     status_value: str,
     source_value: str,
+    service_id: int | None = None,
     appointment_id: int | None = None,
     allow_override: bool = False,
 ) -> int:
     validate_status_and_source(status_value, source_value)
     duration_minutes = calculate_duration_minutes(appointment_date, start_time, end_time)
+    if service_id is not None:
+        service = db.get(Service, service_id)
+        room = db.get(Room, room_id)
+        provider = db.get(Provider, provider_id)
+        if not service:
+            raise HTTPException(status_code=404, detail="Usluga nije pronadena")
+        if not room:
+            raise HTTPException(status_code=404, detail="Soba nije pronadena")
+        if not provider:
+            raise HTTPException(status_code=404, detail="Lijecnik nije pronaden")
+        allowed = db.scalar(select(room_services.c.room_id).where(room_services.c.room_id == room_id, room_services.c.service_id == service_id).limit(1))
+        any_room_rules = db.scalar(select(room_services.c.room_id).where(room_services.c.service_id == service_id).limit(1))
+        if any_room_rules and not allowed:
+            raise HTTPException(status_code=409, detail="Usluga nije dopustena u odabranoj sobi")
+        if room.clinic_id and provider.clinic_id and room.clinic_id != provider.clinic_id:
+            raise HTTPException(status_code=409, detail="Lijecnik i soba nisu u istoj klinici")
+        if service.duration_minutes and service.duration_minutes != duration_minutes:
+            raise HTTPException(status_code=409, detail="Trajanje termina ne odgovara trajanju usluge")
     if status_value not in BLOCKING_STATUSES:
         return duration_minutes
 

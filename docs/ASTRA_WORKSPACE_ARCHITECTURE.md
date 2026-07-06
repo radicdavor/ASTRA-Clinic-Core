@@ -9,6 +9,7 @@ Core ASTRA objects are:
 - patient
 - clinical episode
 - appointment
+- reception day
 - invoice
 - purchase order
 - inventory item
@@ -83,6 +84,24 @@ Appointment Workspace includes:
 - audit timeline
 
 Critical actions keep V19 `ActionButton` and `HelpHint` behavior.
+
+## 5b. Reception Workspace
+
+Reception is an operational day workspace, not a medical module.
+
+It includes:
+
+- selected date
+- clinic, room, provider, service and status filters
+- 10-minute slot grid
+- visible empty slots
+- appointment cards spanning duration
+- patient identity panel
+- mark arrived action
+- start service action
+- links to Appointment Workspace and Patient Workspace
+
+Reception must not create clinical truth. It organizes arrival, identity verification and resource scheduling.
 
 ## 5a. Episode Workspace
 

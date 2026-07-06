@@ -19,8 +19,9 @@ export type Service = {
   active: boolean;
 };
 
-export type Provider = { id: number; full_name: string; specialty?: string };
-export type Room = { id: number; name: string; type?: string };
+export type Clinic = { id: number; name: string; active: boolean };
+export type Provider = { id: number; full_name: string; specialty?: string; staff_role?: string; clinic_id?: number | null; clinic?: Clinic | null };
+export type Room = { id: number; name: string; type?: string; clinic_id?: number | null; clinic?: Clinic | null };
 export type Module = { id: number; key: string; name: string; description?: string; enabled: boolean };
 
 export type ClinicalEpisode = {
@@ -159,11 +160,21 @@ export type Appointment = {
   status: string;
   source: string;
   notes?: string;
+  arrived_at?: string | null;
+  identity_verified_at?: string | null;
+  identity_verified_by?: number | null;
   patient?: Patient;
   service?: Service;
   provider?: Provider;
   room?: Room;
   episode?: ClinicalEpisode | null;
+};
+
+export type ReceptionSlot = {
+  time: string;
+  appointment?: Appointment | null;
+  span: number;
+  empty: boolean;
 };
 
 export type InventoryItem = {

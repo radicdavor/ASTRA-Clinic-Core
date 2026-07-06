@@ -26,7 +26,10 @@ const actionLabels: Record<string, string> = {
   ai_document_summary_rejected: "AI sazetak odbijen",
   patient_summary_draft_generated: "AI draft sazetka",
   patient_summary_edited: "Sazetak uredjen",
-  patient_summary_reviewed: "Sazetak potvrdjen"
+  patient_summary_reviewed: "Sazetak potvrdjen",
+  mark_arrived: "Pacijent pristigao",
+  identity_verified: "Identitet provjeren",
+  reception_patient_updated: "Podaci dopunjeni na prijemu"
 };
 
 const entityLabels: Record<string, string> = {

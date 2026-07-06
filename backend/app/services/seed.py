@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 from app.core.security import hash_password
 from app.models.domain import (
     Appointment,
+    Clinic,
     InventoryBatch,
     InventoryItem,
     Module,
@@ -99,6 +100,13 @@ GASTRO_SERVICE_SEEDS = [
 
 
 def seed_catalog(db: Session) -> None:
+    gastro_clinic = db.scalar(select(Clinic).where(Clinic.name == "Gastroenterologija")) or Clinic(name="Gastroenterologija")
+    aesthetic_clinic = db.scalar(select(Clinic).where(Clinic.name == "Estetika")) or Clinic(name="Estetika")
+    gastro_clinic.active = True
+    aesthetic_clinic.active = True
+    db.add_all([gastro_clinic, aesthetic_clinic])
+    db.flush()
+
     modules: dict[str, Module] = {}
     for module_seed in MODULE_SEEDS:
         module = db.scalar(select(Module).where(Module.key == module_seed["key"]))
@@ -110,6 +118,18 @@ def seed_catalog(db: Session) -> None:
             module.description = module_seed["description"]
             module.enabled = True
         modules[module_seed["key"]] = module
+    db.flush()
+
+    active_services = db.scalars(select(Service).where(Service.active.is_(True))).all()
+    for room in db.scalars(select(Room)).all():
+        if room.clinic_id is None:
+            room.clinic_id = aesthetic_clinic.id if "estet" in f"{room.name} {room.type}".lower() else gastro_clinic.id
+        if not room.allowed_services:
+            room.allowed_services = active_services
+    for provider in db.scalars(select(Provider)).all():
+        provider.staff_role = provider.staff_role or "physician"
+        if provider.clinic_id is None:
+            provider.clinic_id = gastro_clinic.id
     db.flush()
 
     scheduling = modules["scheduling"]
@@ -170,9 +190,13 @@ def seed(db: Session) -> None:
     db.add_all(roles.values())
     db.flush()
 
+    gastro_clinic = Clinic(name="Gastroenterologija")
+    aesthetic_clinic = Clinic(name="Estetika")
+    db.add_all([gastro_clinic, aesthetic_clinic])
+    db.flush()
     admin = User(email="admin@astra.local", full_name="ASTRA Administrator", password_hash=hash_password("astra123"), role_id=roles["admin"].id)
-    provider = Provider(full_name="dr. Ana Kovač", specialty="Gastroenterologija")
-    room = Room(name="Endoskopska sala 1", type="endoscopy_room")
+    provider = Provider(full_name="dr. Ana Kovač", specialty="Gastroenterologija", clinic_id=gastro_clinic.id)
+    room = Room(name="Endoskopska sala 1", type="endoscopy_room", clinic_id=gastro_clinic.id)
     db.add_all([admin, provider, room])
 
     modules = [
@@ -194,6 +218,7 @@ def seed(db: Session) -> None:
     ]
     db.add_all(services)
     db.flush()
+    room.allowed_services = services
     seed_catalog(db)
 
     patient = Patient(first_name="Ivana", last_name="Horvat", date_of_birth=date(1984, 5, 12), phone="+385 91 234 5678", email="ivana.horvat@example.com")

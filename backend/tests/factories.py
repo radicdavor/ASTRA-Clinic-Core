@@ -1,11 +1,18 @@
 from datetime import date, time
 from decimal import Decimal
 
-from app.models.domain import Appointment, ClinicalDocument, ClinicalEpisode, ClinicalPlan, InventoryBatch, InventoryItem, Patient, Provider, Room, Service, StockLocation
+from app.models.domain import Appointment, Clinic, ClinicalDocument, ClinicalEpisode, ClinicalPlan, InventoryBatch, InventoryItem, Patient, Provider, Room, Service, StockLocation
 
 
 def patient(db, first_name="Test", last_name="Patient"):
     obj = Patient(first_name=first_name, last_name=last_name)
+    db.add(obj)
+    db.flush()
+    return obj
+
+
+def clinic(db, name="Test clinic"):
+    obj = Clinic(name=name)
     db.add(obj)
     db.flush()
     return obj

@@ -1,4 +1,4 @@
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, datetime, time, timedelta, timezone
 from decimal import Decimal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
@@ -10,8 +10,8 @@ from app.audit.service import audit, snapshot
 from app.auth.dependencies import Actor, require_permission
 from app.core.config import get_settings
 from app.core.database import get_db
-from app.models.domain import ApiKey, Appointment, AuditLog, ClinicalDocument, ClinicalEpisode, ClinicalPlan, InventoryBatch, InventoryItem, Invoice, Module, Patient, PatientClinicalSummaryRecord, Provider, Room, Service
-from app.schemas.common import AppointmentCreate, AppointmentOut, AppointmentUpdate, ClinicalDecisionTimelineItem, ClinicalDocumentCreate, ClinicalDocumentOut, ClinicalDocumentUpdate, ClinicalDocumentUpload, ClinicalEpisodeCreate, ClinicalEpisodeOut, ClinicalEpisodeUpdate, ClinicalPlanGenerate, ClinicalPlanOut, ClinicalPlanUpdate, ErrorResponse, InvoiceOut, PatientClinicalSummary, PatientClinicalSummaryRecordOut, PatientClinicalSummaryRecordUpdate, PatientCreate, PatientKnowledgeItem, PatientKnowledgeSource, PatientOut, PatientUpdate, ReadinessCheck, ReadinessOut, ServiceCreate, ServiceOut
+from app.models.domain import ApiKey, Appointment, AuditLog, Clinic, ClinicalDocument, ClinicalEpisode, ClinicalPlan, InventoryBatch, InventoryItem, Invoice, Module, Patient, PatientClinicalSummaryRecord, Provider, Room, Service, room_services
+from app.schemas.common import AppointmentCreate, AppointmentOut, AppointmentUpdate, ClinicOut, ClinicalDecisionTimelineItem, ClinicalDocumentCreate, ClinicalDocumentOut, ClinicalDocumentUpdate, ClinicalDocumentUpload, ClinicalEpisodeCreate, ClinicalEpisodeOut, ClinicalEpisodeUpdate, ClinicalPlanGenerate, ClinicalPlanOut, ClinicalPlanUpdate, ErrorResponse, InvoiceOut, PatientClinicalSummary, PatientClinicalSummaryRecordOut, PatientClinicalSummaryRecordUpdate, PatientCreate, PatientKnowledgeItem, PatientKnowledgeSource, PatientOut, PatientUpdate, ReadinessCheck, ReadinessOut, ReceptionArrivalRequest, ReceptionSlot, ServiceCreate, ServiceOut
 from app.services.appointments import validate_appointment_payload
 from app.services.clinical_extraction import extract_document_knowledge_from_text
 
@@ -171,6 +171,27 @@ def add_knowledge_item(items: list[PatientKnowledgeItem], text: str | None, docu
     items.append(PatientKnowledgeItem(text=cleaned, sources=[source]))
 
 
+def ten_minute_reception_slots(appointments: list[Appointment]) -> list[ReceptionSlot]:
+    by_start = {appointment.start_time.strftime("%H:%M"): appointment for appointment in appointments}
+    slots: list[ReceptionSlot] = []
+    current = datetime.combine(date.today(), time(7, 0))
+    end = datetime.combine(date.today(), time(21, 0))
+    occupied_until: datetime | None = None
+    while current <= end:
+        label = current.strftime("%H:%M")
+        appointment = by_start.get(label)
+        if appointment:
+            span = max(1, int((datetime.combine(date.today(), appointment.end_time) - datetime.combine(date.today(), appointment.start_time)).total_seconds() // 600))
+            occupied_until = datetime.combine(date.today(), appointment.end_time)
+            slots.append(ReceptionSlot(time=label, appointment=appointment, span=span, empty=False))
+        elif occupied_until and current < occupied_until:
+            slots.append(ReceptionSlot(time=label, appointment=None, span=0, empty=False))
+        else:
+            slots.append(ReceptionSlot(time=label, appointment=None, span=1, empty=True))
+        current += timedelta(minutes=10)
+    return slots
+
+
 def latest_patient_summary_record(db: Session, patient_id: int, statuses: list[str] | None = None) -> PatientClinicalSummaryRecord | None:
     stmt = select(PatientClinicalSummaryRecord).where(PatientClinicalSummaryRecord.patient_id == patient_id)
     if statuses:
@@ -299,6 +320,10 @@ def readiness(db: Session = Depends(get_db), actor: Actor = Depends(require_perm
     episode_count = scalar_count(db, select(func.count(ClinicalEpisode.id)))
     appointments_without_episode = scalar_count(db, select(func.count(Appointment.id)).where(Appointment.episode_id.is_(None)))
     documents_awaiting_review = scalar_count(db, select(func.count(ClinicalDocument.id)).where(ClinicalDocument.physician_reviewed.is_(False)))
+    rooms_without_services = scalar_count(db, select(func.count(Room.id)).where(Room.active.is_(True), ~Room.id.in_(select(room_services.c.room_id))))
+    services_without_rooms = scalar_count(db, select(func.count(Service.id)).where(Service.active.is_(True), ~Service.id.in_(select(room_services.c.service_id))))
+    providers_without_clinic = scalar_count(db, select(func.count(Provider.id)).where(Provider.active.is_(True), Provider.clinic_id.is_(None)))
+    today_incomplete_appointments = scalar_count(db, select(func.count(Appointment.id)).where(Appointment.date == today, or_(Appointment.provider_id.is_(None), Appointment.room_id.is_(None), Appointment.service_id.is_(None))))
     reviewed_documents = db.scalars(select(ClinicalDocument).where(ClinicalDocument.physician_reviewed.is_(True))).all()
     reviewed_summaries = db.scalars(select(PatientClinicalSummaryRecord).where(PatientClinicalSummaryRecord.status == "reviewed")).all()
     reviewed_summary_by_patient = {summary.patient_id: summary for summary in reviewed_summaries}
@@ -378,6 +403,40 @@ def readiness(db: Session = Depends(get_db), actor: Actor = Depends(require_perm
             target_label="Otvori pacijente",
             decision_impact="review" if stale_summary_patients else "none",
             severity_reason="Sazetak je operativna pomoc i ne smije zamijeniti pregled izvora." if stale_summary_patients else None,
+        ),
+        ReadinessCheck(
+            key="room_service_compatibility",
+            label="Sobe i usluge",
+            status=warning if rooms_without_services or services_without_rooms else ok,
+            message=f"Sobe bez dopustenih usluga: {rooms_without_services}; usluge bez soba: {services_without_rooms}." if rooms_without_services or services_without_rooms else "Sve aktivne sobe i usluge imaju osnovnu kompatibilnost.",
+            count=rooms_without_services + services_without_rooms,
+            action="Provjeriti pravila soba/usluga prije recepcijskog narucivanja." if rooms_without_services or services_without_rooms else None,
+            target_path="/reception",
+            target_label="Otvori prijem",
+            decision_impact="review" if rooms_without_services or services_without_rooms else "none",
+            severity_reason="Recepcija treba znati u kojoj sobi se usluga smije izvesti." if rooms_without_services or services_without_rooms else None,
+        ),
+        ReadinessCheck(
+            key="provider_clinic_assignments",
+            label="Osoblje i klinike",
+            status=warning if providers_without_clinic else ok,
+            message=f"Postoje aktivni djelatnici bez klinike ({providers_without_clinic})." if providers_without_clinic else "Aktivni djelatnici imaju klinicki kontekst.",
+            count=providers_without_clinic,
+            action="Dodijeliti kliniku djelatnicima za resursno narucivanje." if providers_without_clinic else None,
+            target_path="/reception",
+            target_label="Otvori prijem",
+            decision_impact="review" if providers_without_clinic else "none",
+        ),
+        ReadinessCheck(
+            key="today_appointments_resource_context",
+            label="Danasnji termini",
+            status=critical if today_incomplete_appointments else ok,
+            message=f"Danas postoje termini bez sobe, lijecnika ili usluge ({today_incomplete_appointments})." if today_incomplete_appointments else "Danasnji termini imaju osnovne resurse.",
+            count=today_incomplete_appointments,
+            action="Popuniti sobu, lijecnika i uslugu prije prijema pacijenta." if today_incomplete_appointments else None,
+            target_path="/reception",
+            target_label="Otvori prijem",
+            decision_impact="blocks_demo" if today_incomplete_appointments else "none",
         ),
         ReadinessCheck(
             key="human_pilot_evidence",
@@ -1106,7 +1165,7 @@ def create_appointment(
 ):
     data = payload.model_dump()
     validate_episode_for_patient(db, data.get("episode_id"), payload.patient_id)
-    data["duration_minutes"] = validate_appointment_payload(db, payload.date, payload.start_time, payload.end_time, payload.provider_id, payload.room_id, payload.status, payload.source)
+    data["duration_minutes"] = validate_appointment_payload(db, payload.date, payload.start_time, payload.end_time, payload.provider_id, payload.room_id, payload.status, payload.source, service_id=payload.service_id)
     appointment = Appointment(**data, created_by=actor.user_id)
     db.add(appointment)
     db.flush()
@@ -1172,7 +1231,7 @@ def update_appointment(
         validate_episode_for_patient(db, update_data.get("episode_id"), next_patient_id)
     old_episode_id = appointment.episode_id
     patch_model(appointment, update_data)
-    appointment.duration_minutes = validate_appointment_payload(db, appointment.date, appointment.start_time, appointment.end_time, appointment.provider_id, appointment.room_id, appointment.status, appointment.source, appointment_id=appointment.id)
+    appointment.duration_minutes = validate_appointment_payload(db, appointment.date, appointment.start_time, appointment.end_time, appointment.provider_id, appointment.room_id, appointment.status, appointment.source, service_id=appointment.service_id, appointment_id=appointment.id)
     db.flush()
     audit(db, "update", "Appointment", appointment.id, "Ažuriran termin", actor.user_id, actor.actor_type, actor.api_key_id, before, snapshot(appointment), request)
     if "episode_id" in update_data and old_episode_id != appointment.episode_id:
@@ -1211,6 +1270,67 @@ def day_schedule(date: date = Query(...), db: Session = Depends(get_db), actor: 
     ).all()
 
 
+@router.get("/reception/day", response_model=list[ReceptionSlot])
+def reception_day(
+    date: date = Query(...),
+    clinic_id: int | None = None,
+    room_id: int | None = None,
+    provider_id: int | None = None,
+    service_id: int | None = None,
+    status: str | None = None,
+    db: Session = Depends(get_db),
+    actor: Actor = Depends(require_permission("appointments.read")),
+):
+    stmt = (
+        select(Appointment)
+        .options(joinedload(Appointment.patient), joinedload(Appointment.service), joinedload(Appointment.provider).joinedload(Provider.clinic), joinedload(Appointment.room).joinedload(Room.clinic))
+        .join(Appointment.room)
+        .where(Appointment.date == date)
+        .order_by(Appointment.start_time)
+    )
+    if clinic_id:
+        stmt = stmt.where(Room.clinic_id == clinic_id)
+    if room_id:
+        stmt = stmt.where(Appointment.room_id == room_id)
+    if provider_id:
+        stmt = stmt.where(Appointment.provider_id == provider_id)
+    if service_id:
+        stmt = stmt.where(Appointment.service_id == service_id)
+    if status:
+        stmt = stmt.where(Appointment.status == status)
+    return ten_minute_reception_slots(db.scalars(stmt).all())
+
+
+@router.post("/appointments/{appointment_id}/mark-arrived", response_model=AppointmentOut)
+def mark_appointment_arrived(
+    appointment_id: int,
+    payload: ReceptionArrivalRequest,
+    request: Request,
+    db: Session = Depends(get_db),
+    actor: Actor = Depends(require_permission("appointments.write")),
+):
+    appointment = db.scalar(select(Appointment).options(joinedload(Appointment.patient)).where(Appointment.id == appointment_id))
+    if not appointment:
+        raise HTTPException(404, detail="Termin nije pronaden")
+    before = snapshot(appointment)
+    if payload.patient:
+        patient_before = snapshot(appointment.patient)
+        patch_model(appointment.patient, payload.patient.model_dump(exclude_unset=True))
+        audit(db, "reception_patient_updated", "Patient", appointment.patient_id, "Recepcija je dopunila podatke pacijenta", actor.user_id, actor.actor_type, actor.api_key_id, patient_before, snapshot(appointment.patient), request)
+    now = datetime.now(timezone.utc)
+    appointment.status = "arrived"
+    appointment.arrived_at = now
+    if payload.identity_verified:
+        appointment.identity_verified_at = now
+        appointment.identity_verified_by = actor.user_id
+        audit(db, "identity_verified", "Appointment", appointment.id, "Identitet pacijenta je provjeren na prijemu", actor.user_id, actor.actor_type, actor.api_key_id, before, snapshot(appointment), request)
+    db.flush()
+    audit(db, "mark_arrived", "Appointment", appointment.id, "Pacijent je oznacen kao pristigao", actor.user_id, actor.actor_type, actor.api_key_id, before, snapshot(appointment), request)
+    db.commit()
+    db.refresh(appointment)
+    return get_appointment(appointment.id, db, actor)
+
+
 @router.get("/search")
 def search(q: str, db: Session = Depends(get_db), actor: Actor = Depends(require_permission("patients.read"))):
     like = f"%{q}%"
@@ -1224,6 +1344,11 @@ def search(q: str, db: Session = Depends(get_db), actor: Actor = Depends(require
 @router.get("/services", response_model=list[ServiceOut])
 def list_services(db: Session = Depends(get_db), actor: Actor = Depends(require_permission("services.read"))):
     return db.scalars(select(Service).order_by(Service.name)).all()
+
+
+@router.get("/clinics", response_model=list[ClinicOut])
+def list_clinics(db: Session = Depends(get_db), actor: Actor = Depends(require_permission("appointments.read"))):
+    return db.scalars(select(Clinic).where(Clinic.active.is_(True)).order_by(Clinic.name)).all()
 
 
 @router.post("/services", response_model=ServiceOut)

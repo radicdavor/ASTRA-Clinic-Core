@@ -17,6 +17,13 @@ role_permissions = Table(
     Column("permission_id", ForeignKey("permissions.id"), primary_key=True),
 )
 
+room_services = Table(
+    "room_services",
+    Base.metadata,
+    Column("room_id", ForeignKey("rooms.id"), primary_key=True),
+    Column("service_id", ForeignKey("services.id"), primary_key=True),
+)
+
 
 class AppointmentStatus(StrEnum):
     scheduled = "scheduled"
@@ -101,7 +108,10 @@ class Provider(TimestampMixin, Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     full_name: Mapped[str] = mapped_column(String(160), index=True)
     specialty: Mapped[str | None] = mapped_column(String(120))
+    staff_role: Mapped[str] = mapped_column(String(60), default="physician", index=True)
+    clinic_id: Mapped[int | None] = mapped_column(ForeignKey("clinics.id"))
     active: Mapped[bool] = mapped_column(Boolean, default=True)
+    clinic: Mapped["Clinic | None"] = relationship()
 
 
 class Room(TimestampMixin, Base):
@@ -109,7 +119,17 @@ class Room(TimestampMixin, Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     name: Mapped[str] = mapped_column(String(120), unique=True)
     type: Mapped[str | None] = mapped_column(String(80))
+    clinic_id: Mapped[int | None] = mapped_column(ForeignKey("clinics.id"))
     active: Mapped[bool] = mapped_column(Boolean, default=True)
+    clinic: Mapped["Clinic | None"] = relationship()
+    allowed_services: Mapped[list["Service"]] = relationship(secondary=room_services, back_populates="allowed_rooms")
+
+
+class Clinic(TimestampMixin, Base):
+    __tablename__ = "clinics"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    name: Mapped[str] = mapped_column(String(120), unique=True, index=True)
+    active: Mapped[bool] = mapped_column(Boolean, default=True, index=True)
 
 
 class Module(TimestampMixin, Base):
@@ -214,6 +234,7 @@ class Service(TimestampMixin, Base):
     module_id: Mapped[int | None] = mapped_column(ForeignKey("modules.id"))
     active: Mapped[bool] = mapped_column(Boolean, default=True)
     module: Mapped[Module | None] = relationship()
+    allowed_rooms: Mapped[list[Room]] = relationship(secondary=room_services, back_populates="allowed_services")
 
 
 class Appointment(TimestampMixin, Base):
@@ -232,6 +253,9 @@ class Appointment(TimestampMixin, Base):
     source: Mapped[str] = mapped_column(String(40), default=AppointmentSource.manual.value)
     notes: Mapped[str | None] = mapped_column(Text)
     created_by: Mapped[int | None] = mapped_column(ForeignKey("users.id"))
+    arrived_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    identity_verified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    identity_verified_by: Mapped[int | None] = mapped_column(ForeignKey("users.id"))
     patient: Mapped[Patient] = relationship()
     service: Mapped[Service] = relationship()
     provider: Mapped[Provider] = relationship()

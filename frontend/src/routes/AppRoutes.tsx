@@ -21,6 +21,7 @@ import { PatientForm } from "../pages/PatientForm";
 import { Patients } from "../pages/Patients";
 import { PurchaseOrders } from "../pages/PurchaseOrders";
 import { Readiness } from "../pages/Readiness";
+import { Reception } from "../pages/Reception";
 import { Services } from "../pages/Services";
 import { Suppliers } from "../pages/Suppliers";
 
@@ -37,6 +38,7 @@ export function AppRoutes() {
         <Route path="/patients" element={<Patients />} />
         <Route path="/patients/new" element={<PatientForm />} />
         <Route path="/patients/:id" element={<PatientDetail />} />
+        <Route path="/reception" element={<Reception />} />
         <Route path="/episodes" element={<Episodes />} />
         <Route path="/episodes/new" element={<EpisodeForm />} />
         <Route path="/episodes/:id" element={<EpisodeDetail />} />

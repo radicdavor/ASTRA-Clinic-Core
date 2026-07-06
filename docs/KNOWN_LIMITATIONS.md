@@ -9,6 +9,8 @@ ASTRA Clinic Core is currently a closed demo/pilot system for demo data only.
 - Possible duplicate detection is a safety prompt, not a guaranteed master-patient-index match.
 - No real Croatian fiscalization is implemented.
 - Frontend e2e coverage is limited.
+- Reception weekly/monthly views are deferred; daily 10-minute grid is implemented.
+- Staff rota, working hours and multi-room support assignments are not fully implemented.
 - Module loader is basic and data-only.
 - Dedicated Invoice Workspace, Inventory Item Workspace and Purchase Order Workspace are still future work; V20 implements Patient Workspace first.
 - Readiness cockpit supports pilot review only; it is not compliance certification and does not replace human pilot evidence.

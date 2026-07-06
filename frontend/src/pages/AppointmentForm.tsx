@@ -32,6 +32,12 @@ export function AppointmentForm() {
     return `/patients/new?${next.toString()}`;
   }, [patientQuery]);
 
+  function endTimeFrom(startTime: string, duration: number) {
+    const [hours, minutes] = startTime.split(":").map(Number);
+    const total = hours * 60 + minutes + duration;
+    return `${String(Math.floor(total / 60)).padStart(2, "0")}:${String(total % 60).padStart(2, "0")}`;
+  }
+
   useEffect(() => {
     if (!initialPatientId || selectedPatient) return;
     let alive = true;
@@ -120,7 +126,10 @@ export function AppointmentForm() {
             Usluga
             <HelpHint title="Usluga">Usluga odreduje trajanje, cijenu i moguce materijale koji se skidaju sa zalihe nakon zavrsetka termina.</HelpHint>
           </span>
-          <select required value={form.service_id} onChange={(e) => setForm({ ...form, service_id: e.target.value })}><option value="">Odaberi</option>{services.data.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}</select>
+          <select required value={form.service_id} onChange={(e) => {
+            const service = services.data.find((item) => String(item.id) === e.target.value);
+            setForm({ ...form, service_id: e.target.value, duration_minutes: service?.duration_minutes ?? form.duration_minutes, end_time: service ? endTimeFrom(form.start_time, service.duration_minutes) : form.end_time });
+          }}><option value="">Odaberi</option>{services.data.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}</select>
         </label>
         {selectedService && (
           <div className="service-context wide-field">
@@ -132,7 +141,7 @@ export function AppointmentForm() {
         <label>Lijecnik<select required value={form.provider_id} onChange={(e) => setForm({ ...form, provider_id: e.target.value })}><option value="">Odaberi</option>{providers.data.map((p) => <option key={p.id} value={p.id}>{p.full_name}</option>)}</select></label>
         <label>Soba<select required value={form.room_id} onChange={(e) => setForm({ ...form, room_id: e.target.value })}><option value="">Odaberi</option>{rooms.data.map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}</select></label>
         <label>Datum<DateInput required value={form.date} onChange={(value) => setForm({ ...form, date: value })} /></label>
-        <label>Pocetak<input type="time" value={form.start_time} onChange={(e) => setForm({ ...form, start_time: e.target.value })} /></label>
+        <label>Pocetak<input type="time" value={form.start_time} onChange={(e) => setForm({ ...form, start_time: e.target.value, end_time: selectedService ? endTimeFrom(e.target.value, selectedService.duration_minutes) : form.end_time })} /></label>
         <label>Kraj<input type="time" value={form.end_time} onChange={(e) => setForm({ ...form, end_time: e.target.value })} /></label>
         <label>Trajanje<input type="number" value={form.duration_minutes} onChange={(e) => setForm({ ...form, duration_minutes: Number(e.target.value) })} /></label>
         <ActionButton type="submit" className="primary" variant="create" disabled={!selectedPatient} helpTitle="Spremi termin" help="Termin se moze spremiti tek nakon odabira konkretnog pacijenta iz rezultata pretrage. Ne stvarajte termin za nepoznatog pacijenta.">

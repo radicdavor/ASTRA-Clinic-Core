@@ -119,6 +119,18 @@ th { color: #667085; font-size: 0.78rem; text-transform: uppercase; letter-spaci
 .patient-search-results button:hover { border-color: #0f766e; }
 .source-link-list { display: flex; flex-wrap: wrap; gap: 8px; }
 .source-link-list a { border: 1px solid #d9e2ec; border-radius: 8px; padding: 6px 8px; background: #ffffff; }
+.segmented-control { display: inline-flex; gap: 4px; border: 1px solid #d9e2ec; border-radius: 8px; padding: 4px; background: #ffffff; }
+.segmented-control button { border: 0; border-radius: 6px; background: transparent; padding: 8px 12px; cursor: pointer; }
+.segmented-control button.active { background: #0f766e; color: #ffffff; }
+.reception-grid { display: grid; gap: 6px; margin-top: 16px; }
+.reception-slot { display: grid; grid-template-columns: 64px minmax(0, 1fr); gap: 10px; min-height: 34px; align-items: stretch; border: 1px solid #e7edf3; border-radius: 8px; background: #ffffff; padding: 6px; }
+.reception-slot time { color: #667085; font-weight: 800; padding-top: 6px; }
+.reception-slot.empty { background: #fbfcfe; }
+.empty-slot { color: #98a2b3; padding-top: 6px; }
+.reception-card { display: grid; gap: 4px; width: 100%; border: 1px solid #b7d8c2; border-radius: 8px; background: #f1fbf4; color: #172033; padding: 10px; text-align: left; cursor: pointer; }
+.reception-card:hover { border-color: #0f766e; }
+.reception-card small { color: #667085; }
+.reception-panel { width: min(760px, calc(100vw - 32px)); }
 .readiness-pill, .readiness-badge { display: inline-flex; align-items: center; min-height: 30px; border-radius: 8px; padding: 0 10px; font-weight: 800; white-space: nowrap; }
 .readiness-pill { min-height: 38px; }
 .readiness-ready_for_demo, .readiness-check-ok { background: #e7f8ed; color: #15803d; }

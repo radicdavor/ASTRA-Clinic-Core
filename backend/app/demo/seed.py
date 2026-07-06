@@ -7,6 +7,7 @@ from app.core.database import SessionLocal
 from app.core.security import hash_password
 from app.models.domain import (
     Appointment,
+    Clinic,
     ClinicalDocument,
     ClinicalEpisode,
     ClinicalPlan,
@@ -70,16 +71,25 @@ def main() -> None:
         for role_name, email in DEMO_EMAILS.items():
             ensure_demo_user(db, role_name, email, permissions)
 
+        gastro_clinic = db.scalar(select(Clinic).where(Clinic.name == "Gastroenterologija")) or Clinic(name="Gastroenterologija")
+        aesthetic_clinic = db.scalar(select(Clinic).where(Clinic.name == "Estetika")) or Clinic(name="Estetika")
+        db.add_all([gastro_clinic, aesthetic_clinic])
+        db.flush()
         patient = db.scalar(select(Patient).where(Patient.email.in_([DEMO_PATIENT_EMAIL, LEGACY_DEMO_PATIENT_EMAIL]))) or Patient(first_name="Demo", last_name="Pacijent", email=DEMO_PATIENT_EMAIL)
         patient.email = DEMO_PATIENT_EMAIL
         provider = db.scalar(select(Provider).where(Provider.full_name == "dr. Demo Gastro")) or Provider(full_name="dr. Demo Gastro", specialty="Gastroenterologija")
+        provider.clinic_id = provider.clinic_id or gastro_clinic.id
+        provider.staff_role = provider.staff_role or "physician"
         room = db.scalar(select(Room).where(Room.name == "Demo ordinacija 1")) or Room(name="Demo ordinacija 1", type="ordinacija")
+        room.clinic_id = room.clinic_id or gastro_clinic.id
         service = db.scalar(select(Service).where(Service.code == "DEMO-GASTRO")) or Service(name="Demo gastroskopija", code="DEMO-GASTRO", duration_minutes=30, price=Decimal("120"))
         location = db.scalar(select(StockLocation).where(StockLocation.name == "Demo skladiste")) or StockLocation(name="Demo skladiste", type="main")
         item = db.scalar(select(InventoryItem).where(InventoryItem.sku == "DEMO-MAT")) or InventoryItem(sku="DEMO-MAT", name="Demo potrosni materijal", current_stock=Decimal("0"), minimum_stock=Decimal("2"), reorder_point=Decimal("2"), purchase_price=Decimal("5"))
         supplier = db.scalar(select(Supplier).where(Supplier.name == "Demo dobavljac")) or Supplier(name="Demo dobavljac")
         db.add_all([patient, provider, room, service, location, item, supplier])
         db.flush()
+        if service not in room.allowed_services:
+            room.allowed_services.append(service)
 
         if db.scalar(select(InventoryBatch).where(InventoryBatch.inventory_item_id == item.id)) is None:
             db.add(InventoryBatch(inventory_item_id=item.id, quantity=Decimal("10"), location_id=location.id, purchase_price=Decimal("5")))

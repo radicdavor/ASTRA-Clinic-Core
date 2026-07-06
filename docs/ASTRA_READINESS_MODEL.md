@@ -49,6 +49,7 @@ Each readiness check should link to an operational screen when possible:
 - clinical episodes are experimental/deferred and should not block readiness
 - providers -> `/appointments/new`
 - rooms -> `/appointments/new`
+- reception resource issues -> `/reception`
 - services -> `/services`
 - modules -> `/modules`
 - audit -> `/audit-log`
