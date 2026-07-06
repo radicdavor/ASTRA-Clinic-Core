@@ -68,6 +68,16 @@ th { color: #667085; font-size: 0.78rem; text-transform: uppercase; letter-spaci
 .quick-actions button { height: 30px; border: 1px solid #d9e2ec; border-radius: 8px; background: #ffffff; color: #405069; cursor: pointer; font-size: 0.82rem; }
 .workflow-panel { margin-top: 18px; background: white; border: 1px solid #e3e8ef; border-radius: 8px; padding: 18px; }
 .success-message { color: #15803d; margin: 0 0 14px; font-weight: 700; }
+.toast-host { position: fixed; right: 24px; bottom: 24px; z-index: 30; pointer-events: none; }
+.toast-card { min-width: 260px; max-width: min(380px, calc(100vw - 32px)); display: grid; gap: 3px; border: 1px solid #a7e0c0; border-radius: 8px; background: #ecfdf3; color: #14532d; padding: 14px 16px; box-shadow: 0 18px 50px rgba(15, 23, 42, 0.18); animation: toast-in 160ms ease-out; }
+.toast-card-error { border-color: #f0b4b4; background: #fff1f1; color: #8f1d1d; }
+.toast-card strong { font-size: 0.9rem; }
+.toast-card span { color: #166534; }
+.toast-card-error span { color: #9f1d1d; }
+@keyframes toast-in {
+  from { transform: translateY(8px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
 .modal-backdrop { position: fixed; inset: 0; background: rgba(15, 23, 42, 0.35); display: grid; place-items: center; padding: 20px; z-index: 10; }
 .modal-panel { width: min(720px, 100%); max-height: 90vh; overflow: auto; background: white; border-radius: 8px; border: 1px solid #d9e2ec; padding: 20px; box-shadow: 0 24px 80px rgba(15, 23, 42, 0.22); }
 .material-list { display: grid; gap: 10px; margin: 14px 0; }
@@ -104,6 +114,7 @@ th { color: #667085; font-size: 0.78rem; text-transform: uppercase; letter-spaci
   .sidebar { position: static; }
   .sidebar nav { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .dashboard-grid, .metrics { grid-template-columns: 1fr; }
+  .toast-host { right: 16px; bottom: 16px; }
   .topbar { padding: 0 16px; }
   .page { padding: 18px; }
   .form-grid { grid-template-columns: 1fr; }

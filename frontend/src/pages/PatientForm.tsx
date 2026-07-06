@@ -7,7 +7,7 @@ export function PatientForm() {
   const [form, setForm] = useState({ first_name: "", last_name: "", date_of_birth: "", phone: "", email: "", notes: "" });
   async function submit(event: FormEvent) {
     event.preventDefault();
-    await api("/api/patients", { method: "POST", body: JSON.stringify(form) });
+    await api("/api/patients", { method: "POST", body: JSON.stringify({ ...form, date_of_birth: form.date_of_birth || null }) });
     navigate("/patients");
   }
   return (

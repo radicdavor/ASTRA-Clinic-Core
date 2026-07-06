@@ -2,13 +2,13 @@
 
 ## Status
 
-Deferred
+Accepted
 
 ## Context
 
 ASTRA Clinic Core has reached a v0.1-pilot candidate state for closed demo/pilot use with demo data only. The system includes appointment flow, inventory/material consumption, purchase receiving, invoice issue/payment, audit logging, public demo/real-data config, release notes, validation scripts and pilot feedback templates.
 
-A maintainer command-level dry-run passed on 05-07-2026, but a human participant pilot dry-run has not yet been completed.
+A maintainer command-level dry-run passed on 05-07-2026. The maintainer then completed the structured human pilot gate: tasks 1-12 passed, real-data confusion was not observed, fiscalization confusion was not observed, and one P2 UX finding was raised for clearer action confirmation.
 
 ## Decision
 
@@ -22,7 +22,9 @@ V15 decision: keep the release Deferred. Human pilot evidence is still missing, 
 
 Post-V15 update: maintainer/user completed an informal walkthrough and reported "Za sada dobro" with no issues reported. The release remains Deferred until structured pilot evidence fields are completed or explicitly waived.
 
-V17 update: release remains Deferred because the structured pilot completion questions are still unanswered.
+V17 update: release remained Deferred because the structured pilot completion questions were still unanswered.
+
+Post-V17 update: structured answers were provided. No P0/P1 blocker was reported. The P2 UX finding for action confirmation was fixed with global toast feedback for successful create/update/delete actions.
 
 ## Decision Options
 
@@ -30,11 +32,11 @@ V17 update: release remains Deferred because the structured pilot completion que
 2. Deferred - do not tag because P0/P1 was found or the human pilot remains incomplete.
 3. Waived - maintainer explicitly permits tagging without a human pilot and documents the risk in this ADR and release notes.
 
-Current status is Deferred because informal human feedback exists but structured pilot evidence is incomplete and no maintainer waiver has been recorded.
+Current status is Accepted for `v0.1-pilot` preparation because structured pilot evidence is complete and no P0/P1 blocker is open. Tagging still requires an explicit maintainer tag action after final checklist review.
 
 ## Consequences
 
-- Feature expansion remains deferred.
+- Feature expansion can proceed only after the pilot tag decision or an explicit maintainer direction.
 - P0/P1 fixes take priority over new module or integration work.
 - P2/P3 issues may be documented and deferred if release notes clearly describe them.
 - Release tagging requires explicit checklist review.
@@ -49,4 +51,4 @@ Real Croatian fiscalization is not implemented. The current mode is noop/stub an
 
 ## Next Milestone
 
-Complete the human v0.1 pilot dry-run, triage findings, fix any P0/P1 blockers, then decide whether to tag `v0.1-pilot` or explicitly waive the human pilot gate.
+Run final validation checks, then tag `v0.1-pilot` only when the maintainer explicitly requests the tag.

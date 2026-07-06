@@ -1,12 +1,10 @@
 # Next Action Before v0.1-pilot Tag
 
-## Current Block
+## Current Status
 
-`v0.1-pilot` is blocked because the informal human walkthrough has not yet been converted into a complete structured pilot report and no maintainer waiver has been documented.
+`v0.1-pilot` is no longer blocked by missing structured pilot answers. The maintainer provided structured answers: tasks 1-12 passed, real-data confusion was not observed, fiscalization confusion was not observed, and one P2 UX finding was recorded.
 
-The maintainer/user reported that the program is "za sada dobro", with no issues reported so far. No broad feature work should proceed before the structured pilot evidence is completed, except validated P0/P1 fixes.
-
-V17 inspection confirms the walkthrough is still informal. The release remains Deferred until the missing structured fields below are answered or explicitly waived.
+The P2 UX finding requested a visible hover/toast confirmation after actions such as patient entry and payment. This has been implemented as global toast feedback for successful create/update/delete actions.
 
 ## Owner
 
@@ -19,12 +17,10 @@ V17 inspection confirms the walkthrough is still informal. The release remains D
 3. Seed demo data.
 4. Confirm `/api/public-config` returns `real_data_allowed=false`.
 5. Open the frontend and confirm the demo banner is visible.
-6. Complete the remaining structured fields in `docs/pilot_sessions/2026-07-05_human_pilot_01.md`.
-7. Confirm task completion, friction notes, real-data confusion and fiscalization confusion.
-8. Update `docs/pilot_sessions/2026-07-05_human_pilot_01_triage.md`.
-9. Create GitHub issues for findings or document `to-create` payloads.
-10. Update `docs/V0_1_GO_NO_GO_MATRIX.md`.
-11. Update ADR 0001 to Accepted, Deferred or Waived.
+6. Run final validation checks.
+7. Review `docs/pilot_sessions/2026-07-05_human_pilot_01.md` and triage.
+8. Confirm there are no open P0/P1 findings.
+9. Tag `v0.1-pilot` only after explicit maintainer approval.
 
 ## Expected Evidence File
 
@@ -41,23 +37,23 @@ Required evidence:
 - fiscalization confusion yes/no
 - Go/No-Go recommendation
 
-Missing structured answers:
+Structured answers received:
 
-1. Login completed: Yes / No
-2. Today's schedule found: Yes / No
-3. Appointment detail opened: Yes / No
-4. Appointment status changed: Yes / No
-5. Material suggestion reviewed: Yes / No
-6. Appointment completed with material consumption: Yes / No
-7. Stock movement verified: Yes / No
-8. Draft invoice created: Yes / No
-9. Invoice issued: Yes / No
-10. Payment recorded: Yes / No
-11. Purchase order received: Yes / No
-12. Audit trail found and understood: Yes / No
-13. Real-data confusion observed: Yes / No
-14. Fiscalization confusion observed: Yes / No
-15. Observed friction or requested changes:
+1. Login completed: Yes
+2. Today's schedule found: Yes
+3. Appointment detail opened: Yes
+4. Appointment status changed: Yes
+5. Material suggestion reviewed: Yes
+6. Appointment completed with material consumption: Yes
+7. Stock movement verified: Yes
+8. Draft invoice created: Yes
+9. Invoice issued: Yes
+10. Payment recorded: Yes
+11. Purchase order received: Yes
+12. Audit trail found and understood: Yes
+13. Real-data confusion observed: No
+14. Fiscalization confusion observed: No
+15. Observed friction or requested changes: visible hover/toast confirmation after actions.
 
 ## What Not To Build Yet
 
@@ -70,6 +66,6 @@ Missing structured answers:
 
 ## Release Decision
 
-- Accepted only if human pilot completes and no P0/P1 remain open.
+- Accepted if final validation still passes and no P0/P1 remain open.
 - Deferred while human pilot is pending or any P0/P1 exists.
 - Waived only if maintainer explicitly accepts and documents the risk.
