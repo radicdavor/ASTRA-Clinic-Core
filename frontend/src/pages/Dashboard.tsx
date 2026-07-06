@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { api } from "../api/client";
+import { ActionButton } from "../components/ActionButton";
 import { DataTable } from "../components/DataTable";
 import { StatusBadge, statusLabel } from "../components/StatusBadge";
 import { useApi } from "../hooks/useApi";
@@ -59,7 +60,6 @@ export function Dashboard() {
 
   async function completeWithMaterials() {
     if (!selectedAppointment) return;
-    if (!window.confirm("Potvrditi završetak termina i skidanje materijala sa zalihe?")) return;
     setWorkflowError("");
     try {
       const lines = materials
@@ -70,10 +70,10 @@ export function Dashboard() {
         body: JSON.stringify({ lines })
       });
       schedule.setData(schedule.data.map((item) => (item.id === updated.id ? { ...item, status: updated.status } : item)));
-      setWorkflowMessage("Termin je završen i materijal je skinut sa zalihe.");
+      setWorkflowMessage("Termin je zavrsen i materijal je skinut sa zalihe.");
       setSelectedAppointment(null);
     } catch (error) {
-      setWorkflowError(error instanceof Error ? error.message : "Greška kod završetka termina");
+      setWorkflowError(error instanceof Error ? error.message : "Greska kod zavrsetka termina");
     }
   }
 
@@ -86,7 +86,7 @@ export function Dashboard() {
     <section className="page">
       <div className="page-header">
         <div>
-          <h1>Današnji raspored</h1>
+          <h1>Danasnji raspored</h1>
           <p>Pacijenti, statusi i operativna upozorenja za odabrani dan.</p>
         </div>
         <input type="date" value={day} onChange={(event) => setDay(event.target.value)} />
@@ -100,7 +100,7 @@ export function Dashboard() {
       </div>
 
       <div className="filters">
-        <select value={provider} onChange={(event) => setProvider(event.target.value)}><option value="">Svi liječnici</option>{providers.data.map((p) => <option key={p.id} value={p.id}>{p.full_name}</option>)}</select>
+        <select value={provider} onChange={(event) => setProvider(event.target.value)}><option value="">Svi lijecnici</option>{providers.data.map((p) => <option key={p.id} value={p.id}>{p.full_name}</option>)}</select>
         <select value={room} onChange={(event) => setRoom(event.target.value)}><option value="">Sve sobe</option>{rooms.data.map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}</select>
         <select value={service} onChange={(event) => setService(event.target.value)}><option value="">Sve usluge</option>{services.data.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}</select>
         <select value={status} onChange={(event) => setStatus(event.target.value)}><option value="">Svi statusi</option>{["scheduled", "confirmed", "arrived", "in_progress", "completed", "cancelled"].map((s) => <option key={s} value={s}>{statusLabel(s)}</option>)}</select>
@@ -114,7 +114,7 @@ export function Dashboard() {
             { header: "Pacijent", render: (row) => <Link to={`/appointments/${row.id}`}>{row.patient?.first_name ?? ""} {row.patient?.last_name ?? ""}</Link> },
             { header: "Usluga", render: (row) => row.service?.name ?? row.service_id },
             { header: "Status", render: (row) => <StatusBadge status={row.status} /> },
-            { header: "Brze radnje", render: (row) => <div className="quick-actions">{quickStatuses.map((s) => <button key={s} onClick={() => setAppointmentStatus(row, s)}>{statusLabel(s)}</button>)}<button onClick={() => openMaterialWorkflow(row)}>Materijal</button><button onClick={() => draftInvoice(row)}>Račun</button></div> }
+            { header: "Brze radnje", render: (row) => <div className="quick-actions">{quickStatuses.map((s) => <button key={s} onClick={() => setAppointmentStatus(row, s)}>{statusLabel(s)}</button>)}<button onClick={() => openMaterialWorkflow(row)}>Materijal</button><button onClick={() => draftInvoice(row)}>Racun</button></div> }
           ]}
         />
         <aside className="side-panel">
@@ -129,7 +129,7 @@ export function Dashboard() {
       {selectedAppointment && (
         <div className="modal-backdrop">
           <div className="modal-panel">
-            <h2>Završi uz potrošnju materijala</h2>
+            <h2>Zavrsi uz potrosnju materijala</h2>
             {workflowError && <p className="form-error">{workflowError}</p>}
             <div className="material-list">
               {materials.map((item) => (
@@ -141,13 +141,23 @@ export function Dashboard() {
                     step="0.01"
                     value={materialQuantities[item.item.id] ?? ""}
                     onChange={(event) => setMaterialQuantities({ ...materialQuantities, [item.item.id]: event.target.value })}
-                    placeholder={item.requires_user_quantity ? "Unesite količinu" : "0"}
+                    placeholder={item.requires_user_quantity ? "Unesite kolicinu" : "0"}
                   />
                 </label>
               ))}
             </div>
             <div className="quick-actions">
-              <button className="primary" onClick={completeWithMaterials}>Potvrdi završetak</button>
+              <ActionButton
+                className="primary"
+                variant="danger"
+                onClick={completeWithMaterials}
+                requiresConfirm
+                confirmMessage="Potvrditi zavrsetak termina i skidanje materijala sa zalihe?"
+                helpTitle="Potvrdi zavrsetak"
+                help="Zavrsava termin iz dnevnog rasporeda i skida odabrane materijale sa zalihe."
+              >
+                Potvrdi zavrsetak
+              </ActionButton>
               <button onClick={() => setSelectedAppointment(null)}>Odustani</button>
             </div>
           </div>

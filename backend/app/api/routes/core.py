@@ -1,7 +1,7 @@
 from datetime import date
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
-from sqlalchemy import or_, select
+from sqlalchemy import and_, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, joinedload
 
@@ -74,6 +74,36 @@ def list_patients(q: str | None = None, db: Session = Depends(get_db), actor: Ac
     if q:
         like = f"%{q}%"
         stmt = stmt.where(or_(Patient.first_name.ilike(like), Patient.last_name.ilike(like), Patient.phone.ilike(like), Patient.email.ilike(like), Patient.oib.ilike(like)))
+    return db.scalars(stmt).all()
+
+
+@router.get("/patients/possible-duplicates", response_model=list[PatientOut])
+def possible_patient_duplicates(
+    first_name: str | None = None,
+    last_name: str | None = None,
+    date_of_birth: date | None = None,
+    phone: str | None = None,
+    email: str | None = None,
+    oib: str | None = None,
+    db: Session = Depends(get_db),
+    actor: Actor = Depends(require_permission("patients.read")),
+):
+    conditions = []
+    if oib:
+        conditions.append(Patient.oib == oib.strip())
+    if first_name and last_name:
+        name_match = [Patient.first_name.ilike(first_name.strip()), Patient.last_name.ilike(last_name.strip())]
+        if date_of_birth:
+            conditions.append(and_(*name_match, Patient.date_of_birth == date_of_birth))
+        if phone:
+            conditions.append(and_(*name_match, Patient.phone == phone.strip()))
+        if email:
+            conditions.append(and_(*name_match, Patient.email == email.strip()))
+        if not date_of_birth and not phone and not email:
+            conditions.append(and_(*name_match))
+    if not conditions:
+        return []
+    stmt = select(Patient).where(or_(*conditions)).order_by(Patient.last_name, Patient.first_name).limit(10)
     return db.scalars(stmt).all()
 
 

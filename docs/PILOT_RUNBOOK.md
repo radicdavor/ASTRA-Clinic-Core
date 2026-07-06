@@ -47,33 +47,36 @@ Steps:
 
 1. Log in as demo admin.
 2. Open patients and create or review a demo patient. If OIB is used, use only an invented demo OIB.
-3. Open new appointment and search for the patient by name or OIB.
-4. Select the resolved patient from the search result; do not create an appointment from ambiguous free text.
-5. Select a service and review the service context card.
-6. Open daily dashboard.
-7. Select today's date and open the demo appointment.
-8. Use quick status actions: arrived, in progress.
-9. Open appointment detail.
-10. Load material suggestion.
-11. Review required fixed, required variable, and optional material labels.
-12. Complete appointment with material consumption.
-13. Verify the appointment status is completed.
-14. Verify stock movement appears on appointment detail.
-15. Create draft invoice from appointment.
-16. Open invoice detail.
-17. Issue invoice.
-18. Show demo fiscalization status and warning.
-19. Record payment for the remaining amount.
-20. Open purchase orders.
-21. Receive demo purchase order line.
-22. Open inventory and verify stock changed.
-23. Open audit log or appointment audit timeline and review traceability.
-24. Capture feedback in `docs/PILOT_FEEDBACK_TEMPLATE.md`.
+3. If the possible-duplicate warning appears, compare name, birth date, OIB, phone and e-mail before confirming a new patient.
+4. Open new appointment and search for the patient by name or OIB.
+5. Select the resolved patient from the search result; do not create an appointment from ambiguous free text.
+6. Select a service and review the service context card.
+7. Open daily dashboard.
+8. Select today's date and open the demo appointment.
+9. Use quick status actions: arrived, in progress.
+10. Open appointment detail.
+11. Load material suggestion.
+12. Review required fixed, required variable, and optional material labels.
+13. Complete appointment with material consumption and verify the confirmation prompt is clear.
+14. Verify the appointment status is completed.
+15. Verify stock movement appears on appointment detail.
+16. Create draft invoice from appointment.
+17. Open invoice detail.
+18. Issue invoice and verify the confirmation prompt is clear.
+19. Show demo fiscalization status and warning.
+20. Record payment for the remaining amount and verify the confirmation prompt is clear.
+21. Open purchase orders.
+22. Receive demo purchase order line and verify the confirmation prompt is clear.
+23. Open inventory and verify stock changed.
+24. Open audit log or appointment audit timeline and review traceability.
+25. Capture feedback in `docs/PILOT_FEEDBACK_TEMPLATE.md`.
 
 ## Expected Outcomes
 
 - Material consumption reduces stock.
 - Appointment creation requires selecting a resolved patient from search results.
+- Patient creation warns about possible duplicates when identity data overlaps.
+- Critical workflow actions use contextual help and confirmation.
 - Patient OIB is optional and demo-only unless real-data readiness is approved.
 - Invoice receives an official number after issue.
 - Fiscalization provider is `noop`.

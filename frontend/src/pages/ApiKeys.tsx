@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { api } from "../api/client";
+import { ActionButton } from "../components/ActionButton";
 import { DataTable } from "../components/DataTable";
-import { HelpHint } from "../components/HelpHint";
 import { useApi } from "../hooks/useApi";
 import { ApiKey } from "../types";
 import { formatDateTime } from "../utils/date";
@@ -22,11 +22,10 @@ export function ApiKeys() {
       return groups;
     }, {});
   }, [scopeCatalog.data]);
+  const hasDangerousScopes = scopeCatalog.data.some((scope) => scope.category === "Dangerous scopes" && scopes.includes(scope.name));
 
   async function createKey() {
     setError("");
-    const dangerous = scopeCatalog.data.filter((scope) => scope.category === "Dangerous scopes" && scopes.includes(scope.name));
-    if (dangerous.length && !window.confirm("Odabrani su opasni scopeovi. Potvrditi kreiranje kljuca?")) return;
     try {
       const created = await api<ApiKey & { key: string }>("/auth/api-keys", { method: "POST", body: JSON.stringify({ name, scopes }) });
       setRawKey(created.key);
@@ -38,7 +37,6 @@ export function ApiKeys() {
   }
 
   async function deactivate(row: ApiKey) {
-    if (!window.confirm(`Deaktivirati API kljuc "${row.name}"?`)) return;
     const updated = await api<ApiKey>(`/auth/api-keys/${row.id}/deactivate`, { method: "PATCH" });
     keys.setData(keys.data.map((key) => (key.id === updated.id ? updated : key)));
   }
@@ -52,8 +50,17 @@ export function ApiKeys() {
         <h2>Novi API kljuc</h2>
         <div className="inline-form">
           <input placeholder="Naziv kljuca" value={name} onChange={(event) => setName(event.target.value)} />
-          <button className="primary" onClick={createKey}>Kreiraj</button>
-          <HelpHint title="Kreiraj API kljuc">API kljuc moze koristiti vanjski sustav ili AI agent. Dodijelite najmanji potreban skup scopeova.</HelpHint>
+          <ActionButton
+            className="primary"
+            variant={hasDangerousScopes ? "danger" : "admin"}
+            onClick={createKey}
+            requiresConfirm
+            confirmMessage={hasDangerousScopes ? "Odabrani su opasni scopeovi. Potvrditi kreiranje kljuca?" : "Potvrditi kreiranje API kljuca?"}
+            helpTitle="Kreiraj API kljuc"
+            help="API kljuc moze koristiti vanjski sustav ili AI agent. Dodijelite najmanji potreban skup scopeova."
+          >
+            Kreiraj
+          </ActionButton>
         </div>
         {Object.entries(groupedScopes).map(([category, entries]) => (
           <div key={category} className={category === "Dangerous scopes" ? "danger-scope" : ""}>
@@ -74,7 +81,18 @@ export function ApiKeys() {
         { header: "Scopeovi", render: (row) => row.scopes.join(", ") },
         { header: "Aktivan", render: (row) => row.active ? "Da" : "Ne" },
         { header: "Zadnja upotreba", render: (row) => formatDateTime(row.last_used_at) },
-        { header: "Radnja", render: (row) => row.active ? <span className="action-with-help"><button onClick={() => deactivate(row)}>Deaktiviraj</button><HelpHint title="Deaktiviraj API kljuc">Odmah gasi pristup za ovaj kljuc. Postojece integracije koje ga koriste prestat ce raditi.</HelpHint></span> : "-" }
+        { header: "Radnja", render: (row) => row.active ? (
+          <ActionButton
+            variant="danger"
+            onClick={() => deactivate(row)}
+            requiresConfirm
+            confirmMessage={`Deaktivirati API kljuc "${row.name}"?`}
+            helpTitle="Deaktiviraj API kljuc"
+            help="Odmah gasi pristup za ovaj kljuc. Postojece integracije koje ga koriste prestat ce raditi."
+          >
+            Deaktiviraj
+          </ActionButton>
+        ) : "-" }
       ]} />
     </section>
   );

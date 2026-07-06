@@ -21,8 +21,10 @@ ASTRA Clinic Core is not ready for real patient data until every item below is r
 ## Data Protection
 
 - Confirm OIB handling is approved before any real-data use.
+- Implement and test Croatian OIB checksum validation, or formally approve the current validation limit before real-data use.
 - Confirm demo users understand that real OIB values must not be entered while `REAL_DATA_ALLOWED=false`.
 - Confirm patient identity matching uses a resolved patient record, not ambiguous free text.
+- Confirm possible-duplicate warnings are reviewed during patient creation.
 - Define patient data retention policy.
 - Document who can export or delete data.
 - Validate backup encryption and restore procedure.

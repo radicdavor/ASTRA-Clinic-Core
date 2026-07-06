@@ -1,8 +1,8 @@
 import { useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { api } from "../api/client";
+import { ActionButton } from "../components/ActionButton";
 import { DataTable } from "../components/DataTable";
-import { HelpHint } from "../components/HelpHint";
 import { useApi } from "../hooks/useApi";
 import { Invoice } from "../types";
 import { formatDate, formatDateTime } from "../utils/date";
@@ -33,7 +33,6 @@ export function Invoices() {
       setError("Racun mora imati stavke i pozitivan iznos prije izdavanja.");
       return;
     }
-    if (!window.confirm("Potvrditi izdavanje racuna?")) return;
     try {
       updateInvoice(await api<Invoice>(`/api/invoices/${invoice.id}/issue`, { method: "POST" }));
       setMessage("Racun je izdan.");
@@ -93,7 +92,20 @@ export function Invoices() {
               <h2>{selected.invoice_number}</h2>
               <p>{selected.status} / {selected.payment_status}</p>
             </div>
-            {selected.status === "draft" && <span className="action-with-help"><button className="primary" disabled={!selected.lines?.length || Number(selected.total_amount) <= 0} onClick={() => issueInvoice(selected)}>Izdaj racun</button><HelpHint title="Izdaj racun">Izdavanje zakljucava draft racun i dodjeljuje sluzbeni broj. Fiskalizacija je demo/noop, nije stvarna hrvatska fiskalizacija.</HelpHint></span>}
+            {selected.status === "draft" && (
+              <ActionButton
+                className="primary"
+                variant="danger"
+                disabled={!selected.lines?.length || Number(selected.total_amount) <= 0}
+                onClick={() => issueInvoice(selected)}
+                requiresConfirm
+                confirmMessage="Potvrditi izdavanje racuna?"
+                helpTitle="Izdaj racun"
+                help="Izdavanje zakljucava draft racun i dodjeljuje sluzbeni broj. Fiskalizacija je demo/noop, nije stvarna hrvatska fiskalizacija."
+              >
+                Izdaj racun
+              </ActionButton>
+            )}
           </div>
           <div className="metrics">
             <div><span>Ukupno</span><strong>{selected.total_amount}</strong></div>
@@ -109,8 +121,9 @@ export function Invoices() {
               <input placeholder="Opis stavke" value={lineDraft.description} onChange={(event) => setLineDraft({ ...lineDraft, description: event.target.value })} />
               <input type="number" min="0.01" step="0.01" value={lineDraft.quantity} onChange={(event) => setLineDraft({ ...lineDraft, quantity: event.target.value })} />
               <input type="number" min="0" step="0.01" value={lineDraft.unit_price} onChange={(event) => setLineDraft({ ...lineDraft, unit_price: event.target.value })} />
-            <button onClick={() => addLine(selected)}>Dodaj stavku</button>
-            <HelpHint title="Dodaj stavku">Dodaje stavku na draft racun prije izdavanja.</HelpHint>
+              <ActionButton variant="update" onClick={() => addLine(selected)} helpTitle="Dodaj stavku" help="Dodaje stavku na draft racun prije izdavanja.">
+                Dodaj stavku
+              </ActionButton>
             </div>
           )}
 
@@ -132,8 +145,18 @@ export function Invoices() {
           <div className="inline-form">
             <input type="number" min="0.01" max={remaining} step="0.01" placeholder={`Preostalo ${remaining.toFixed(2)}`} value={paymentAmount} onFocus={() => !paymentAmount && setPaymentAmount(remaining.toFixed(2))} onChange={(event) => setPaymentAmount(event.target.value)} />
             <select value={paymentMethod} onChange={(event) => setPaymentMethod(event.target.value)}><option value="cash">Gotovina</option><option value="card">Kartica</option><option value="bank">Transakcija</option></select>
-            <button className="primary" disabled={paymentBlocked} onClick={() => addPayment(selected)}>Evidentiraj uplatu</button>
-            <HelpHint title="Evidentiraj uplatu">Sprema uplatu na izdani racun i azurira status placanja.</HelpHint>
+            <ActionButton
+              className="primary"
+              variant="danger"
+              disabled={paymentBlocked}
+              onClick={() => addPayment(selected)}
+              requiresConfirm
+              confirmMessage="Potvrditi evidentiranje uplate?"
+              helpTitle="Evidentiraj uplatu"
+              help="Sprema uplatu na izdani racun i azurira status placanja."
+            >
+              Evidentiraj uplatu
+            </ActionButton>
           </div>
         </section>
       )}

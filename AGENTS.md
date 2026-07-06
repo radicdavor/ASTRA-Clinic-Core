@@ -23,6 +23,7 @@ If a requested feature is not aligned with the Architecture Bible, do not implem
 For larger changes, also check:
 
 - `docs/V19_ARCHITECTURE_BIBLE_COMPLIANCE_GATE.md`
+- `docs/ASTRA_DESIGN_SYSTEM.md`
 
 ## Architecture Bible Changes
 

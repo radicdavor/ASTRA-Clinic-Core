@@ -55,3 +55,20 @@ def test_patient_search_includes_oib(client, auth_setup):
 
     assert response.status_code == 200
     assert [patient["oib"] for patient in response.json()] == ["33333333333"]
+
+
+def test_possible_duplicates_returns_identity_candidates(client, auth_setup):
+    headers = auth_headers(client)
+    client.post(
+        "/api/patients",
+        headers=headers,
+        json={"first_name": "Ana", "last_name": "Horvat", "date_of_birth": "1990-01-01", "phone": "+385 91 111 222"},
+    )
+
+    response = client.get(
+        "/api/patients/possible-duplicates?first_name=Ana&last_name=Horvat&date_of_birth=1990-01-01",
+        headers=headers,
+    )
+
+    assert response.status_code == 200
+    assert response.json()[0]["first_name"] == "Ana"

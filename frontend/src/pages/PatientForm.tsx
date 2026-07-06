@@ -1,18 +1,52 @@
-import { FormEvent, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { api } from "../api/client";
+import { ActionButton } from "../components/ActionButton";
 import { HelpHint } from "../components/HelpHint";
+import { Patient } from "../types";
+import { formatPatientIdentity, formatPatientName } from "../utils/patientIdentity";
 
 export function PatientForm() {
   const navigate = useNavigate();
   const [form, setForm] = useState({ first_name: "", last_name: "", date_of_birth: "", oib: "", phone: "", email: "", notes: "" });
   const [error, setError] = useState("");
+  const [possibleDuplicates, setPossibleDuplicates] = useState<Patient[]>([]);
+  const [duplicatesConfirmed, setDuplicatesConfirmed] = useState(false);
+
+  const duplicateQuery = useMemo(() => {
+    if (!form.first_name.trim() || !form.last_name.trim()) return "";
+    const params = new URLSearchParams();
+    params.set("first_name", form.first_name.trim());
+    params.set("last_name", form.last_name.trim());
+    if (form.date_of_birth) params.set("date_of_birth", form.date_of_birth);
+    if (form.phone.trim()) params.set("phone", form.phone.trim());
+    if (form.email.trim()) params.set("email", form.email.trim());
+    if (form.oib.trim()) params.set("oib", form.oib.trim());
+    return `/api/patients/possible-duplicates?${params.toString()}`;
+  }, [form.date_of_birth, form.email, form.first_name, form.last_name, form.oib, form.phone]);
+
+  useEffect(() => {
+    let alive = true;
+    setDuplicatesConfirmed(false);
+    if (!duplicateQuery) {
+      setPossibleDuplicates([]);
+      return;
+    }
+    api<Patient[]>(duplicateQuery).then((result) => alive && setPossibleDuplicates(result)).catch(() => alive && setPossibleDuplicates([]));
+    return () => {
+      alive = false;
+    };
+  }, [duplicateQuery]);
 
   async function submit(event: FormEvent) {
     event.preventDefault();
     setError("");
     if (form.oib && !/^\d{11}$/.test(form.oib.trim())) {
       setError("OIB mora imati tocno 11 znamenki.");
+      return;
+    }
+    if (possibleDuplicates.length > 0 && !duplicatesConfirmed) {
+      setError("Pronadeni su moguci duplikati. Provjerite identitet pacijenta i potvrdite nastavak.");
       return;
     }
     await api("/api/patients", {
@@ -33,6 +67,21 @@ export function PatientForm() {
         </div>
       </div>
       {error && <p className="form-error">{error}</p>}
+      {possibleDuplicates.length > 0 && (
+        <div className="duplicate-warning">
+          <strong>Moguci duplikati pacijenta</strong>
+          <p>Provjerite identitet prije spremanja novog pacijenta.</p>
+          {possibleDuplicates.map((patient) => (
+            <span key={patient.id}>
+              {formatPatientName(patient)} <small>{formatPatientIdentity(patient)}</small>
+            </span>
+          ))}
+          <label className="confirm-row">
+            <input type="checkbox" checked={duplicatesConfirmed} onChange={(event) => setDuplicatesConfirmed(event.target.checked)} />
+            Provjereno, nastavi sa spremanjem novog pacijenta.
+          </label>
+        </div>
+      )}
       <form className="form-grid" onSubmit={submit}>
         {[
           ["first_name", "Ime"],
@@ -51,8 +100,9 @@ export function PatientForm() {
             <input type={key === "date_of_birth" ? "date" : "text"} placeholder={key === "oib" ? "Demo OIB ili prazno" : undefined} value={(form as any)[key]} onChange={(e) => setForm({ ...form, [key]: e.target.value })} />
           </label>
         ))}
-        <button className="primary">Spremi pacijenta</button>
-        <HelpHint title="Spremi pacijenta">Sprema pacijenta u lokalnu demo bazu. Ne unosite stvarne OIB-e ili osobne podatke dok real-data readiness nije odobren.</HelpHint>
+        <ActionButton type="submit" className="primary" variant="create" helpTitle="Spremi pacijenta" help="Sprema pacijenta u lokalnu demo bazu. Ne unosite stvarne OIB-e ili osobne podatke dok real-data readiness nije odobren.">
+          Spremi pacijenta
+        </ActionButton>
       </form>
     </section>
   );

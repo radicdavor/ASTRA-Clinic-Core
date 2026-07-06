@@ -28,6 +28,19 @@ main { min-width: 0; }
 .search input { border: 0; outline: 0; background: transparent; width: 100%; height: 40px; }
 .icon-button { width: 38px; height: 38px; border: 1px solid #d9e2ec; border-radius: 8px; background: white; display: grid; place-items: center; color: #405069; cursor: pointer; }
 .action-with-help, .label-with-help { display: inline-flex; align-items: center; gap: 8px; }
+.action-with-help { flex-wrap: wrap; }
+.action-button { border: 1px solid #d9e2ec; border-radius: 8px; background: #ffffff; color: #405069; height: 40px; padding: 0 14px; font-weight: 750; cursor: pointer; }
+.action-button:hover:not(:disabled) { border-color: #0f766e; color: #0f766e; background: #f1fbf9; }
+.action-button:disabled { cursor: not-allowed; opacity: 0.55; }
+.action-button.primary, .action-create, .action-workflow { border-color: #0f766e; background: #0f766e; color: white; }
+.action-button.primary:hover:not(:disabled), .action-create:hover:not(:disabled), .action-workflow:hover:not(:disabled) { background: #0b5f59; color: white; }
+.action-info { border-color: #bfdbfe; background: #eff6ff; color: #1d4ed8; }
+.action-update { border-color: #d9e2ec; background: #ffffff; color: #405069; }
+.action-button.action-danger { border-color: #b42318; background: #b42318; color: white; }
+.action-button.action-danger:hover:not(:disabled) { background: #8f1d1d; color: white; border-color: #8f1d1d; }
+.action-ai { border-color: #7c3aed; background: #f5f3ff; color: #6d28d9; }
+.action-button.action-admin { border-color: #405069; background: #405069; color: white; }
+.action-button.action-admin:hover:not(:disabled) { background: #172033; color: white; border-color: #172033; }
 .help-hint { position: relative; display: inline-flex; align-items: center; vertical-align: middle; }
 .help-hint-trigger { width: 24px; height: 24px; border: 1px solid #b7c8d9; border-radius: 999px; background: #ffffff; color: #405069; font-weight: 800; cursor: help; display: grid; place-items: center; line-height: 1; padding: 0; }
 .help-hint-trigger:hover, .help-hint-trigger:focus { border-color: #0f766e; color: #0f766e; outline: 0; box-shadow: 0 0 0 3px rgba(15, 118, 110, 0.12); }
@@ -111,8 +124,14 @@ th { color: #667085; font-size: 0.78rem; text-transform: uppercase; letter-spaci
 .form-error { color: #b42318; margin: 6px 0 14px; }
 .form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; background: white; border: 1px solid #e3e8ef; border-radius: 8px; padding: 18px; }
 .form-grid .primary { grid-column: 1 / -1; justify-self: start; }
+.form-grid .action-with-help { grid-column: 1 / -1; justify-self: start; }
 .wide-field { grid-column: 1 / -1; }
 .patient-results, .selected-patient, .service-context { display: grid; gap: 8px; border: 1px solid #d9e2ec; border-radius: 8px; background: #fbfcfe; padding: 12px; }
+.duplicate-warning { display: grid; gap: 8px; border: 1px solid #f1d27a; border-radius: 8px; background: #fff9e8; color: #8a5700; padding: 14px; margin-bottom: 14px; }
+.duplicate-warning span { display: grid; gap: 2px; color: #172033; }
+.duplicate-warning small, .identity-warning { color: #8a5700; }
+.confirm-row { display: flex; align-items: center; gap: 8px; font-weight: 750; color: #172033; }
+.confirm-row input { width: 18px; height: 18px; }
 .patient-results button { display: grid; gap: 3px; text-align: left; border: 1px solid #d9e2ec; border-radius: 8px; background: #ffffff; color: #172033; padding: 10px; cursor: pointer; }
 .patient-results button:hover { border-color: #0f766e; background: #f1fbf9; }
 .patient-results span, .selected-patient small, .service-context span, .service-context small { color: #667085; display: block; }

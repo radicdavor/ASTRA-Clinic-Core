@@ -1,9 +1,9 @@
 import { useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { api } from "../api/client";
+import { ActionButton } from "../components/ActionButton";
 import { AuditTimeline } from "../components/AuditTimeline";
 import { DataTable } from "../components/DataTable";
-import { HelpHint } from "../components/HelpHint";
 import { StatusBadge } from "../components/StatusBadge";
 import { useApi } from "../hooks/useApi";
 import { Appointment, AuditLog, Invoice, StockMovement } from "../types";
@@ -52,7 +52,6 @@ export function AppointmentDetail() {
   async function completeWithMaterials() {
     if (!appointment.data) return;
     if (missingRequiredVariable || exceedsStock || terminalStatus) return;
-    if (!window.confirm("Ovo ce skinuti materijal sa zalihe i zavrsiti termin.")) return;
     setError("");
     try {
       const lines = materials
@@ -110,12 +109,22 @@ export function AppointmentDetail() {
         {exceedsStock && <p className="form-error">Kolicina prelazi dostupnu zalihu.</p>}
         {belowReorderAfterUse && <p className="form-error">Upozorenje: nakon potrosnje zaliha pada na ili ispod reorder razine.</p>}
         {terminalStatus && <p className="form-error">Termin je vec zavrsen ili otkazan, potrosnja se ne moze ponovno potvrditi.</p>}
-        <button className="primary" disabled={missingRequiredVariable || exceedsStock || terminalStatus || materials.length === 0} onClick={completeWithMaterials}>Zavrsi uz potrosnju</button>
-        <HelpHint title="Zavrsi uz potrosnju">Zavrsava termin i skida odabrane materijale sa zalihe. Provjerite kolicine prije potvrde.</HelpHint>
+        <ActionButton
+          className="primary"
+          variant="danger"
+          disabled={missingRequiredVariable || exceedsStock || terminalStatus || materials.length === 0}
+          onClick={completeWithMaterials}
+          requiresConfirm
+          confirmMessage="Potvrditi zavrsetak termina i skidanje materijala sa zalihe?"
+          helpTitle="Zavrsi uz potrosnju"
+          help="Zavrsava termin i skida odabrane materijale sa zalihe. Provjerite kolicine prije potvrde."
+        >
+          Zavrsi uz potrosnju
+        </ActionButton>
       </section>
 
       <section className="workflow-panel">
-        <div className="page-header"><h2>Racun</h2>{relatedInvoice ? <Link className="primary link-button" to={`/invoices?invoice=${relatedInvoice.id}`}>Otvori racun</Link> : <span className="action-with-help"><button className="primary" onClick={createInvoice}>Kreiraj nacrt racuna</button><HelpHint title="Kreiraj nacrt racuna">Stvara draft racun iz termina. Racun se jos mora pregledati i izdati.</HelpHint></span>}</div>
+        <div className="page-header"><h2>Racun</h2>{relatedInvoice ? <Link className="primary link-button" to={`/invoices?invoice=${relatedInvoice.id}`}>Otvori racun</Link> : <ActionButton className="primary" variant="workflow" onClick={createInvoice} helpTitle="Kreiraj nacrt racuna" help="Stvara draft racun iz termina. Racun se jos mora pregledati i izdati.">Kreiraj nacrt racuna</ActionButton>}</div>
       </section>
 
       <section className="workflow-panel">

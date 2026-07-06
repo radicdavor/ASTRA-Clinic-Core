@@ -1,19 +1,11 @@
 import { FormEvent, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { api } from "../api/client";
+import { ActionButton } from "../components/ActionButton";
 import { HelpHint } from "../components/HelpHint";
 import { useApi } from "../hooks/useApi";
 import { Patient, Provider, Room, Service } from "../types";
-import { formatDate } from "../utils/date";
-
-function patientSubtitle(patient: Patient) {
-  const parts = [
-    patient.date_of_birth ? `roden/a ${formatDate(patient.date_of_birth)}` : null,
-    patient.oib ? `OIB ${patient.oib}` : null,
-    patient.phone || patient.email || null
-  ].filter(Boolean);
-  return parts.length ? parts.join(" / ") : "Nema dodatnih identifikacijskih podataka";
-}
+import { formatPatientIdentity, formatPatientName, hasStrongPatientIdentifier } from "../utils/patientIdentity";
 
 export function AppointmentForm() {
   const navigate = useNavigate();
@@ -71,8 +63,8 @@ export function AppointmentForm() {
             )}
             {patients.data.map((patient) => (
               <button type="button" key={patient.id} onClick={() => selectPatient(patient)}>
-                <strong>{patient.first_name} {patient.last_name}</strong>
-                <span>{patientSubtitle(patient)}</span>
+                <strong>{formatPatientName(patient)}</strong>
+                <span>{formatPatientIdentity(patient)}</span>
               </button>
             ))}
           </div>
@@ -80,8 +72,9 @@ export function AppointmentForm() {
         {selectedPatient && (
           <div className="selected-patient wide-field">
             <span>
-              Odabrani pacijent: <strong>{selectedPatient.first_name} {selectedPatient.last_name}</strong>
-              <small>{patientSubtitle(selectedPatient)}</small>
+              Odabrani pacijent: <strong>{formatPatientName(selectedPatient)}</strong>
+              <small>{formatPatientIdentity(selectedPatient)}</small>
+              {!hasStrongPatientIdentifier(selectedPatient) && <small className="identity-warning">Pacijent nema jak identifikator. Provjerite prije spremanja termina.</small>}
             </span>
             <button type="button" onClick={() => { setSelectedPatient(null); setForm({ ...form, patient_id: "" }); }}>Promijeni</button>
           </div>
@@ -106,8 +99,9 @@ export function AppointmentForm() {
         <label>Pocetak<input type="time" value={form.start_time} onChange={(e) => setForm({ ...form, start_time: e.target.value })} /></label>
         <label>Kraj<input type="time" value={form.end_time} onChange={(e) => setForm({ ...form, end_time: e.target.value })} /></label>
         <label>Trajanje<input type="number" value={form.duration_minutes} onChange={(e) => setForm({ ...form, duration_minutes: Number(e.target.value) })} /></label>
-        <button className="primary" disabled={!selectedPatient}>Spremi termin</button>
-        <HelpHint title="Spremi termin">Termin se moze spremiti tek nakon odabira konkretnog pacijenta iz rezultata pretrage.</HelpHint>
+        <ActionButton type="submit" className="primary" variant="create" disabled={!selectedPatient} helpTitle="Spremi termin" help="Termin se moze spremiti tek nakon odabira konkretnog pacijenta iz rezultata pretrage. Ne stvarajte termin za nepoznatog pacijenta.">
+          Spremi termin
+        </ActionButton>
       </form>
     </section>
   );

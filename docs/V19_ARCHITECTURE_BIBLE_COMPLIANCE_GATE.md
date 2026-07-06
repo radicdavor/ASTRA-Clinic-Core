@@ -67,6 +67,14 @@ V19 adds these enforcement points:
 - `docs/MANUAL_QA_CHECKLIST.md` includes UI language, contextual help and safety checks.
 - `scripts/validate_pilot_release.sh` verifies that the core governance files exist and are linked.
 
+## Design-System Addendum
+
+`docs/CODEX_MASTER_PROMPT_V19.md` also introduced a design-system consistency sprint. The implementation is documented in:
+
+- `docs/ASTRA_DESIGN_SYSTEM.md`
+- `docs/V19_IMPLEMENTATION_REPORT.md`
+- `docs/ARCHITECTURE_CHANGE_PROPOSAL_PATIENT_IDENTITY_AND_ACTION_LANGUAGE.md`
+
 ## Definition of Done
 
 V19 is complete when:

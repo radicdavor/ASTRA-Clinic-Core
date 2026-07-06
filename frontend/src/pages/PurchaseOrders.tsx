@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { api } from "../api/client";
+import { ActionButton } from "../components/ActionButton";
 import { DataTable } from "../components/DataTable";
-import { HelpHint } from "../components/HelpHint";
 import { useApi } from "../hooks/useApi";
 import { InventoryItem, PurchaseOrder, StockLocation } from "../types";
 import { formatDate } from "../utils/date";
@@ -58,7 +58,6 @@ export function PurchaseOrders() {
         setError(validationError);
         return;
       }
-      if (!window.confirm("Potvrditi zaprimanje robe na zalihu?")) return;
       const lines = selected.lines
         .filter((line) => draft[line.id]?.quantity_received && Number(draft[line.id].quantity_received) > 0)
         .map((line) => ({
@@ -109,8 +108,18 @@ export function PurchaseOrders() {
             { header: "Lokacija", render: (line) => <select value={draft[line.id]?.location_id ?? ""} onChange={(event) => setDraft({ ...draft, [line.id]: { ...draft[line.id], location_id: event.target.value } })}>{locations.data.map((location) => <option key={location.id} value={location.id}>{location.name}</option>)}</select> }
           ]} />
           {selectedReceiveError && <p className="form-error">{selectedReceiveError}</p>}
-          <button className="primary" disabled={Boolean(selectedReceiveError)} onClick={receiveSelected}>Potvrdi zaprimanje</button>
-          <HelpHint title="Potvrdi zaprimanje">Zaprimanje povecava zalihu i stvara skladisno kretanje. Provjerite kolicinu, LOT, rok i lokaciju prije potvrde.</HelpHint>
+          <ActionButton
+            className="primary"
+            variant="danger"
+            disabled={Boolean(selectedReceiveError)}
+            onClick={receiveSelected}
+            requiresConfirm
+            confirmMessage="Potvrditi zaprimanje robe na zalihu?"
+            helpTitle="Potvrdi zaprimanje"
+            help="Zaprimanje povecava zalihu i stvara skladisno kretanje. Provjerite kolicinu, LOT, rok i lokaciju prije potvrde."
+          >
+            Potvrdi zaprimanje
+          </ActionButton>
         </section>
       )}
     </section>

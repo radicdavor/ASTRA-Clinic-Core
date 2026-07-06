@@ -17,8 +17,9 @@ Human pilot findings override maintainer speculation. No alpha hardening work st
 
 ## P3 Polish
 
-- Review Croatian wording after human pilot.
+- Review Croatian wording after V19 action-language standardization.
 - Review table density and button labels after live observation.
+- Decide whether OIB checksum validation should enter the next real-data readiness sprint.
 
 ## Alpha Hardening Candidates
 

@@ -24,6 +24,8 @@ function assertIncludes(file, value) {
   "src/components/AppShell.tsx",
   "src/components/AuditTimeline.tsx",
   "src/components/HelpHint.tsx",
+  "src/components/ActionButton.tsx",
+  "src/utils/patientIdentity.ts",
 ].forEach(read);
 
 assertIncludes("src/routes/AppRoutes.tsx", "/appointments/:id");
@@ -38,10 +40,19 @@ assertIncludes("src/pages/Invoices.tsx", "Demo fiskalizacija - nije stvarna fisk
 assertIncludes("src/components/AuditTimeline.tsx", "before_json");
 assertIncludes("src/pages/PatientForm.tsx", "OIB");
 assertIncludes("src/pages/PatientForm.tsx", "Spremi pacijenta");
+assertIncludes("src/pages/PatientForm.tsx", "possible-duplicates");
+assertIncludes("src/pages/PatientForm.tsx", "Moguci duplikati pacijenta");
 assertIncludes("src/pages/AppointmentForm.tsx", "Ime, prezime ili OIB");
 assertIncludes("src/pages/AppointmentForm.tsx", "selectedPatient");
 assertIncludes("src/pages/AppointmentForm.tsx", "service-context");
+assertIncludes("src/pages/AppointmentForm.tsx", "formatPatientIdentity");
+assertIncludes("src/components/ActionButton.tsx", "requiresConfirm");
+assertIncludes("src/components/ActionButton.tsx", "confirmMessage");
+assertIncludes("src/utils/patientIdentity.ts", "formatPatientIdentity");
+assertIncludes("src/utils/patientIdentity.ts", "hasStrongPatientIdentifier");
 assertIncludes("src/pages/Invoices.tsx", "Demo fiskalizacija - nije stvarna fiskalizacija.");
 assertIncludes("src/pages/ApiKeys.tsx", "opasni scopeovi");
+assertIncludes("src/pages/AppointmentDetail.tsx", "Potvrditi zavrsetak termina");
+assertIncludes("src/pages/PurchaseOrders.tsx", "Potvrditi zaprimanje robe");
 
 console.log("Frontend pilot smoke passed.");
