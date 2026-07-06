@@ -8,7 +8,7 @@ Ovaj roadmap prevodi Program 1 - ASTRA Clinical Workflow u redoslijed buduće im
 
 Roadmap ne ovlašćuje automatsku implementaciju svih stavki.
 
-Buduće implementacijske faze moraju koristiti kanonski rječnik definiran u `PROGRAM_1_GLOSSARY.md`.
+Buduće implementacijske faze moraju koristiti kanonski rječnik definiran u `PROGRAM_1_GLOSSARY.md` i mapiranje postojećeg sustava iz `PROGRAM_1_DOMAIN_OBJECT_MAPPING.md`.
 
 Prije svakog sprinta treba ponovno provjeriti:
 
