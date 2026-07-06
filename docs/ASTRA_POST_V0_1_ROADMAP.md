@@ -402,6 +402,8 @@ ASTRA must first answer:
 
 Only reviewed Clinical Documents may contribute to the official patient summary. Every AI-assisted statement must reference one or more source documents. Workflow Engine, Knowledge Engine, autonomous AI automation and new clinical modules remain deferred.
 
+Patient Clinical Summary now has an explicit draft/review lifecycle. AI placeholder drafts can be generated from reviewed Clinical Documents, edited by the physician and confirmed as reviewed. The source-linked document summary remains the evidence view; the reviewed patient summary is the concise orientation layer.
+
 Updated program sequence:
 
 1. ASTRA Patient Clinical Knowledge Layer

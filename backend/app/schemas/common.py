@@ -436,10 +436,48 @@ class PatientKnowledgeItem(BaseModel):
     sources: list[PatientKnowledgeSource]
 
 
+class PatientClinicalSummaryRecordUpdate(BaseModel):
+    summary_text: str | None = None
+    known_conditions: list[str] | None = None
+    key_findings: list[str] | None = None
+    open_items: list[str] | None = None
+    risks: list[str] | None = None
+    last_recommendations: list[str] | None = None
+    source_document_ids: list[int] | None = None
+    status: str | None = None
+
+    @field_validator("status")
+    @classmethod
+    def validate_status(cls, value: str | None) -> str | None:
+        if value is not None and value not in {"draft_ai", "needs_review", "reviewed", "stale"}:
+            raise ValueError("Nepoznat status klinickog sazetka")
+        return value
+
+
+class PatientClinicalSummaryRecordOut(ORMModel):
+    id: int
+    patient_id: int
+    summary_text: str | None = None
+    known_conditions: list[str] | None = None
+    key_findings: list[str] | None = None
+    open_items: list[str] | None = None
+    risks: list[str] | None = None
+    last_recommendations: list[str] | None = None
+    source_document_ids: list[int] | None = None
+    status: str
+    generated_by: str | None = None
+    reviewed_by: int | None = None
+    reviewed_at: DateTimeType | None = None
+    created_at: DateTimeType
+    updated_at: DateTimeType
+
+
 class PatientClinicalSummary(BaseModel):
     patient_id: int
     generated_from_reviewed_documents: int
     awaiting_review_count: int
+    reviewed_summary: PatientClinicalSummaryRecordOut | None = None
+    draft_summary: PatientClinicalSummaryRecordOut | None = None
     known_problems: list[PatientKnowledgeItem]
     completed_procedures: list[PatientKnowledgeItem]
     pathology: list[PatientKnowledgeItem]

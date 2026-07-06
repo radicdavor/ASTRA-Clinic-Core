@@ -111,10 +111,30 @@ export type PatientKnowledgeItem = {
   sources: PatientKnowledgeSource[];
 };
 
+export type PatientClinicalSummaryRecord = {
+  id: number;
+  patient_id: number;
+  summary_text?: string | null;
+  known_conditions?: string[] | null;
+  key_findings?: string[] | null;
+  open_items?: string[] | null;
+  risks?: string[] | null;
+  last_recommendations?: string[] | null;
+  source_document_ids?: number[] | null;
+  status: "draft_ai" | "needs_review" | "reviewed" | "stale";
+  generated_by?: string | null;
+  reviewed_by?: number | null;
+  reviewed_at?: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
 export type PatientClinicalSummary = {
   patient_id: number;
   generated_from_reviewed_documents: number;
   awaiting_review_count: number;
+  reviewed_summary?: PatientClinicalSummaryRecord | null;
+  draft_summary?: PatientClinicalSummaryRecord | null;
   known_problems: PatientKnowledgeItem[];
   completed_procedures: PatientKnowledgeItem[];
   pathology: PatientKnowledgeItem[];

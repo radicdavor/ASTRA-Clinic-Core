@@ -58,32 +58,34 @@ Steps:
 11. Open `/clinical-documents` and review documents awaiting physician review.
 12. Open a document detail page, run AI extraction placeholder if needed, then confirm or reject the proposed summary.
 13. Return to Patient Workspace and confirm reviewed document knowledge appears with source links.
-14. Review appointments, invoices and audit context.
-15. Create a new appointment from Patient Workspace or open new appointment and search for the patient by name or OIB.
-16. Select the resolved patient from the search result; do not create an appointment from ambiguous free text.
-17. Leave `Bez epizode` unless intentionally testing legacy/deferred Episode Engine compatibility.
-18. Select a service and review the service context card.
-19. Open daily dashboard.
-20. Select today's date and open the demo appointment.
-21. Use quick status actions: arrived, in progress.
-22. Open appointment detail.
-23. Confirm the appointment screen links back to Patient Workspace.
-24. Load material suggestion.
-25. Review required fixed, required variable, and optional material labels.
-26. Complete appointment with material consumption and verify the confirmation prompt is clear.
-27. Verify the appointment status is completed.
-28. Verify stock movement appears on appointment detail.
-29. Create draft invoice from appointment.
-30. Open invoice detail.
-31. Issue invoice and verify the confirmation prompt is clear.
-32. Show demo fiscalization status and warning.
-33. Record payment for the remaining amount and verify the confirmation prompt is clear.
-34. Open purchase orders.
-35. Receive demo purchase order line and verify the confirmation prompt is clear.
-36. Open inventory and verify stock changed.
-37. Open audit log or appointment audit timeline and review traceability.
-38. Return to `/readiness` and review whether warnings changed or remain acceptable.
-39. Capture feedback in `docs/PILOT_FEEDBACK_TEMPLATE.md`.
+14. In Patient Workspace, review `AI sazetak pacijenta`.
+15. Generate a draft summary if needed, then confirm it only after source review.
+16. Review appointments, invoices and audit context.
+17. Create a new appointment from Patient Workspace or open new appointment and search for the patient by name or OIB.
+18. Select the resolved patient from the search result; do not create an appointment from ambiguous free text.
+19. Leave `Bez epizode` unless intentionally testing legacy/deferred Episode Engine compatibility.
+20. Select a service and review the service context card.
+21. Open daily dashboard.
+22. Select today's date and open the demo appointment.
+23. Use quick status actions: arrived, in progress.
+24. Open appointment detail.
+25. Confirm the appointment screen links back to Patient Workspace.
+26. Load material suggestion.
+27. Review required fixed, required variable, and optional material labels.
+28. Complete appointment with material consumption and verify the confirmation prompt is clear.
+29. Verify the appointment status is completed.
+30. Verify stock movement appears on appointment detail.
+31. Create draft invoice from appointment.
+32. Open invoice detail.
+33. Issue invoice and verify the confirmation prompt is clear.
+34. Show demo fiscalization status and warning.
+35. Record payment for the remaining amount and verify the confirmation prompt is clear.
+36. Open purchase orders.
+37. Receive demo purchase order line and verify the confirmation prompt is clear.
+38. Open inventory and verify stock changed.
+39. Open audit log or appointment audit timeline and review traceability.
+40. Return to `/readiness` and review whether warnings changed or remain acceptable.
+41. Capture feedback in `docs/PILOT_FEEDBACK_TEMPLATE.md`.
 
 ## Expected Outcomes
 
@@ -91,6 +93,7 @@ Steps:
 - Appointment creation requires selecting a resolved patient from search results.
 - Patient creation warns about possible duplicates when identity data overlaps.
 - Patient Workspace shows source-linked clinical knowledge first.
+- Patient Workspace shows AI draft/reviewed Patient Clinical Summary with visible source documents.
 - Clinical documents awaiting review are visible and do not become official knowledge until reviewed.
 - Appointment may optionally link to an existing deferred episode, but appointments must not require episodes.
 - Critical workflow actions use contextual help and confirmation.

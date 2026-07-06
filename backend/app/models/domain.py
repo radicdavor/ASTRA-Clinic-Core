@@ -185,6 +185,25 @@ class ClinicalDocument(TimestampMixin, Base):
     reviewer: Mapped[User | None] = relationship()
 
 
+class PatientClinicalSummaryRecord(TimestampMixin, Base):
+    __tablename__ = "patient_clinical_summaries"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    patient_id: Mapped[int] = mapped_column(ForeignKey("patients.id"), index=True)
+    summary_text: Mapped[str | None] = mapped_column(Text)
+    known_conditions: Mapped[list | None] = mapped_column(JSON)
+    key_findings: Mapped[list | None] = mapped_column(JSON)
+    open_items: Mapped[list | None] = mapped_column(JSON)
+    risks: Mapped[list | None] = mapped_column(JSON)
+    last_recommendations: Mapped[list | None] = mapped_column(JSON)
+    source_document_ids: Mapped[list | None] = mapped_column(JSON)
+    status: Mapped[str] = mapped_column(String(40), default="needs_review", index=True)
+    generated_by: Mapped[str | None] = mapped_column(String(80))
+    reviewed_by: Mapped[int | None] = mapped_column(ForeignKey("users.id"))
+    reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    patient: Mapped[Patient] = relationship()
+    reviewer: Mapped[User | None] = relationship()
+
+
 class Service(TimestampMixin, Base):
     __tablename__ = "services"
     id: Mapped[int] = mapped_column(primary_key=True)

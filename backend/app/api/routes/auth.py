@@ -25,6 +25,7 @@ API_KEY_SCOPES = [
     {"name": "patients.write", "category": "Operational write scopes", "description": "Create and update patients."},
     {"name": "appointments.write", "category": "Operational write scopes", "description": "Create and update appointments."},
     {"name": "clinical_documents.write", "category": "Operational write scopes", "description": "Upload, extract and review clinical documents."},
+    {"name": "clinical_documents.review", "category": "Clinical review scopes", "description": "Confirm reviewed clinical documents and patient summaries."},
     {"name": "inventory.adjust", "category": "Dangerous scopes", "description": "Adjust stock quantities."},
     {"name": "inventory.write_off", "category": "Dangerous scopes", "description": "Write off stock."},
     {"name": "billing.mark_paid", "category": "Dangerous scopes", "description": "Mark invoices paid or create payments."},

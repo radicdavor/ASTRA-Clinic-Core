@@ -117,6 +117,8 @@ th { color: #667085; font-size: 0.78rem; text-transform: uppercase; letter-spaci
 .selected-patient-card span, .patient-search-results span { display: block; color: #667085; font-size: 0.85rem; }
 .patient-search-results button { width: 100%; text-align: left; border: 1px solid #d9e2ec; border-radius: 8px; background: #ffffff; padding: 10px; cursor: pointer; }
 .patient-search-results button:hover { border-color: #0f766e; }
+.source-link-list { display: flex; flex-wrap: wrap; gap: 8px; }
+.source-link-list a { border: 1px solid #d9e2ec; border-radius: 8px; padding: 6px 8px; background: #ffffff; }
 .readiness-pill, .readiness-badge { display: inline-flex; align-items: center; min-height: 30px; border-radius: 8px; padding: 0 10px; font-weight: 800; white-space: nowrap; }
 .readiness-pill { min-height: 38px; }
 .readiness-ready_for_demo, .readiness-check-ok { background: #e7f8ed; color: #15803d; }

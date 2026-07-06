@@ -10,9 +10,10 @@ from app.audit.service import audit, snapshot
 from app.auth.dependencies import Actor, require_permission
 from app.core.config import get_settings
 from app.core.database import get_db
-from app.models.domain import ApiKey, Appointment, AuditLog, ClinicalDocument, ClinicalEpisode, ClinicalPlan, InventoryBatch, InventoryItem, Invoice, Module, Patient, Provider, Room, Service
-from app.schemas.common import AppointmentCreate, AppointmentOut, AppointmentUpdate, ClinicalDecisionTimelineItem, ClinicalDocumentCreate, ClinicalDocumentOut, ClinicalDocumentUpdate, ClinicalDocumentUpload, ClinicalEpisodeCreate, ClinicalEpisodeOut, ClinicalEpisodeUpdate, ClinicalPlanGenerate, ClinicalPlanOut, ClinicalPlanUpdate, ErrorResponse, InvoiceOut, PatientClinicalSummary, PatientCreate, PatientKnowledgeItem, PatientKnowledgeSource, PatientOut, PatientUpdate, ReadinessCheck, ReadinessOut, ServiceCreate, ServiceOut
+from app.models.domain import ApiKey, Appointment, AuditLog, ClinicalDocument, ClinicalEpisode, ClinicalPlan, InventoryBatch, InventoryItem, Invoice, Module, Patient, PatientClinicalSummaryRecord, Provider, Room, Service
+from app.schemas.common import AppointmentCreate, AppointmentOut, AppointmentUpdate, ClinicalDecisionTimelineItem, ClinicalDocumentCreate, ClinicalDocumentOut, ClinicalDocumentUpdate, ClinicalDocumentUpload, ClinicalEpisodeCreate, ClinicalEpisodeOut, ClinicalEpisodeUpdate, ClinicalPlanGenerate, ClinicalPlanOut, ClinicalPlanUpdate, ErrorResponse, InvoiceOut, PatientClinicalSummary, PatientClinicalSummaryRecordOut, PatientClinicalSummaryRecordUpdate, PatientCreate, PatientKnowledgeItem, PatientKnowledgeSource, PatientOut, PatientUpdate, ReadinessCheck, ReadinessOut, ServiceCreate, ServiceOut
 from app.services.appointments import validate_appointment_payload
+from app.services.clinical_extraction import extract_document_knowledge_from_text
 
 ERROR_RESPONSES = {400: {"model": ErrorResponse}, 401: {"model": ErrorResponse}, 403: {"model": ErrorResponse}, 404: {"model": ErrorResponse}, 409: {"model": ErrorResponse}, 422: {"model": ErrorResponse}}
 
@@ -170,6 +171,47 @@ def add_knowledge_item(items: list[PatientKnowledgeItem], text: str | None, docu
     items.append(PatientKnowledgeItem(text=cleaned, sources=[source]))
 
 
+def latest_patient_summary_record(db: Session, patient_id: int, statuses: list[str] | None = None) -> PatientClinicalSummaryRecord | None:
+    stmt = select(PatientClinicalSummaryRecord).where(PatientClinicalSummaryRecord.patient_id == patient_id)
+    if statuses:
+        stmt = stmt.where(PatientClinicalSummaryRecord.status.in_(statuses))
+    return db.scalar(stmt.order_by(PatientClinicalSummaryRecord.updated_at.desc(), PatientClinicalSummaryRecord.id.desc()))
+
+
+def summary_record_from_documents(patient_id: int, documents: list[ClinicalDocument]) -> dict:
+    source_ids = [document.id for document in documents]
+    findings: list[str] = []
+    recommendations: list[str] = []
+    open_items: list[str] = []
+    known_conditions: list[str] = []
+    for document in documents:
+        for finding in document.key_findings or []:
+            target = known_conditions if "gerb" in finding.lower() or "polip" in finding.lower() or "adenom" in finding.lower() else findings
+            if finding not in target:
+                target.append(finding)
+        for recommendation in document.recommendations or []:
+            if "ceka" in recommendation.lower() or "pending" in recommendation.lower() or "otvoreno" in recommendation.lower():
+                if recommendation not in open_items:
+                    open_items.append(recommendation)
+            elif recommendation not in recommendations:
+                recommendations.append(recommendation)
+    summary_text = "AI draft sazetak pacijenta iz pregledanih dokumenata. Lijecnik mora urediti i potvrditi prije sluzbene uporabe."
+    if known_conditions or findings:
+        summary_text = "AI draft: " + "; ".join((known_conditions + findings)[:5])
+    return {
+        "patient_id": patient_id,
+        "summary_text": summary_text,
+        "known_conditions": known_conditions,
+        "key_findings": findings,
+        "open_items": open_items,
+        "risks": [],
+        "last_recommendations": recommendations,
+        "source_document_ids": source_ids,
+        "status": "needs_review",
+        "generated_by": "ai_placeholder",
+    }
+
+
 def active_plan_for_episode(db: Session, episode_id: int) -> ClinicalPlan | None:
     return db.scalar(select(ClinicalPlan).where(ClinicalPlan.episode_id == episode_id, ClinicalPlan.status == "active", ClinicalPlan.physician_confirmed.is_(True)).order_by(ClinicalPlan.confirmed_at.desc(), ClinicalPlan.id.desc()))
 
@@ -257,6 +299,15 @@ def readiness(db: Session = Depends(get_db), actor: Actor = Depends(require_perm
     episode_count = scalar_count(db, select(func.count(ClinicalEpisode.id)))
     appointments_without_episode = scalar_count(db, select(func.count(Appointment.id)).where(Appointment.episode_id.is_(None)))
     documents_awaiting_review = scalar_count(db, select(func.count(ClinicalDocument.id)).where(ClinicalDocument.physician_reviewed.is_(False)))
+    reviewed_documents = db.scalars(select(ClinicalDocument).where(ClinicalDocument.physician_reviewed.is_(True))).all()
+    reviewed_summaries = db.scalars(select(PatientClinicalSummaryRecord).where(PatientClinicalSummaryRecord.status == "reviewed")).all()
+    reviewed_summary_by_patient = {summary.patient_id: summary for summary in reviewed_summaries}
+    stale_summary_patients = {
+        document.patient_id
+        for document in reviewed_documents
+        if document.patient_id not in reviewed_summary_by_patient
+        or document.updated_at > reviewed_summary_by_patient[document.patient_id].updated_at
+    }
 
     checks = [
         ReadinessCheck(
@@ -315,6 +366,18 @@ def readiness(db: Session = Depends(get_db), actor: Actor = Depends(require_perm
             target_label="Pregledaj dokumente",
             decision_impact="review" if documents_awaiting_review > 0 else "none",
             severity_reason="Dokumenti bez pregleda ne ulaze u sluzbeni sazetak pacijenta." if documents_awaiting_review > 0 else None,
+        ),
+        ReadinessCheck(
+            key="patient_summary_stale",
+            label="Sazetak pacijenta",
+            status=warning if stale_summary_patients else ok,
+            message=f"Postoje pacijenti s pregledanim dokumentima nakon zadnjeg potvrdjenog sazetka ({len(stale_summary_patients)})." if stale_summary_patients else "Potvrdjeni sazetci pacijenata su uskladjeni s pregledanim dokumentima.",
+            count=len(stale_summary_patients),
+            action="Generirati draft i lijecnicki potvrditi sazetak pacijenta." if stale_summary_patients else None,
+            target_path="/patients",
+            target_label="Otvori pacijente",
+            decision_impact="review" if stale_summary_patients else "none",
+            severity_reason="Sazetak je operativna pomoc i ne smije zamijeniti pregled izvora." if stale_summary_patients else None,
         ),
         ReadinessCheck(
             key="human_pilot_evidence",
@@ -639,6 +702,19 @@ def create_clinical_document(
     return get_document_or_404(db, document.id)
 
 
+@router.post("/patients/{patient_id}/clinical-documents", response_model=ClinicalDocumentOut)
+def create_patient_clinical_document(
+    patient_id: int,
+    payload: ClinicalDocumentCreate,
+    request: Request,
+    db: Session = Depends(get_db),
+    actor: Actor = Depends(require_permission("clinical_documents.write")),
+):
+    if payload.patient_id != patient_id:
+        raise HTTPException(422, detail="Dokument mora pripadati pacijentu iz rute")
+    return create_clinical_document(payload, request, db, actor)
+
+
 @router.post("/clinical-documents/upload", response_model=ClinicalDocumentOut)
 def upload_clinical_document(
     payload: ClinicalDocumentUpload,
@@ -692,7 +768,7 @@ def update_clinical_document(
     payload: ClinicalDocumentUpdate,
     request: Request,
     db: Session = Depends(get_db),
-    actor: Actor = Depends(require_permission("clinical_documents.write")),
+    actor: Actor = Depends(require_permission("clinical_documents.review")),
 ):
     document = get_document_or_404(db, document_id)
     update_data = payload.model_dump(exclude_unset=True)
@@ -717,7 +793,7 @@ def extract_clinical_document(
     document_id: int,
     request: Request,
     db: Session = Depends(get_db),
-    actor: Actor = Depends(require_permission("clinical_documents.write")),
+    actor: Actor = Depends(require_permission("clinical_documents.review")),
 ):
     document = get_document_or_404(db, document_id)
     before = snapshot(document)
@@ -792,6 +868,8 @@ def patient_clinical_summary(patient_id: int, db: Session = Depends(get_db), act
         patient_id=patient_id,
         generated_from_reviewed_documents=len(reviewed),
         awaiting_review_count=len(documents) - len(reviewed),
+        reviewed_summary=latest_patient_summary_record(db, patient_id, ["reviewed"]),
+        draft_summary=latest_patient_summary_record(db, patient_id, ["draft_ai", "needs_review", "stale"]),
         known_problems=[],
         completed_procedures=[],
         pathology=[],
@@ -828,6 +906,80 @@ def patient_clinical_summary(patient_id: int, db: Session = Depends(get_db), act
         if "ceka se" in text_blob or "pending" in text_blob:
             add_knowledge_item(summary.open_questions, "Dokument sadrzi otvoreno pitanje koje zahtijeva pregled.", document)
     return summary
+
+
+@router.post("/patients/{patient_id}/clinical-summary/generate-draft", response_model=PatientClinicalSummaryRecordOut)
+def generate_patient_clinical_summary_draft(
+    patient_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+    actor: Actor = Depends(require_permission("clinical_documents.write")),
+):
+    if not db.get(Patient, patient_id):
+        raise HTTPException(404, detail="Pacijent nije pronaden")
+    reviewed = db.scalars(select(ClinicalDocument).where(ClinicalDocument.patient_id == patient_id, ClinicalDocument.physician_reviewed.is_(True)).order_by(ClinicalDocument.document_date.desc().nulls_last(), ClinicalDocument.id.desc())).all()
+    values = summary_record_from_documents(patient_id, reviewed)
+    record = PatientClinicalSummaryRecord(**values)
+    db.add(record)
+    db.flush()
+    audit(db, "patient_summary_draft_generated", "PatientClinicalSummary", record.id, "AI placeholder je generirao draft sazetka pacijenta", actor.user_id, actor.actor_type, actor.api_key_id, None, snapshot(record), request)
+    db.commit()
+    db.refresh(record)
+    return record
+
+
+@router.patch("/patients/{patient_id}/clinical-summary", response_model=PatientClinicalSummaryRecordOut)
+def update_patient_clinical_summary_record(
+    patient_id: int,
+    payload: PatientClinicalSummaryRecordUpdate,
+    request: Request,
+    db: Session = Depends(get_db),
+    actor: Actor = Depends(require_permission("clinical_documents.write")),
+):
+    if not db.get(Patient, patient_id):
+        raise HTTPException(404, detail="Pacijent nije pronaden")
+    record = latest_patient_summary_record(db, patient_id, ["draft_ai", "needs_review", "stale", "reviewed"])
+    if record is None:
+        record = PatientClinicalSummaryRecord(patient_id=patient_id, status="needs_review", generated_by="physician")
+        db.add(record)
+        db.flush()
+    before = snapshot(record)
+    update_data = payload.model_dump(exclude_unset=True)
+    if update_data.get("status") == "reviewed":
+        update_data["status"] = "needs_review"
+    patch_model(record, update_data)
+    if record.status == "reviewed":
+        record.status = "needs_review"
+        record.reviewed_by = None
+        record.reviewed_at = None
+    db.flush()
+    audit(db, "patient_summary_edited", "PatientClinicalSummary", record.id, "Uredjen klinicki sazetak pacijenta prije potvrde", actor.user_id, actor.actor_type, actor.api_key_id, before, snapshot(record), request)
+    db.commit()
+    db.refresh(record)
+    return record
+
+
+@router.post("/patients/{patient_id}/clinical-summary/review", response_model=PatientClinicalSummaryRecordOut)
+def review_patient_clinical_summary_record(
+    patient_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+    actor: Actor = Depends(require_permission("clinical_documents.review")),
+):
+    if not db.get(Patient, patient_id):
+        raise HTTPException(404, detail="Pacijent nije pronaden")
+    record = latest_patient_summary_record(db, patient_id, ["draft_ai", "needs_review", "stale"])
+    if record is None:
+        raise HTTPException(404, detail="Nema draft sazetka za potvrdu")
+    before = snapshot(record)
+    record.status = "reviewed"
+    record.reviewed_by = actor.user_id
+    record.reviewed_at = datetime.now(timezone.utc)
+    db.flush()
+    audit(db, "patient_summary_reviewed", "PatientClinicalSummary", record.id, "Lijecnik je potvrdio klinicki sazetak pacijenta", actor.user_id, actor.actor_type, actor.api_key_id, before, snapshot(record), request)
+    db.commit()
+    db.refresh(record)
+    return record
 
 
 @router.post("/patients", response_model=PatientOut)

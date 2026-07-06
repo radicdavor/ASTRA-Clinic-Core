@@ -23,7 +23,10 @@ const actionLabels: Record<string, string> = {
   ai_document_extracted: "AI prijedlog izdvojen",
   ai_document_extraction_edited: "AI prijedlog uredjen",
   clinical_document_reviewed: "Dokument pregledan",
-  ai_document_summary_rejected: "AI sazetak odbijen"
+  ai_document_summary_rejected: "AI sazetak odbijen",
+  patient_summary_draft_generated: "AI draft sazetka",
+  patient_summary_edited: "Sazetak uredjen",
+  patient_summary_reviewed: "Sazetak potvrdjen"
 };
 
 const entityLabels: Record<string, string> = {
@@ -37,7 +40,8 @@ const entityLabels: Record<string, string> = {
   ApiKey: "API kljuc",
   ClinicalEpisode: "Klinicka epizoda",
   ClinicalPlan: "Klinicki plan",
-  ClinicalDocument: "Klinicki dokument"
+  ClinicalDocument: "Klinicki dokument",
+  PatientClinicalSummary: "Sazetak pacijenta"
 };
 
 function actorLabel(log: AuditLog) {

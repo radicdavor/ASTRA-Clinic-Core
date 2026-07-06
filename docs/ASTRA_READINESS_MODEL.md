@@ -45,6 +45,7 @@ Each readiness check should link to an operational screen when possible:
 
 - patients -> `/patients`
 - clinical documents awaiting review -> `/clinical-documents?physician_reviewed=false`
+- stale patient clinical summaries -> `/patients`
 - clinical episodes are experimental/deferred and should not block readiness
 - providers -> `/appointments/new`
 - rooms -> `/appointments/new`

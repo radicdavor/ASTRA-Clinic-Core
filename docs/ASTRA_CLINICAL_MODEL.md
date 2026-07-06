@@ -1,141 +1,117 @@
 # ASTRA Clinical Model
 
-Status: Patient Clinical Knowledge Layer foundation
+Status: Patient Clinical Summary and Clinical Documents foundation
 
 ASTRA Clinical Model defines how medicine exists inside ASTRA Clinic Core during demo/pilot development. It is not production approval, EMR certification, medical-device certification or permission to use real patient data.
 
-Direction update: Patient Clinical Knowledge Layer is the first active architectural program. Clinical Episodes remain a useful future structure, but patient knowledge from reviewed internal and external documents comes first.
+The current primary clinical direction is patient-centered knowledge:
 
-## 1. Purpose
+- Patient
+- ClinicalDocument
+- PatientClinicalSummary
 
-The clinical model gives ASTRA one language for clinical context.
+Episode Engine remains experimental/deferred until patient-level knowledge is stable.
 
-Its first active structural unit is Clinical Document: a sourced statement of what is known about the patient.
-
-Clinical Episode is postponed as the primary product center until ASTRA can first answer what is known about the patient regardless of where the information originated.
-
-ASTRA organizes, documents and connects context. The clinician decides.
-
-## 2. Patient
+## Patient
 
 Patient is the person.
 
 The patient is identified by name, date of birth, OIB when available, phone and e-mail. A patient is not only a number, and no appointment should be created for an unknown patient.
 
-## 3. Clinical Episode
+The Patient Workspace should first answer:
 
-Clinical Episode is the clinical story.
+- What do we know about this patient?
+- What remains unresolved?
+- Where did each statement come from?
 
-It is not an appointment, diagnosis, invoice or workflow. It gathers the context around why care is happening and what remains open.
+## ClinicalDocument
 
-Examples include GERB/reflux follow-up, H. pylori eradication, colon polyp surveillance, post-polypectomy follow-up, metabolic care, aesthetic treatment or preventive check-up.
+ClinicalDocument is the source object for patient knowledge.
 
-## 3a. Clinical Document
+It may represent:
 
-Clinical Document is a source of patient knowledge.
+- internal note
+- internal procedure
+- external report
+- external laboratory
+- external pathology
+- external imaging
+- referral
+- discharge summary
+- patient uploaded document
+- other source material
 
-It may be internal, external, scanned or uploaded. It may represent consultation, gastroscopy, colonoscopy, pathology, laboratory, radiology, discharge, referral or another clinical source.
+ClinicalDocument can contain raw text, AI draft extraction, key findings and recommendations. Unreviewed extraction is not official clinical truth.
 
-AI may extract a structured summary, key findings and recommendations from the document, but the information becomes part of the patient knowledge summary only after physician review.
+## PatientClinicalSummary
 
-Every statement in the patient summary must link back to one or more Clinical Documents.
+PatientClinicalSummary is a concise patient-level summary created from reviewed Clinical Documents.
 
-## 4. Problem
+It may contain:
 
-A problem is the reason a story exists.
+- summary text
+- known conditions
+- key findings
+- open items
+- risks
+- last recommendations
+- source document IDs
+- review status
 
-In the MVP, the problem is represented only through episode title, type, summary and notes. ASTRA does not yet maintain a formal problem list.
+AI may generate a draft summary. The physician may edit it. Only physician-reviewed summaries are official.
 
-## 5. Diagnosis
+## Internal And External Evidence
 
-Diagnosis is a clinical conclusion made by a qualified clinician.
+ASTRA treats external evidence as first-class clinical input after physician review.
 
-Episode Engine does not create diagnoses, code diagnoses or imply diagnostic certainty.
+A patient may have a consultation in ASTRA, endoscopy elsewhere, pathology from a hospital and a follow-up note later. ASTRA must preserve those sources instead of pretending all care happened inside one linear episode.
 
-## 6. Goal Of Care
+## AI Draft Versus Physician-Reviewed Truth
 
-Goal of care describes what the episode is trying to achieve: symptom control, surveillance, follow-up, prevention, treatment completion or administrative closure.
+AI may read and summarize.
 
-In the MVP, goals are written in the episode summary/notes. Structured goal tracking is future work.
+AI must not:
 
-## 7. Plan
+- invent diagnoses
+- hide uncertainty
+- mark knowledge as reviewed
+- change official clinical truth without physician confirmation
 
-Plan is the clinician-approved direction for care.
+The physician confirms what becomes official.
 
-In the AI Assisted Clinical Plan version, ASTRA stores a structured `ClinicalPlan`.
+## Source Linking
 
-AI may prepare a draft suggestion, but the official plan exists only after physician confirmation.
+Every official clinical summary must retain source document IDs.
 
-The confirmed plan becomes the active state of the Clinical Episode. Unconfirmed AI suggestions must never be displayed as official clinical direction.
+The UI must make it clear which document supports each patient-level statement whenever feasible.
 
-Workflow Engine is still future operational automation and must not be inferred from the current plan model.
+## Why Episode Engine Is Deferred
 
-## 8. Appointment
+Clinical Episodes can later organize the patient story, but they should not be the first active clinical workflow.
 
-Appointment is an event in time.
+Patient care is often fragmented across institutions and documents. ASTRA must first know what is known about the patient and where it came from.
 
-It connects patient, provider, room, service and status. An appointment may optionally belong to a Clinical Episode. Existing appointments can remain without an episode during the first version.
+## Future Preparation
 
-## 9. Follow-Up
+This model prepares future:
 
-Follow-up is the continuation of an episode after an event.
+- Episode Engine stabilization
+- Workflow Engine
+- Knowledge Engine
+- Clinical Module SDK
+- AI operating layer
 
-The MVP can describe follow-up in notes and can link future appointments to the same episode. It does not implement task automation, reminders or clinical protocols.
+Those future systems must use reviewed, source-linked patient knowledge as their evidence base.
 
-## 10. Result/Outcome
-
-Result/outcome is the human-reviewed state at the end of an episode.
-
-In the MVP, closing an episode sets status to `completed` and records an end date when missing. It does not certify clinical success or failure.
-
-## 11. Episode Status Lifecycle
-
-Initial statuses are intentionally simple:
-
-- `open`
-- `active`
-- `waiting`
-- `completed`
-- `cancelled`
-- `archived`
-
-`open`, `active` and `waiting` represent ongoing clinical context. `completed`, `cancelled` and `archived` are terminal or inactive states.
-
-## 12. Relationship Between Episode, Workflow Engine, Knowledge Engine And AI
-
-Episode is the clinical story.
-
-Workflow Engine is future operational automation that may later attach tasks, steps and responsibilities to an episode.
-
-Knowledge Engine is future domain reasoning that may later provide structured medical knowledge, guidelines or safety checks.
-
-AI is a future assistant layer. It may suggest, organize, remind or summarize, but it must not hide uncertainty, invent data, make medical decisions or change critical data without permission.
-
-In the current plan MVP, AI suggestion is local and controlled. It is a preparation layer, not an autonomous clinical actor.
-
-## 13. What ASTRA Must Not Do
+## What ASTRA Must Not Do Now
 
 ASTRA must not:
 
-- use real patient data in demo/pilot mode
-- create unknown-patient appointments
-- present an episode as a diagnosis
-- make medical decisions
-- imply production readiness
-- implement real Croatian fiscalization through Episode Engine
-- silently automate clinical workflow
-- add documents, labs, prescriptions or new clinical modules inside this sprint
-
-## 14. Examples
-
-### GERB Episode
-
-Patient has reflux symptoms and follow-up appointments. The episode title may be `GERB/refluks pracenje`, type `gastroenterology`, status `active`, summary describing demo follow-up context, and appointments linked over time.
-
-### Colon Polyp Surveillance Episode
-
-Patient has a surveillance story after colonoscopy/polyp finding. The episode may track future control appointments and notes, but it does not implement guideline calculation or pathology documents in this MVP.
-
-### Aesthetic Medicine Episode
-
-Patient has an aesthetic treatment plan. The episode groups consultation and treatment appointments. It does not add a new aesthetic clinical module, consent documents or automated protocols in this sprint.
+- enable real patient data
+- implement real Croatian fiscalization
+- present AI drafts as official truth
+- implement autonomous medical decisions
+- implement Workflow Engine
+- implement Knowledge Engine
+- add new clinical modules
+- make Episode Engine primary

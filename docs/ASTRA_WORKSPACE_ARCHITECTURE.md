@@ -49,6 +49,7 @@ It includes:
 
 - patient identity
 - OIB/date/phone/email display
+- AI draft/reviewed Patient Clinical Summary
 - clinical knowledge summary from reviewed Clinical Documents
 - source links for every AI-assisted knowledge statement
 - internal documents

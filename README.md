@@ -26,6 +26,7 @@ Pilot documents:
 - [ASTRA Workspace Architecture](docs/ASTRA_WORKSPACE_ARCHITECTURE.md)
 - [ASTRA Patient Clinical Knowledge Model](docs/ASTRA_PATIENT_CLINICAL_KNOWLEDGE_MODEL.md)
 - [Patient Clinical Knowledge Layer MVP](docs/PATIENT_CLINICAL_KNOWLEDGE_LAYER_MVP.md)
+- [Patient Clinical Summary MVP](docs/PATIENT_CLINICAL_SUMMARY_MVP.md)
 - [ASTRA Readiness Model](docs/ASTRA_READINESS_MODEL.md)
 - [ASTRA Operational Evidence Loop](docs/ASTRA_OPERATIONAL_EVIDENCE_LOOP.md)
 - [V20 Readiness Cockpit](docs/V20_READINESS_COCKPIT.md)

@@ -20,6 +20,7 @@ ASTRA Clinic Core is currently a closed demo/pilot system for demo data only.
 - Clinical document extraction is a placeholder and must be physician-reviewed before it becomes official patient knowledge.
 - OCR is not implemented; uploaded document text is manual/placeholder input.
 - Patient Clinical Summary is source-linked and rule-based; it is not a diagnostic engine.
+- Patient Clinical Summary draft generation is deterministic placeholder logic and still requires physician confirmation.
 - No Workflow Engine.
 - No Knowledge Engine.
 - No AI automation.

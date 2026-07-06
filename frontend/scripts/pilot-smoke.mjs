@@ -122,6 +122,10 @@ assertIncludes("src/pages/PatientDetail.tsx", "Moguci duplikati pacijenta");
 assertIncludes("src/pages/PatientDetail.tsx", "summary-strip");
 assertIncludes("src/pages/PatientDetail.tsx", "Sazetak");
 assertIncludes("src/pages/PatientDetail.tsx", "Klinicki dokumenti");
+assertIncludes("src/pages/PatientDetail.tsx", "AI sazetak pacijenta");
+assertIncludes("src/pages/PatientDetail.tsx", "/clinical-summary/generate-draft");
+assertIncludes("src/pages/PatientDetail.tsx", "/clinical-summary/review");
+assertIncludes("src/pages/PatientDetail.tsx", "AI draft - potreban je lijecnicki pregled.");
 assertIncludes("src/pages/PatientDetail.tsx", "Zadnji termin");
 assertIncludes("src/pages/PatientDetail.tsx", "Otvoreni racuni");
 assertIncludes("src/pages/Patients.tsx", "/patients/${row.id}");
@@ -171,6 +175,7 @@ assertIncludes("src/pages/Readiness.tsx", "Blokira demo");
 assertIncludes("src/pages/Readiness.tsx", "readiness-detail");
 assertIncludes("src/pages/Readiness.tsx", "Nepregledani dokumenti ne ulaze u sluzbeni sazetak pacijenta.");
 assertIncludes("../backend/app/api/routes/core.py", "/clinical-documents?physician_reviewed=false");
+assertIncludes("../backend/app/api/routes/core.py", "patient_summary_stale");
 
 const backendCore = read("../backend/app/api/routes/core.py");
 const appRoutes = read("src/routes/AppRoutes.tsx");

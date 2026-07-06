@@ -1,4 +1,5 @@
 import { Link, useParams } from "react-router-dom";
+import { api } from "../api/client";
 import { ActionButton } from "../components/ActionButton";
 import { AuditTimeline } from "../components/AuditTimeline";
 import { DataTable } from "../components/DataTable";
@@ -10,8 +11,8 @@ import { WorkspaceLayout } from "../components/workspace/WorkspaceLayout";
 import { WorkspaceSection } from "../components/workspace/WorkspaceSection";
 import { WorkspaceTabs } from "../components/workspace/WorkspaceTabs";
 import { useApi } from "../hooks/useApi";
-import { Appointment, AuditLog, ClinicalDocument, Invoice, Patient, PatientClinicalSummary, PatientKnowledgeItem } from "../types";
-import { formatDate } from "../utils/date";
+import { Appointment, AuditLog, ClinicalDocument, Invoice, Patient, PatientClinicalSummary, PatientClinicalSummaryRecord, PatientKnowledgeItem } from "../types";
+import { formatDate, formatDateTime } from "../utils/date";
 import { formatPatientIdentity, formatPatientName } from "../utils/patientIdentity";
 import { documentTypeLabel, sourceTypeLabel } from "./ClinicalDocuments";
 
@@ -31,6 +32,25 @@ function KnowledgeCard({ title, items }: { title: string; items: PatientKnowledg
       )}
     </article>
   );
+}
+
+function KnowledgeList({ title, items }: { title: string; items: string[] }) {
+  return (
+    <article className="knowledge-card">
+      <h3>{title}</h3>
+      {items.length === 0 ? <p>Nema stavki.</p> : <ul>{items.map((item) => <li key={`${title}-${item}`}>{item}</li>)}</ul>}
+    </article>
+  );
+}
+
+function summaryStatusLabel(status?: PatientClinicalSummaryRecord["status"]) {
+  const labels: Record<PatientClinicalSummaryRecord["status"], string> = {
+    draft_ai: "AI draft",
+    needs_review: "Ceka pregled",
+    reviewed: "Pregledano",
+    stale: "Zastarjelo"
+  };
+  return status ? labels[status] : "Nema sazetka";
 }
 
 export function PatientDetail() {
@@ -71,6 +91,22 @@ export function PatientDetail() {
     : 0;
   const openQuestionCount = clinicalSummary.data?.open_questions.length ?? 0;
   const hasReviewedKnowledge = (clinicalSummary.data?.generated_from_reviewed_documents ?? 0) > 0;
+  const activeSummary = clinicalSummary.data?.reviewed_summary ?? clinicalSummary.data?.draft_summary ?? null;
+  const sourceDocuments = documents.data.filter((document) => activeSummary?.source_document_ids?.includes(document.id));
+
+  async function refreshClinicalSummary() {
+    clinicalSummary.setData(await api<PatientClinicalSummary>(`/api/patients/${id}/clinical-summary`));
+  }
+
+  async function generateSummaryDraft() {
+    await api(`/api/patients/${id}/clinical-summary/generate-draft`, { method: "POST" });
+    await refreshClinicalSummary();
+  }
+
+  async function confirmSummary() {
+    await api(`/api/patients/${id}/clinical-summary/review`, { method: "POST" });
+    await refreshClinicalSummary();
+  }
 
   const documentColumns = [
     { header: "Dokument", render: (row: ClinicalDocument) => <Link to={`/clinical-documents/${row.id}`}>{row.title}</Link> },
@@ -159,6 +195,35 @@ export function PatientDetail() {
 
       <div className="patient-knowledge-layout">
         <div>
+          <WorkspaceSection title={<>AI sazetak pacijenta <HelpHint title="AI sazetak pacijenta">AI draft nije sluzbena klinicka istina. Lijecnik mora pregledati izvore i potvrditi sazetak.</HelpHint></>}>
+            <div className={`clinical-plan-card ${activeSummary?.status === "reviewed" ? "" : "ai-suggestion"}`}>
+              <div><span>Status</span><strong>{summaryStatusLabel(activeSummary?.status)}</strong></div>
+              {activeSummary?.status !== "reviewed" && <p><strong>AI draft - potreban je lijecnicki pregled.</strong></p>}
+              <p>{activeSummary?.summary_text ?? "Nema potvrdjenog sazetka pacijenta. Generirajte draft iz pregledanih dokumenata."}</p>
+              <div className="knowledge-grid">
+                <KnowledgeList title="Poznata stanja" items={activeSummary?.known_conditions ?? []} />
+                <KnowledgeList title="Kljucni nalazi" items={activeSummary?.key_findings ?? []} />
+                <KnowledgeList title="Otvorene stavke" items={activeSummary?.open_items ?? []} />
+                <KnowledgeList title="Rizici" items={activeSummary?.risks ?? []} />
+                <KnowledgeList title="Zadnje preporuke" items={activeSummary?.last_recommendations ?? []} />
+              </div>
+              {activeSummary?.reviewed_at && <p><span>Pregledano</span><strong>{formatDateTime(activeSummary.reviewed_at)}</strong></p>}
+              {sourceDocuments.length > 0 && (
+                <p>
+                  <span>Izvori</span>
+                  <strong className="source-link-list">{sourceDocuments.map((document) => <Link key={document.id} to={`/clinical-documents/${document.id}`}>{document.title}</Link>)}</strong>
+                </p>
+              )}
+              <div className="quick-actions">
+                <ActionButton variant="ai" onClick={generateSummaryDraft} helpTitle="Generiraj draft" help="Stvara AI placeholder draft iz pregledanih dokumenata. Ne postaje sluzben bez lijecnicke potvrde.">
+                  Generiraj draft
+                </ActionButton>
+                <ActionButton variant="update" onClick={confirmSummary} helpTitle="Potvrdi sazetak" help="Potvrdjuje zadnji draft sazetka kao lijecnicki pregledan. Izvori ostaju vidljivi.">
+                  Potvrdi sazetak
+                </ActionButton>
+              </div>
+            </div>
+          </WorkspaceSection>
           <WorkspaceTabs
             tabs={[
               {

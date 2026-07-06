@@ -134,3 +134,45 @@ def test_readiness_deep_links_to_unreviewed_documents(client, db, auth_setup):
     check = next(item for item in response.json()["checks"] if item["key"] == "clinical_documents_review")
     assert check["target_path"] == "/clinical-documents?physician_reviewed=false"
     assert check["target_label"] == "Pregledaj dokumente"
+
+
+def test_generate_edit_and_review_patient_clinical_summary(client, db, auth_setup):
+    headers = auth_headers(client)
+    p = patient(db)
+    doc = clinical_document(db, p, physician_reviewed=True)
+
+    draft = client.post(f"/api/patients/{p.id}/clinical-summary/generate-draft", headers=headers)
+    assert draft.status_code == 200
+    draft_body = draft.json()
+    assert draft_body["status"] == "needs_review"
+    assert doc.id in draft_body["source_document_ids"]
+
+    edited = client.patch(
+        f"/api/patients/{p.id}/clinical-summary",
+        headers=headers,
+        json={"summary_text": "Lijecnicki uredjen sazetak.", "open_items": ["Rucno provjeriti izvore"]},
+    )
+    assert edited.status_code == 200
+    assert edited.json()["summary_text"] == "Lijecnicki uredjen sazetak."
+    assert edited.json()["status"] == "needs_review"
+
+    reviewed = client.post(f"/api/patients/{p.id}/clinical-summary/review", headers=headers)
+    assert reviewed.status_code == 200
+    assert reviewed.json()["status"] == "reviewed"
+    assert reviewed.json()["reviewed_at"]
+
+    summary = client.get(f"/api/patients/{p.id}/clinical-summary", headers=headers)
+    assert summary.status_code == 200
+    assert summary.json()["reviewed_summary"]["summary_text"] == "Lijecnicki uredjen sazetak."
+
+
+def test_readiness_detects_stale_patient_summary(client, db, auth_setup):
+    headers = auth_headers(client)
+    p = patient(db)
+    clinical_document(db, p, physician_reviewed=True)
+
+    response = client.get("/api/readiness", headers=headers)
+    assert response.status_code == 200
+    check = next(item for item in response.json()["checks"] if item["key"] == "patient_summary_stale")
+    assert check["status"] == "warning"
+    assert check["target_path"] == "/patients"

@@ -13,6 +13,7 @@ from app.models.domain import (
     InventoryBatch,
     InventoryItem,
     Patient,
+    PatientClinicalSummaryRecord,
     Permission,
     Provider,
     PurchaseOrder,
@@ -179,6 +180,29 @@ def main() -> None:
                     setattr(document, field, value)
                 document.physician_reviewed = reviewed
                 document.reviewed_at = datetime.now(timezone.utc) if reviewed else None
+
+        reviewed_document_ids = [
+            document.id
+            for document in db.scalars(select(ClinicalDocument).where(ClinicalDocument.patient_id == patient.id, ClinicalDocument.physician_reviewed.is_(True))).all()
+        ]
+        summary = db.scalar(select(PatientClinicalSummaryRecord).where(PatientClinicalSummaryRecord.patient_id == patient.id, PatientClinicalSummaryRecord.status == "reviewed"))
+        summary_values = {
+            "summary_text": "Demo pregledani sazetak: poznat GERB/refluks, raniji polip/adenom i potreba pracenja prema izvorima.",
+            "known_conditions": ["GERB/refluks naveden u dokumentu", "Prethodni polip/adenom naveden u dokumentu"],
+            "key_findings": ["H. pylori status naveden u dokumentu"],
+            "open_items": ["Pregledati dokumente koji cekaju lijecnicki pregled"],
+            "risks": [],
+            "last_recommendations": ["Nastaviti pracenje simptoma i kontrolu prema odluci lijecnika"],
+            "source_document_ids": reviewed_document_ids,
+            "status": "reviewed",
+            "generated_by": "demo_seed",
+            "reviewed_at": datetime.now(timezone.utc),
+        }
+        if summary is None:
+            db.add(PatientClinicalSummaryRecord(patient_id=patient.id, **summary_values))
+        else:
+            for field, value in summary_values.items():
+                setattr(summary, field, value)
 
         order = db.scalar(select(PurchaseOrder).where(PurchaseOrder.supplier_id == supplier.id, PurchaseOrder.notes == "DEMO_DATA"))
         if order is None:
