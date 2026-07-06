@@ -1,6 +1,6 @@
 # Program 1 - Phase A: Patient Knowledge Stabilization Plan
 
-Status: implementacijski plan; Phase A1 i Phase A2 djelomicno implementirani
+Status: implementacijski plan; Phase A1, Phase A2 i Phase A3 djelomicno implementirani
 
 ## 1. Svrha
 
@@ -268,6 +268,14 @@ Plan:
 - Source badge mora prikazati title, type/source, date/origin gdje je dostupno.
 - Source link mora voditi na `/clinical-documents/{document_id}`.
 - API mora nastaviti filtrirati unreviewed docs iz official knowledge outputa.
+
+Current support:
+
+- Contract testovi potvrdjuju da official Patient Clinical Knowledge nastaje samo iz `ClinicalDocument` zapisa s `review_status=reviewed` i `physician_reviewed=true`.
+- `PatientClinicalSummaryRecord` ostaje summary view i sam po sebi ne stvara official knowledge stavke.
+- `generated`, `edited`, `rejected` i `superseded` AI/document stanja ne doprinose official knowledgeu bez valjanog lijecnickog reviewa.
+- Svaka official knowledge stavka i open question mora imati barem jedan ClinicalDocument source s minimalnim source metapodacima.
+- Duplicate statementi se spajaju po normaliziranom tekstu i zadrzavaju vise izvora.
 
 ### A4 - Patient Clinical Summary Stabilization
 

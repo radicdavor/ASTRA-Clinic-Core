@@ -1,3 +1,6 @@
+from datetime import datetime
+
+from app.models.domain import PatientClinicalSummaryRecord
 from tests.conftest import login_token
 from tests.factories import appointment, clinical_document, patient
 
@@ -5,6 +8,27 @@ from tests.factories import appointment, clinical_document, patient
 def auth_headers(client):
     token = login_token(client, "admin@test.local")
     return {"Authorization": f"Bearer {token}"}
+
+
+KNOWLEDGE_CATEGORIES = [
+    "known_problems",
+    "completed_procedures",
+    "pathology",
+    "laboratory",
+    "imaging",
+    "current_therapy",
+    "open_questions",
+    "latest_recommendations",
+]
+
+
+def all_knowledge_items(summary_body):
+    return [item for category in KNOWLEDGE_CATEGORIES for item in summary_body[category]]
+
+
+def assert_no_official_knowledge(summary_body):
+    assert summary_body["generated_from_reviewed_documents"] == 0
+    assert all_knowledge_items(summary_body) == []
 
 
 def test_create_extract_review_document_updates_patient_summary(client, db, auth_setup):
@@ -153,6 +177,153 @@ def test_patient_summary_requires_reviewed_status_and_compatibility_flag(client,
     assert summary.json()["known_problems"] == []
 
 
+def test_unreviewed_generated_ai_extraction_is_not_official_knowledge(client, db, auth_setup):
+    headers = auth_headers(client)
+    p = patient(db)
+    doc = clinical_document(db, p, physician_reviewed=False)
+    doc.ai_extraction_status = "generated"
+    db.commit()
+
+    summary = client.get(f"/api/patients/{p.id}/clinical-summary", headers=headers)
+    assert summary.status_code == 200
+    assert_no_official_knowledge(summary.json())
+
+
+def test_edited_unreviewed_ai_extraction_is_not_official_knowledge(client, db, auth_setup):
+    headers = auth_headers(client)
+    p = patient(db)
+    doc = clinical_document(db, p, physician_reviewed=False)
+    doc.ai_extraction_status = "edited"
+    doc.key_findings = ["GERB/refluks naveden u dokumentu"]
+    doc.recommendations = ["Postoji otvoreno pitanje koje ceka nalaz ili rucni pregled"]
+    db.commit()
+
+    summary = client.get(f"/api/patients/{p.id}/clinical-summary", headers=headers)
+    assert summary.status_code == 200
+    assert_no_official_knowledge(summary.json())
+
+
+def test_rejected_document_is_not_official_knowledge(client, db, auth_setup):
+    headers = auth_headers(client)
+    p = patient(db)
+    doc = clinical_document(db, p, physician_reviewed=False)
+    doc.review_status = "rejected"
+    doc.ai_extraction_status = "rejected"
+    doc.physician_reviewed = False
+    db.commit()
+
+    summary = client.get(f"/api/patients/{p.id}/clinical-summary", headers=headers)
+    assert summary.status_code == 200
+    assert_no_official_knowledge(summary.json())
+
+
+def test_superseded_document_does_not_contribute_if_status_supported(client, db, auth_setup):
+    headers = auth_headers(client)
+    p = patient(db)
+    doc = clinical_document(db, p, physician_reviewed=True)
+    doc.review_status = "superseded"
+    doc.ai_extraction_status = "superseded"
+    db.commit()
+
+    summary = client.get(f"/api/patients/{p.id}/clinical-summary", headers=headers)
+    assert summary.status_code == 200
+    assert_no_official_knowledge(summary.json())
+
+
+def test_reviewed_document_with_accepted_ai_extraction_is_official_knowledge(client, db, auth_setup):
+    headers = auth_headers(client)
+    p = patient(db)
+    doc = clinical_document(db, p, physician_reviewed=True)
+    doc.ai_extraction_status = "accepted"
+    db.commit()
+
+    summary = client.get(f"/api/patients/{p.id}/clinical-summary", headers=headers)
+    assert summary.status_code == 200
+    body = summary.json()
+    assert body["generated_from_reviewed_documents"] == 1
+    assert any(source["document_id"] == doc.id for item in all_knowledge_items(body) for source in item["sources"])
+
+
+def test_reviewed_manual_document_without_ai_extraction_can_be_official_knowledge(client, db, auth_setup):
+    headers = auth_headers(client)
+    p = patient(db)
+    doc = clinical_document(db, p, physician_reviewed=True)
+    doc.ai_extraction_status = "not_run"
+    doc.ai_summary = None
+    doc.key_findings = ["Rucno unesena pregledana klinicka tvrdnja"]
+    doc.recommendations = []
+    db.commit()
+
+    summary = client.get(f"/api/patients/{p.id}/clinical-summary", headers=headers)
+    assert summary.status_code == 200
+    body = summary.json()
+    assert body["generated_from_reviewed_documents"] == 1
+    matching = [item for item in all_knowledge_items(body) if item["text"] == "Rucno unesena pregledana klinicka tvrdnja"]
+    assert len(matching) == 1
+    assert matching[0]["sources"][0]["document_id"] == doc.id
+
+
+def test_summary_record_alone_does_not_create_official_knowledge(client, db, auth_setup):
+    headers = auth_headers(client)
+    p = patient(db)
+    record = PatientClinicalSummaryRecord(
+        patient_id=p.id,
+        summary_text="Pregledani sazetak bez source dokumenta.",
+        known_conditions=["GERB bez source dokumenta"],
+        key_findings=["Nalaz bez source dokumenta"],
+        open_items=["Otvoreno pitanje bez source dokumenta"],
+        risks=[],
+        last_recommendations=["Preporuka bez source dokumenta"],
+        source_document_ids=[],
+        status="reviewed",
+        generated_by="physician",
+        reviewed_by=1,
+        reviewed_at=datetime(2026, 7, 6),
+    )
+    db.add(record)
+    db.commit()
+
+    summary = client.get(f"/api/patients/{p.id}/clinical-summary", headers=headers)
+    assert summary.status_code == 200
+    body = summary.json()
+    assert body["reviewed_summary"]["id"] == record.id
+    assert_no_official_knowledge(body)
+
+
+def test_official_knowledge_items_always_have_sources(client, db, auth_setup):
+    headers = auth_headers(client)
+    p = patient(db)
+    clinical_document(db, p, physician_reviewed=True)
+
+    summary = client.get(f"/api/patients/{p.id}/clinical-summary", headers=headers)
+    assert summary.status_code == 200
+    for item in all_knowledge_items(summary.json()):
+        assert item["sources"]
+        for source in item["sources"]:
+            assert source["document_id"]
+            assert source["title"]
+            assert source["document_type"]
+            assert source["source_type"]
+            assert "origin" in source
+            assert "document_date" in source
+
+
+def test_open_questions_require_reviewed_sources(client, db, auth_setup):
+    headers = auth_headers(client)
+    p = patient(db)
+    unreviewed = clinical_document(db, p, physician_reviewed=False)
+    unreviewed.recommendations = ["Postoji otvoreno pitanje koje ceka nalaz ili rucni pregled"]
+    reviewed = clinical_document(db, p, physician_reviewed=True)
+    reviewed.recommendations = ["Postoji otvoreno pitanje koje ceka nalaz ili rucni pregled"]
+    db.commit()
+
+    summary = client.get(f"/api/patients/{p.id}/clinical-summary", headers=headers)
+    assert summary.status_code == 200
+    open_questions = summary.json()["open_questions"]
+    assert len(open_questions) == 1
+    assert {source["document_id"] for source in open_questions[0]["sources"]} == {reviewed.id}
+
+
 def test_review_without_ai_extraction_keeps_ai_status_not_run(client, db, auth_setup):
     headers = auth_headers(client)
     p = patient(db)
@@ -234,6 +405,32 @@ def test_readiness_counts_generated_and_edited_extraction_awaiting_review(client
     assert check["count"] == 1
 
 
+def test_readiness_counts_needs_physician_review_documents_only(client, db, auth_setup):
+    headers = auth_headers(client)
+    p = patient(db)
+    clinical_document(db, p, physician_reviewed=False)
+    reviewed = clinical_document(db, p, physician_reviewed=True)
+    rejected = clinical_document(db, p, physician_reviewed=False)
+    rejected.review_status = "rejected"
+    rejected.ai_extraction_status = "rejected"
+    draft = clinical_document(db, p, physician_reviewed=False)
+    draft.review_status = "draft"
+    draft.ai_extraction_status = "not_run"
+    draft.key_findings = None
+    draft.recommendations = None
+    extracted = clinical_document(db, p, physician_reviewed=False)
+    extracted.review_status = "extracted"
+    db.commit()
+
+    response = client.get("/api/readiness", headers=headers)
+    assert response.status_code == 200
+    check = next(item for item in response.json()["checks"] if item["key"] == "clinical_documents_review")
+    assert check["count"] == 2
+    assert reviewed.review_status == "reviewed"
+    assert rejected.review_status == "rejected"
+    assert draft.review_status == "draft"
+
+
 def test_generate_edit_and_review_patient_clinical_summary(client, db, auth_setup):
     headers = auth_headers(client)
     p = patient(db)
@@ -274,3 +471,28 @@ def test_readiness_detects_stale_patient_summary(client, db, auth_setup):
     check = next(item for item in response.json()["checks"] if item["key"] == "patient_summary_stale")
     assert check["status"] == "warning"
     assert check["target_path"] == "/patients"
+
+
+def test_stale_summary_detects_new_reviewed_document(client, db, auth_setup):
+    headers = auth_headers(client)
+    p = patient(db)
+    old_doc = clinical_document(db, p, physician_reviewed=True)
+    old_doc.updated_at = datetime(2026, 7, 1, 9, 0)
+    db.commit()
+
+    draft = client.post(f"/api/patients/{p.id}/clinical-summary/generate-draft", headers=headers)
+    assert draft.status_code == 200
+    reviewed = client.post(f"/api/patients/{p.id}/clinical-summary/review", headers=headers)
+    assert reviewed.status_code == 200
+    record = db.get(PatientClinicalSummaryRecord, reviewed.json()["id"])
+    record.updated_at = datetime(2026, 7, 2, 9, 0)
+
+    new_doc = clinical_document(db, p, physician_reviewed=True)
+    new_doc.updated_at = datetime(2026, 7, 3, 9, 0)
+    db.commit()
+
+    response = client.get("/api/readiness", headers=headers)
+    assert response.status_code == 200
+    check = next(item for item in response.json()["checks"] if item["key"] == "patient_summary_stale")
+    assert check["status"] == "warning"
+    assert check["count"] == 1

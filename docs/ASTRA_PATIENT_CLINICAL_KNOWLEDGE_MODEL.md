@@ -90,6 +90,13 @@ It is a structured view, not a separate diagnosis registry.
 
 ASTRA must not display unsourced AI statements as official clinical facts.
 
+Contract tests now lock this rule:
+
+- `review_status=reviewed` and `physician_reviewed=true` are both required.
+- AI extraction status alone never makes a statement official.
+- `PatientClinicalSummaryRecord` is a summary view, not a source document.
+- Rejected and superseded documents do not contribute to official knowledge.
+
 ## 7. Source-Linked Summary
 
 Every official summary item must contain at least one source document.
@@ -99,6 +106,8 @@ Source badges link to:
 `/clinical-documents/{document_id}`
 
 If a candidate item has no source, it is not returned in the official patient summary.
+
+Open questions follow the same source rule. They are displayed as unresolved questions or warnings, not as clinical decisions.
 
 ## 8. Unresolved Findings / Open Questions
 
