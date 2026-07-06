@@ -462,6 +462,9 @@ def test_readiness_counts_needs_physician_review_documents_only(client, db, auth
     rejected = clinical_document(db, p, physician_reviewed=False)
     rejected.review_status = "rejected"
     rejected.ai_extraction_status = "rejected"
+    superseded = clinical_document(db, p, physician_reviewed=False)
+    superseded.review_status = "superseded"
+    superseded.ai_extraction_status = "superseded"
     draft = clinical_document(db, p, physician_reviewed=False)
     draft.review_status = "draft"
     draft.ai_extraction_status = "not_run"
@@ -477,6 +480,7 @@ def test_readiness_counts_needs_physician_review_documents_only(client, db, auth
     assert check["count"] == 2
     assert reviewed.review_status == "reviewed"
     assert rejected.review_status == "rejected"
+    assert superseded.review_status == "superseded"
     assert draft.review_status == "draft"
 
 

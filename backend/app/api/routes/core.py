@@ -13,7 +13,7 @@ from app.core.database import get_db
 from app.models.domain import ApiKey, Appointment, AuditLog, Clinic, ClinicalDocument, ClinicalEpisode, ClinicalPlan, InventoryBatch, InventoryItem, Invoice, Module, Patient, PatientClinicalSummaryRecord, Provider, Room, Service, room_services
 from app.schemas.common import AppointmentCreate, AppointmentOut, AppointmentUpdate, ClinicOut, ClinicalDecisionTimelineItem, ClinicalDocumentCreate, ClinicalDocumentOut, ClinicalDocumentUpdate, ClinicalDocumentUpload, ClinicalEpisodeCreate, ClinicalEpisodeOut, ClinicalEpisodeUpdate, ClinicalPlanGenerate, ClinicalPlanOut, ClinicalPlanUpdate, ErrorResponse, InvoiceOut, PatientClinicalSummary, PatientClinicalSummaryRecordOut, PatientClinicalSummaryRecordUpdate, PatientCreate, PatientOut, PatientUpdate, ReadinessCheck, ReadinessOut, ReceptionArrivalRequest, ReceptionSlot, ServiceCreate, ServiceOut
 from app.services.appointments import validate_appointment_payload
-from app.services.patient_knowledge import add_knowledge_item, is_document_awaiting_physician_review, is_official_clinical_document, latest_patient_summary_record, latest_reviewed_document_updated_at, latest_summary_records_by_patient, official_patient_documents_statement, summary_record_from_documents, summary_record_is_stale
+from app.services.patient_knowledge import DOCUMENT_REVIEW_AWAITING_STATUSES, add_knowledge_item, is_document_awaiting_physician_review, is_official_clinical_document, latest_patient_summary_record, latest_reviewed_document_updated_at, latest_summary_records_by_patient, official_patient_documents_statement, summary_record_from_documents, summary_record_is_stale
 
 ERROR_RESPONSES = {400: {"model": ErrorResponse}, 401: {"model": ErrorResponse}, 403: {"model": ErrorResponse}, 404: {"model": ErrorResponse}, 409: {"model": ErrorResponse}, 422: {"model": ErrorResponse}}
 
@@ -275,7 +275,7 @@ def readiness(db: Session = Depends(get_db), actor: Actor = Depends(require_perm
     unpaid_invoice_count = scalar_count(db, select(func.count(Invoice.id)).where(Invoice.status != "draft", Invoice.payment_status != "paid"))
     episode_count = scalar_count(db, select(func.count(ClinicalEpisode.id)))
     appointments_without_episode = scalar_count(db, select(func.count(Appointment.id)).where(Appointment.episode_id.is_(None)))
-    documents_awaiting_review = scalar_count(db, select(func.count(ClinicalDocument.id)).where(ClinicalDocument.review_status.in_(["extracted", "needs_physician_review"])))
+    documents_awaiting_review = scalar_count(db, select(func.count(ClinicalDocument.id)).where(ClinicalDocument.review_status.in_(DOCUMENT_REVIEW_AWAITING_STATUSES)))
     rooms_without_services = scalar_count(db, select(func.count(Room.id)).where(Room.active.is_(True), ~Room.id.in_(select(room_services.c.room_id))))
     services_without_rooms = scalar_count(db, select(func.count(Service.id)).where(Service.active.is_(True), ~Service.id.in_(select(room_services.c.service_id))))
     providers_without_clinic = scalar_count(db, select(func.count(Provider.id)).where(Provider.active.is_(True), Provider.clinic_id.is_(None)))
