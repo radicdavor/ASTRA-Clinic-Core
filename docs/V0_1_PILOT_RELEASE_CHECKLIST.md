@@ -19,6 +19,7 @@ ASTRA Clinic Core can be tagged as `v0.1-pilot` only after every item below is r
 - [x] Demo banner visible.
 - [x] `/api/public-config` confirms `real_data_allowed=false` for demo.
 - [x] API keys reviewed and deactivated after demo.
+- [x] V23 release candidate manifest reviewed before tag decision.
 
 V18 readiness note:
 

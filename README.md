@@ -27,6 +27,7 @@ Pilot documents:
 - [ASTRA Readiness Model](docs/ASTRA_READINESS_MODEL.md)
 - [ASTRA Operational Evidence Loop](docs/ASTRA_OPERATIONAL_EVIDENCE_LOOP.md)
 - [V20 Readiness Cockpit](docs/V20_READINESS_COCKPIT.md)
+- [V23 Pilot Release Candidate](docs/V23_PILOT_RELEASE_CANDIDATE.md)
 - [Codex Architecture Bible instructions](docs/CODEX_ARCHITECTURE_BIBLE_INSTRUCTIONS.md)
 - [V19 Architecture Bible compliance gate](docs/V19_ARCHITECTURE_BIBLE_COMPLIANCE_GATE.md)
 - [Pilot runbook](docs/PILOT_RUNBOOK.md)

@@ -15,6 +15,7 @@ Canonical evidence:
 - `docs/V0_1_GO_NO_GO_MATRIX.md`
 - `docs/ADR/0001-v0-1-pilot-decision.md`
 - `docs/releases/V0_1_PILOT_RELEASE_NOTES.md`
+- `docs/V23_PILOT_RELEASE_CANDIDATE.md`
 
 Pilot evidence status:
 
@@ -37,6 +38,7 @@ Validation status:
 - Fresh PostgreSQL migration replay passed through `0005_patient_oib`.
 - Pilot release validation script passed.
 - Local Docker frontend/backend services were rebuilt and started.
+- V23 release candidate manifest exists and gathers final readiness, CI and human pilot evidence for maintainer tag decision.
 
 ## Boundaries
 
