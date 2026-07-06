@@ -96,7 +96,7 @@ export function PatientDetail() {
   const activeSummary = clinicalSummary.data?.reviewed_summary ?? clinicalSummary.data?.draft_summary ?? null;
   const activeSummaryIsReviewed = Boolean(clinicalSummary.data?.reviewed_summary);
   const activeSummaryIsStale = activeSummaryIsReviewed ? clinicalSummary.data?.reviewed_summary_is_stale : clinicalSummary.data?.draft_summary_is_stale;
-  const activeSummaryTitle = activeSummaryIsReviewed ? "Pregledani sazetak" : "AI draft sazetka";
+  const activeSummaryTitle = activeSummaryIsReviewed ? "Pregledani sazetak pacijenta" : "AI draft sazetka";
   const sourceDocuments = documents.data.filter((document) => activeSummary?.source_document_ids?.includes(document.id));
 
   async function refreshClinicalSummary() {
@@ -201,13 +201,13 @@ export function PatientDetail() {
 
       <div className="patient-knowledge-layout">
         <div>
-          <WorkspaceSection title={<>{activeSummaryTitle} <HelpHint title="Sazetak pacijenta">Sazetak je pomocni prikaz i nije izvor istine. Sluzbene tvrdnje dolaze iz pregledanih, source-linked dokumenata.</HelpHint></>}>
+          <WorkspaceSection title={<>{activeSummaryTitle} <HelpHint title="Sazetak pacijenta">Sazetak je pomocni prikaz i nije izvor istine. Izvor istine su pregledani, source-linked klinicki dokumenti.</HelpHint></>}>
             <div className={`clinical-plan-card ${activeSummary?.status === "reviewed" && !activeSummaryIsStale ? "" : "ai-suggestion"}`}>
               <div><span>Status</span><strong>{summaryStatusLabel(activeSummary?.status)}</strong></div>
               {activeSummaryIsStale && <p><strong>Sazetak je zastario. Generirajte novi draft iz najnovijih pregledanih dokumenata.</strong></p>}
               {clinicalSummary.data?.summary_warning && <p>{clinicalSummary.data.summary_warning}</p>}
               {activeSummary?.status !== "reviewed" && <p><strong>AI draft - potreban je lijecnicki pregled.</strong></p>}
-              <p>Sazetak je pomocni prikaz i nije izvor istine. Sluzbene tvrdnje dolaze iz pregledanih, source-linked dokumenata.</p>
+              <p>Sazetak je pomocni prikaz. Izvor istine su pregledani, source-linked klinicki dokumenti.</p>
               <p>{activeSummary?.summary_text ?? "Nema potvrdjenog sazetka pacijenta. Generirajte draft iz pregledanih dokumenata."}</p>
               <div className="knowledge-grid">
                 <KnowledgeList title="Poznata stanja" items={activeSummary?.known_conditions ?? []} />
@@ -241,7 +241,7 @@ export function PatientDetail() {
                 label: "Sazetak",
                 content: (
                   <>
-                    <p>Sluzbeno klinicko znanje prikazano ispod dolazi iz pregledanih dokumenata i uvijek ima izvore.</p>
+                    <p><strong>Sluzbeno source-linked znanje</strong> dolazi iz pregledanih dokumenata i uvijek ima izvore.</p>
                     <div className="knowledge-grid">
                       <KnowledgeCard title="Poznati problemi" items={clinicalSummary.data?.known_problems ?? []} />
                       <KnowledgeCard title="Zavrseni postupci" items={clinicalSummary.data?.completed_procedures ?? []} />
@@ -300,7 +300,7 @@ export function PatientDetail() {
           <div><span>Pregledani izvori</span><strong>{clinicalSummary.data?.generated_from_reviewed_documents ?? 0}</strong></div>
           <div><span>Strukturirane stavke</span><strong>{knownItemCount}</strong></div>
           <div><span>Otvorena pitanja</span><strong>{openQuestionCount}</strong></div>
-          <div><span>Ceka pregled</span><strong>{clinicalSummary.data?.awaiting_review_count ?? awaitingReview.length}</strong></div>
+          <div><span>Dokumenti cekaju lijecnicki pregled</span><strong>{clinicalSummary.data?.awaiting_review_count ?? awaitingReview.length}</strong></div>
           {!hasReviewedKnowledge && (
             <section>
               <h3>Nema pregledanih dokumenata</h3>
@@ -311,7 +311,7 @@ export function PatientDetail() {
           )}
           {awaitingReview.length > 0 && (
             <section>
-              <h3>Dokumenti koji cekaju pregled</h3>
+              <h3>Dokumenti cekaju lijecnicki pregled</h3>
               {awaitingReview.slice(0, 4).map((document) => (
                 <Link key={document.id} to={`/clinical-documents/${document.id}`}>{document.title}</Link>
               ))}

@@ -117,7 +117,7 @@ assertIncludes("src/pages/PatientDetail.tsx", "/api/patients/${id}/clinical-docu
 assertIncludes("src/pages/PatientDetail.tsx", "/api/patients/${id}/clinical-summary");
 assertIncludes("src/pages/PatientDetail.tsx", "KnowledgeCard");
 assertIncludes("src/pages/PatientDetail.tsx", "knowledge-sidebar");
-assertIncludes("src/pages/PatientDetail.tsx", "Dokumenti koji cekaju pregled");
+assertIncludes("src/pages/PatientDetail.tsx", "Dokumenti cekaju lijecnicki pregled");
 assertIncludes("src/pages/PatientDetail.tsx", "SourceBadge");
 assertIncludes("src/pages/PatientDetail.tsx", "/api/patients/${id}/appointments");
 assertIncludes("src/pages/PatientDetail.tsx", "/api/patients/${id}/invoices");
@@ -127,6 +127,7 @@ assertIncludes("src/pages/PatientDetail.tsx", "Sazetak");
 assertIncludes("src/pages/PatientDetail.tsx", "Klinicki dokumenti");
 assertIncludes("src/pages/PatientDetail.tsx", "Pregledani sazetak");
 assertIncludes("src/pages/PatientDetail.tsx", "AI draft sazetka");
+assertIncludes("src/pages/PatientDetail.tsx", "Sluzbeno source-linked znanje");
 assertIncludes("src/pages/PatientDetail.tsx", "Sazetak je zastario");
 assertIncludes("src/pages/PatientDetail.tsx", "/clinical-summary/generate-draft");
 assertIncludes("src/pages/PatientDetail.tsx", "/clinical-summary/review");
