@@ -1,4 +1,4 @@
-from sqlalchemy import delete, select
+from sqlalchemy import delete, or_, select
 
 from app.core.config import get_settings
 from app.core.database import SessionLocal
@@ -18,7 +18,18 @@ def main() -> None:
         demo_items = db.scalars(select(InventoryItem.id).where(InventoryItem.sku.like("DEMO-%"))).all()
         demo_services = db.scalars(select(Service.id).where(Service.code.like("DEMO-%"))).all()
         demo_suppliers = db.scalars(select(Supplier.id).where(Supplier.name.like("Demo%"))).all()
-        demo_appointments = db.scalars(select(Appointment.id).where(Appointment.patient_id.in_(demo_patients)) if demo_patients else select(Appointment.id).where(False)).all()
+        demo_providers = db.scalars(select(Provider.id).where(Provider.full_name.like("dr. Demo%"))).all()
+        demo_rooms = db.scalars(select(Room.id).where(Room.name.like("Demo%"))).all()
+        appointment_filters = []
+        if demo_patients:
+            appointment_filters.append(Appointment.patient_id.in_(demo_patients))
+        if demo_services:
+            appointment_filters.append(Appointment.service_id.in_(demo_services))
+        if demo_providers:
+            appointment_filters.append(Appointment.provider_id.in_(demo_providers))
+        if demo_rooms:
+            appointment_filters.append(Appointment.room_id.in_(demo_rooms))
+        demo_appointments = db.scalars(select(Appointment.id).where(or_(*appointment_filters)) if appointment_filters else select(Appointment.id).where(False)).all()
         demo_invoices = db.scalars(select(Invoice.id).where(Invoice.appointment_id.in_(demo_appointments)) if demo_appointments else select(Invoice.id).where(False)).all()
         demo_orders = db.scalars(select(PurchaseOrder.id).where(PurchaseOrder.supplier_id.in_(demo_suppliers)) if demo_suppliers else select(PurchaseOrder.id).where(False)).all()
 

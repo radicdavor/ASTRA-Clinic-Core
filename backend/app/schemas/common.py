@@ -139,6 +139,24 @@ class ServiceOut(ServiceCreate, ORMModel):
     id: int
 
 
+class ProviderOut(ORMModel):
+    id: int
+    full_name: str
+    specialty: str | None = None
+    active: bool
+    created_at: DateTimeType
+    updated_at: DateTimeType
+
+
+class RoomOut(ORMModel):
+    id: int
+    name: str
+    type: str | None = None
+    active: bool
+    created_at: DateTimeType
+    updated_at: DateTimeType
+
+
 class AppointmentCreate(BaseModel):
     patient_id: int
     service_id: int
@@ -175,6 +193,8 @@ class AppointmentOut(AppointmentCreate, ORMModel):
     updated_at: DateTimeType
     patient: PatientOut | None = None
     service: ServiceOut | None = None
+    provider: ProviderOut | None = None
+    room: RoomOut | None = None
 
 
 class SupplierCreate(BaseModel):

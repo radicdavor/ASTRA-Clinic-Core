@@ -1,5 +1,5 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { api, notifyUser } from "../api/client";
 import { ActionButton } from "../components/ActionButton";
 import { HelpHint } from "../components/HelpHint";
@@ -8,6 +8,10 @@ import { formatPatientIdentity, formatPatientName } from "../utils/patientIdenti
 
 export function PatientForm() {
   const navigate = useNavigate();
+  const [params] = useSearchParams();
+  const returnTo = params.get("return_to");
+  const initialName = params.get("name") ?? "";
+  const initialNameParts = useMemo(() => initialName.trim().split(/\s+/).filter(Boolean), [initialName]);
   const [form, setForm] = useState({ first_name: "", last_name: "", date_of_birth: "", oib: "", phone: "", email: "", notes: "" });
   const [error, setError] = useState("");
   const [possibleDuplicates, setPossibleDuplicates] = useState<Patient[]>([]);
@@ -24,6 +28,23 @@ export function PatientForm() {
     if (form.oib.trim()) params.set("oib", form.oib.trim());
     return `/api/patients/possible-duplicates?${params.toString()}`;
   }, [form.date_of_birth, form.email, form.first_name, form.last_name, form.oib, form.phone]);
+
+  function optionalText(value: string) {
+    const trimmed = value.trim();
+    return trimmed ? trimmed : null;
+  }
+
+  useEffect(() => {
+    if (!initialName.trim()) return;
+    setForm((current) => {
+      if (current.first_name || current.last_name) return current;
+      return {
+        ...current,
+        first_name: initialNameParts[0] ?? "",
+        last_name: initialNameParts.slice(1).join(" ")
+      };
+    });
+  }, [initialName, initialNameParts]);
 
   useEffect(() => {
     let alive = true;
@@ -51,11 +72,19 @@ export function PatientForm() {
       notifyUser("Pronadeni su moguci duplikati. Provjerite identitet pacijenta i potvrdite nastavak.", "error");
       return;
     }
-    await api("/api/patients", {
+    const patient = await api<Patient>("/api/patients", {
       method: "POST",
-      body: JSON.stringify({ ...form, date_of_birth: form.date_of_birth || null, oib: form.oib.trim() || null })
+      body: JSON.stringify({
+        first_name: form.first_name.trim(),
+        last_name: form.last_name.trim(),
+        date_of_birth: form.date_of_birth || null,
+        oib: optionalText(form.oib),
+        phone: optionalText(form.phone),
+        email: optionalText(form.email),
+        notes: optionalText(form.notes)
+      })
     });
-    navigate("/patients");
+    navigate(returnTo === "appointment" ? `/appointments/new?patient_id=${patient.id}` : "/patients");
   }
 
   return (
@@ -65,7 +94,7 @@ export function PatientForm() {
           <h1>
             Novi pacijent <HelpHint title="Novi pacijent">Otvara unos novog pacijenta. U demo nacinu ne unosite stvarne osobne podatke.</HelpHint>
           </h1>
-          <p>Unos osnovnih podataka za narucivanje i pracenje toka pacijenta.</p>
+          <p>{returnTo === "appointment" ? "Nakon spremanja pacijent ce biti odabran u novom terminu." : "Unos osnovnih podataka za narucivanje i pracenje toka pacijenta."}</p>
         </div>
       </div>
       {error && <p className="form-error">{error}</p>}

@@ -21,6 +21,11 @@ export function AppointmentForm() {
   const [form, setForm] = useState({ patient_id: "", service_id: "", provider_id: "", room_id: "", date: new Date().toISOString().slice(0, 10), start_time: "09:00", end_time: "09:30", duration_minutes: 30, status: "scheduled", source: "manual", notes: "" });
   const selectedService = useMemo(() => services.data.find((service) => String(service.id) === form.service_id), [form.service_id, services.data]);
   const similarPatientWarning = patients.data.length > 1 && !selectedPatient;
+  const createPatientLink = useMemo(() => {
+    const next = new URLSearchParams({ return_to: "appointment" });
+    if (patientQuery.trim()) next.set("name", patientQuery.trim());
+    return `/patients/new?${next.toString()}`;
+  }, [patientQuery]);
 
   useEffect(() => {
     if (!initialPatientId || selectedPatient) return;
@@ -43,11 +48,11 @@ export function AppointmentForm() {
   async function submit(event: FormEvent) {
     event.preventDefault();
     if (!selectedPatient) return;
-    await api("/api/appointments", {
+    const appointment = await api<{ id: number }>("/api/appointments", {
       method: "POST",
       body: JSON.stringify({ ...form, patient_id: selectedPatient.id, service_id: Number(form.service_id), provider_id: Number(form.provider_id), room_id: Number(form.room_id) })
     });
-    navigate("/appointments");
+    navigate(`/appointments/${appointment.id}`);
   }
 
   return (
@@ -72,7 +77,7 @@ export function AppointmentForm() {
             {similarPatientWarning && <p className="form-error">Pronadeno je vise slicnih pacijenata - provjerite datum rodenja/OIB prije odabira.</p>}
             {patients.data.length === 0 && (
               <p>
-                Nema pronadenog pacijenta. <Link to="/patients/new">Kreiraj novog pacijenta</Link>
+                Nema pronadenog pacijenta. <Link to={createPatientLink}>Kreiraj novog pacijenta</Link>
               </p>
             )}
             {patients.data.map((patient) => (

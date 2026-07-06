@@ -5,6 +5,7 @@ from fastapi import HTTPException
 
 from app.models.domain import Appointment
 from app.services.appointments import validate_appointment_payload
+from tests.conftest import login_token
 from tests.factories import appointment, patient, provider, room, service
 
 
@@ -56,6 +57,19 @@ def test_create_appointment_succeeds(db):
     db.flush()
 
     assert obj.id is not None
+
+
+def test_appointment_detail_includes_patient_provider_and_room(client, db, auth_setup):
+    obj = appointment(db)
+    token = login_token(client, "admin@test.local")
+
+    response = client.get(f"/api/appointments/{obj.id}", headers={"Authorization": f"Bearer {token}"})
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["patient"]["first_name"]
+    assert payload["provider"]["full_name"]
+    assert payload["room"]["name"]
 
 
 def test_update_appointment_revalidates_conflicts(db):
