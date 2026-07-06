@@ -25,6 +25,7 @@ Pilot documents:
 - [ASTRA Design System](docs/ASTRA_DESIGN_SYSTEM.md)
 - [ASTRA Workspace Architecture](docs/ASTRA_WORKSPACE_ARCHITECTURE.md)
 - [ASTRA Readiness Model](docs/ASTRA_READINESS_MODEL.md)
+- [ASTRA Operational Evidence Loop](docs/ASTRA_OPERATIONAL_EVIDENCE_LOOP.md)
 - [V20 Readiness Cockpit](docs/V20_READINESS_COCKPIT.md)
 - [Codex Architecture Bible instructions](docs/CODEX_ARCHITECTURE_BIBLE_INSTRUCTIONS.md)
 - [V19 Architecture Bible compliance gate](docs/V19_ARCHITECTURE_BIBLE_COMPLIANCE_GATE.md)

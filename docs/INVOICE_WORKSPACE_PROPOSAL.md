@@ -32,6 +32,18 @@ The current invoice UI uses a list/detail panel pattern inside `/invoices`. This
 6. Add invoice audit timeline.
 7. Update readiness invoice checks to link directly to invoice filters or detail routes when available.
 
+## Readiness Link Direction
+
+Invoice readiness checks currently open `/invoices` because the dedicated Invoice Workspace is deferred.
+
+Eventually:
+
+- draft invoice checks should open `/invoices/:id` or a filtered invoice workspace
+- unpaid invoice checks should open the relevant invoice workspace
+- invoice issue/payment audit should appear in the Invoice Workspace audit panel
+
+This is deferred until the readiness-workspace loop is stable. The current list/detail panel remains acceptable for pilot.
+
 ## Non-Goals
 
 - No real fiscalization.

@@ -76,7 +76,8 @@ Steps:
 29. Receive demo purchase order line and verify the confirmation prompt is clear.
 30. Open inventory and verify stock changed.
 31. Open audit log or appointment audit timeline and review traceability.
-32. Capture feedback in `docs/PILOT_FEEDBACK_TEMPLATE.md`.
+32. Return to `/readiness` and review whether warnings changed or remain acceptable.
+33. Capture feedback in `docs/PILOT_FEEDBACK_TEMPLATE.md`.
 
 ## Expected Outcomes
 
@@ -90,6 +91,8 @@ Steps:
 - Payment status updates after payment.
 - Purchase receive increases inventory.
 - Audit log contains user/API traceability.
+- Readiness cockpit can link from warnings to operational screens.
+- After the workflow, readiness and audit can be reviewed as release evidence.
 
 ## Known Limitations
 

@@ -35,3 +35,18 @@ def test_readiness_reports_demo_guardrails(client, db, auth_setup):
     assert any(check["key"] == "services" and check["target_path"] == "/services" for check in payload["checks"])
     assert any(check["key"] == "audit" and check["target_path"] == "/audit-log" for check in payload["checks"])
     assert any(check["key"] == "human_pilot_evidence" and check["status"] == "warning" for check in payload["checks"])
+    assert any(check["key"] == "fiscalization" and check["decision_impact"] == "review" for check in payload["checks"])
+    assert any(check["key"] == "human_pilot_evidence" and check["decision_impact"] == "blocks_release" for check in payload["checks"])
+
+
+def test_readiness_missing_core_setup_blocks_demo(client, auth_setup):
+    token = login_token(client, "admin@test.local")
+
+    response = client.get("/api/readiness", headers={"Authorization": f"Bearer {token}"})
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["status"] == "blocked"
+    assert any(check["key"] == "providers" and check["decision_impact"] == "blocks_demo" for check in payload["checks"])
+    assert any(check["key"] == "rooms" and check["decision_impact"] == "blocks_demo" for check in payload["checks"])
+    assert any(check["key"] == "services" and check["decision_impact"] == "blocks_demo" for check in payload["checks"])

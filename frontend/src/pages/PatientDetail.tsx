@@ -24,6 +24,12 @@ export function PatientDetail() {
     : "/api/patients/possible-duplicates";
   const duplicates = useApi<Patient[]>(duplicatePath, []);
   const duplicateCandidates = duplicates.data.filter((candidate) => candidate.id !== patient.data?.id);
+  const sortedAppointments = [...appointments.data].sort((a, b) => `${a.date}T${a.start_time}`.localeCompare(`${b.date}T${b.start_time}`));
+  const today = new Date().toISOString().slice(0, 10);
+  const lastAppointment = [...sortedAppointments].reverse().find((appointment) => appointment.date <= today);
+  const nextAppointment = sortedAppointments.find((appointment) => appointment.date >= today && !["completed", "cancelled", "no_show"].includes(appointment.status));
+  const openInvoices = invoices.data.filter((invoice) => invoice.payment_status !== "paid");
+  const unpaidTotal = openInvoices.reduce((sum, invoice) => sum + Number(invoice.total_amount || 0), 0);
 
   if (patient.loading || !patient.data) {
     return <WorkspaceLayout><p>Ucitavanje pacijenta...</p></WorkspaceLayout>;
@@ -60,6 +66,14 @@ export function PatientDetail() {
           ))}
         </div>
       )}
+
+      <div className="summary-strip">
+        <div><span>Zadnji termin</span><strong>{lastAppointment ? `${formatDate(lastAppointment.date)} / ${lastAppointment.status}` : "-"}</strong></div>
+        <div><span>Sljedeci termin</span><strong>{nextAppointment ? `${formatDate(nextAppointment.date)} / ${nextAppointment.status}` : "-"}</strong></div>
+        <div><span>Otvoreni racuni</span><strong>{openInvoices.length ? `${openInvoices.length} / ${unpaidTotal.toFixed(2)} EUR` : "Nema"}</strong></div>
+        <div><span>Moguci duplikati</span><strong>{duplicateCandidates.length}</strong></div>
+        <div><span>OIB</span><strong>{patient.data.oib ? "Da" : "Ne"}</strong></div>
+      </div>
 
       <div className="metrics">
         <div><span>Termini</span><strong>{appointments.data.length}</strong></div>

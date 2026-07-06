@@ -67,6 +67,10 @@ p { margin: 0; color: #667085; }
 .metrics div { background: #ffffff; border: 1px solid #e3e8ef; border-radius: 8px; padding: 16px; }
 .metrics span { display: block; color: #667085; font-size: 0.84rem; }
 .metrics strong { display: block; font-size: 1.45rem; margin-top: 4px; }
+.summary-strip { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; }
+.summary-strip div { background: #ffffff; border: 1px solid #e3e8ef; border-radius: 8px; padding: 12px; min-width: 0; }
+.summary-strip span { display: block; color: #667085; font-size: 0.78rem; }
+.summary-strip strong { display: block; color: #172033; margin-top: 3px; font-size: 0.92rem; overflow-wrap: anywhere; }
 
 .filters, .inline-form { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 18px; }
 input, select { height: 40px; border: 1px solid #d9e2ec; border-radius: 8px; background: white; padding: 0 12px; color: #172033; }
@@ -95,6 +99,11 @@ th { color: #667085; font-size: 0.78rem; text-transform: uppercase; letter-spaci
 .readiness-ready_for_demo, .readiness-check-ok { background: #e7f8ed; color: #15803d; }
 .readiness-attention_needed, .readiness-check-warning { background: #fff7db; color: #a16207; }
 .readiness-blocked, .readiness-check-critical { background: #feecec; color: #b42318; }
+.decision-badge { display: inline-flex; align-items: center; min-height: 28px; border-radius: 8px; padding: 0 9px; font-weight: 800; white-space: nowrap; }
+.decision-none { background: #eef2f6; color: #405069; }
+.decision-review { background: #fff7db; color: #a16207; }
+.decision-blocks_demo, .decision-blocks_release { background: #feecec; color: #b42318; }
+.readiness-detail .detail-list strong { text-align: right; }
 
 .quick-actions { display: flex; gap: 6px; flex-wrap: wrap; }
 .quick-actions button { height: 30px; border: 1px solid #d9e2ec; border-radius: 8px; background: #ffffff; color: #405069; cursor: pointer; font-size: 0.82rem; }
@@ -157,7 +166,7 @@ th { color: #667085; font-size: 0.78rem; text-transform: uppercase; letter-spaci
   .shell { grid-template-columns: 1fr; }
   .sidebar { position: static; }
   .sidebar nav { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .dashboard-grid, .metrics { grid-template-columns: 1fr; }
+  .dashboard-grid, .metrics, .summary-strip { grid-template-columns: 1fr; }
   .toast-host { right: 16px; bottom: 16px; }
   .topbar { padding: 0 16px; }
   .page { padding: 18px; }
