@@ -62,6 +62,10 @@ Each readiness check should link to an operational screen when possible:
 
 Future object workspaces should replace generic list targets when they exist.
 
+Clinical documents awaiting review use the same Phase A semantics as Patient Clinical Knowledge helpers: `extracted` and `needs_physician_review` count as awaiting review; `draft`, `reviewed`, `rejected` and `superseded` do not.
+
+Stale patient summaries are Operational Readiness warnings. They are not a Clinical Readiness Gate and do not certify clinical safety.
+
 ## 6. Readiness Target Contract
 
 Every `target_path` returned by `/api/readiness` must point to an existing protected frontend route.

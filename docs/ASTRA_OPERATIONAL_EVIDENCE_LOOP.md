@@ -79,7 +79,9 @@ Draft invoice -> invoice UI -> issue/payment -> audit -> readiness review.
 
 ### Clinical Documents
 
-Documents awaiting review -> Clinical Documents -> edit extraction -> physician review or reject -> document audit -> Patient Workspace source-linked summary -> readiness review.
+Documents awaiting review -> Clinical Documents -> edit extraction -> physician review or reject AI extraction -> document audit -> Patient Workspace source-linked knowledge -> readiness review.
+
+Rejecting AI extraction does not reject the raw ClinicalDocument source. The source remains available as draft evidence until it is edited, re-extracted or physician-reviewed.
 
 ### Reception Arrival
 

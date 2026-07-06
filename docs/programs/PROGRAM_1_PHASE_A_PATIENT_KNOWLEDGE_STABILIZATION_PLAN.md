@@ -563,6 +563,19 @@ Ne implementirati UI sada.
 | Phase A regression/smoke validation | Verify no pilot flow broke. | Tests only. | Hidden regression in appointments/readiness. | Backend + frontend smoke/build as appropriate. |
 | Phase A documentation update | Record implemented behavior. | Docs. | Docs drift from code. | No tests if docs-only. |
 
+### Phase A hardening update
+
+Status after critical hardening pass:
+
+- A1 documentation-to-code alignment: implemented through hardening audit and updated Program 1 docs.
+- A2 ClinicalDocument review status hardening: implemented; official knowledge requires `review_status=reviewed` and `physician_reviewed=true`.
+- A3 AI extraction lifecycle hardening: implemented for placeholder extraction; `reject-summary` rejects AI extraction only and keeps raw source as draft.
+- A4 Patient Clinical Summary clarity: implemented through stale detection tests, stale review blocking, source-linked contract tests and clearer Patient Workspace labels.
+- Service extraction: Patient Clinical Knowledge helper logic is centralized in `backend/app/services/patient_knowledge.py`.
+- Readiness alignment: `/api/readiness` remains Operational Readiness and uses the same document-awaiting-review semantics as the knowledge helper layer.
+
+A5 remains deferred and should be handled separately: Open Questions and Unresolved Findings UI/Contract.
+
 ## 12. Risks and non-goals
 
 ### Risks

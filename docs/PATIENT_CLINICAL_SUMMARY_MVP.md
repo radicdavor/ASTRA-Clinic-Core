@@ -42,6 +42,8 @@ The physician must review, edit if needed and confirm before the summary becomes
 
 Unreviewed AI extraction must not be treated as clinical truth.
 
+Rejecting an AI summary rejects the AI extraction/suggestion only. The original `ClinicalDocument` remains available as a draft source and may later be edited, re-extracted or physician-reviewed.
+
 ## Summary Statuses
 
 Patient Clinical Summary supports:
@@ -65,6 +67,19 @@ The source-linked structured patient summary also renders source badges for indi
 - detailed source-linked facts for traceability
 
 The concise summary is not the source of truth. Reviewed ClinicalDocuments and source-linked knowledge items remain authoritative.
+
+## Phase A Hardening Status
+
+Current Phase A hardening adds:
+
+- service extraction for Patient Clinical Knowledge helper logic
+- stronger stale summary regression tests
+- UI labels that separate official source-linked knowledge, reviewed summary view and AI draft
+- conservative AI extraction rejection semantics
+- aligned Operational Readiness document review semantics
+- documented audit event naming direction
+
+This does not make the system production-ready and does not enable real patient data.
 
 ## Deferred
 
