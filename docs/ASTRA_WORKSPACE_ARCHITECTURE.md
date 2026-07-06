@@ -7,6 +7,7 @@ Clinic staff think around objects, not isolated forms.
 Core ASTRA objects are:
 
 - patient
+- clinical episode
 - appointment
 - invoice
 - purchase order
@@ -72,6 +73,24 @@ Appointment Workspace includes:
 
 Critical actions keep V19 `ActionButton` and `HelpHint` behavior.
 
+## 5a. Episode Workspace
+
+Episode Workspace gathers the clinical story around one patient context.
+
+It includes:
+
+- episode title/status/type/priority
+- patient identity with link to Patient Workspace
+- start/end dates
+- owner provider
+- summary and clinical notes
+- related appointments
+- audit timeline
+- close episode action
+- create appointment for this episode action
+
+Episode Workspace is not Workflow Engine, Knowledge Engine, AI automation or a new clinical module.
+
 ## 6. Invoice Workspace
 
 Invoice Workspace should include:
@@ -112,8 +131,10 @@ Future Purchase Order Workspace standard:
 
 - Shared workspace components live in `frontend/src/components/workspace/`.
 - Patient Workspace exists at `/patients/:id`.
+- Episode Workspace exists at `/episodes/:id`.
 - Appointment detail follows the workspace pattern.
 - Patient related appointments are loaded through `GET /api/patients/{patient_id}/appointments`.
+- Patient related episodes are loaded through `GET /api/patients/{patient_id}/episodes`.
 - Patient related invoices are loaded through `GET /api/patients/{patient_id}/invoices`.
 
 ## Relationship To Readiness Cockpit

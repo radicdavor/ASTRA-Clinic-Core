@@ -29,6 +29,7 @@ A readiness check should guide the user to the most useful screen:
 - unpaid invoice -> Invoices
 - missing audit context -> Audit log
 - patient issue -> Patient Workspace
+- appointments without episode -> Episodes
 
 ## 3. User Performs Guided Action
 
@@ -73,6 +74,10 @@ Low stock -> Inventory -> purchase receive -> stock movement/audit -> readiness 
 ### Draft Invoice
 
 Draft invoice -> invoice UI -> issue/payment -> audit -> readiness review.
+
+### Clinical Episodes
+
+Appointments without episode -> Episodes -> create/link episode -> episode/appointment audit -> readiness review.
 
 ### Missing Human Pilot Evidence
 

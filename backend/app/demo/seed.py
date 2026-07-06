@@ -7,6 +7,7 @@ from app.core.database import SessionLocal
 from app.core.security import hash_password
 from app.models.domain import (
     Appointment,
+    ClinicalEpisode,
     InventoryBatch,
     InventoryItem,
     Patient,
@@ -85,8 +86,28 @@ def main() -> None:
         if template is None:
             db.add(ServiceMaterialTemplate(service_id=service.id, inventory_item_id=item.id, default_quantity=Decimal("1"), required=True, variable_quantity_allowed=False))
 
+        gerb_episode = db.scalar(select(ClinicalEpisode).where(ClinicalEpisode.patient_id == patient.id, ClinicalEpisode.title == "GERB/refluks pracenje"))
+        if gerb_episode is None:
+            gerb_episode = ClinicalEpisode(
+                patient_id=patient.id,
+                title="GERB/refluks pracenje",
+                episode_type="gastroenterology",
+                status="active",
+                priority="routine",
+                start_date=date.today(),
+                summary="Demo epizoda za pracenje refluksa i kontrolu simptoma.",
+                clinical_notes="Demo podaci, ne unositi stvarne medicinske podatke.",
+                owner_provider_id=provider.id,
+            )
+            db.add(gerb_episode)
+            db.flush()
+        if db.scalar(select(ClinicalEpisode).where(ClinicalEpisode.patient_id == patient.id, ClinicalEpisode.title == "Nadzor polipa debelog crijeva")) is None:
+            db.add(ClinicalEpisode(patient_id=patient.id, title="Nadzor polipa debelog crijeva", episode_type="endoscopy", status="open", priority="routine", start_date=date.today(), summary="Demo epizoda za kontrolu nakon polipektomije.", owner_provider_id=provider.id))
+        if db.scalar(select(ClinicalEpisode).where(ClinicalEpisode.patient_id == patient.id, ClinicalEpisode.title == "Estetski tretman plan")) is None:
+            db.add(ClinicalEpisode(patient_id=patient.id, title="Estetski tretman plan", episode_type="dermatology_aesthetics", status="open", priority="routine", start_date=date.today(), summary="Demo epizoda za planiranje estetskog tretmana.", owner_provider_id=provider.id))
+
         if db.scalar(select(Appointment).where(Appointment.patient_id == patient.id, Appointment.date == date.today())) is None:
-            db.add(Appointment(patient_id=patient.id, provider_id=provider.id, room_id=room.id, service_id=service.id, date=date.today(), start_time=time(9, 0), end_time=time(9, 30), duration_minutes=30, status="scheduled", source="manual"))
+            db.add(Appointment(patient_id=patient.id, provider_id=provider.id, room_id=room.id, service_id=service.id, episode_id=gerb_episode.id, date=date.today(), start_time=time(9, 0), end_time=time(9, 30), duration_minutes=30, status="scheduled", source="manual"))
 
         order = db.scalar(select(PurchaseOrder).where(PurchaseOrder.supplier_id == supplier.id, PurchaseOrder.notes == "DEMO_DATA"))
         if order is None:

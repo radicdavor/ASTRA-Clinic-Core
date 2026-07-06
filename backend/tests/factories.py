@@ -1,7 +1,7 @@
 from datetime import date, time
 from decimal import Decimal
 
-from app.models.domain import Appointment, InventoryBatch, InventoryItem, Patient, Provider, Room, Service, StockLocation
+from app.models.domain import Appointment, ClinicalEpisode, InventoryBatch, InventoryItem, Patient, Provider, Room, Service, StockLocation
 
 
 def patient(db, first_name="Test", last_name="Patient"):
@@ -47,6 +47,23 @@ def appointment(db, patient_obj=None, provider_obj=None, room_obj=None, service_
         end_time=time(9, 30),
         duration_minutes=30,
         status=status,
+    )
+    db.add(obj)
+    db.flush()
+    return obj
+
+
+def episode(db, patient_obj=None, provider_obj=None, title="Test episode"):
+    patient_obj = patient_obj or patient(db)
+    provider_obj = provider_obj or provider(db)
+    obj = ClinicalEpisode(
+        patient_id=patient_obj.id,
+        title=title,
+        episode_type="general",
+        status="active",
+        priority="routine",
+        start_date=date(2026, 7, 5),
+        owner_provider_id=provider_obj.id,
     )
     db.add(obj)
     db.flush()

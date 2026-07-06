@@ -157,11 +157,47 @@ class RoomOut(ORMModel):
     updated_at: DateTimeType
 
 
+class ClinicalEpisodeCreate(BaseModel):
+    patient_id: int
+    title: str
+    episode_type: str = "general"
+    status: str = "open"
+    priority: str = "routine"
+    start_date: DateType
+    end_date: DateType | None = None
+    summary: str | None = None
+    clinical_notes: str | None = None
+    owner_provider_id: int | None = None
+
+
+class ClinicalEpisodeUpdate(BaseModel):
+    title: str | None = None
+    episode_type: str | None = None
+    status: str | None = None
+    priority: str | None = None
+    start_date: DateType | None = None
+    end_date: DateType | None = None
+    summary: str | None = None
+    clinical_notes: str | None = None
+    owner_provider_id: int | None = None
+
+
+class ClinicalEpisodeOut(ClinicalEpisodeCreate, ORMModel):
+    id: int
+    created_by: int | None = None
+    created_at: DateTimeType
+    updated_at: DateTimeType
+    patient: PatientOut | None = None
+    owner_provider: ProviderOut | None = None
+    appointment_count: int | None = None
+
+
 class AppointmentCreate(BaseModel):
     patient_id: int
     service_id: int
     provider_id: int
     room_id: int
+    episode_id: int | None = None
     date: DateType
     start_time: TimeType
     end_time: TimeType
@@ -178,6 +214,7 @@ class AppointmentUpdate(BaseModel):
     service_id: int | None = None
     provider_id: int | None = None
     room_id: int | None = None
+    episode_id: int | None = None
     date: DateType | None = None
     start_time: TimeType | None = None
     end_time: TimeType | None = None
@@ -195,6 +232,7 @@ class AppointmentOut(AppointmentCreate, ORMModel):
     service: ServiceOut | None = None
     provider: ProviderOut | None = None
     room: RoomOut | None = None
+    episode: ClinicalEpisodeOut | None = None
 
 
 class SupplierCreate(BaseModel):

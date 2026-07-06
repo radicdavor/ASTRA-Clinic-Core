@@ -17,6 +17,9 @@ function mutationSuccessMessage(path: string, method: string) {
   const normalizedMethod = method.toUpperCase();
   if (normalizedMethod === "POST" && path === "/api/patients") return "Pacijent je spremljen.";
   if (normalizedMethod === "POST" && path === "/api/appointments") return "Termin je spremljen.";
+  if (normalizedMethod === "POST" && path === "/api/episodes") return "Epizoda je spremljena.";
+  if (normalizedMethod === "PATCH" && path.startsWith("/api/episodes/")) return "Epizoda je azurirana.";
+  if (normalizedMethod === "POST" && path.includes("/close")) return "Epizoda je zatvorena.";
   if (normalizedMethod === "PATCH" && path.startsWith("/api/appointments/")) return "Status termina je azuriran.";
   if (normalizedMethod === "POST" && path.includes("/complete-with-consumption")) return "Termin je zavrsen i materijal je skinut sa zalihe.";
   if (normalizedMethod === "POST" && path.includes("/draft-invoice")) return "Nacrt racuna je kreiran.";

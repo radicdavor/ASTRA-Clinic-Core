@@ -7,6 +7,9 @@ import { Appointments } from "../pages/Appointments";
 import { AuditLog } from "../pages/AuditLog";
 import { ApiKeys } from "../pages/ApiKeys";
 import { Dashboard } from "../pages/Dashboard";
+import { EpisodeDetail } from "../pages/EpisodeDetail";
+import { EpisodeForm } from "../pages/EpisodeForm";
+import { Episodes } from "../pages/Episodes";
 import { Inventory } from "../pages/Inventory";
 import { Invoices } from "../pages/Invoices";
 import { Login } from "../pages/Login";
@@ -32,6 +35,9 @@ export function AppRoutes() {
         <Route path="/patients" element={<Patients />} />
         <Route path="/patients/new" element={<PatientForm />} />
         <Route path="/patients/:id" element={<PatientDetail />} />
+        <Route path="/episodes" element={<Episodes />} />
+        <Route path="/episodes/new" element={<EpisodeForm />} />
+        <Route path="/episodes/:id" element={<EpisodeDetail />} />
         <Route path="/appointments" element={<Appointments />} />
         <Route path="/appointments/new" element={<AppointmentForm />} />
         <Route path="/appointments/:id" element={<AppointmentDetail />} />

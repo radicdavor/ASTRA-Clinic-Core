@@ -121,6 +121,24 @@ class Module(TimestampMixin, Base):
     enabled: Mapped[bool] = mapped_column(Boolean, default=True)
 
 
+class ClinicalEpisode(TimestampMixin, Base):
+    __tablename__ = "clinical_episodes"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    patient_id: Mapped[int] = mapped_column(ForeignKey("patients.id"), index=True)
+    title: Mapped[str] = mapped_column(String(180), index=True)
+    episode_type: Mapped[str] = mapped_column(String(80), default="general", index=True)
+    status: Mapped[str] = mapped_column(String(40), default="open", index=True)
+    priority: Mapped[str] = mapped_column(String(40), default="routine", index=True)
+    start_date: Mapped[date] = mapped_column(Date, default=date.today, index=True)
+    end_date: Mapped[date | None] = mapped_column(Date)
+    summary: Mapped[str | None] = mapped_column(Text)
+    clinical_notes: Mapped[str | None] = mapped_column(Text)
+    owner_provider_id: Mapped[int | None] = mapped_column(ForeignKey("providers.id"))
+    created_by: Mapped[int | None] = mapped_column(ForeignKey("users.id"))
+    patient: Mapped[Patient] = relationship()
+    owner_provider: Mapped[Provider | None] = relationship()
+
+
 class Service(TimestampMixin, Base):
     __tablename__ = "services"
     id: Mapped[int] = mapped_column(primary_key=True)
@@ -140,6 +158,7 @@ class Appointment(TimestampMixin, Base):
     service_id: Mapped[int] = mapped_column(ForeignKey("services.id"))
     provider_id: Mapped[int] = mapped_column(ForeignKey("providers.id"))
     room_id: Mapped[int] = mapped_column(ForeignKey("rooms.id"))
+    episode_id: Mapped[int | None] = mapped_column(ForeignKey("clinical_episodes.id"))
     date: Mapped[date] = mapped_column(Date, index=True)
     start_time: Mapped[time] = mapped_column(Time)
     end_time: Mapped[time] = mapped_column(Time)
@@ -152,6 +171,7 @@ class Appointment(TimestampMixin, Base):
     service: Mapped[Service] = relationship()
     provider: Mapped[Provider] = relationship()
     room: Mapped[Room] = relationship()
+    episode: Mapped[ClinicalEpisode | None] = relationship()
 
 
 class ApiKey(TimestampMixin, Base):

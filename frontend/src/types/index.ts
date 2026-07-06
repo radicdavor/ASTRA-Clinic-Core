@@ -23,9 +23,30 @@ export type Provider = { id: number; full_name: string; specialty?: string };
 export type Room = { id: number; name: string; type?: string };
 export type Module = { id: number; key: string; name: string; description?: string; enabled: boolean };
 
+export type ClinicalEpisode = {
+  id: number;
+  patient_id: number;
+  title: string;
+  episode_type: string;
+  status: string;
+  priority?: string;
+  start_date: string;
+  end_date?: string;
+  summary?: string;
+  clinical_notes?: string;
+  owner_provider_id?: number;
+  created_by?: number;
+  created_at: string;
+  updated_at?: string;
+  patient?: Patient;
+  owner_provider?: Provider;
+  appointment_count?: number;
+};
+
 export type Appointment = {
   id: number;
   patient_id: number;
+  episode_id?: number | null;
   service_id: number;
   provider_id: number;
   room_id: number;
@@ -40,6 +61,7 @@ export type Appointment = {
   service?: Service;
   provider?: Provider;
   room?: Room;
+  episode?: ClinicalEpisode | null;
 };
 
 export type InventoryItem = {

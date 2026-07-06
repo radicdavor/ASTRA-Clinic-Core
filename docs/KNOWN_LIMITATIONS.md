@@ -15,7 +15,11 @@ ASTRA Clinic Core is currently a closed demo/pilot system for demo data only.
 - OpenEMR integration is not implemented.
 - Google Calendar integration is not implemented.
 - No full EMR charting.
+- Clinical Episode is structural context only; it is not a diagnosis, care guideline or treatment plan engine.
 - No clinical decision support.
+- No Workflow Engine.
+- No Knowledge Engine.
+- No AI automation.
 - No prescription system.
 - Not a certified EMR.
 - Not a certified medical device.

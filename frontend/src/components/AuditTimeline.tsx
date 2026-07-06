@@ -10,7 +10,10 @@ const actionLabels: Record<string, string> = {
   issue: "Izdano",
   payment: "Uplata",
   stock_movement: "Kretanje zalihe",
-  complete_with_consumption: "Zavrsetak s potrosnjom"
+  complete_with_consumption: "Zavrsetak s potrosnjom",
+  close: "Zatvoreno",
+  link_episode: "Povezano s epizodom",
+  unlink_episode: "Odvojeno od epizode"
 };
 
 const entityLabels: Record<string, string> = {
@@ -21,7 +24,8 @@ const entityLabels: Record<string, string> = {
   InventoryItem: "Artikl",
   StockMovement: "Kretanje zalihe",
   PurchaseOrder: "Narudzbenica",
-  ApiKey: "API kljuc"
+  ApiKey: "API kljuc",
+  ClinicalEpisode: "Klinicka epizoda"
 };
 
 function actorLabel(log: AuditLog) {
@@ -35,6 +39,7 @@ function entityRoute(log: AuditLog) {
   if (log.entity_type === "Patient") return `/patients/${log.entity_id}`;
   if (log.entity_type === "Appointment") return `/appointments/${log.entity_id}`;
   if (log.entity_type === "Invoice") return `/invoices?invoice=${log.entity_id}`;
+  if (log.entity_type === "ClinicalEpisode") return `/episodes/${log.entity_id}`;
   return "";
 }
 

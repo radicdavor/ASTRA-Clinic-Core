@@ -4,13 +4,14 @@ import { api } from "../api/client";
 import { ActionButton } from "../components/ActionButton";
 import { HelpHint } from "../components/HelpHint";
 import { useApi } from "../hooks/useApi";
-import { Patient, Provider, Room, Service } from "../types";
+import { ClinicalEpisode, Patient, Provider, Room, Service } from "../types";
 import { formatPatientIdentity, formatPatientName, hasStrongPatientIdentifier } from "../utils/patientIdentity";
 
 export function AppointmentForm() {
   const navigate = useNavigate();
   const [params] = useSearchParams();
   const initialPatientId = params.get("patient_id");
+  const initialEpisodeId = params.get("episode_id");
   const [patientQuery, setPatientQuery] = useState("");
   const patientSearchPath = patientQuery.trim().length >= 2 ? `/api/patients?q=${encodeURIComponent(patientQuery.trim())}` : "/api/patients?q=__no_initial_results__";
   const patients = useApi<Patient[]>(patientSearchPath, []);
@@ -18,7 +19,10 @@ export function AppointmentForm() {
   const providers = useApi<Provider[]>("/api/providers", []);
   const rooms = useApi<Room[]>("/api/rooms", []);
   const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null);
-  const [form, setForm] = useState({ patient_id: "", service_id: "", provider_id: "", room_id: "", date: new Date().toISOString().slice(0, 10), start_time: "09:00", end_time: "09:30", duration_minutes: 30, status: "scheduled", source: "manual", notes: "" });
+  const [form, setForm] = useState({ patient_id: "", episode_id: initialEpisodeId ?? "", service_id: "", provider_id: "", room_id: "", date: new Date().toISOString().slice(0, 10), start_time: "09:00", end_time: "09:30", duration_minutes: 30, status: "scheduled", source: "manual", notes: "" });
+  const patientEpisodesPath = selectedPatient ? `/api/patients/${selectedPatient.id}/episodes` : "/api/episodes?status=__no_patient__";
+  const episodes = useApi<ClinicalEpisode[]>(patientEpisodesPath, []);
+  const activeEpisodes = episodes.data.filter((episode) => ["open", "active", "waiting"].includes(episode.status));
   const selectedService = useMemo(() => services.data.find((service) => String(service.id) === form.service_id), [form.service_id, services.data]);
   const similarPatientWarning = patients.data.length > 1 && !selectedPatient;
   const createPatientLink = useMemo(() => {
@@ -50,7 +54,7 @@ export function AppointmentForm() {
     if (!selectedPatient) return;
     const appointment = await api<{ id: number }>("/api/appointments", {
       method: "POST",
-      body: JSON.stringify({ ...form, patient_id: selectedPatient.id, service_id: Number(form.service_id), provider_id: Number(form.provider_id), room_id: Number(form.room_id) })
+      body: JSON.stringify({ ...form, patient_id: selectedPatient.id, episode_id: form.episode_id ? Number(form.episode_id) : null, service_id: Number(form.service_id), provider_id: Number(form.provider_id), room_id: Number(form.room_id) })
     });
     navigate(`/appointments/${appointment.id}`);
   }
@@ -70,7 +74,7 @@ export function AppointmentForm() {
             Pacijent
             <HelpHint title="Pacijent u terminu">Pocnite upisivati ime, prezime, telefon, e-postu ili OIB. Ako postoji vise slicnih pacijenata, provjerite datum rodenja i OIB prije odabira.</HelpHint>
           </span>
-          <input value={patientQuery} onChange={(event) => { setPatientQuery(event.target.value); setSelectedPatient(null); setForm({ ...form, patient_id: "" }); }} placeholder="Ime, prezime ili OIB" />
+          <input value={patientQuery} onChange={(event) => { setPatientQuery(event.target.value); setSelectedPatient(null); setForm({ ...form, patient_id: "", episode_id: "" }); }} placeholder="Ime, prezime ili OIB" />
         </label>
         {patientQuery.trim().length >= 2 && !selectedPatient && (
           <div className="patient-results wide-field">
@@ -95,8 +99,21 @@ export function AppointmentForm() {
               <small>{formatPatientIdentity(selectedPatient)}</small>
               {!hasStrongPatientIdentifier(selectedPatient) && <small className="identity-warning">Pacijent nema jak identifikator. Provjerite prije spremanja termina.</small>}
             </span>
-            <button type="button" onClick={() => { setSelectedPatient(null); setForm({ ...form, patient_id: "" }); }}>Promijeni</button>
+            <button type="button" onClick={() => { setSelectedPatient(null); setForm({ ...form, patient_id: "", episode_id: "" }); }}>Promijeni</button>
           </div>
+        )}
+        {selectedPatient && (
+          <label className="wide-field">
+            <span className="label-with-help">
+              Klinicka epizoda
+              <HelpHint title="Epizoda termina">Termin se moze povezati s otvorenom epizodom istog pacijenta. U prvoj verziji opcija Bez epizode ostaje dozvoljena.</HelpHint>
+            </span>
+            <select value={form.episode_id} onChange={(event) => setForm({ ...form, episode_id: event.target.value })}>
+              <option value="">Bez epizode</option>
+              {activeEpisodes.map((episode) => <option key={episode.id} value={episode.id}>{episode.title} / {episode.status}</option>)}
+            </select>
+            <small><Link to={`/episodes/new?patient_id=${selectedPatient.id}`}>Kreiraj novu epizodu za pacijenta</Link></small>
+          </label>
         )}
         <label>
           <span className="label-with-help">

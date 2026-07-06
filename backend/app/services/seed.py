@@ -28,6 +28,8 @@ PERMISSIONS = [
     "appointments.read",
     "appointments.write",
     "appointments.cancel",
+    "episodes.read",
+    "episodes.write",
     "services.read",
     "services.write",
     "modules.read",
@@ -50,9 +52,9 @@ PERMISSIONS = [
 
 ROLE_PERMISSIONS = {
     "admin": PERMISSIONS,
-    "physician": ["patients.read", "patients.write", "appointments.read", "appointments.write", "services.read", "inventory.read", "billing.read"],
-    "nurse": ["patients.read", "appointments.read", "appointments.write", "inventory.read", "inventory.write"],
-    "receptionist": ["patients.read", "patients.write", "appointments.read", "appointments.write", "services.read", "billing.read"],
+    "physician": ["patients.read", "patients.write", "appointments.read", "appointments.write", "episodes.read", "episodes.write", "services.read", "inventory.read", "billing.read"],
+    "nurse": ["patients.read", "appointments.read", "appointments.write", "episodes.read", "inventory.read", "inventory.write"],
+    "receptionist": ["patients.read", "patients.write", "appointments.read", "appointments.write", "episodes.read", "services.read", "billing.read"],
     "inventory_manager": ["inventory.read", "inventory.write", "inventory.adjust", "inventory.write_off", "inventory.transfer", "procurement.read", "procurement.write"],
     "billing": ["billing.read", "billing.write", "billing.mark_paid", "patients.read", "appointments.read"],
     "ai_agent": ["ai.appointments.create", "ai.patients.create", "ai.free_slots.read"],

@@ -9,13 +9,15 @@ import { WorkspaceLayout } from "../components/workspace/WorkspaceLayout";
 import { WorkspaceSection } from "../components/workspace/WorkspaceSection";
 import { WorkspaceTabs } from "../components/workspace/WorkspaceTabs";
 import { useApi } from "../hooks/useApi";
-import { Appointment, AuditLog, Invoice, Patient } from "../types";
+import { Appointment, AuditLog, ClinicalEpisode, Invoice, Patient } from "../types";
 import { formatDate } from "../utils/date";
 import { formatPatientIdentity, formatPatientName } from "../utils/patientIdentity";
+import { episodeTypeLabel } from "./Episodes";
 
 export function PatientDetail() {
   const { id } = useParams();
   const patient = useApi<Patient | null>(`/api/patients/${id}`, null);
+  const episodes = useApi<ClinicalEpisode[]>(`/api/patients/${id}/episodes`, []);
   const appointments = useApi<Appointment[]>(`/api/patients/${id}/appointments`, []);
   const invoices = useApi<Invoice[]>(`/api/patients/${id}/invoices`, []);
   const audit = useApi<AuditLog[]>(`/api/audit-log?entity_type=Patient&entity_id=${id}`, []);
@@ -28,6 +30,11 @@ export function PatientDetail() {
   const today = new Date().toISOString().slice(0, 10);
   const lastAppointment = [...sortedAppointments].reverse().find((appointment) => appointment.date <= today);
   const nextAppointment = sortedAppointments.find((appointment) => appointment.date >= today && !["completed", "cancelled", "no_show"].includes(appointment.status));
+  const activeEpisodes = episodes.data.filter((episode) => ["open", "active", "waiting"].includes(episode.status));
+  const sortedEpisodes = [...episodes.data].sort((a, b) => {
+    const rank = (episode: ClinicalEpisode) => (["open", "active", "waiting"].includes(episode.status) ? 0 : 1);
+    return rank(a) - rank(b) || b.start_date.localeCompare(a.start_date);
+  });
   const openInvoices = invoices.data.filter((invoice) => invoice.payment_status !== "paid");
   const unpaidTotal = openInvoices.reduce((sum, invoice) => sum + Number(invoice.total_amount || 0), 0);
 
@@ -42,15 +49,25 @@ export function PatientDetail() {
         subtitle={formatPatientIdentity(patient.data)}
         badge={<span className="readiness-badge readiness-check-ok">Patient Workspace</span>}
         actions={
-          <ActionButton
-            variant="create"
-            className="primary"
-            onClick={() => { window.location.href = `/appointments/new?patient_id=${patient.data?.id}`; }}
-            helpTitle="Novi termin"
-            help="Otvara unos termina iz konteksta odabranog pacijenta. Termin se i dalje sprema samo s razrijesenim patient_id."
-          >
-            Novi termin
-          </ActionButton>
+          <>
+            <ActionButton
+              variant="create"
+              className="primary"
+              onClick={() => { window.location.href = `/episodes/new?patient_id=${patient.data?.id}`; }}
+              helpTitle="Nova epizoda"
+              help="Otvara klinicki kontekst za odabranog pacijenta. Epizoda nije dijagnoza ni medicinska odluka."
+            >
+              Nova epizoda
+            </ActionButton>
+            <ActionButton
+              variant="create"
+              onClick={() => { window.location.href = `/appointments/new?patient_id=${patient.data?.id}`; }}
+              helpTitle="Novi termin"
+              help="Otvara unos termina iz konteksta odabranog pacijenta. Termin se i dalje sprema samo s razrijesenim patient_id."
+            >
+              Novi termin
+            </ActionButton>
+          </>
         }
       />
 
@@ -68,18 +85,18 @@ export function PatientDetail() {
       )}
 
       <div className="summary-strip">
+        <div><span>Aktivne epizode</span><strong>{activeEpisodes.length}</strong></div>
         <div><span>Zadnji termin</span><strong>{lastAppointment ? `${formatDate(lastAppointment.date)} / ${lastAppointment.status}` : "-"}</strong></div>
         <div><span>Sljedeci termin</span><strong>{nextAppointment ? `${formatDate(nextAppointment.date)} / ${nextAppointment.status}` : "-"}</strong></div>
         <div><span>Otvoreni racuni</span><strong>{openInvoices.length ? `${openInvoices.length} / ${unpaidTotal.toFixed(2)} EUR` : "Nema"}</strong></div>
         <div><span>Moguci duplikati</span><strong>{duplicateCandidates.length}</strong></div>
-        <div><span>OIB</span><strong>{patient.data.oib ? "Da" : "Ne"}</strong></div>
       </div>
 
       <div className="metrics">
+        <div><span>Epizode</span><strong>{episodes.data.length}</strong></div>
         <div><span>Termini</span><strong>{appointments.data.length}</strong></div>
         <div><span>Racuni</span><strong>{invoices.data.length}</strong></div>
         <div><span>Audit zapisi</span><strong>{audit.data.length}</strong></div>
-        <div><span>OIB</span><strong>{patient.data.oib ? "Da" : "Ne"}</strong></div>
       </div>
 
       <WorkspaceSection
@@ -100,6 +117,27 @@ export function PatientDetail() {
 
       <WorkspaceTabs
         tabs={[
+          {
+            id: "episodes",
+            label: "Epizode",
+            content: (
+              <>
+                <div className="filters">
+                  <Link className="primary link-button" to={`/episodes/new?patient_id=${patient.data.id}`}>Nova epizoda</Link>
+                </div>
+                <DataTable rows={sortedEpisodes} columns={[
+                  { header: "Naziv", render: (row) => <Link to={`/episodes/${row.id}`}>{row.title}</Link> },
+                  { header: "Status", render: (row) => <StatusBadge status={row.status} /> },
+                  { header: "Tip", render: (row) => episodeTypeLabel(row.episode_type) },
+                  { header: "Prioritet", render: (row) => row.priority ?? "-" },
+                  { header: "Pocetak", render: (row) => formatDate(row.start_date) },
+                  { header: "Kraj", render: (row) => formatDate(row.end_date) },
+                  { header: "Termini", render: (row) => row.appointment_count ?? 0 },
+                  { header: "Sazetak", render: (row) => row.summary ?? "-" }
+                ]} />
+              </>
+            )
+          },
           {
             id: "appointments",
             label: "Termini",

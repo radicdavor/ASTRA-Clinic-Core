@@ -44,6 +44,7 @@ Real data readiness is governed by `docs/REAL_DATA_READINESS_CHECKLIST.md`.
 Each readiness check should link to an operational screen when possible:
 
 - patients -> `/patients`
+- clinical episodes -> `/episodes`
 - providers -> `/appointments/new`
 - rooms -> `/appointments/new`
 - services -> `/services`

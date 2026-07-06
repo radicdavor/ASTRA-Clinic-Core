@@ -22,6 +22,9 @@ function unique(values) {
 [
   "src/pages/Dashboard.tsx",
   "src/pages/AppointmentDetail.tsx",
+  "src/pages/Episodes.tsx",
+  "src/pages/EpisodeForm.tsx",
+  "src/pages/EpisodeDetail.tsx",
   "src/pages/PurchaseOrders.tsx",
   "src/pages/Invoices.tsx",
   "src/pages/ApiKeys.tsx",
@@ -40,14 +43,19 @@ function unique(values) {
 
 assertIncludes("src/routes/AppRoutes.tsx", "/appointments/:id");
 assertIncludes("src/routes/AppRoutes.tsx", "/patients/:id");
+assertIncludes("src/routes/AppRoutes.tsx", "/episodes");
+assertIncludes("src/routes/AppRoutes.tsx", "/episodes/new");
+assertIncludes("src/routes/AppRoutes.tsx", "/episodes/:id");
 assertIncludes("src/routes/AppRoutes.tsx", "/api-keys");
 assertIncludes("src/routes/AppRoutes.tsx", "/readiness");
 assertIncludes("src/components/AppShell.tsx", "/api/public-config");
 assertIncludes("src/components/AppShell.tsx", "Demo/development okruzenje");
 assertIncludes("src/components/AppShell.tsx", "Spremnost");
+assertIncludes("src/components/AppShell.tsx", "Epizode");
 assertIncludes("src/components/ToastHost.tsx", "Radnja je spremljena");
 assertIncludes("src/components/ToastHost.tsx", "Zatvori obavijest");
 assertIncludes("src/api/client.ts", "Pacijent je spremljen.");
+assertIncludes("src/api/client.ts", "Epizoda je spremljena.");
 assertIncludes("src/api/client.ts", "Uplata je evidentirana.");
 assertIncludes("src/api/client.ts", "Status termina je azuriran.");
 assertIncludes("src/api/client.ts", "Prijava je istekla");
@@ -60,6 +68,7 @@ assertIncludes("src/pages/Invoices.tsx", "Demo fiskalizacija - nije stvarna fisk
 assertIncludes("src/components/AuditTimeline.tsx", "before_json");
 assertIncludes("src/components/AuditTimeline.tsx", "actionLabels");
 assertIncludes("src/components/AuditTimeline.tsx", "entityRoute");
+assertIncludes("src/components/AuditTimeline.tsx", "ClinicalEpisode");
 assertIncludes("src/pages/PatientForm.tsx", "OIB");
 assertIncludes("src/pages/PatientForm.tsx", "Spremi pacijenta");
 assertIncludes("src/pages/PatientForm.tsx", "possible-duplicates");
@@ -71,6 +80,8 @@ assertIncludes("src/pages/AppointmentForm.tsx", "appointment");
 assertIncludes("src/pages/AppointmentForm.tsx", "/appointments/${appointment.id}");
 assertIncludes("src/pages/AppointmentForm.tsx", "service-context");
 assertIncludes("src/pages/AppointmentForm.tsx", "formatPatientIdentity");
+assertIncludes("src/pages/AppointmentForm.tsx", "Klinicka epizoda");
+assertIncludes("src/pages/AppointmentForm.tsx", "Bez epizode");
 assertIncludes("src/pages/PatientForm.tsx", "return_to");
 assertIncludes("src/pages/PatientForm.tsx", "/appointments/new?patient_id=${patient.id}");
 assertIncludes("src/pages/PatientDetail.tsx", "WorkspaceHeader");
@@ -78,11 +89,20 @@ assertIncludes("src/pages/PatientDetail.tsx", "/api/patients/${id}/appointments"
 assertIncludes("src/pages/PatientDetail.tsx", "/api/patients/${id}/invoices");
 assertIncludes("src/pages/PatientDetail.tsx", "Moguci duplikati pacijenta");
 assertIncludes("src/pages/PatientDetail.tsx", "summary-strip");
+assertIncludes("src/pages/PatientDetail.tsx", "Epizode");
+assertIncludes("src/pages/PatientDetail.tsx", "/api/patients/${id}/episodes");
 assertIncludes("src/pages/PatientDetail.tsx", "Zadnji termin");
 assertIncludes("src/pages/PatientDetail.tsx", "Otvoreni racuni");
 assertIncludes("src/pages/Patients.tsx", "/patients/${row.id}");
 assertIncludes("src/pages/AppointmentDetail.tsx", "/patients/${appointment.data.patient.id}");
+assertIncludes("src/pages/AppointmentDetail.tsx", "/episodes/${appointment.data.episode.id}");
+assertIncludes("src/pages/AppointmentDetail.tsx", "Termin nije povezan s klinickom epizodom.");
 assertIncludes("src/pages/AppointmentDetail.tsx", "Zavrsi uz potrosnju");
+assertIncludes("src/pages/Episodes.tsx", "/api/episodes");
+assertIncludes("src/pages/EpisodeForm.tsx", "/api/episodes");
+assertIncludes("src/pages/EpisodeDetail.tsx", "WorkspaceLayout");
+assertIncludes("src/pages/EpisodeDetail.tsx", "AuditTimeline");
+assertIncludes("src/pages/EpisodeDetail.tsx", "/api/episodes/${id}/appointments");
 assertIncludes("src/components/ActionButton.tsx", "requiresConfirm");
 assertIncludes("src/components/ActionButton.tsx", "confirmMessage");
 assertIncludes("src/utils/patientIdentity.ts", "formatPatientIdentity");

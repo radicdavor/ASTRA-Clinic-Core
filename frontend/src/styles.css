@@ -8,7 +8,7 @@
 
 * { box-sizing: border-box; }
 body { margin: 0; background: #f6f8fb; }
-button, input, select { font: inherit; }
+button, input, select, textarea { font: inherit; }
 a { color: #0f766e; text-decoration: none; }
 
 .shell { display: grid; grid-template-columns: 248px 1fr; min-height: 100vh; }
@@ -73,7 +73,9 @@ p { margin: 0; color: #667085; }
 .summary-strip strong { display: block; color: #172033; margin-top: 3px; font-size: 0.92rem; overflow-wrap: anywhere; }
 
 .filters, .inline-form { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 18px; }
-input, select { height: 40px; border: 1px solid #d9e2ec; border-radius: 8px; background: white; padding: 0 12px; color: #172033; }
+input, select, textarea { border: 1px solid #d9e2ec; border-radius: 8px; background: white; padding: 0 12px; color: #172033; }
+input, select { height: 40px; }
+textarea { min-height: 96px; padding: 10px 12px; resize: vertical; }
 select { min-width: 170px; }
 .primary { border: 0; border-radius: 8px; background: #0f766e; color: white; height: 40px; padding: 0 16px; font-weight: 750; cursor: pointer; }
 .link-button { display: inline-flex; align-items: center; }

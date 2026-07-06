@@ -9,8 +9,8 @@ from app.audit.service import audit, snapshot
 from app.auth.dependencies import Actor, require_permission
 from app.core.config import get_settings
 from app.core.database import get_db
-from app.models.domain import ApiKey, Appointment, AuditLog, InventoryBatch, InventoryItem, Invoice, Module, Patient, Provider, Room, Service
-from app.schemas.common import AppointmentCreate, AppointmentOut, AppointmentUpdate, ErrorResponse, InvoiceOut, PatientCreate, PatientOut, PatientUpdate, ReadinessCheck, ReadinessOut, ServiceCreate, ServiceOut
+from app.models.domain import ApiKey, Appointment, AuditLog, ClinicalEpisode, InventoryBatch, InventoryItem, Invoice, Module, Patient, Provider, Room, Service
+from app.schemas.common import AppointmentCreate, AppointmentOut, AppointmentUpdate, ClinicalEpisodeCreate, ClinicalEpisodeOut, ClinicalEpisodeUpdate, ErrorResponse, InvoiceOut, PatientCreate, PatientOut, PatientUpdate, ReadinessCheck, ReadinessOut, ServiceCreate, ServiceOut
 from app.services.appointments import validate_appointment_payload
 
 ERROR_RESPONSES = {400: {"model": ErrorResponse}, 401: {"model": ErrorResponse}, 403: {"model": ErrorResponse}, 404: {"model": ErrorResponse}, 409: {"model": ErrorResponse}, 422: {"model": ErrorResponse}}
@@ -56,6 +56,28 @@ def scalar_count(db: Session, stmt) -> int:
     return int(db.scalar(stmt) or 0)
 
 
+def get_episode_or_404(db: Session, episode_id: int) -> ClinicalEpisode:
+    episode = db.scalar(
+        select(ClinicalEpisode)
+        .options(joinedload(ClinicalEpisode.patient), joinedload(ClinicalEpisode.owner_provider))
+        .where(ClinicalEpisode.id == episode_id)
+    )
+    if not episode:
+        raise HTTPException(404, detail="Klinička epizoda nije pronađena")
+    return episode
+
+
+def validate_episode_for_patient(db: Session, episode_id: int | None, patient_id: int) -> ClinicalEpisode | None:
+    if episode_id is None:
+        return None
+    episode = db.get(ClinicalEpisode, episode_id)
+    if not episode:
+        raise HTTPException(404, detail="Klinička epizoda nije pronađena")
+    if episode.patient_id != patient_id:
+        raise HTTPException(422, detail="Klinička epizoda mora pripadati istom pacijentu kao termin")
+    return episode
+
+
 @router.get("/readiness", response_model=ReadinessOut)
 def readiness(db: Session = Depends(get_db), actor: Actor = Depends(require_permission("audit.read"))):
     settings = get_settings()
@@ -75,6 +97,8 @@ def readiness(db: Session = Depends(get_db), actor: Actor = Depends(require_perm
     expiring_count = scalar_count(db, select(func.count(InventoryBatch.id)).where(InventoryBatch.quantity > 0, InventoryBatch.expiration_date.is_not(None), InventoryBatch.expiration_date <= today + timedelta(days=30)))
     draft_invoice_count = scalar_count(db, select(func.count(Invoice.id)).where(Invoice.status == "draft"))
     unpaid_invoice_count = scalar_count(db, select(func.count(Invoice.id)).where(Invoice.status != "draft", Invoice.payment_status != "paid"))
+    episode_count = scalar_count(db, select(func.count(ClinicalEpisode.id)))
+    appointments_without_episode = scalar_count(db, select(func.count(Appointment.id)).where(Appointment.episode_id.is_(None)))
 
     checks = [
         ReadinessCheck(
@@ -111,6 +135,18 @@ def readiness(db: Session = Depends(get_db), actor: Actor = Depends(require_perm
         ReadinessCheck(key="unpaid_invoices", label="Neplaceni racuni", status=warning if unpaid_invoice_count > 0 else ok, message="Postoje izdani racuni koji nisu placeni." if unpaid_invoice_count > 0 else "Nema otvorenih uplata.", count=unpaid_invoice_count, target_path="/invoices", target_label="Otvori racune", decision_impact="review" if unpaid_invoice_count > 0 else "none"),
         ReadinessCheck(key="api_keys", label="API kljucevi", status=warning if active_api_keys > 0 else ok, message="Postoje aktivni API kljucevi." if active_api_keys > 0 else "Nema aktivnih API kljuceva.", count=active_api_keys, action="Provjeriti scopeove i deaktivirati nepotrebne kljuceve." if active_api_keys > 0 else None, target_path="/api-keys", target_label="Otvori API kljuceve", decision_impact="review" if active_api_keys > 0 else "none", severity_reason="Aktivni kljucevi su sigurnosno osjetljivi i trebaju provjeru scopeova." if active_api_keys > 0 else None),
         ReadinessCheck(
+            key="clinical_episodes",
+            label="Kliničke epizode",
+            status=warning if appointments_without_episode > 0 else ok,
+            message=f"Postoje termini bez kliničke epizode ({appointments_without_episode}). Ovo nije v0.1-pilot blocker." if appointments_without_episode > 0 else "Termini su povezani s kliničkim epizodama ili nema otvorenog zahtjeva.",
+            count=episode_count,
+            action="Pregledati epizode i po potrebi povezati buduće termine." if appointments_without_episode > 0 else None,
+            target_path="/episodes",
+            target_label="Otvori epizode",
+            decision_impact="review" if appointments_without_episode > 0 else "none",
+            severity_reason="Episode Engine je novi post-v0.1 sloj; nedostajuće epizode ne blokiraju demo u prvoj verziji." if appointments_without_episode > 0 else None,
+        ),
+        ReadinessCheck(
             key="human_pilot_evidence",
             label="Human pilot evidence",
             status=warning,
@@ -137,6 +173,103 @@ def readiness(db: Session = Depends(get_db), actor: Actor = Depends(require_perm
         "summary": summary,
         "checks": checks,
     }
+
+
+def episode_with_count(db: Session, episode: ClinicalEpisode) -> ClinicalEpisodeOut:
+    data = ClinicalEpisodeOut.model_validate(episode)
+    data.appointment_count = scalar_count(db, select(func.count(Appointment.id)).where(Appointment.episode_id == episode.id))
+    return data
+
+
+@router.get("/episodes", response_model=list[ClinicalEpisodeOut])
+def list_episodes(
+    patient_id: int | None = None,
+    status: str | None = None,
+    db: Session = Depends(get_db),
+    actor: Actor = Depends(require_permission("episodes.read")),
+):
+    stmt = select(ClinicalEpisode).options(joinedload(ClinicalEpisode.patient), joinedload(ClinicalEpisode.owner_provider)).order_by(ClinicalEpisode.start_date.desc(), ClinicalEpisode.id.desc())
+    if patient_id:
+        stmt = stmt.where(ClinicalEpisode.patient_id == patient_id)
+    if status:
+        stmt = stmt.where(ClinicalEpisode.status == status)
+    return [episode_with_count(db, episode) for episode in db.scalars(stmt).all()]
+
+
+@router.post("/episodes", response_model=ClinicalEpisodeOut)
+def create_episode(
+    payload: ClinicalEpisodeCreate,
+    request: Request,
+    db: Session = Depends(get_db),
+    actor: Actor = Depends(require_permission("episodes.write")),
+):
+    if not db.get(Patient, payload.patient_id):
+        raise HTTPException(404, detail="Pacijent nije pronađen")
+    if payload.owner_provider_id and not db.get(Provider, payload.owner_provider_id):
+        raise HTTPException(404, detail="Liječnik nije pronađen")
+    episode = ClinicalEpisode(**payload.model_dump(), created_by=actor.user_id)
+    db.add(episode)
+    db.flush()
+    audit(db, "create", "ClinicalEpisode", episode.id, f"Kreirana epizoda: {episode.title}", actor.user_id, actor.actor_type, actor.api_key_id, None, snapshot(episode), request)
+    db.commit()
+    db.refresh(episode)
+    return episode_with_count(db, get_episode_or_404(db, episode.id))
+
+
+@router.get("/episodes/{episode_id}", response_model=ClinicalEpisodeOut)
+def get_episode(episode_id: int, db: Session = Depends(get_db), actor: Actor = Depends(require_permission("episodes.read"))):
+    return episode_with_count(db, get_episode_or_404(db, episode_id))
+
+
+@router.patch("/episodes/{episode_id}", response_model=ClinicalEpisodeOut)
+def update_episode(
+    episode_id: int,
+    payload: ClinicalEpisodeUpdate,
+    request: Request,
+    db: Session = Depends(get_db),
+    actor: Actor = Depends(require_permission("episodes.write")),
+):
+    episode = get_episode_or_404(db, episode_id)
+    update_data = payload.model_dump(exclude_unset=True)
+    if update_data.get("owner_provider_id") and not db.get(Provider, update_data["owner_provider_id"]):
+        raise HTTPException(404, detail="Liječnik nije pronađen")
+    before = snapshot(episode)
+    patch_model(episode, update_data)
+    db.flush()
+    audit(db, "update", "ClinicalEpisode", episode.id, f"Ažurirana epizoda: {episode.title}", actor.user_id, actor.actor_type, actor.api_key_id, before, snapshot(episode), request)
+    db.commit()
+    db.refresh(episode)
+    return episode_with_count(db, get_episode_or_404(db, episode.id))
+
+
+@router.post("/episodes/{episode_id}/close", response_model=ClinicalEpisodeOut)
+def close_episode(
+    episode_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+    actor: Actor = Depends(require_permission("episodes.write")),
+):
+    episode = get_episode_or_404(db, episode_id)
+    before = snapshot(episode)
+    episode.status = "completed"
+    if episode.end_date is None:
+        episode.end_date = date.today()
+    db.flush()
+    audit(db, "close", "ClinicalEpisode", episode.id, f"Zatvorena epizoda: {episode.title}", actor.user_id, actor.actor_type, actor.api_key_id, before, snapshot(episode), request)
+    db.commit()
+    db.refresh(episode)
+    return episode_with_count(db, get_episode_or_404(db, episode.id))
+
+
+@router.get("/episodes/{episode_id}/appointments", response_model=list[AppointmentOut])
+def episode_appointments(episode_id: int, db: Session = Depends(get_db), actor: Actor = Depends(require_permission("appointments.read"))):
+    get_episode_or_404(db, episode_id)
+    return db.scalars(
+        select(Appointment)
+        .options(joinedload(Appointment.patient), joinedload(Appointment.service), joinedload(Appointment.provider), joinedload(Appointment.room), joinedload(Appointment.episode).joinedload(ClinicalEpisode.patient), joinedload(Appointment.episode).joinedload(ClinicalEpisode.owner_provider))
+        .where(Appointment.episode_id == episode_id)
+        .order_by(Appointment.date.desc(), Appointment.start_time.desc())
+    ).all()
 
 
 @router.post("/patients", response_model=PatientOut)
@@ -214,6 +347,19 @@ def patient_appointments(patient_id: int, db: Session = Depends(get_db), actor: 
     ).all()
 
 
+@router.get("/patients/{patient_id}/episodes", response_model=list[ClinicalEpisodeOut])
+def patient_episodes(patient_id: int, db: Session = Depends(get_db), actor: Actor = Depends(require_permission("episodes.read"))):
+    if not db.get(Patient, patient_id):
+        raise HTTPException(404, detail="Pacijent nije pronaden")
+    stmt = (
+        select(ClinicalEpisode)
+        .options(joinedload(ClinicalEpisode.patient), joinedload(ClinicalEpisode.owner_provider))
+        .where(ClinicalEpisode.patient_id == patient_id)
+        .order_by(ClinicalEpisode.status, ClinicalEpisode.start_date.desc())
+    )
+    return [episode_with_count(db, episode) for episode in db.scalars(stmt).all()]
+
+
 @router.get("/patients/{patient_id}/invoices", response_model=list[InvoiceOut])
 def patient_invoices(patient_id: int, db: Session = Depends(get_db), actor: Actor = Depends(require_permission("billing.read"))):
     if not db.get(Patient, patient_id):
@@ -249,6 +395,7 @@ def create_appointment(
     actor: Actor = Depends(require_permission("appointments.write")),
 ):
     data = payload.model_dump()
+    validate_episode_for_patient(db, data.get("episode_id"), payload.patient_id)
     data["duration_minutes"] = validate_appointment_payload(db, payload.date, payload.start_time, payload.end_time, payload.provider_id, payload.room_id, payload.status, payload.source)
     appointment = Appointment(**data, created_by=actor.user_id)
     db.add(appointment)
@@ -271,7 +418,7 @@ def list_appointments(
     db: Session = Depends(get_db),
     actor: Actor = Depends(require_permission("appointments.read")),
 ):
-    stmt = select(Appointment).options(joinedload(Appointment.patient), joinedload(Appointment.service), joinedload(Appointment.provider), joinedload(Appointment.room)).order_by(Appointment.date, Appointment.start_time)
+    stmt = select(Appointment).options(joinedload(Appointment.patient), joinedload(Appointment.service), joinedload(Appointment.provider), joinedload(Appointment.room), joinedload(Appointment.episode).joinedload(ClinicalEpisode.patient), joinedload(Appointment.episode).joinedload(ClinicalEpisode.owner_provider)).order_by(Appointment.date, Appointment.start_time)
     if date_from:
         stmt = stmt.where(Appointment.date >= date_from)
     if date_to:
@@ -291,7 +438,7 @@ def list_appointments(
 
 @router.get("/appointments/{appointment_id}", response_model=AppointmentOut)
 def get_appointment(appointment_id: int, db: Session = Depends(get_db), actor: Actor = Depends(require_permission("appointments.read"))):
-    appointment = db.scalar(select(Appointment).options(joinedload(Appointment.patient), joinedload(Appointment.service), joinedload(Appointment.provider), joinedload(Appointment.room)).where(Appointment.id == appointment_id))
+    appointment = db.scalar(select(Appointment).options(joinedload(Appointment.patient), joinedload(Appointment.service), joinedload(Appointment.provider), joinedload(Appointment.room), joinedload(Appointment.episode).joinedload(ClinicalEpisode.patient), joinedload(Appointment.episode).joinedload(ClinicalEpisode.owner_provider)).where(Appointment.id == appointment_id))
     if not appointment:
         raise HTTPException(404, detail="Termin nije pronađen")
     return appointment
@@ -309,10 +456,19 @@ def update_appointment(
     if not appointment:
         raise HTTPException(404, detail="Termin nije pronađen")
     before = snapshot(appointment)
-    patch_model(appointment, payload.model_dump(exclude_unset=True))
+    update_data = payload.model_dump(exclude_unset=True)
+    next_patient_id = update_data.get("patient_id", appointment.patient_id)
+    if "episode_id" in update_data:
+        validate_episode_for_patient(db, update_data.get("episode_id"), next_patient_id)
+    old_episode_id = appointment.episode_id
+    patch_model(appointment, update_data)
     appointment.duration_minutes = validate_appointment_payload(db, appointment.date, appointment.start_time, appointment.end_time, appointment.provider_id, appointment.room_id, appointment.status, appointment.source, appointment_id=appointment.id)
     db.flush()
     audit(db, "update", "Appointment", appointment.id, "Ažuriran termin", actor.user_id, actor.actor_type, actor.api_key_id, before, snapshot(appointment), request)
+    if "episode_id" in update_data and old_episode_id != appointment.episode_id:
+        action = "link_episode" if appointment.episode_id else "unlink_episode"
+        summary = f"Termin povezan s epizodom #{appointment.episode_id}" if appointment.episode_id else "Termin odvojen od kliničke epizode"
+        audit(db, action, "Appointment", appointment.id, summary, actor.user_id, actor.actor_type, actor.api_key_id, before, snapshot(appointment), request)
     db.commit()
     db.refresh(appointment)
     return appointment
@@ -339,7 +495,7 @@ def delete_appointment(
 def day_schedule(date: date = Query(...), db: Session = Depends(get_db), actor: Actor = Depends(require_permission("appointments.read"))):
     return db.scalars(
         select(Appointment)
-        .options(joinedload(Appointment.patient), joinedload(Appointment.service), joinedload(Appointment.provider), joinedload(Appointment.room))
+        .options(joinedload(Appointment.patient), joinedload(Appointment.service), joinedload(Appointment.provider), joinedload(Appointment.room), joinedload(Appointment.episode).joinedload(ClinicalEpisode.patient), joinedload(Appointment.episode).joinedload(ClinicalEpisode.owner_provider))
         .where(Appointment.date == date)
         .order_by(Appointment.start_time)
     ).all()

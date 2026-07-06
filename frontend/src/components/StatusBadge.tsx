@@ -1,14 +1,18 @@
 const labels: Record<string, string> = {
   scheduled: "Zakazano",
-  confirmed: "Potvrđeno",
+  confirmed: "Potvrdeno",
   arrived: "Stigao/la",
   in_progress: "U tijeku",
-  completed: "Završeno",
+  completed: "Zavrseno",
   cancelled: "Otkazano",
-  no_show: "Nije došao/la",
-  rescheduled: "Premješteno",
-  waiting_for_result: "Čeka nalaz",
-  follow_up_needed: "Treba kontrolu"
+  no_show: "Nije dosao/la",
+  rescheduled: "Premjesteno",
+  waiting_for_result: "Ceka nalaz",
+  follow_up_needed: "Treba kontrolu",
+  open: "Otvoreno",
+  active: "Aktivno",
+  waiting: "Ceka",
+  archived: "Arhivirano"
 };
 
 export function statusLabel(status: string) {

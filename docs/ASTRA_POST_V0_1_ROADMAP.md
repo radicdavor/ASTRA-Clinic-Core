@@ -354,3 +354,33 @@ Every new large capability after `v0.1-pilot` must answer:
 Episode Engine strengthens the operating system.
 
 That is why it is first.
+
+## 18. Implementation status
+
+Episode Engine Foundation is now implemented as the first post-v0.1 architectural program.
+
+Implemented scope:
+
+- `ClinicalEpisode` backend model
+- optional `Appointment.episode_id`
+- episode API endpoints
+- patient/appointment validation for episode linking
+- episode audit events
+- `/episodes`, `/episodes/new` and `/episodes/:id`
+- Patient Workspace episode tab
+- Appointment form episode selection
+- Appointment Workspace episode context/warning
+- readiness check `clinical_episodes`
+- demo seed episodes
+- `docs/ASTRA_CLINICAL_MODEL.md`
+- `docs/EPISODE_ENGINE_MVP.md`
+
+Still deliberately deferred:
+
+- Workflow Engine
+- Knowledge Engine
+- AI automation
+- new clinical modules
+- documents/labs/prescriptions
+- real-data approval
+- real Croatian fiscalization

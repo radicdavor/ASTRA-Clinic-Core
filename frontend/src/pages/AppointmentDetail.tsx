@@ -102,8 +102,20 @@ export function AppointmentDetail() {
         <p><span>Usluga</span><strong>{appointment.data.service?.name ?? appointment.data.service_id}</strong></p>
         <p><span>Lijecnik</span><strong>{appointment.data.provider?.full_name ?? appointment.data.provider_id}</strong></p>
         <p><span>Soba</span><strong>{appointment.data.room?.name ?? appointment.data.room_id}</strong></p>
+        <p>
+          <span>Klinicka epizoda</span>
+          <strong>
+            {appointment.data.episode ? <Link to={`/episodes/${appointment.data.episode.id}`}>{appointment.data.episode.title}</Link> : "Termin nije povezan s klinickom epizodom."}
+          </strong>
+        </p>
         <p><span>Napomena</span><strong>{appointment.data.notes ?? "-"}</strong></p>
       </div>
+      {!appointment.data.episode && (
+        <div className="duplicate-warning">
+          <strong>Termin nije povezan s klinickom epizodom.</strong>
+          <p>To nije blokada za v0.1-pilot, ali za klinicko pracenje preporucuje se povezati termin s epizodom pacijenta.</p>
+        </div>
+      )}
 
       <WorkspaceSection title="Materijali" actions={<button onClick={loadMaterials}>Ucitaj prijedlog</button>}>
         {materials.map((entry) => (

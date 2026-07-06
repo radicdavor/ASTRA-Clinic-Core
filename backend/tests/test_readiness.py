@@ -74,6 +74,7 @@ def test_readiness_checks_keep_operational_evidence_contract(client, db, auth_se
         "/readiness",
         "/patients",
         "/appointments/new",
+        "/episodes",
         "/services",
         "/modules",
         "/audit-log",
