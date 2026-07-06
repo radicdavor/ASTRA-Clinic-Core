@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import date as DateType, datetime as DateTimeType, time as TimeType
 from decimal import Decimal
 
-from pydantic import BaseModel, ConfigDict, EmailStr
+from pydantic import BaseModel, ConfigDict, EmailStr, field_validator
 
 
 class ORMModel(BaseModel):
@@ -61,20 +61,39 @@ class PatientCreate(BaseModel):
     first_name: str
     last_name: str
     date_of_birth: DateType | None = None
+    oib: str | None = None
     email: EmailStr | None = None
     phone: str | None = None
     notes: str | None = None
 
-    model_config = ConfigDict(json_schema_extra={"example": {"first_name": "Petra", "last_name": "Novak", "date_of_birth": "1990-01-15", "email": "petra.novak@example.com", "phone": "+385 91 111 2222"}})
+    @field_validator("oib")
+    @classmethod
+    def validate_oib(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        cleaned = value.strip()
+        if cleaned == "":
+            return None
+        if len(cleaned) != 11 or not cleaned.isdigit():
+            raise ValueError("OIB mora imati tocno 11 znamenki")
+        return cleaned
+
+    model_config = ConfigDict(json_schema_extra={"example": {"first_name": "Petra", "last_name": "Novak", "date_of_birth": "1990-01-15", "oib": "12345678901", "email": "petra.novak@example.com", "phone": "+385 91 111 2222"}})
 
 
 class PatientUpdate(BaseModel):
     first_name: str | None = None
     last_name: str | None = None
     date_of_birth: DateType | None = None
+    oib: str | None = None
     email: EmailStr | None = None
     phone: str | None = None
     notes: str | None = None
+
+    @field_validator("oib")
+    @classmethod
+    def validate_oib(cls, value: str | None) -> str | None:
+        return PatientCreate.validate_oib(value)
 
 
 class PatientOut(PatientCreate, ORMModel):

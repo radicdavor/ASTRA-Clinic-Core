@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { api } from "../api/client";
 import { DataTable } from "../components/DataTable";
+import { HelpHint } from "../components/HelpHint";
 import { useApi } from "../hooks/useApi";
 import { InventoryItem, PurchaseOrder, StockLocation } from "../types";
 import { formatDate } from "../utils/date";
@@ -109,6 +110,7 @@ export function PurchaseOrders() {
           ]} />
           {selectedReceiveError && <p className="form-error">{selectedReceiveError}</p>}
           <button className="primary" disabled={Boolean(selectedReceiveError)} onClick={receiveSelected}>Potvrdi zaprimanje</button>
+          <HelpHint title="Potvrdi zaprimanje">Zaprimanje povecava zalihu i stvara skladisno kretanje. Provjerite kolicinu, LOT, rok i lokaciju prije potvrde.</HelpHint>
         </section>
       )}
     </section>

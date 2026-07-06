@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { api } from "../api/client";
 import { DataTable } from "../components/DataTable";
+import { HelpHint } from "../components/HelpHint";
 import { useApi } from "../hooks/useApi";
 import { ApiKey } from "../types";
 import { formatDateTime } from "../utils/date";
@@ -52,6 +53,7 @@ export function ApiKeys() {
         <div className="inline-form">
           <input placeholder="Naziv kljuca" value={name} onChange={(event) => setName(event.target.value)} />
           <button className="primary" onClick={createKey}>Kreiraj</button>
+          <HelpHint title="Kreiraj API kljuc">API kljuc moze koristiti vanjski sustav ili AI agent. Dodijelite najmanji potreban skup scopeova.</HelpHint>
         </div>
         {Object.entries(groupedScopes).map(([category, entries]) => (
           <div key={category} className={category === "Dangerous scopes" ? "danger-scope" : ""}>
@@ -72,7 +74,7 @@ export function ApiKeys() {
         { header: "Scopeovi", render: (row) => row.scopes.join(", ") },
         { header: "Aktivan", render: (row) => row.active ? "Da" : "Ne" },
         { header: "Zadnja upotreba", render: (row) => formatDateTime(row.last_used_at) },
-        { header: "Radnja", render: (row) => row.active ? <button onClick={() => deactivate(row)}>Deaktiviraj</button> : "-" }
+        { header: "Radnja", render: (row) => row.active ? <span className="action-with-help"><button onClick={() => deactivate(row)}>Deaktiviraj</button><HelpHint title="Deaktiviraj API kljuc">Odmah gasi pristup za ovaj kljuc. Postojece integracije koje ga koriste prestat ce raditi.</HelpHint></span> : "-" }
       ]} />
     </section>
   );

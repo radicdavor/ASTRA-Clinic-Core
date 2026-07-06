@@ -2,6 +2,7 @@ from datetime import date
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy import or_, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, joinedload
 
 from app.audit.service import audit, snapshot
@@ -20,6 +21,22 @@ router = APIRouter(prefix="/api", tags=["clinic"], responses=ERROR_RESPONSES)
 def patch_model(obj, data: dict) -> None:
     for key, value in data.items():
         setattr(obj, key, value)
+
+
+def commit_or_conflict(db: Session) -> None:
+    try:
+        db.commit()
+    except IntegrityError as exc:
+        db.rollback()
+        raise HTTPException(409, detail="Zapis s istim jedinstvenim identifikatorom vec postoji") from exc
+
+
+def flush_or_conflict(db: Session) -> None:
+    try:
+        db.flush()
+    except IntegrityError as exc:
+        db.rollback()
+        raise HTTPException(409, detail="Zapis s istim jedinstvenim identifikatorom vec postoji") from exc
 
 
 @router.get("/public-config")
@@ -44,9 +61,9 @@ def create_patient(
 ):
     patient = Patient(**payload.model_dump())
     db.add(patient)
-    db.flush()
+    flush_or_conflict(db)
     audit(db, "create", "Patient", patient.id, f"{patient.first_name} {patient.last_name}", actor.user_id, actor.actor_type, actor.api_key_id, None, snapshot(patient), request)
-    db.commit()
+    commit_or_conflict(db)
     db.refresh(patient)
     return patient
 
@@ -56,7 +73,7 @@ def list_patients(q: str | None = None, db: Session = Depends(get_db), actor: Ac
     stmt = select(Patient).order_by(Patient.last_name, Patient.first_name)
     if q:
         like = f"%{q}%"
-        stmt = stmt.where(or_(Patient.first_name.ilike(like), Patient.last_name.ilike(like), Patient.phone.ilike(like), Patient.email.ilike(like)))
+        stmt = stmt.where(or_(Patient.first_name.ilike(like), Patient.last_name.ilike(like), Patient.phone.ilike(like), Patient.email.ilike(like), Patient.oib.ilike(like)))
     return db.scalars(stmt).all()
 
 
@@ -81,9 +98,9 @@ def update_patient(
         raise HTTPException(404, detail="Pacijent nije pronađen")
     before = snapshot(patient)
     patch_model(patient, payload.model_dump(exclude_unset=True))
-    db.flush()
+    flush_or_conflict(db)
     audit(db, "update", "Patient", patient.id, "Ažuriran pacijent", actor.user_id, actor.actor_type, actor.api_key_id, before, snapshot(patient), request)
-    db.commit()
+    commit_or_conflict(db)
     db.refresh(patient)
     return patient
 
@@ -196,7 +213,7 @@ def day_schedule(date: date = Query(...), db: Session = Depends(get_db), actor: 
 def search(q: str, db: Session = Depends(get_db), actor: Actor = Depends(require_permission("patients.read"))):
     like = f"%{q}%"
     return {
-        "patients": db.scalars(select(Patient).where(or_(Patient.first_name.ilike(like), Patient.last_name.ilike(like))).limit(10)).all(),
+        "patients": db.scalars(select(Patient).where(or_(Patient.first_name.ilike(like), Patient.last_name.ilike(like), Patient.oib.ilike(like))).limit(10)).all(),
         "services": db.scalars(select(Service).where(Service.name.ilike(like)).limit(10)).all(),
         "appointments": db.scalars(select(Appointment).join(Appointment.patient).join(Appointment.service).where(or_(Patient.first_name.ilike(like), Patient.last_name.ilike(like), Service.name.ilike(like), Appointment.status.ilike(like))).limit(10)).all(),
     }

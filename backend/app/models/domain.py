@@ -90,6 +90,7 @@ class Patient(TimestampMixin, Base):
     first_name: Mapped[str] = mapped_column(String(100), index=True)
     last_name: Mapped[str] = mapped_column(String(100), index=True)
     date_of_birth: Mapped[date | None] = mapped_column(Date)
+    oib: Mapped[str | None] = mapped_column(String(11), unique=True, index=True)
     email: Mapped[str | None] = mapped_column(String(255))
     phone: Mapped[str | None] = mapped_column(String(80))
     notes: Mapped[str | None] = mapped_column(Text)

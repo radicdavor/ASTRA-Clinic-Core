@@ -23,6 +23,7 @@ function assertIncludes(file, value) {
   "src/pages/ApiKeys.tsx",
   "src/components/AppShell.tsx",
   "src/components/AuditTimeline.tsx",
+  "src/components/HelpHint.tsx",
 ].forEach(read);
 
 assertIncludes("src/routes/AppRoutes.tsx", "/appointments/:id");
@@ -35,5 +36,12 @@ assertIncludes("src/pages/Invoices.tsx", "remaining");
 assertIncludes("src/pages/ApiKeys.tsx", "opasni scopeovi");
 assertIncludes("src/pages/Invoices.tsx", "Demo fiskalizacija - nije stvarna fiskalizacija.");
 assertIncludes("src/components/AuditTimeline.tsx", "before_json");
+assertIncludes("src/pages/PatientForm.tsx", "OIB");
+assertIncludes("src/pages/PatientForm.tsx", "Spremi pacijenta");
+assertIncludes("src/pages/AppointmentForm.tsx", "Ime, prezime ili OIB");
+assertIncludes("src/pages/AppointmentForm.tsx", "selectedPatient");
+assertIncludes("src/pages/AppointmentForm.tsx", "service-context");
+assertIncludes("src/pages/Invoices.tsx", "Demo fiskalizacija - nije stvarna fiskalizacija.");
+assertIncludes("src/pages/ApiKeys.tsx", "opasni scopeovi");
 
 console.log("Frontend pilot smoke passed.");

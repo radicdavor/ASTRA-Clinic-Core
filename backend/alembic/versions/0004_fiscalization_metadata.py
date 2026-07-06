@@ -6,7 +6,6 @@ Create Date: 2026-07-05
 """
 
 from alembic import op
-import sqlalchemy as sa
 
 
 revision = "0004_fiscalization_metadata"
@@ -16,12 +15,12 @@ depends_on = None
 
 
 def upgrade() -> None:
-    op.add_column("invoices", sa.Column("fiscalization_provider", sa.String(length=80), nullable=True))
-    op.add_column("invoices", sa.Column("fiscalization_message", sa.Text(), nullable=True))
-    op.add_column("invoices", sa.Column("fiscalized_at", sa.DateTime(timezone=True), nullable=True))
+    op.execute("ALTER TABLE invoices ADD COLUMN IF NOT EXISTS fiscalization_provider VARCHAR(80)")
+    op.execute("ALTER TABLE invoices ADD COLUMN IF NOT EXISTS fiscalization_message TEXT")
+    op.execute("ALTER TABLE invoices ADD COLUMN IF NOT EXISTS fiscalized_at TIMESTAMP WITH TIME ZONE")
 
 
 def downgrade() -> None:
-    op.drop_column("invoices", "fiscalized_at")
-    op.drop_column("invoices", "fiscalization_message")
-    op.drop_column("invoices", "fiscalization_provider")
+    op.execute("ALTER TABLE invoices DROP COLUMN IF EXISTS fiscalized_at")
+    op.execute("ALTER TABLE invoices DROP COLUMN IF EXISTS fiscalization_message")
+    op.execute("ALTER TABLE invoices DROP COLUMN IF EXISTS fiscalization_provider")

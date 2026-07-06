@@ -4,6 +4,7 @@ ASTRA Clinic Core is currently a closed demo/pilot system for demo data only.
 
 - Not production ready.
 - No real patient data is allowed.
+- OIB is supported only as an optional demo/pilot identifier until real-data readiness is formally approved.
 - No real Croatian fiscalization is implemented.
 - Frontend e2e coverage is limited.
 - Module loader is basic and data-only.

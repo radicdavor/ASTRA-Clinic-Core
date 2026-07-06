@@ -25,12 +25,15 @@ Pilot evidence status:
 - No P0/P1 blocker was reported.
 - One P2 UX finding was reported: action completion feedback was too subtle.
 - The P2 UX finding was fixed with global toast feedback for successful create/update/delete actions and visible error feedback for failed mutations.
+- V18 patient identity feedback was implemented: optional OIB, patient search/disambiguation for appointment creation, service context and contextual help on critical actions.
 
 Validation status:
 
 - Frontend typecheck passed.
 - Frontend smoke passed.
 - Frontend build passed.
+- Backend tests passed, including OIB validation/search coverage.
+- Fresh PostgreSQL migration replay passed through `0005_patient_oib`.
 - Pilot release validation script passed.
 - Local Docker frontend/backend services were rebuilt and started.
 
@@ -39,6 +42,7 @@ Validation status:
 The `v0.1-pilot` tag does not allow:
 
 - real patient data
+- real OIB values in demo mode
 - real Croatian fiscalization
 - certified EMR use
 - medical device use
@@ -65,4 +69,3 @@ git push origin :refs/tags/v0.1-pilot
 ```
 
 If the tag has already been shared publicly, do not delete it silently. Create a corrective release note and a new patch tag instead.
-

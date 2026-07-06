@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import { api } from "../api/client";
 import { AuditTimeline } from "../components/AuditTimeline";
 import { DataTable } from "../components/DataTable";
+import { HelpHint } from "../components/HelpHint";
 import { StatusBadge } from "../components/StatusBadge";
 import { useApi } from "../hooks/useApi";
 import { Appointment, AuditLog, Invoice, StockMovement } from "../types";
@@ -110,10 +111,11 @@ export function AppointmentDetail() {
         {belowReorderAfterUse && <p className="form-error">Upozorenje: nakon potrosnje zaliha pada na ili ispod reorder razine.</p>}
         {terminalStatus && <p className="form-error">Termin je vec zavrsen ili otkazan, potrosnja se ne moze ponovno potvrditi.</p>}
         <button className="primary" disabled={missingRequiredVariable || exceedsStock || terminalStatus || materials.length === 0} onClick={completeWithMaterials}>Zavrsi uz potrosnju</button>
+        <HelpHint title="Zavrsi uz potrosnju">Zavrsava termin i skida odabrane materijale sa zalihe. Provjerite kolicine prije potvrde.</HelpHint>
       </section>
 
       <section className="workflow-panel">
-        <div className="page-header"><h2>Racun</h2>{relatedInvoice ? <Link className="primary link-button" to={`/invoices?invoice=${relatedInvoice.id}`}>Otvori racun</Link> : <button className="primary" onClick={createInvoice}>Kreiraj nacrt racuna</button>}</div>
+        <div className="page-header"><h2>Racun</h2>{relatedInvoice ? <Link className="primary link-button" to={`/invoices?invoice=${relatedInvoice.id}`}>Otvori racun</Link> : <span className="action-with-help"><button className="primary" onClick={createInvoice}>Kreiraj nacrt racuna</button><HelpHint title="Kreiraj nacrt racuna">Stvara draft racun iz termina. Racun se jos mora pregledati i izdati.</HelpHint></span>}</div>
       </section>
 
       <section className="workflow-panel">

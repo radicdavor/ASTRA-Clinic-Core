@@ -10,15 +10,21 @@ ASTRA Clinic Core can be tagged as `v0.1-pilot` only after every item below is r
 - [x] Frontend typecheck green.
 - [x] Frontend build green.
 - [x] Pilot demo smoke green.
-- [ ] Demo seed/reset verified.
+- [x] Demo seed/reset verified.
 - [x] Pilot runbook followed end-to-end.
 - [x] No P0/P1 pilot issues open.
 - [x] Real data readiness checklist reviewed and still blocks real patient data.
-- [ ] Backup/restore docs reviewed.
+- [x] Backup/restore docs reviewed.
 - [x] Fiscalization marked noop/stub.
 - [x] Demo banner visible.
 - [x] `/api/public-config` confirms `real_data_allowed=false` for demo.
-- [ ] API keys reviewed and deactivated after demo.
+- [x] API keys reviewed and deactivated after demo.
+
+V18 readiness note:
+
+- OIB is optional and remains demo/pilot-only until real-data readiness is approved.
+- Appointment creation requires a resolved patient selected from search results.
+- Contextual help has been added to key Novi/Dodaj/Spremi/Izdaj/Zaprimi workflows.
 
 V17 readiness note:
 

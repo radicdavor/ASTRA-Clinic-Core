@@ -8,6 +8,7 @@
 | Human pilot | `docs/pilot_sessions/2026-07-05_human_pilot_01.md` | Structured walkthrough completed | structured report completed or explicitly waived | incomplete without waiver |
 | P0/P1 issues | `docs/pilot_sessions/*_issue_triage.md` | None from maintainer dry-run or structured human walkthrough | no open P0/P1 | any open P0/P1 |
 | Real-data warnings | `/api/public-config`, README, banner | Implemented and human check reported no confusion | `real_data_allowed=false` visible and participant understands it | users may think real data is allowed |
+| Patient identity | `docs/V18_PATIENT_IDENTITY_AND_CONTEXTUAL_HELP_PLAN.md`, Patient API, AppointmentForm | OIB optional; appointment creation uses resolved patient search | user selects a resolved patient and does not enter real OIB in demo | ambiguous patient selection or real OIB confusion |
 | Fiscalization warning | Invoice UI and release notes | Implemented as noop/stub and human check reported no confusion | noop/stub warning visible and participant understands it | users may think fiscalization is real |
 | Demo reset safety | `backend/app/demo/reset.py`, runbook | Implemented | reset refuses production | reset can run in production |
 | Audit visibility | Audit log/timeline | Human check passed | participant can review who/what/when | audit trail missing or confusing for core flow |

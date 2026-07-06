@@ -6,6 +6,8 @@
 
 The P2 UX finding requested a visible hover/toast confirmation after actions such as patient entry and payment. This has been implemented as global toast feedback for successful create/update/delete actions.
 
+V18 also implemented the patient identity/contextual help feedback: optional OIB, appointment patient search by name/contact/OIB, service context and help popovers for critical actions. Real OIB values remain forbidden in demo mode.
+
 ## Owner
 
 - Maintainer / pilot facilitator
@@ -18,9 +20,10 @@ The P2 UX finding requested a visible hover/toast confirmation after actions suc
 4. Confirm `/api/public-config` returns `real_data_allowed=false`.
 5. Open the frontend and confirm the demo banner is visible.
 6. Run final validation checks.
-7. Review `docs/pilot_sessions/2026-07-05_human_pilot_01.md` and triage.
-8. Confirm there are no open P0/P1 findings.
-9. Tag `v0.1-pilot` only after explicit maintainer approval.
+7. Confirm GitHub CI is green after the latest V18 commit.
+8. Review `docs/pilot_sessions/2026-07-05_human_pilot_01.md` and triage.
+9. Confirm there are no open P0/P1 findings.
+10. Tag `v0.1-pilot` only after explicit maintainer approval.
 
 ## Expected Evidence File
 

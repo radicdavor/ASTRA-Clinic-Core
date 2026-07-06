@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { api } from "../api/client";
 import { DataTable } from "../components/DataTable";
+import { HelpHint } from "../components/HelpHint";
 import { useApi } from "../hooks/useApi";
 import { Invoice } from "../types";
 import { formatDate, formatDateTime } from "../utils/date";
@@ -92,7 +93,7 @@ export function Invoices() {
               <h2>{selected.invoice_number}</h2>
               <p>{selected.status} / {selected.payment_status}</p>
             </div>
-            {selected.status === "draft" && <button className="primary" disabled={!selected.lines?.length || Number(selected.total_amount) <= 0} onClick={() => issueInvoice(selected)}>Izdaj racun</button>}
+            {selected.status === "draft" && <span className="action-with-help"><button className="primary" disabled={!selected.lines?.length || Number(selected.total_amount) <= 0} onClick={() => issueInvoice(selected)}>Izdaj racun</button><HelpHint title="Izdaj racun">Izdavanje zakljucava draft racun i dodjeljuje sluzbeni broj. Fiskalizacija je demo/noop, nije stvarna hrvatska fiskalizacija.</HelpHint></span>}
           </div>
           <div className="metrics">
             <div><span>Ukupno</span><strong>{selected.total_amount}</strong></div>
@@ -108,7 +109,8 @@ export function Invoices() {
               <input placeholder="Opis stavke" value={lineDraft.description} onChange={(event) => setLineDraft({ ...lineDraft, description: event.target.value })} />
               <input type="number" min="0.01" step="0.01" value={lineDraft.quantity} onChange={(event) => setLineDraft({ ...lineDraft, quantity: event.target.value })} />
               <input type="number" min="0" step="0.01" value={lineDraft.unit_price} onChange={(event) => setLineDraft({ ...lineDraft, unit_price: event.target.value })} />
-              <button onClick={() => addLine(selected)}>Dodaj stavku</button>
+            <button onClick={() => addLine(selected)}>Dodaj stavku</button>
+            <HelpHint title="Dodaj stavku">Dodaje stavku na draft racun prije izdavanja.</HelpHint>
             </div>
           )}
 
@@ -131,6 +133,7 @@ export function Invoices() {
             <input type="number" min="0.01" max={remaining} step="0.01" placeholder={`Preostalo ${remaining.toFixed(2)}`} value={paymentAmount} onFocus={() => !paymentAmount && setPaymentAmount(remaining.toFixed(2))} onChange={(event) => setPaymentAmount(event.target.value)} />
             <select value={paymentMethod} onChange={(event) => setPaymentMethod(event.target.value)}><option value="cash">Gotovina</option><option value="card">Kartica</option><option value="bank">Transakcija</option></select>
             <button className="primary" disabled={paymentBlocked} onClick={() => addPayment(selected)}>Evidentiraj uplatu</button>
+            <HelpHint title="Evidentiraj uplatu">Sprema uplatu na izdani racun i azurira status placanja.</HelpHint>
           </div>
         </section>
       )}

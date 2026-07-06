@@ -1,6 +1,7 @@
 import { FormEvent, useState } from "react";
 import { api } from "../api/client";
 import { DataTable } from "../components/DataTable";
+import { HelpHint } from "../components/HelpHint";
 import { useApi } from "../hooks/useApi";
 import { Service } from "../types";
 
@@ -16,10 +17,14 @@ export function Services() {
   return (
     <section className="page">
       <div className="page-header"><h1>Usluge</h1></div>
-      <form className="inline-form" onSubmit={submit}><input value={name} onChange={(e) => setName(e.target.value)} placeholder="Naziv nove usluge" /><button className="primary">Dodaj</button></form>
+      <form className="inline-form" onSubmit={submit}>
+        <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Naziv nove usluge" />
+        <button className="primary">Dodaj</button>
+        <HelpHint title="Dodaj uslugu">Dodaje novu uslugu u katalog. Usluga se kasnije koristi kod narucivanja termina.</HelpHint>
+      </form>
       <DataTable rows={services.data} columns={[
         { header: "Naziv", render: (row) => row.name },
-        { header: "Šifra", render: (row) => row.code ?? "-" },
+        { header: "Sifra", render: (row) => row.code ?? "-" },
         { header: "Trajanje", render: (row) => `${row.duration_minutes} min` },
         { header: "Cijena", render: (row) => `${row.price} EUR` }
       ]} />

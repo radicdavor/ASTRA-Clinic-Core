@@ -10,9 +10,10 @@ export function PatientDetail() {
     <section className="page narrow">
       <h1>{data.first_name} {data.last_name}</h1>
       <div className="detail-list">
-        <p><strong>Datum rođenja</strong><span>{formatDate(data.date_of_birth)}</span></p>
+        <p><strong>Datum rodenja</strong><span>{formatDate(data.date_of_birth)}</span></p>
+        <p><strong>OIB</strong><span>{data.oib ?? "-"}</span></p>
         <p><strong>Telefon</strong><span>{data.phone ?? "-"}</span></p>
-        <p><strong>E-pošta</strong><span>{data.email ?? "-"}</span></p>
+        <p><strong>E-posta</strong><span>{data.email ?? "-"}</span></p>
         <p><strong>Napomene</strong><span>{data.notes ?? "-"}</span></p>
       </div>
     </section>
