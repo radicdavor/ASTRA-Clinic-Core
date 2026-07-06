@@ -19,6 +19,7 @@ Implemented locally; GitHub CI must pass after push before `v0.1-pilot` can be t
 
 ## Boundaries Preserved
 
+- `docs/ASTRA_ARCHITECTURE_BIBLE.md` now records the founder-level product philosophy and architecture principles.
 - Real patient data remains forbidden.
 - Real OIB values must not be entered in demo mode.
 - Real Croatian fiscalization is still not implemented.
@@ -28,4 +29,3 @@ Implemented locally; GitHub CI must pass after push before `v0.1-pilot` can be t
 ## CI Fix Included
 
 Migration `0004_fiscalization_metadata` was made idempotent because GitHub CI was failing on duplicate invoice fiscalization columns during migration replay.
-
