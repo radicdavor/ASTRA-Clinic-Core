@@ -102,19 +102,24 @@ def main() -> None:
             )
             db.add(gerb_episode)
             db.flush()
-        if db.scalar(select(ClinicalPlan).where(ClinicalPlan.episode_id == gerb_episode.id, ClinicalPlan.status == "active")) is None:
-            db.add(ClinicalPlan(
-                episode_id=gerb_episode.id,
-                source="physician",
-                status="active",
-                proposed_episode_status="waiting",
-                next_action="wait_for_pathology",
-                due_date=date.today() + timedelta(days=14),
-                priority="important",
-                rationale="Demo aktivni plan: cekati patologiju i zatim odrediti daljnji interval pracenja.",
-                suggested_follow_up="Pregledati patologiju nakon dolaska nalaza.",
-                physician_confirmed=True,
-            ))
+        demo_plan_values = {
+            "source": "physician",
+            "status": "active",
+            "proposed_episode_status": "waiting",
+            "next_action": "wait_for_pathology",
+            "due_date": date.today() + timedelta(days=14),
+            "priority": "important",
+            "rationale": "Demo aktivni plan: cekati patologiju i zatim odrediti daljnji interval pracenja.",
+            "suggested_follow_up": "Pregledati patologiju nakon dolaska nalaza.",
+            "physician_conclusion": "Demo zakljucak: kontrolirati PH nalaz i nastaviti pracenje refluksa.",
+            "physician_confirmed": True,
+        }
+        demo_plan = db.scalar(select(ClinicalPlan).where(ClinicalPlan.episode_id == gerb_episode.id, ClinicalPlan.status == "active"))
+        if demo_plan is None:
+            db.add(ClinicalPlan(episode_id=gerb_episode.id, **demo_plan_values))
+        else:
+            for field, value in demo_plan_values.items():
+                setattr(demo_plan, field, value)
         if db.scalar(select(ClinicalEpisode).where(ClinicalEpisode.patient_id == patient.id, ClinicalEpisode.title == "Nadzor polipa debelog crijeva")) is None:
             db.add(ClinicalEpisode(patient_id=patient.id, title="Nadzor polipa debelog crijeva", episode_type="endoscopy", status="open", priority="routine", start_date=date.today(), summary="Demo epizoda za kontrolu nakon polipektomije.", owner_provider_id=provider.id))
         if db.scalar(select(ClinicalEpisode).where(ClinicalEpisode.patient_id == patient.id, ClinicalEpisode.title == "Estetski tretman plan")) is None:

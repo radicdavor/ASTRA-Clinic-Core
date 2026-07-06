@@ -54,6 +54,7 @@ export type ClinicalPlan = {
   priority: string;
   rationale?: string | null;
   suggested_follow_up?: string | null;
+  physician_conclusion?: string | null;
   ai_confidence?: string | null;
   physician_confirmed: boolean;
   confirmed_by?: number | null;

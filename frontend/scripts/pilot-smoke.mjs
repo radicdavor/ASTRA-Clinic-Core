@@ -111,6 +111,8 @@ assertIncludes("src/pages/EpisodeDetail.tsx", "Uredi");
 assertIncludes("src/pages/EpisodeDetail.tsx", "Odbij");
 assertIncludes("src/pages/EpisodeDetail.tsx", "activePlan");
 assertIncludes("src/pages/EpisodeDetail.tsx", "physician_confirmed");
+assertIncludes("src/pages/EpisodeDetail.tsx", "physician_conclusion");
+assertIncludes("src/types/index.ts", "physician_conclusion");
 assertIncludes("src/pages/EpisodeDetail.tsx", "Ne mijenja epizodu");
 assertIncludes("src/components/ActionButton.tsx", "requiresConfirm");
 assertIncludes("src/components/ActionButton.tsx", "confirmMessage");

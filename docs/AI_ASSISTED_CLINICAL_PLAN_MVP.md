@@ -23,6 +23,7 @@ Current fields include:
 - `priority`
 - `rationale`
 - `suggested_follow_up`
+- `physician_conclusion`
 - `ai_confidence`
 - `physician_confirmed`
 - `confirmed_by`
@@ -36,6 +37,10 @@ Current fields include:
 4. Only confirmation makes the plan active.
 5. Confirmation updates the episode status/priority from the plan.
 6. Audit and clinical timeline record the decision.
+
+Only one confirmed active plan may exist per episode. Older active plans are archived before a new confirmed plan becomes active.
+
+When a new AI suggestion is generated, older unconfirmed draft/waiting suggestions for the same episode are marked cancelled/superseded.
 
 ## API
 
@@ -53,6 +58,7 @@ Episode Workspace shows:
 
 - active confirmed clinical plan
 - pending AI suggestion
+- physician conclusion attached to the plan
 - confirm/edit/reject actions
 - clinical decision timeline
 - appointment context
@@ -71,6 +77,8 @@ AI must not:
 - invent diagnoses
 
 Low-confidence suggestions display manual review language.
+
+Allowed values are intentionally whitelisted for episode status, plan priority and plan next action so the shared ASTRA language remains stable.
 
 ## Deliberately Deferred
 

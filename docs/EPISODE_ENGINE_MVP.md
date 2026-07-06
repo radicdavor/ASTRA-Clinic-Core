@@ -15,6 +15,8 @@ Episode Engine adds Clinical Episode as the first clinical story object in ASTRA
 - Shows episode context or a warning in Appointment Workspace.
 - Adds AI Assisted Clinical Plan proposal/review/confirm flow.
 - Stores only physician-confirmed plans as active.
+- Enforces one active confirmed clinical plan per episode in PostgreSQL.
+- Stores the physician conclusion used for the plan.
 - Shows clinical decision timeline.
 - Adds readiness awareness for appointments without an episode.
 - Writes audit for create, update, close, link and unlink actions.

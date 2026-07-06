@@ -82,6 +82,7 @@ def clinical_plan(db, episode_obj=None, status="draft", physician_confirmed=Fals
         priority="important",
         rationale="Test plan",
         suggested_follow_up="Test follow up",
+        physician_conclusion="Test physician conclusion",
         ai_confidence=Decimal("0.91"),
         physician_confirmed=physician_confirmed,
     )

@@ -151,6 +151,7 @@ class ClinicalPlan(TimestampMixin, Base):
     priority: Mapped[str] = mapped_column(String(40), default="routine", index=True)
     rationale: Mapped[str | None] = mapped_column(Text)
     suggested_follow_up: Mapped[str | None] = mapped_column(Text)
+    physician_conclusion: Mapped[str | None] = mapped_column(Text)
     ai_confidence: Mapped[Decimal | None] = mapped_column(Numeric(5, 2))
     physician_confirmed: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
     confirmed_by: Mapped[int | None] = mapped_column(ForeignKey("users.id"))

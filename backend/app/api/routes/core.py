@@ -145,6 +145,7 @@ def propose_plan(payload: ClinicalPlanGenerate, episode: ClinicalEpisode) -> dic
         "priority": priority,
         "rationale": rationale,
         "suggested_follow_up": suggested_follow_up,
+        "physician_conclusion": payload.physician_conclusion,
         "ai_confidence": confidence,
         "physician_confirmed": False,
     }
@@ -369,10 +370,22 @@ def generate_clinical_plan(
         appointment = db.get(Appointment, payload.appointment_id)
         if not appointment or appointment.episode_id != episode.id:
             raise HTTPException(422, detail="Termin mora pripadati istoj epizodi")
+    pending_plans = db.scalars(
+        select(ClinicalPlan).where(
+            ClinicalPlan.episode_id == episode.id,
+            ClinicalPlan.physician_confirmed.is_(False),
+            ClinicalPlan.status.in_(["draft", "waiting"]),
+        )
+    ).all()
+    for pending in pending_plans:
+        before = snapshot(pending)
+        pending.status = "cancelled"
+        db.flush()
+        audit(db, "ai_plan_superseded", "ClinicalPlan", pending.id, "Stariji AI prijedlog plana je zamijenjen novim prijedlogom", actor.user_id, actor.actor_type, actor.api_key_id, before, snapshot(pending), request)
     plan = ClinicalPlan(episode_id=episode.id, **propose_plan(payload, episode))
     db.add(plan)
     db.flush()
-    audit(db, "ai_plan_generated", "ClinicalPlan", plan.id, f"AI prijedlog plana za epizodu #{episode.id}", actor.user_id, "ai_suggestion", actor.api_key_id, None, snapshot(plan), request)
+    audit(db, "ai_plan_generated", "ClinicalPlan", plan.id, f"AI prijedlog plana za epizodu #{episode.id}", actor.user_id, actor.actor_type, actor.api_key_id, None, snapshot(plan), request)
     db.commit()
     db.refresh(plan)
     return plan
@@ -409,6 +422,8 @@ def reject_clinical_plan(
     plan = get_plan_or_404(db, plan_id)
     if plan.physician_confirmed:
         raise HTTPException(422, detail="Potvrdeni plan se ne moze odbiti")
+    if plan.status not in {"draft", "waiting"}:
+        raise HTTPException(422, detail="Samo aktivni prijedlog koji ceka odluku moze biti odbijen")
     before = snapshot(plan)
     plan.status = "cancelled"
     db.flush()
@@ -426,8 +441,14 @@ def confirm_clinical_plan(
     actor: Actor = Depends(require_permission("clinical_plans.write")),
 ):
     plan = get_plan_or_404(db, plan_id)
+    if plan.physician_confirmed and plan.status == "active":
+        return plan
+    if plan.physician_confirmed:
+        raise HTTPException(422, detail="Arhivirani potvrdeni plan se ne moze ponovno potvrditi")
     if plan.status == "cancelled":
         raise HTTPException(422, detail="Odbijeni plan se ne moze potvrditi")
+    if plan.status not in {"draft", "waiting"}:
+        raise HTTPException(422, detail="Samo prijedlog plana koji ceka odluku moze biti potvrden")
     episode = get_episode_or_404(db, plan.episode_id)
     plan_before = snapshot(plan)
     episode_before = snapshot(episode)
@@ -443,10 +464,10 @@ def confirm_clinical_plan(
     plan.confirmed_at = datetime.now(timezone.utc)
     if plan.proposed_episode_status:
         episode.status = plan.proposed_episode_status
+        if episode.status == "completed" and episode.end_date is None:
+            episode.end_date = date.today()
     episode.priority = plan.priority
-    if plan.rationale:
-        episode.summary = plan.rationale
-    db.flush()
+    flush_or_conflict(db)
     audit(db, "ai_plan_confirmed", "ClinicalPlan", plan.id, "Lijecnik je potvrdio klinicki plan", actor.user_id, actor.actor_type, actor.api_key_id, plan_before, snapshot(plan), request)
     audit(db, "update", "ClinicalEpisode", episode.id, "Epizoda azurirana potvrdenim klinickim planom", actor.user_id, actor.actor_type, actor.api_key_id, episode_before, snapshot(episode), request)
     db.commit()
@@ -468,12 +489,13 @@ def episode_clinical_timeline(episode_id: int, db: Session = Depends(get_db), ac
         "ai_plan_rejected": "Lijecnik odbio prijedlog",
         "ai_plan_confirmed": "Lijecnik potvrdio plan",
         "clinical_plan_archived": "Plan arhiviran",
+        "ai_plan_superseded": "AI prijedlog zamijenjen",
         "update": "Epizoda azurirana",
         "close": "Epizoda zatvorena",
         "create": "Epizoda kreirana",
     }
     return [
-        ClinicalDecisionTimelineItem(id=log.id, action=log.action, label=labels.get(log.action, log.action), summary=log.summary, source="AI Suggested" if log.actor_type == "ai_suggestion" else "Human Confirmed" if log.action == "ai_plan_confirmed" else log.actor_type, created_at=log.created_at)
+        ClinicalDecisionTimelineItem(id=log.id, action=log.action, label=labels.get(log.action, log.action), summary=log.summary, source="AI Suggested" if log.action == "ai_plan_generated" else "Human Confirmed" if log.action == "ai_plan_confirmed" else log.actor_type, created_at=log.created_at)
         for log in logs
     ]
 

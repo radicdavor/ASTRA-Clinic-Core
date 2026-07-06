@@ -23,11 +23,11 @@ export function EpisodeDetail() {
   const decisionTimeline = useApi<ClinicalDecisionTimelineItem[]>(`/api/episodes/${id}/clinical-timeline`, []);
   const audit = useApi<AuditLog[]>(`/api/audit-log?entity_type=ClinicalEpisode&entity_id=${id}`, []);
   const [planDraft, setPlanDraft] = useState({ appointment_id: "", procedure_type: "", findings: "", pathology_ordered: false, physician_conclusion: "", episode_goal: "" });
-  const [editDraft, setEditDraft] = useState({ proposed_episode_status: "waiting", next_action: "wait_for_pathology", due_date: "", priority: "important", rationale: "", suggested_follow_up: "" });
+  const [editDraft, setEditDraft] = useState({ proposed_episode_status: "waiting", next_action: "wait_for_pathology", due_date: "", priority: "important", rationale: "", suggested_follow_up: "", physician_conclusion: "" });
   const [editingPlanId, setEditingPlanId] = useState<number | null>(null);
 
   const activePlan = useMemo(() => plans.data.find((plan) => plan.status === "active" && plan.physician_confirmed), [plans.data]);
-  const pendingPlan = useMemo(() => plans.data.find((plan) => !plan.physician_confirmed && ["draft", "waiting"].includes(plan.status)), [plans.data]);
+  const pendingPlans = useMemo(() => plans.data.filter((plan) => !plan.physician_confirmed && ["draft", "waiting"].includes(plan.status)), [plans.data]);
 
   async function refreshClinicalPlanData() {
     if (!episode.data) return;
@@ -62,7 +62,8 @@ export function EpisodeDetail() {
       due_date: plan.due_date ?? "",
       priority: plan.priority,
       rationale: plan.rationale ?? "",
-      suggested_follow_up: plan.suggested_follow_up ?? ""
+      suggested_follow_up: plan.suggested_follow_up ?? "",
+      physician_conclusion: plan.physician_conclusion ?? ""
     });
   }
 
@@ -160,6 +161,7 @@ export function EpisodeDetail() {
               <strong>{activePlan.rationale ?? activePlan.next_action}</strong>
             </div>
             <p><span>Sljedeca radnja</span><strong>{activePlan.next_action}</strong></p>
+            <p><span>Zakljucak lijecnika</span><strong>{activePlan.physician_conclusion ?? "-"}</strong></p>
             <p><span>Predlozeni status epizode</span><strong>{activePlan.proposed_episode_status ?? "-"}</strong></p>
             <p><span>Kontrola / rok</span><strong>{activePlan.suggested_follow_up ?? formatDate(activePlan.due_date)}</strong></p>
             <p><span>Potvrdio</span><strong>{activePlan.confirmed_by ? `Korisnik #${activePlan.confirmed_by}` : "Lijecnik"} / {formatDateTime(activePlan.confirmed_at)}</strong></p>
@@ -170,30 +172,33 @@ export function EpisodeDetail() {
       </WorkspaceSection>
 
       <WorkspaceSection title="AI prijedlog plana">
-        {pendingPlan ? (
-          <div className="clinical-plan-card ai-suggestion">
-            <div>
-              <span>AI prijedlog</span>
-              <strong>{pendingPlan.rationale ?? pendingPlan.next_action}</strong>
+        {pendingPlans.length > 0 ? (
+          pendingPlans.map((pendingPlan) => (
+            <div className="clinical-plan-card ai-suggestion" key={pendingPlan.id}>
+              <div>
+                <span>AI prijedlog</span>
+                <strong>{pendingPlan.rationale ?? pendingPlan.next_action}</strong>
+              </div>
+              {Number(pendingPlan.ai_confidence ?? 0) < 0.7 && <p className="form-error">Manual review recommended.</p>}
+              <p><span>Zakljucak lijecnika</span><strong>{pendingPlan.physician_conclusion ?? "-"}</strong></p>
+              <p><span>Predlozeni status epizode</span><strong>{pendingPlan.proposed_episode_status ?? "-"}</strong></p>
+              <p><span>Sljedeca radnja</span><strong>{pendingPlan.next_action}</strong></p>
+              <p><span>Kontrola / rok</span><strong>{pendingPlan.suggested_follow_up ?? formatDate(pendingPlan.due_date)}</strong></p>
+              <p><span>Prioritet</span><strong>{pendingPlan.priority}</strong></p>
+              <p><span>Pouzdanost</span><strong>{pendingPlan.ai_confidence ? `${Math.round(Number(pendingPlan.ai_confidence) * 100)}%` : "-"}</strong></p>
+              <div className="quick-actions">
+                <ActionButton variant="workflow" onClick={() => confirmPlan(pendingPlan)} requiresConfirm confirmMessage="Potvrditi klinicki plan i azurirati epizodu?" helpTitle="Potvrdi plan" help="Samo potvrda lijecnika pretvara prijedlog u aktivni klinicki plan i azurira epizodu.">
+                  Potvrdi
+                </ActionButton>
+                <ActionButton variant="update" onClick={() => startEdit(pendingPlan)} helpTitle="Uredi prijedlog" help="Uredite prijedlog prije potvrde. Uredeni plan se i dalje mora posebno potvrditi.">
+                  Uredi
+                </ActionButton>
+                <ActionButton variant="danger" onClick={() => rejectPlan(pendingPlan)} requiresConfirm confirmMessage="Odbiti AI prijedlog plana?" helpTitle="Odbij prijedlog" help="Odbija prijedlog bez promjene epizode.">
+                  Odbij
+                </ActionButton>
+              </div>
             </div>
-            {Number(pendingPlan.ai_confidence ?? 0) < 0.7 && <p className="form-error">Manual review recommended.</p>}
-            <p><span>Predlozeni status epizode</span><strong>{pendingPlan.proposed_episode_status ?? "-"}</strong></p>
-            <p><span>Sljedeca radnja</span><strong>{pendingPlan.next_action}</strong></p>
-            <p><span>Kontrola / rok</span><strong>{pendingPlan.suggested_follow_up ?? formatDate(pendingPlan.due_date)}</strong></p>
-            <p><span>Prioritet</span><strong>{pendingPlan.priority}</strong></p>
-            <p><span>Pouzdanost</span><strong>{pendingPlan.ai_confidence ? `${Math.round(Number(pendingPlan.ai_confidence) * 100)}%` : "-"}</strong></p>
-            <div className="quick-actions">
-              <ActionButton variant="workflow" onClick={() => confirmPlan(pendingPlan)} requiresConfirm confirmMessage="Potvrditi klinicki plan i azurirati epizodu?" helpTitle="Potvrdi plan" help="Samo potvrda lijecnika pretvara prijedlog u aktivni klinicki plan i azurira epizodu.">
-                Potvrdi
-              </ActionButton>
-              <ActionButton variant="update" onClick={() => startEdit(pendingPlan)} helpTitle="Uredi prijedlog" help="Uredite prijedlog prije potvrde. Uredeni plan se i dalje mora posebno potvrditi.">
-                Uredi
-              </ActionButton>
-              <ActionButton variant="danger" onClick={() => rejectPlan(pendingPlan)} requiresConfirm confirmMessage="Odbiti AI prijedlog plana?" helpTitle="Odbij prijedlog" help="Odbija prijedlog bez promjene epizode.">
-                Odbij
-              </ActionButton>
-            </div>
-          </div>
+          ))
         ) : (
           <p>Nema AI prijedloga koji ceka potvrdu.</p>
         )}
@@ -206,6 +211,7 @@ export function EpisodeDetail() {
             <label>Prioritet<select value={editDraft.priority} onChange={(event) => setEditDraft({ ...editDraft, priority: event.target.value })}><option value="routine">routine</option><option value="important">important</option><option value="urgent">urgent</option></select></label>
             <label className="wide-field">Razlog<textarea value={editDraft.rationale} onChange={(event) => setEditDraft({ ...editDraft, rationale: event.target.value })} rows={3} /></label>
             <label className="wide-field">Predlozeni follow-up<textarea value={editDraft.suggested_follow_up} onChange={(event) => setEditDraft({ ...editDraft, suggested_follow_up: event.target.value })} rows={3} /></label>
+            <label className="wide-field">Zakljucak lijecnika<textarea value={editDraft.physician_conclusion} onChange={(event) => setEditDraft({ ...editDraft, physician_conclusion: event.target.value })} rows={3} /></label>
             <ActionButton type="submit" className="primary" variant="update" helpTitle="Spremi izmjenu" help="Sprema uredeni prijedlog, ali ga ne potvrduje automatski.">
               Spremi izmjenu
             </ActionButton>

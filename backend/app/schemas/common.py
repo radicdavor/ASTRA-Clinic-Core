@@ -6,6 +6,25 @@ from decimal import Decimal
 from pydantic import BaseModel, ConfigDict, EmailStr, field_validator
 
 
+EPISODE_STATUSES = {"open", "active", "waiting", "completed", "cancelled", "archived"}
+CLINICAL_PLAN_STATUSES = {"draft", "waiting", "active", "completed", "cancelled", "archived"}
+CLINICAL_PLAN_SOURCES = {"physician", "ai_suggestion", "imported"}
+CLINICAL_PLAN_PRIORITIES = {"routine", "important", "urgent"}
+CLINICAL_PLAN_NEXT_ACTIONS = {
+    "wait_for_pathology",
+    "follow_up_visit",
+    "repeat_endoscopy",
+    "colonoscopy",
+    "gastroscopy",
+    "MR_enterography",
+    "CT",
+    "surgery_referral",
+    "continue_therapy",
+    "stop_therapy",
+    "episode_completed",
+}
+
+
 class ORMModel(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -169,6 +188,20 @@ class ClinicalEpisodeCreate(BaseModel):
     clinical_notes: str | None = None
     owner_provider_id: int | None = None
 
+    @field_validator("status")
+    @classmethod
+    def validate_status(cls, value: str) -> str:
+        if value not in EPISODE_STATUSES:
+            raise ValueError("Nepoznat status epizode")
+        return value
+
+    @field_validator("priority")
+    @classmethod
+    def validate_priority(cls, value: str) -> str:
+        if value not in CLINICAL_PLAN_PRIORITIES:
+            raise ValueError("Nepoznat prioritet")
+        return value
+
 
 class ClinicalEpisodeUpdate(BaseModel):
     title: str | None = None
@@ -180,6 +213,20 @@ class ClinicalEpisodeUpdate(BaseModel):
     summary: str | None = None
     clinical_notes: str | None = None
     owner_provider_id: int | None = None
+
+    @field_validator("status")
+    @classmethod
+    def validate_status(cls, value: str | None) -> str | None:
+        if value is not None and value not in EPISODE_STATUSES:
+            raise ValueError("Nepoznat status epizode")
+        return value
+
+    @field_validator("priority")
+    @classmethod
+    def validate_priority(cls, value: str | None) -> str | None:
+        if value is not None and value not in CLINICAL_PLAN_PRIORITIES:
+            raise ValueError("Nepoznat prioritet")
+        return value
 
 
 class ClinicalEpisodeOut(ClinicalEpisodeCreate, ORMModel):
@@ -203,12 +250,33 @@ class ClinicalPlanGenerate(BaseModel):
 
 class ClinicalPlanUpdate(BaseModel):
     proposed_episode_status: str | None = None
-    status: str | None = None
     next_action: str | None = None
     due_date: DateType | None = None
     priority: str | None = None
     rationale: str | None = None
     suggested_follow_up: str | None = None
+    physician_conclusion: str | None = None
+
+    @field_validator("proposed_episode_status")
+    @classmethod
+    def validate_proposed_episode_status(cls, value: str | None) -> str | None:
+        if value is not None and value not in EPISODE_STATUSES:
+            raise ValueError("Nepoznat status epizode")
+        return value
+
+    @field_validator("next_action")
+    @classmethod
+    def validate_next_action(cls, value: str | None) -> str | None:
+        if value is not None and value not in CLINICAL_PLAN_NEXT_ACTIONS:
+            raise ValueError("Nepoznata sljedeca radnja")
+        return value
+
+    @field_validator("priority")
+    @classmethod
+    def validate_priority(cls, value: str | None) -> str | None:
+        if value is not None and value not in CLINICAL_PLAN_PRIORITIES:
+            raise ValueError("Nepoznat prioritet")
+        return value
 
 
 class ClinicalPlanOut(ORMModel):
@@ -222,6 +290,7 @@ class ClinicalPlanOut(ORMModel):
     priority: str
     rationale: str | None = None
     suggested_follow_up: str | None = None
+    physician_conclusion: str | None = None
     ai_confidence: Decimal | None = None
     physician_confirmed: bool
     confirmed_by: int | None = None

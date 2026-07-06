@@ -34,9 +34,9 @@ def test_create_update_close_episode(client, db, auth_setup):
     episode_id = created.json()["id"]
     assert created.json()["patient"]["id"] == p.id
 
-    updated = client.patch(f"/api/episodes/{episode_id}", headers=headers, json={"priority": "high", "summary": "Updated"})
+    updated = client.patch(f"/api/episodes/{episode_id}", headers=headers, json={"priority": "urgent", "summary": "Updated"})
     assert updated.status_code == 200
-    assert updated.json()["priority"] == "high"
+    assert updated.json()["priority"] == "urgent"
 
     closed = client.post(f"/api/episodes/{episode_id}/close", headers=headers)
     assert closed.status_code == 200
