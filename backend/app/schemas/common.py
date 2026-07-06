@@ -27,6 +27,7 @@ CLINICAL_DOCUMENT_SOURCE_TYPES = {"internal", "external", "scanned", "uploaded"}
 CLINICAL_DOCUMENT_TYPES = {"consultation", "gastroscopy", "colonoscopy", "pathology", "laboratory", "radiology", "discharge", "referral", "other"}
 CLINICAL_DOCUMENT_REVIEW_STATUSES = {"draft", "extracted", "needs_physician_review", "reviewed", "rejected", "superseded"}
 CLINICAL_DOCUMENT_AI_EXTRACTION_STATUSES = {"not_run", "generated", "edited", "accepted", "rejected", "superseded"}
+PATIENT_CLINICAL_SUMMARY_STATUSES = {"draft_ai", "needs_review", "reviewed", "stale", "rejected", "superseded"}
 
 
 class ORMModel(BaseModel):
@@ -469,7 +470,7 @@ class PatientClinicalSummaryRecordUpdate(BaseModel):
     @field_validator("status")
     @classmethod
     def validate_status(cls, value: str | None) -> str | None:
-        if value is not None and value not in {"draft_ai", "needs_review", "reviewed", "stale"}:
+        if value is not None and value not in PATIENT_CLINICAL_SUMMARY_STATUSES:
             raise ValueError("Nepoznat status klinickog sazetka")
         return value
 
@@ -491,6 +492,13 @@ class PatientClinicalSummaryRecordOut(ORMModel):
     created_at: DateTimeType
     updated_at: DateTimeType
 
+    @field_validator("status")
+    @classmethod
+    def validate_status(cls, value: str) -> str:
+        if value not in PATIENT_CLINICAL_SUMMARY_STATUSES:
+            raise ValueError("Nepoznat status klinickog sazetka")
+        return value
+
 
 class PatientClinicalSummary(BaseModel):
     patient_id: int
@@ -498,6 +506,11 @@ class PatientClinicalSummary(BaseModel):
     awaiting_review_count: int
     reviewed_summary: PatientClinicalSummaryRecordOut | None = None
     draft_summary: PatientClinicalSummaryRecordOut | None = None
+    reviewed_summary_is_stale: bool = False
+    draft_summary_is_stale: bool = False
+    latest_reviewed_document_updated_at: DateTimeType | None = None
+    reviewed_summary_updated_at: DateTimeType | None = None
+    summary_warning: str | None = None
     known_problems: list[PatientKnowledgeItem]
     completed_procedures: list[PatientKnowledgeItem]
     pathology: list[PatientKnowledgeItem]

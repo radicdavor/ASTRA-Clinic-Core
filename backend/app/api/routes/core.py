@@ -235,6 +235,30 @@ def latest_patient_summary_record(db: Session, patient_id: int, statuses: list[s
     return db.scalar(stmt.order_by(PatientClinicalSummaryRecord.updated_at.desc(), PatientClinicalSummaryRecord.id.desc()))
 
 
+def official_patient_documents_statement(patient_id: int | None = None):
+    stmt = select(ClinicalDocument).where(ClinicalDocument.physician_reviewed.is_(True), ClinicalDocument.review_status == "reviewed")
+    if patient_id is not None:
+        stmt = stmt.where(ClinicalDocument.patient_id == patient_id)
+    return stmt
+
+
+def latest_reviewed_document_updated_at(documents: list[ClinicalDocument]) -> datetime | None:
+    timestamps = [document.updated_at for document in documents if document.updated_at is not None]
+    return max(timestamps) if timestamps else None
+
+
+def summary_record_is_stale(record: PatientClinicalSummaryRecord | None, latest_document_updated_at: datetime | None) -> bool:
+    return bool(record and latest_document_updated_at and record.updated_at and latest_document_updated_at > record.updated_at)
+
+
+def latest_summary_records_by_patient(records: list[PatientClinicalSummaryRecord]) -> dict[int, PatientClinicalSummaryRecord]:
+    latest: dict[int, PatientClinicalSummaryRecord] = {}
+    for record in records:
+        if record.patient_id not in latest:
+            latest[record.patient_id] = record
+    return latest
+
+
 def summary_record_from_documents(patient_id: int, documents: list[ClinicalDocument]) -> dict:
     source_ids = [document.id for document in documents]
     findings: list[str] = []
@@ -264,7 +288,7 @@ def summary_record_from_documents(patient_id: int, documents: list[ClinicalDocum
         "risks": [],
         "last_recommendations": recommendations,
         "source_document_ids": source_ids,
-        "status": "needs_review",
+        "status": "draft_ai",
         "generated_by": "ai_placeholder",
     }
 
@@ -360,9 +384,13 @@ def readiness(db: Session = Depends(get_db), actor: Actor = Depends(require_perm
     services_without_rooms = scalar_count(db, select(func.count(Service.id)).where(Service.active.is_(True), ~Service.id.in_(select(room_services.c.service_id))))
     providers_without_clinic = scalar_count(db, select(func.count(Provider.id)).where(Provider.active.is_(True), Provider.clinic_id.is_(None)))
     today_incomplete_appointments = scalar_count(db, select(func.count(Appointment.id)).where(Appointment.date == today, or_(Appointment.provider_id.is_(None), Appointment.room_id.is_(None), Appointment.service_id.is_(None))))
-    reviewed_documents = db.scalars(select(ClinicalDocument).where(ClinicalDocument.physician_reviewed.is_(True), ClinicalDocument.review_status == "reviewed")).all()
-    reviewed_summaries = db.scalars(select(PatientClinicalSummaryRecord).where(PatientClinicalSummaryRecord.status == "reviewed")).all()
-    reviewed_summary_by_patient = {summary.patient_id: summary for summary in reviewed_summaries}
+    reviewed_documents = db.scalars(official_patient_documents_statement()).all()
+    reviewed_summaries = db.scalars(
+        select(PatientClinicalSummaryRecord)
+        .where(PatientClinicalSummaryRecord.status == "reviewed")
+        .order_by(PatientClinicalSummaryRecord.patient_id, PatientClinicalSummaryRecord.updated_at.desc(), PatientClinicalSummaryRecord.id.desc())
+    ).all()
+    reviewed_summary_by_patient = latest_summary_records_by_patient(reviewed_summaries)
     stale_summary_patients = {
         document.patient_id
         for document in reviewed_documents
@@ -991,12 +1019,27 @@ def patient_clinical_summary(patient_id: int, db: Session = Depends(get_db), act
     documents = db.scalars(select(ClinicalDocument).where(ClinicalDocument.patient_id == patient_id).order_by(ClinicalDocument.document_date.desc().nulls_last(), ClinicalDocument.id.desc())).all()
     reviewed = [document for document in documents if is_official_clinical_document(document)]
     awaiting_review_count = len([document for document in documents if is_document_awaiting_physician_review(document)])
+    reviewed_summary = latest_patient_summary_record(db, patient_id, ["reviewed"])
+    draft_summary = latest_patient_summary_record(db, patient_id, ["draft_ai", "needs_review", "stale"])
+    latest_document_updated_at = latest_reviewed_document_updated_at(reviewed)
+    reviewed_summary_is_stale = summary_record_is_stale(reviewed_summary, latest_document_updated_at)
+    draft_summary_is_stale = summary_record_is_stale(draft_summary, latest_document_updated_at)
+    summary_warning = None
+    if reviewed_summary_is_stale:
+        summary_warning = "Pregledani sazetak je zastario jer postoje noviji pregledani dokumenti."
+    elif draft_summary_is_stale:
+        summary_warning = "AI draft sazetka je zastario jer postoje noviji pregledani dokumenti."
     summary = PatientClinicalSummary(
         patient_id=patient_id,
         generated_from_reviewed_documents=len(reviewed),
         awaiting_review_count=awaiting_review_count,
-        reviewed_summary=latest_patient_summary_record(db, patient_id, ["reviewed"]),
-        draft_summary=latest_patient_summary_record(db, patient_id, ["draft_ai", "needs_review", "stale"]),
+        reviewed_summary=reviewed_summary,
+        draft_summary=draft_summary,
+        reviewed_summary_is_stale=reviewed_summary_is_stale,
+        draft_summary_is_stale=draft_summary_is_stale,
+        latest_reviewed_document_updated_at=latest_document_updated_at,
+        reviewed_summary_updated_at=reviewed_summary.updated_at if reviewed_summary else None,
+        summary_warning=summary_warning,
         known_problems=[],
         completed_procedures=[],
         pathology=[],
@@ -1044,7 +1087,7 @@ def generate_patient_clinical_summary_draft(
 ):
     if not db.get(Patient, patient_id):
         raise HTTPException(404, detail="Pacijent nije pronaden")
-    reviewed = db.scalars(select(ClinicalDocument).where(ClinicalDocument.patient_id == patient_id, ClinicalDocument.physician_reviewed.is_(True), ClinicalDocument.review_status == "reviewed").order_by(ClinicalDocument.document_date.desc().nulls_last(), ClinicalDocument.id.desc())).all()
+    reviewed = db.scalars(official_patient_documents_statement(patient_id).order_by(ClinicalDocument.document_date.desc().nulls_last(), ClinicalDocument.id.desc())).all()
     values = summary_record_from_documents(patient_id, reviewed)
     record = PatientClinicalSummaryRecord(**values)
     db.add(record)
@@ -1075,6 +1118,9 @@ def update_patient_clinical_summary_record(
     if update_data.get("status") == "reviewed":
         update_data["status"] = "needs_review"
     patch_model(record, update_data)
+    edited_fields = {"summary_text", "known_conditions", "key_findings", "open_items", "risks", "last_recommendations", "source_document_ids"}
+    if edited_fields.intersection(update_data):
+        record.status = "needs_review"
     if record.status == "reviewed":
         record.status = "needs_review"
         record.reviewed_by = None
@@ -1098,6 +1144,10 @@ def review_patient_clinical_summary_record(
     record = latest_patient_summary_record(db, patient_id, ["draft_ai", "needs_review", "stale"])
     if record is None:
         raise HTTPException(404, detail="Nema draft sazetka za potvrdu")
+    reviewed_documents = db.scalars(official_patient_documents_statement(patient_id)).all()
+    latest_document_updated_at = latest_reviewed_document_updated_at(reviewed_documents)
+    if summary_record_is_stale(record, latest_document_updated_at):
+        raise HTTPException(409, detail="Sazetak je zastario jer postoje noviji pregledani dokumenti. Generirajte novi draft prije potvrde.")
     before = snapshot(record)
     record.status = "reviewed"
     record.reviewed_by = actor.user_id

@@ -1,6 +1,6 @@
 # Program 1 - Phase A: Patient Knowledge Stabilization Plan
 
-Status: implementacijski plan; Phase A1, Phase A2 i Phase A3 djelomicno implementirani
+Status: implementacijski plan; Phase A1, Phase A2, Phase A3 i Phase A4 djelomicno implementirani
 
 ## 1. Svrha
 
@@ -292,6 +292,15 @@ Plan:
 - Physician review je potreban za reviewed summary status.
 - Ako nema reviewed documents, summary ne smije glumiti clinical knowledge.
 
+Current support:
+
+- `PatientClinicalSummaryRecord` podrzava statuse `draft_ai`, `needs_review`, `reviewed`, `stale`, `rejected` i `superseded` kroz schema/API validaciju.
+- Generirani draft koristi samo official reviewed `ClinicalDocument` izvore (`review_status=reviewed` i `physician_reviewed=true`).
+- Stale stanje se racuna dinamicki kada noviji pregledani ClinicalDocument postoji nakon summary recorda.
+- API vraca `reviewed_summary_is_stale`, `draft_summary_is_stale`, `latest_reviewed_document_updated_at`, `reviewed_summary_updated_at` i `summary_warning`.
+- Potvrda zastarjelog drafta se blokira s 409 conflict i korisnik mora generirati novi draft.
+- Summary ostaje pomocni view; official Patient Clinical Knowledge i dalje dolazi iz source-linked reviewed documents.
+
 ### A5 - Open Questions and Unresolved Findings
 
 Purpose: razjasniti kako se nerazriješene informacije prikazuju i obrađuju.
@@ -462,8 +471,10 @@ Suggested statuses:
 Current support:
 
 - `draft_ai`, `needs_review`, `reviewed`, `stale` postoje u schema validatoru.
-- `rejected` i `superseded` nisu podržani.
+- `rejected` i `superseded` su podrzane vrijednosti, ali puni reject/supersede workflow nije implementiran.
 - Future schema change može biti potreban ako se rejection/supersession uvede kao stvarni lifecycle.
+
+A4 update: `rejected` i `superseded` su sada podrzane summary status vrijednosti kroz schema/API validaciju. Puni reject/supersede workflow nije implementiran, a stale stanje se racuna dinamicki.
 
 ## 7. Data model implications
 
@@ -479,7 +490,7 @@ Current support:
 | `ClinicalDocument.document_type` | consultation/gastroscopy/pathology/etc. | Dovoljno, ali procedure/treatment outputs nisu formalni. | Extend later with controlled values. | unknown |
 | `ClinicalDocument.reviewed_by` | Reviewer user id. | Dobro, ali role semantics nisu detaljne. | Tie to physician/authorized clinician rules. | no/unknown |
 | `ClinicalDocument.reviewed_at` | Review timestamp. | Dovoljno za Phase A. | Keep. | no |
-| `PatientClinicalSummaryRecord.status` | draft/review/stale lifecycle. | Nema rejected/superseded. | Extend status set if needed. | unknown |
+| `PatientClinicalSummaryRecord.status` | draft/review/stale/rejected/superseded lifecycle. | Summary se moze zamijeniti s truth ako nije jasno labeliran. | Keep validated statuses and dynamic stale metadata. | no |
 | `PatientClinicalSummaryRecord.source_document_ids` | Source list for summary. | Nije per-statement source. | Preserve plus per-item sources from PatientKnowledgeItem. | no |
 | `PatientClinicalSummaryRecord.open_items` | Summary-level unresolved items. | Nema source per item u recordu. | Keep summary view; official open questions from PatientKnowledgeItem. | unknown |
 | `PatientClinicalSummaryRecord.known_conditions` | Summary list. | Može zvučati kao diagnosis registry. | Label as summary view. | no |

@@ -125,7 +125,7 @@ export type PatientClinicalSummaryRecord = {
   risks?: string[] | null;
   last_recommendations?: string[] | null;
   source_document_ids?: number[] | null;
-  status: "draft_ai" | "needs_review" | "reviewed" | "stale";
+  status: "draft_ai" | "needs_review" | "reviewed" | "stale" | "rejected" | "superseded";
   generated_by?: string | null;
   reviewed_by?: number | null;
   reviewed_at?: string | null;
@@ -139,6 +139,11 @@ export type PatientClinicalSummary = {
   awaiting_review_count: number;
   reviewed_summary?: PatientClinicalSummaryRecord | null;
   draft_summary?: PatientClinicalSummaryRecord | null;
+  reviewed_summary_is_stale: boolean;
+  draft_summary_is_stale: boolean;
+  latest_reviewed_document_updated_at?: string | null;
+  reviewed_summary_updated_at?: string | null;
+  summary_warning?: string | null;
   known_problems: PatientKnowledgeItem[];
   completed_procedures: PatientKnowledgeItem[];
   pathology: PatientKnowledgeItem[];

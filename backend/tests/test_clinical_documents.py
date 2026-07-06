@@ -439,7 +439,7 @@ def test_generate_edit_and_review_patient_clinical_summary(client, db, auth_setu
     draft = client.post(f"/api/patients/{p.id}/clinical-summary/generate-draft", headers=headers)
     assert draft.status_code == 200
     draft_body = draft.json()
-    assert draft_body["status"] == "needs_review"
+    assert draft_body["status"] == "draft_ai"
     assert doc.id in draft_body["source_document_ids"]
 
     edited = client.patch(
@@ -459,6 +459,213 @@ def test_generate_edit_and_review_patient_clinical_summary(client, db, auth_setu
     summary = client.get(f"/api/patients/{p.id}/clinical-summary", headers=headers)
     assert summary.status_code == 200
     assert summary.json()["reviewed_summary"]["summary_text"] == "Lijecnicki uredjen sazetak."
+    assert summary.json()["reviewed_summary_is_stale"] is False
+    assert summary.json()["summary_warning"] is None
+
+
+def test_patient_summary_draft_uses_only_reviewed_documents(client, db, auth_setup):
+    headers = auth_headers(client)
+    p = patient(db)
+    reviewed = clinical_document(db, p, physician_reviewed=True)
+    unreviewed = clinical_document(db, p, physician_reviewed=False)
+    unreviewed.key_findings = ["Nepregledana tvrdnja ne smije u draft"]
+    db.commit()
+
+    draft = client.post(f"/api/patients/{p.id}/clinical-summary/generate-draft", headers=headers)
+    assert draft.status_code == 200
+    body = draft.json()
+    assert body["status"] == "draft_ai"
+    assert body["source_document_ids"] == [reviewed.id]
+    assert "Nepregledana tvrdnja ne smije u draft" not in body["known_conditions"]
+    assert "Nepregledana tvrdnja ne smije u draft" not in body["key_findings"]
+
+
+def test_patient_summary_draft_excludes_rejected_and_superseded_documents(client, db, auth_setup):
+    headers = auth_headers(client)
+    p = patient(db)
+    reviewed = clinical_document(db, p, physician_reviewed=True)
+    rejected = clinical_document(db, p, physician_reviewed=False)
+    rejected.review_status = "rejected"
+    rejected.key_findings = ["Odbijena tvrdnja"]
+    superseded = clinical_document(db, p, physician_reviewed=True)
+    superseded.review_status = "superseded"
+    superseded.key_findings = ["Zamijenjena tvrdnja"]
+    db.commit()
+
+    draft = client.post(f"/api/patients/{p.id}/clinical-summary/generate-draft", headers=headers)
+    assert draft.status_code == 200
+    body = draft.json()
+    assert body["source_document_ids"] == [reviewed.id]
+    assert "Odbijena tvrdnja" not in body["known_conditions"] + body["key_findings"]
+    assert "Zamijenjena tvrdnja" not in body["known_conditions"] + body["key_findings"]
+
+
+def test_review_summary_sets_review_metadata(client, db, auth_setup):
+    headers = auth_headers(client)
+    p = patient(db)
+    doc = clinical_document(db, p, physician_reviewed=True)
+    draft = client.post(f"/api/patients/{p.id}/clinical-summary/generate-draft", headers=headers)
+    assert draft.status_code == 200
+
+    reviewed = client.post(f"/api/patients/{p.id}/clinical-summary/review", headers=headers)
+    assert reviewed.status_code == 200
+    body = reviewed.json()
+    assert body["status"] == "reviewed"
+    assert body["reviewed_by"]
+    assert body["reviewed_at"]
+    assert body["source_document_ids"] == [doc.id]
+
+
+def test_reviewed_summary_is_view_not_source_of_truth(client, db, auth_setup):
+    headers = auth_headers(client)
+    p = patient(db)
+    record = PatientClinicalSummaryRecord(
+        patient_id=p.id,
+        summary_text="Pregledani sazetak bez izvora.",
+        known_conditions=["Sazetak nije izvor istine"],
+        key_findings=[],
+        open_items=[],
+        risks=[],
+        last_recommendations=[],
+        source_document_ids=[],
+        status="reviewed",
+        generated_by="physician",
+        reviewed_by=1,
+        reviewed_at=datetime(2026, 7, 6),
+    )
+    db.add(record)
+    db.commit()
+
+    summary = client.get(f"/api/patients/{p.id}/clinical-summary", headers=headers)
+    assert summary.status_code == 200
+    body = summary.json()
+    assert body["reviewed_summary"]["summary_text"] == "Pregledani sazetak bez izvora."
+    assert_no_official_knowledge(body)
+
+
+def test_reviewed_summary_stale_when_new_reviewed_document_added(client, db, auth_setup):
+    headers = auth_headers(client)
+    p = patient(db)
+    old_doc = clinical_document(db, p, physician_reviewed=True)
+    old_doc.updated_at = datetime(2026, 7, 1, 9, 0)
+    db.commit()
+    draft = client.post(f"/api/patients/{p.id}/clinical-summary/generate-draft", headers=headers)
+    assert draft.status_code == 200
+    reviewed = client.post(f"/api/patients/{p.id}/clinical-summary/review", headers=headers)
+    assert reviewed.status_code == 200
+    record = db.get(PatientClinicalSummaryRecord, reviewed.json()["id"])
+    record.updated_at = datetime(2026, 7, 2, 9, 0)
+    new_doc = clinical_document(db, p, physician_reviewed=True)
+    new_doc.updated_at = datetime(2026, 7, 3, 9, 0)
+    db.commit()
+
+    summary = client.get(f"/api/patients/{p.id}/clinical-summary", headers=headers)
+    assert summary.status_code == 200
+    body = summary.json()
+    assert body["reviewed_summary_is_stale"] is True
+    assert body["draft_summary_is_stale"] is False
+    assert body["latest_reviewed_document_updated_at"]
+    assert body["reviewed_summary_updated_at"]
+    assert body["summary_warning"] == "Pregledani sazetak je zastario jer postoje noviji pregledani dokumenti."
+
+
+def test_draft_summary_stale_when_new_reviewed_document_added(client, db, auth_setup):
+    headers = auth_headers(client)
+    p = patient(db)
+    old_doc = clinical_document(db, p, physician_reviewed=True)
+    old_doc.updated_at = datetime(2026, 7, 1, 9, 0)
+    db.commit()
+    draft = client.post(f"/api/patients/{p.id}/clinical-summary/generate-draft", headers=headers)
+    assert draft.status_code == 200
+    record = db.get(PatientClinicalSummaryRecord, draft.json()["id"])
+    record.updated_at = datetime(2026, 7, 2, 9, 0)
+    new_doc = clinical_document(db, p, physician_reviewed=True)
+    new_doc.updated_at = datetime(2026, 7, 3, 9, 0)
+    db.commit()
+
+    summary = client.get(f"/api/patients/{p.id}/clinical-summary", headers=headers)
+    assert summary.status_code == 200
+    body = summary.json()
+    assert body["reviewed_summary_is_stale"] is False
+    assert body["draft_summary_is_stale"] is True
+    assert body["summary_warning"] == "AI draft sazetka je zastario jer postoje noviji pregledani dokumenti."
+
+
+def test_readiness_does_not_warn_when_reviewed_summary_current(client, db, auth_setup):
+    headers = auth_headers(client)
+    p = patient(db)
+    doc = clinical_document(db, p, physician_reviewed=True)
+    doc.updated_at = datetime(2026, 7, 1, 9, 0)
+    db.commit()
+    draft = client.post(f"/api/patients/{p.id}/clinical-summary/generate-draft", headers=headers)
+    assert draft.status_code == 200
+    reviewed = client.post(f"/api/patients/{p.id}/clinical-summary/review", headers=headers)
+    assert reviewed.status_code == 200
+    record = db.get(PatientClinicalSummaryRecord, reviewed.json()["id"])
+    record.updated_at = datetime(2026, 7, 2, 9, 0)
+    db.commit()
+
+    response = client.get("/api/readiness", headers=headers)
+    assert response.status_code == 200
+    check = next(item for item in response.json()["checks"] if item["key"] == "patient_summary_stale")
+    assert check["status"] == "ok"
+    assert check["count"] == 0
+
+
+def test_review_stale_draft_is_blocked(client, db, auth_setup):
+    headers = auth_headers(client)
+    p = patient(db)
+    old_doc = clinical_document(db, p, physician_reviewed=True)
+    old_doc.updated_at = datetime(2026, 7, 1, 9, 0)
+    db.commit()
+    draft = client.post(f"/api/patients/{p.id}/clinical-summary/generate-draft", headers=headers)
+    assert draft.status_code == 200
+    record = db.get(PatientClinicalSummaryRecord, draft.json()["id"])
+    record.updated_at = datetime(2026, 7, 2, 9, 0)
+    new_doc = clinical_document(db, p, physician_reviewed=True)
+    new_doc.updated_at = datetime(2026, 7, 3, 9, 0)
+    db.commit()
+
+    reviewed = client.post(f"/api/patients/{p.id}/clinical-summary/review", headers=headers)
+    assert reviewed.status_code == 409
+    assert reviewed.json()["detail"] == "Sazetak je zastario jer postoje noviji pregledani dokumenti. Generirajte novi draft prije potvrde."
+
+
+def test_latest_reviewed_summary_selection_is_deterministic(client, db, auth_setup):
+    headers = auth_headers(client)
+    p = patient(db)
+    older = PatientClinicalSummaryRecord(patient_id=p.id, summary_text="Stariji sazetak", status="reviewed", generated_by="physician", reviewed_by=1, reviewed_at=datetime(2026, 7, 1))
+    newer = PatientClinicalSummaryRecord(patient_id=p.id, summary_text="Noviji sazetak", status="reviewed", generated_by="physician", reviewed_by=1, reviewed_at=datetime(2026, 7, 2))
+    db.add_all([older, newer])
+    db.flush()
+    older.updated_at = datetime(2026, 7, 1, 9, 0)
+    newer.updated_at = datetime(2026, 7, 2, 9, 0)
+    db.commit()
+
+    summary = client.get(f"/api/patients/{p.id}/clinical-summary", headers=headers)
+    assert summary.status_code == 200
+    assert summary.json()["reviewed_summary"]["id"] == newer.id
+    assert summary.json()["reviewed_summary"]["summary_text"] == "Noviji sazetak"
+
+
+def test_rejected_summary_not_selected_as_reviewed_summary_if_rejection_exists(client, db, auth_setup):
+    headers = auth_headers(client)
+    p = patient(db)
+    rejected = PatientClinicalSummaryRecord(patient_id=p.id, summary_text="Odbijeni sazetak", status="rejected", generated_by="physician")
+    db.add(rejected)
+    db.commit()
+
+    summary = client.get(f"/api/patients/{p.id}/clinical-summary", headers=headers)
+    assert summary.status_code == 200
+    assert summary.json()["reviewed_summary"] is None
+    assert summary.json()["draft_summary"] is None
+
+
+def test_summary_status_validation_rejects_unknown_status(client, db, auth_setup):
+    headers = auth_headers(client)
+    p = patient(db)
+    response = client.patch(f"/api/patients/{p.id}/clinical-summary", headers=headers, json={"status": "official_truth"})
+    assert response.status_code == 422
 
 
 def test_readiness_detects_stale_patient_summary(client, db, auth_setup):

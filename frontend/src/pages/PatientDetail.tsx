@@ -48,7 +48,9 @@ function summaryStatusLabel(status?: PatientClinicalSummaryRecord["status"]) {
     draft_ai: "AI draft",
     needs_review: "Ceka pregled",
     reviewed: "Pregledano",
-    stale: "Zastarjelo"
+    stale: "Zastarjelo",
+    rejected: "Odbijeno",
+    superseded: "Zamijenjeno"
   };
   return status ? labels[status] : "Nema sazetka";
 }
@@ -92,6 +94,9 @@ export function PatientDetail() {
   const openQuestionCount = clinicalSummary.data?.open_questions.length ?? 0;
   const hasReviewedKnowledge = (clinicalSummary.data?.generated_from_reviewed_documents ?? 0) > 0;
   const activeSummary = clinicalSummary.data?.reviewed_summary ?? clinicalSummary.data?.draft_summary ?? null;
+  const activeSummaryIsReviewed = Boolean(clinicalSummary.data?.reviewed_summary);
+  const activeSummaryIsStale = activeSummaryIsReviewed ? clinicalSummary.data?.reviewed_summary_is_stale : clinicalSummary.data?.draft_summary_is_stale;
+  const activeSummaryTitle = activeSummaryIsReviewed ? "Pregledani sazetak" : "AI draft sazetka";
   const sourceDocuments = documents.data.filter((document) => activeSummary?.source_document_ids?.includes(document.id));
 
   async function refreshClinicalSummary() {
@@ -196,10 +201,13 @@ export function PatientDetail() {
 
       <div className="patient-knowledge-layout">
         <div>
-          <WorkspaceSection title={<>AI sazetak pacijenta <HelpHint title="AI sazetak pacijenta">AI draft nije sluzbena klinicka istina. Lijecnik mora pregledati izvore i potvrditi sazetak.</HelpHint></>}>
-            <div className={`clinical-plan-card ${activeSummary?.status === "reviewed" ? "" : "ai-suggestion"}`}>
+          <WorkspaceSection title={<>{activeSummaryTitle} <HelpHint title="Sazetak pacijenta">Sazetak je pomocni prikaz i nije izvor istine. Sluzbene tvrdnje dolaze iz pregledanih, source-linked dokumenata.</HelpHint></>}>
+            <div className={`clinical-plan-card ${activeSummary?.status === "reviewed" && !activeSummaryIsStale ? "" : "ai-suggestion"}`}>
               <div><span>Status</span><strong>{summaryStatusLabel(activeSummary?.status)}</strong></div>
+              {activeSummaryIsStale && <p><strong>Sazetak je zastario. Generirajte novi draft iz najnovijih pregledanih dokumenata.</strong></p>}
+              {clinicalSummary.data?.summary_warning && <p>{clinicalSummary.data.summary_warning}</p>}
               {activeSummary?.status !== "reviewed" && <p><strong>AI draft - potreban je lijecnicki pregled.</strong></p>}
+              <p>Sazetak je pomocni prikaz i nije izvor istine. Sluzbene tvrdnje dolaze iz pregledanih, source-linked dokumenata.</p>
               <p>{activeSummary?.summary_text ?? "Nema potvrdjenog sazetka pacijenta. Generirajte draft iz pregledanih dokumenata."}</p>
               <div className="knowledge-grid">
                 <KnowledgeList title="Poznata stanja" items={activeSummary?.known_conditions ?? []} />
@@ -209,6 +217,7 @@ export function PatientDetail() {
                 <KnowledgeList title="Zadnje preporuke" items={activeSummary?.last_recommendations ?? []} />
               </div>
               {activeSummary?.reviewed_at && <p><span>Pregledano</span><strong>{formatDateTime(activeSummary.reviewed_at)}</strong></p>}
+              {clinicalSummary.data?.latest_reviewed_document_updated_at && <p><span>Zadnji pregledani izvor</span><strong>{formatDateTime(clinicalSummary.data.latest_reviewed_document_updated_at)}</strong></p>}
               {sourceDocuments.length > 0 && (
                 <p>
                   <span>Izvori</span>
@@ -231,16 +240,19 @@ export function PatientDetail() {
                 id: "summary",
                 label: "Sazetak",
                 content: (
-                  <div className="knowledge-grid">
-                    <KnowledgeCard title="Poznati problemi" items={clinicalSummary.data?.known_problems ?? []} />
-                    <KnowledgeCard title="Zavrseni postupci" items={clinicalSummary.data?.completed_procedures ?? []} />
-                    <KnowledgeCard title="Patologija" items={clinicalSummary.data?.pathology ?? []} />
-                    <KnowledgeCard title="Laboratorij" items={clinicalSummary.data?.laboratory ?? []} />
-                    <KnowledgeCard title="Radiologija" items={clinicalSummary.data?.imaging ?? []} />
-                    <KnowledgeCard title="Terapija" items={clinicalSummary.data?.current_therapy ?? []} />
-                    <KnowledgeCard title="Otvorena pitanja" items={clinicalSummary.data?.open_questions ?? []} />
-                    <KnowledgeCard title="Zadnje preporuke" items={clinicalSummary.data?.latest_recommendations ?? []} />
-                  </div>
+                  <>
+                    <p>Sluzbeno klinicko znanje prikazano ispod dolazi iz pregledanih dokumenata i uvijek ima izvore.</p>
+                    <div className="knowledge-grid">
+                      <KnowledgeCard title="Poznati problemi" items={clinicalSummary.data?.known_problems ?? []} />
+                      <KnowledgeCard title="Zavrseni postupci" items={clinicalSummary.data?.completed_procedures ?? []} />
+                      <KnowledgeCard title="Patologija" items={clinicalSummary.data?.pathology ?? []} />
+                      <KnowledgeCard title="Laboratorij" items={clinicalSummary.data?.laboratory ?? []} />
+                      <KnowledgeCard title="Radiologija" items={clinicalSummary.data?.imaging ?? []} />
+                      <KnowledgeCard title="Terapija" items={clinicalSummary.data?.current_therapy ?? []} />
+                      <KnowledgeCard title="Otvorena pitanja" items={clinicalSummary.data?.open_questions ?? []} />
+                      <KnowledgeCard title="Zadnje preporuke" items={clinicalSummary.data?.latest_recommendations ?? []} />
+                    </div>
+                  </>
                 )
               },
               { id: "internal-documents", label: "Interni dokumenti", content: <DataTable rows={internalDocuments} columns={documentColumns} /> },

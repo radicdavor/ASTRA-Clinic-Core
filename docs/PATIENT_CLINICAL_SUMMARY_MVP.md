@@ -13,6 +13,7 @@ It supports:
 - physician confirmation
 - source document IDs
 - reviewed/draft status
+- dynamic stale detection
 - Patient Workspace display
 
 ## What It Does Not Do
@@ -41,6 +42,19 @@ The physician must review, edit if needed and confirm before the summary becomes
 
 Unreviewed AI extraction must not be treated as clinical truth.
 
+## Summary Statuses
+
+Patient Clinical Summary supports:
+
+- `draft_ai`: generated AI placeholder draft
+- `needs_review`: edited or generated summary awaiting physician review
+- `reviewed`: physician-reviewed summary view
+- `stale`: summary no longer aligned with newer reviewed documents
+- `rejected`: rejected summary, not current
+- `superseded`: replaced summary, historical only
+
+Reviewing a stale draft is blocked. The user must generate a new draft from the latest reviewed source documents.
+
 ## Source-Linking Principle
 
 Patient Clinical Summary stores `source_document_ids`.
@@ -49,6 +63,8 @@ The source-linked structured patient summary also renders source badges for indi
 
 - concise reviewed summary for orientation
 - detailed source-linked facts for traceability
+
+The concise summary is not the source of truth. Reviewed ClinicalDocuments and source-linked knowledge items remain authoritative.
 
 ## Deferred
 

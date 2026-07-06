@@ -161,7 +161,7 @@ AI support je placeholder:
 | `ClinicalEpisode` | `Clinical Episode` | Implementirani epizodni objekt. | Partially aligned / deferred | Ostaje compatibility/deferred; ne primary workflow. |
 | `ClinicalPlan` | `ClinicalPlan` | Episode-bound plan suggestion/confirmation model. | Partially aligned | Ne tretirati kao full workflow engine; razmotriti patient-level context kasnije. |
 | `ClinicalDocument` | `ClinicalDocument`, `Source Object` | Source object za patient knowledge. | Aligned | `review_status` hardening postoji; OCR/file storage i supersede workflow ostaju future. |
-| `PatientClinicalSummaryRecord` | `Patient Clinical Summary` | Summary view/draft/review record. | Aligned with caution | Dokumentirati da nije source of truth. |
+| `PatientClinicalSummaryRecord` | `Patient Clinical Summary` | Summary view/draft/review record with validated statuses and dynamic stale detection. | Aligned with caution | Summary nije source of truth; rejected/superseded summaries ostaju non-current view records. |
 | `Service` | `Service` | Katalog usluga. | Aligned | Procedure/treatment semantics tek kasnije. |
 | `Provider` | `Provider` | Pružatelj usluge i potencijalni physician owner. | Aligned | Confirmation role granice. |
 | `Room` | `Room` | Fizički resource. | Aligned | Capability rules ostaju future. |

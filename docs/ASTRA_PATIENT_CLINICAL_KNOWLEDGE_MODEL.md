@@ -109,6 +109,19 @@ If a candidate item has no source, it is not returned in the official patient su
 
 Open questions follow the same source rule. They are displayed as unresolved questions or warnings, not as clinical decisions.
 
+Patient Clinical Summary is a helper view over that source-linked knowledge.
+
+Supported summary statuses are:
+
+- `draft_ai`
+- `needs_review`
+- `reviewed`
+- `stale`
+- `rejected`
+- `superseded`
+
+Reviewed summaries may become stale when newer reviewed ClinicalDocuments exist. ASTRA reports stale state dynamically and blocks confirmation of stale drafts; the user must regenerate a draft from current reviewed sources.
+
 ## 8. Unresolved Findings / Open Questions
 
 Open questions are reviewed, source-linked statements that still need clinical attention.
