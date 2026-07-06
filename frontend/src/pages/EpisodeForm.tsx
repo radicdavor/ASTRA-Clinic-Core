@@ -2,6 +2,7 @@ import { FormEvent, useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { api } from "../api/client";
 import { ActionButton } from "../components/ActionButton";
+import { DateInput } from "../components/DateInput";
 import { HelpHint } from "../components/HelpHint";
 import { useApi } from "../hooks/useApi";
 import { ClinicalEpisode, Patient, Provider } from "../types";
@@ -114,8 +115,8 @@ export function EpisodeForm() {
         <label>Status<select value={form.status} onChange={(event) => setForm({ ...form, status: event.target.value })}>{episodeStatuses.map((value) => <option key={value} value={value}>{value}</option>)}</select></label>
         <label>Prioritet<select value={form.priority} onChange={(event) => setForm({ ...form, priority: event.target.value })}>{priorities.map((value) => <option key={value} value={value}>{value}</option>)}</select></label>
         <label>Voditelj<select value={form.owner_provider_id} onChange={(event) => setForm({ ...form, owner_provider_id: event.target.value })}><option value="">Bez voditelja</option>{providers.data.map((provider) => <option key={provider.id} value={provider.id}>{provider.full_name}</option>)}</select></label>
-        <label>Pocetak<input type="date" value={form.start_date} onChange={(event) => setForm({ ...form, start_date: event.target.value })} /></label>
-        <label>Kraj<input type="date" value={form.end_date} onChange={(event) => setForm({ ...form, end_date: event.target.value })} /></label>
+        <label>Pocetak<DateInput required value={form.start_date} onChange={(value) => setForm({ ...form, start_date: value })} /></label>
+        <label>Kraj<DateInput value={form.end_date} onChange={(value) => setForm({ ...form, end_date: value })} /></label>
         <label className="wide-field">Sazetak<textarea value={form.summary} onChange={(event) => setForm({ ...form, summary: event.target.value })} rows={3} /></label>
         <label className="wide-field">Klinicke biljeske<textarea value={form.clinical_notes} onChange={(event) => setForm({ ...form, clinical_notes: event.target.value })} rows={4} /></label>
         <ActionButton type="submit" className="primary" variant="create" disabled={!selectedPatient} helpTitle="Spremi epizodu" help="Sprema demo klinicki kontekst za postojeceg pacijenta. Ne unosi realne medicinske podatke.">

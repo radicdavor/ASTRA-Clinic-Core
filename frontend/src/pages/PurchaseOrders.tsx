@@ -2,6 +2,7 @@ import { useState } from "react";
 import { api, notifyUser } from "../api/client";
 import { ActionButton } from "../components/ActionButton";
 import { DataTable } from "../components/DataTable";
+import { DateInput } from "../components/DateInput";
 import { useApi } from "../hooks/useApi";
 import { InventoryItem, PurchaseOrder, StockLocation } from "../types";
 import { formatDate } from "../utils/date";
@@ -105,7 +106,7 @@ export function PurchaseOrders() {
             { header: "Preostalo", render: (line) => String(Math.max(0, Number(line.quantity_ordered) - Number(line.quantity_received))) },
             { header: "Kolicina", render: (line) => <input type="number" min="0" step="0.01" value={draft[line.id]?.quantity_received ?? ""} onChange={(event) => setDraft({ ...draft, [line.id]: { ...draft[line.id], quantity_received: event.target.value } })} /> },
             { header: "LOT", render: (line) => <input value={draft[line.id]?.lot_number ?? ""} onChange={(event) => setDraft({ ...draft, [line.id]: { ...draft[line.id], lot_number: event.target.value } })} placeholder={item(line.inventory_item_id)?.lot_tracking_enabled ? "Obavezno" : ""} /> },
-            { header: "Rok", render: (line) => <input type="date" value={draft[line.id]?.expiration_date ?? ""} onChange={(event) => setDraft({ ...draft, [line.id]: { ...draft[line.id], expiration_date: event.target.value } })} /> },
+            { header: "Rok", render: (line) => <DateInput value={draft[line.id]?.expiration_date ?? ""} onChange={(value) => setDraft({ ...draft, [line.id]: { ...draft[line.id], expiration_date: value } })} /> },
             { header: "Lokacija", render: (line) => <select value={draft[line.id]?.location_id ?? ""} onChange={(event) => setDraft({ ...draft, [line.id]: { ...draft[line.id], location_id: event.target.value } })}>{locations.data.map((location) => <option key={location.id} value={location.id}>{location.name}</option>)}</select> }
           ]} />
           {selectedReceiveError && <p className="form-error">{selectedReceiveError}</p>}

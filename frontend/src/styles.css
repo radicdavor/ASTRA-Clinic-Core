@@ -148,6 +148,7 @@ th { color: #667085; font-size: 0.78rem; text-transform: uppercase; letter-spaci
 .login-panel label, .form-grid label { display: grid; gap: 7px; color: #405069; font-weight: 650; }
 .login-panel label { margin-bottom: 14px; }
 .form-error { color: #b42318; margin: 6px 0 14px; }
+.field-error { color: #b42318; display: block; font-size: 12px; margin-top: 4px; }
 .form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; background: white; border: 1px solid #e3e8ef; border-radius: 8px; padding: 18px; }
 .form-grid .primary { grid-column: 1 / -1; justify-self: start; }
 .form-grid .action-with-help { grid-column: 1 / -1; justify-self: start; }

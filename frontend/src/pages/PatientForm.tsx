@@ -2,6 +2,7 @@ import { FormEvent, useEffect, useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { api, notifyUser } from "../api/client";
 import { ActionButton } from "../components/ActionButton";
+import { DateInput } from "../components/DateInput";
 import { HelpHint } from "../components/HelpHint";
 import { Patient } from "../types";
 import { formatPatientIdentity, formatPatientName } from "../utils/patientIdentity";
@@ -128,7 +129,11 @@ export function PatientForm() {
               {label}
               {key === "oib" && <HelpHint title="OIB">OIB je dodatni jedinstveni identifikator pacijenta. U demo nacinu ostavite prazno ili koristite izmisljen broj.</HelpHint>}
             </span>
-            <input type={key === "date_of_birth" ? "date" : "text"} placeholder={key === "oib" ? "Demo OIB ili prazno" : undefined} value={(form as any)[key]} onChange={(e) => setForm({ ...form, [key]: e.target.value })} />
+            {key === "date_of_birth" ? (
+              <DateInput value={form.date_of_birth} onChange={(value) => setForm({ ...form, date_of_birth: value })} />
+            ) : (
+              <input type="text" placeholder={key === "oib" ? "Demo OIB ili prazno" : undefined} value={(form as any)[key]} onChange={(e) => setForm({ ...form, [key]: e.target.value })} />
+            )}
           </label>
         ))}
         <ActionButton type="submit" className="primary" variant="create" helpTitle="Spremi pacijenta" help="Sprema pacijenta u lokalnu demo bazu. Ne unosite stvarne OIB-e ili osobne podatke dok real-data readiness nije odobren.">

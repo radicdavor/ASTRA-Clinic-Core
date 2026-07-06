@@ -3,6 +3,7 @@ import { Link, useParams } from "react-router-dom";
 import { api } from "../api/client";
 import { ActionButton } from "../components/ActionButton";
 import { AuditTimeline } from "../components/AuditTimeline";
+import { DateInput } from "../components/DateInput";
 import { DataTable } from "../components/DataTable";
 import { HelpHint } from "../components/HelpHint";
 import { StatusBadge } from "../components/StatusBadge";
@@ -207,7 +208,7 @@ export function EpisodeDetail() {
           <form className="form-grid clinical-plan-edit" onSubmit={savePlanEdit}>
             <label>Status epizode<select value={editDraft.proposed_episode_status} onChange={(event) => setEditDraft({ ...editDraft, proposed_episode_status: event.target.value })}><option value="open">open</option><option value="active">active</option><option value="waiting">waiting</option><option value="completed">completed</option></select></label>
             <label>Sljedeca radnja<input value={editDraft.next_action} onChange={(event) => setEditDraft({ ...editDraft, next_action: event.target.value })} /></label>
-            <label>Rok<input type="date" value={editDraft.due_date} onChange={(event) => setEditDraft({ ...editDraft, due_date: event.target.value })} /></label>
+            <label>Rok<DateInput value={editDraft.due_date} onChange={(value) => setEditDraft({ ...editDraft, due_date: value })} /></label>
             <label>Prioritet<select value={editDraft.priority} onChange={(event) => setEditDraft({ ...editDraft, priority: event.target.value })}><option value="routine">routine</option><option value="important">important</option><option value="urgent">urgent</option></select></label>
             <label className="wide-field">Razlog<textarea value={editDraft.rationale} onChange={(event) => setEditDraft({ ...editDraft, rationale: event.target.value })} rows={3} /></label>
             <label className="wide-field">Predlozeni follow-up<textarea value={editDraft.suggested_follow_up} onChange={(event) => setEditDraft({ ...editDraft, suggested_follow_up: event.target.value })} rows={3} /></label>

@@ -15,6 +15,11 @@ function assertIncludes(file, value) {
   if (!content.includes(value)) throw new Error(`${file} does not include ${value}`);
 }
 
+function assertNotIncludes(file, value) {
+  const content = read(file);
+  if (content.includes(value)) throw new Error(`${file} must not include ${value}`);
+}
+
 function unique(values) {
   return [...new Set(values)];
 }
@@ -34,6 +39,7 @@ function unique(values) {
   "src/components/ToastHost.tsx",
   "src/components/HelpHint.tsx",
   "src/components/ActionButton.tsx",
+  "src/components/DateInput.tsx",
   "src/components/workspace/WorkspaceLayout.tsx",
   "src/components/workspace/WorkspaceHeader.tsx",
   "src/components/workspace/WorkspaceSection.tsx",
@@ -54,6 +60,16 @@ assertIncludes("src/components/AppShell.tsx", "Spremnost");
 assertIncludes("src/components/AppShell.tsx", "Epizode");
 assertIncludes("src/components/ToastHost.tsx", "Radnja je spremljena");
 assertIncludes("src/components/ToastHost.tsx", "Zatvori obavijest");
+assertIncludes("src/components/DateInput.tsx", "dd/mm/yyyy");
+assertIncludes("src/utils/date.ts", "`${match[3]}/${match[2]}/${match[1]}`");
+[
+  "src/pages/PatientForm.tsx",
+  "src/pages/AppointmentForm.tsx",
+  "src/pages/Dashboard.tsx",
+  "src/pages/EpisodeForm.tsx",
+  "src/pages/EpisodeDetail.tsx",
+  "src/pages/PurchaseOrders.tsx",
+].forEach((file) => assertNotIncludes(file, "type=\"date\""));
 assertIncludes("src/api/client.ts", "Pacijent je spremljen.");
 assertIncludes("src/api/client.ts", "Epizoda je spremljena.");
 assertIncludes("src/api/client.ts", "Uplata je evidentirana.");

@@ -3,6 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { api } from "../api/client";
 import { ActionButton } from "../components/ActionButton";
 import { DataTable } from "../components/DataTable";
+import { DateInput } from "../components/DateInput";
 import { StatusBadge, statusLabel } from "../components/StatusBadge";
 import { useApi } from "../hooks/useApi";
 import { Appointment, InventoryItem, Module, Provider, Room, Service } from "../types";
@@ -89,7 +90,7 @@ export function Dashboard() {
           <h1>Danasnji raspored</h1>
           <p>Pacijenti, statusi i operativna upozorenja za odabrani dan.</p>
         </div>
-        <input type="date" value={day} onChange={(event) => setDay(event.target.value)} />
+        <DateInput required value={day} onChange={setDay} />
       </div>
 
       <div className="metrics">

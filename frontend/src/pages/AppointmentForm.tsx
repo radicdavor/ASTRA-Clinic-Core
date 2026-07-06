@@ -2,6 +2,7 @@ import { FormEvent, useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { api } from "../api/client";
 import { ActionButton } from "../components/ActionButton";
+import { DateInput } from "../components/DateInput";
 import { HelpHint } from "../components/HelpHint";
 import { useApi } from "../hooks/useApi";
 import { ClinicalEpisode, Patient, Provider, Room, Service } from "../types";
@@ -131,7 +132,7 @@ export function AppointmentForm() {
         )}
         <label>Lijecnik<select required value={form.provider_id} onChange={(e) => setForm({ ...form, provider_id: e.target.value })}><option value="">Odaberi</option>{providers.data.map((p) => <option key={p.id} value={p.id}>{p.full_name}</option>)}</select></label>
         <label>Soba<select required value={form.room_id} onChange={(e) => setForm({ ...form, room_id: e.target.value })}><option value="">Odaberi</option>{rooms.data.map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}</select></label>
-        <label>Datum<input type="date" value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} /></label>
+        <label>Datum<DateInput required value={form.date} onChange={(value) => setForm({ ...form, date: value })} /></label>
         <label>Pocetak<input type="time" value={form.start_time} onChange={(e) => setForm({ ...form, start_time: e.target.value })} /></label>
         <label>Kraj<input type="time" value={form.end_time} onChange={(e) => setForm({ ...form, end_time: e.target.value })} /></label>
         <label>Trajanje<input type="number" value={form.duration_minutes} onChange={(e) => setForm({ ...form, duration_minutes: Number(e.target.value) })} /></label>
