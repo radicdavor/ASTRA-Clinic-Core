@@ -182,18 +182,20 @@ def main() -> None:
         for values in demo_documents:
             document = db.scalar(select(ClinicalDocument).where(ClinicalDocument.patient_id == patient.id, ClinicalDocument.title == values["title"]))
             reviewed = values.pop("physician_reviewed", True)
+            review_status = "reviewed" if reviewed else "needs_physician_review"
             if document is None:
-                document = ClinicalDocument(patient_id=patient.id, physician_reviewed=reviewed, reviewed_by=None, reviewed_at=datetime.now(timezone.utc) if reviewed else None, **values)
+                document = ClinicalDocument(patient_id=patient.id, review_status=review_status, physician_reviewed=reviewed, reviewed_by=None, reviewed_at=datetime.now(timezone.utc) if reviewed else None, **values)
                 db.add(document)
             else:
                 for field, value in values.items():
                     setattr(document, field, value)
+                document.review_status = review_status
                 document.physician_reviewed = reviewed
                 document.reviewed_at = datetime.now(timezone.utc) if reviewed else None
 
         reviewed_document_ids = [
             document.id
-            for document in db.scalars(select(ClinicalDocument).where(ClinicalDocument.patient_id == patient.id, ClinicalDocument.physician_reviewed.is_(True))).all()
+            for document in db.scalars(select(ClinicalDocument).where(ClinicalDocument.patient_id == patient.id, ClinicalDocument.physician_reviewed.is_(True), ClinicalDocument.review_status == "reviewed")).all()
         ]
         summary = db.scalar(select(PatientClinicalSummaryRecord).where(PatientClinicalSummaryRecord.patient_id == patient.id, PatientClinicalSummaryRecord.status == "reviewed"))
         summary_values = {

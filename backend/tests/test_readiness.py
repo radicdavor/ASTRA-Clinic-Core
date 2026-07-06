@@ -82,6 +82,7 @@ def test_readiness_checks_keep_operational_evidence_contract(client, db, auth_se
         "/api-keys",
         "/clinical-documents",
         "/clinical-documents?physician_reviewed=false",
+        "/clinical-documents?review_status=needs_physician_review",
         "/reception",
         }
 

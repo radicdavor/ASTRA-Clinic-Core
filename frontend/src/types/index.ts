@@ -88,7 +88,7 @@ export type ClinicalDocument = {
   key_findings?: string[] | null;
   recommendations?: string[] | null;
   physician_reviewed: boolean;
-  review_status: "uploaded" | "extraction_pending" | "ai_extracted" | "reviewed" | "summary_rejected";
+  review_status: "draft" | "extracted" | "needs_physician_review" | "reviewed" | "rejected" | "superseded";
   reviewed_by?: number | null;
   reviewed_at?: string | null;
   attachment_path?: string | null;

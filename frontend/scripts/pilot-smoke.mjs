@@ -186,7 +186,7 @@ assertIncludes("src/pages/Reception.tsx", "Oznaci kao pristigao");
 assertIncludes("src/pages/Reception.tsx", "/patients/${selected.patient_id}");
 assertIncludes("src/pages/Reception.tsx", "/appointments/${selected.id}");
 assertIncludes("src/pages/Readiness.tsx", "Nepregledani dokumenti ne ulaze u sluzbeni sazetak pacijenta.");
-assertIncludes("../backend/app/api/routes/core.py", "/clinical-documents?physician_reviewed=false");
+assertIncludes("../backend/app/api/routes/core.py", "/clinical-documents?review_status=needs_physician_review");
 assertIncludes("../backend/app/api/routes/core.py", "patient_summary_stale");
 
 const backendCore = read("../backend/app/api/routes/core.py");

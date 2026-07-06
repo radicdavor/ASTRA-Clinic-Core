@@ -24,19 +24,25 @@ def test_create_extract_review_document_updates_patient_summary(client, db, auth
         },
     )
     assert created.status_code == 200
-    assert created.json()["review_status"] == "extraction_pending"
+    assert created.json()["review_status"] == "draft"
+    assert created.json()["physician_reviewed"] is False
     document_id = created.json()["id"]
 
     summary_before = client.get(f"/api/patients/{p.id}/clinical-summary", headers=headers)
     assert summary_before.status_code == 200
     assert summary_before.json()["generated_from_reviewed_documents"] == 0
-    assert summary_before.json()["awaiting_review_count"] == 1
+    assert summary_before.json()["awaiting_review_count"] == 0
 
     extracted = client.post(f"/api/clinical-documents/{document_id}/extract", headers=headers)
     assert extracted.status_code == 200
     assert extracted.json()["physician_reviewed"] is False
-    assert extracted.json()["review_status"] == "ai_extracted"
+    assert extracted.json()["review_status"] == "needs_physician_review"
     assert extracted.json()["key_findings"]
+
+    summary_after_extraction = client.get(f"/api/patients/{p.id}/clinical-summary", headers=headers)
+    assert summary_after_extraction.status_code == 200
+    assert summary_after_extraction.json()["generated_from_reviewed_documents"] == 0
+    assert summary_after_extraction.json()["awaiting_review_count"] == 1
 
     edited = client.patch(
         f"/api/clinical-documents/{document_id}",
@@ -49,7 +55,7 @@ def test_create_extract_review_document_updates_patient_summary(client, db, auth
     )
     assert edited.status_code == 200
     assert edited.json()["physician_reviewed"] is False
-    assert edited.json()["review_status"] == "ai_extracted"
+    assert edited.json()["review_status"] == "needs_physician_review"
 
     reviewed = client.post(f"/api/clinical-documents/{document_id}/review", headers=headers)
     assert reviewed.status_code == 200
@@ -76,7 +82,7 @@ def test_reject_summary_removes_ai_items_from_patient_summary(client, db, auth_s
     assert rejected.status_code == 200
     assert rejected.json()["physician_reviewed"] is False
     assert rejected.json()["key_findings"] == []
-    assert rejected.json()["review_status"] in {"extraction_pending", "summary_rejected"}
+    assert rejected.json()["review_status"] == "rejected"
 
     summary = client.get(f"/api/patients/{p.id}/clinical-summary", headers=headers)
     assert summary.status_code == 200
@@ -124,6 +130,38 @@ def test_patient_summary_merges_duplicate_items_and_sources(client, db, auth_set
     assert {source["document_id"] for source in matching[0]["sources"]} == {doc_one.id, doc_two.id}
 
 
+def test_patient_summary_requires_reviewed_status_and_compatibility_flag(client, db, auth_setup):
+    headers = auth_headers(client)
+    p = patient(db)
+    inconsistent = clinical_document(db, p, physician_reviewed=True)
+    inconsistent.review_status = "needs_physician_review"
+    db.commit()
+
+    summary = client.get(f"/api/patients/{p.id}/clinical-summary", headers=headers)
+    assert summary.status_code == 200
+    assert summary.json()["generated_from_reviewed_documents"] == 0
+    assert summary.json()["known_problems"] == []
+
+
+def test_updating_raw_or_extracted_fields_resets_review_metadata(client, db, auth_setup):
+    headers = auth_headers(client)
+    p = patient(db)
+    doc = clinical_document(db, p, physician_reviewed=True)
+
+    updated = client.patch(
+        f"/api/clinical-documents/{doc.id}",
+        headers=headers,
+        json={"raw_text": "Novi tekst dokumenta koji zahtijeva ponovni pregled."},
+    )
+
+    assert updated.status_code == 200
+    body = updated.json()
+    assert body["review_status"] == "needs_physician_review"
+    assert body["physician_reviewed"] is False
+    assert body["reviewed_by"] is None
+    assert body["reviewed_at"] is None
+
+
 def test_readiness_deep_links_to_unreviewed_documents(client, db, auth_setup):
     headers = auth_headers(client)
     p = patient(db)
@@ -132,7 +170,7 @@ def test_readiness_deep_links_to_unreviewed_documents(client, db, auth_setup):
     response = client.get("/api/readiness", headers=headers)
     assert response.status_code == 200
     check = next(item for item in response.json()["checks"] if item["key"] == "clinical_documents_review")
-    assert check["target_path"] == "/clinical-documents?physician_reviewed=false"
+    assert check["target_path"] == "/clinical-documents?review_status=needs_physician_review"
     assert check["target_label"] == "Pregledaj dokumente"
 
 

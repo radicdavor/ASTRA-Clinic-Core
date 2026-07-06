@@ -35,11 +35,12 @@ export function sourceTypeLabel(value: string) {
 
 export function reviewStatusLabel(value: ClinicalDocument["review_status"]) {
   const labels: Record<ClinicalDocument["review_status"], string> = {
-    uploaded: "Uploadano",
-    extraction_pending: "Ceka ekstrakciju",
-    ai_extracted: "AI prijedlog",
-    reviewed: "Pregledano",
-    summary_rejected: "Sazetak odbijen"
+    draft: "Draft / izvor zaprimljen",
+    extracted: "AI ekstrakcija izradena",
+    needs_physician_review: "Ceka lijecnicki pregled",
+    reviewed: "Lijecnicki pregledano",
+    rejected: "Odbijeno",
+    superseded: "Zamijenjeno"
   };
   return labels[value] ?? value;
 }
@@ -47,9 +48,10 @@ export function reviewStatusLabel(value: ClinicalDocument["review_status"]) {
 export function ClinicalDocuments() {
   const [params] = useSearchParams();
   const initialPatientId = params.get("patient_id") ?? "";
+  const initialReviewStatus = params.get("review_status") ?? "";
   const initialReview = params.get("physician_reviewed") ?? "";
   const [showUpload, setShowUpload] = useState(Boolean(initialPatientId));
-  const [filter, setFilter] = useState({ q: "", patient_id: initialPatientId, document_type: "", review: initialReview });
+  const [filter, setFilter] = useState({ q: "", patient_id: initialPatientId, document_type: "", review: initialReview, review_status: initialReviewStatus });
   const [patientSearch, setPatientSearch] = useState("");
   const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null);
   const [draft, setDraft] = useState({
@@ -81,6 +83,7 @@ export function ClinicalDocuments() {
     if (filter.patient_id.trim()) next.set("patient_id", filter.patient_id.trim());
     if (filter.document_type) next.set("document_type", filter.document_type);
     if (filter.review) next.set("physician_reviewed", filter.review);
+    if (filter.review_status) next.set("review_status", filter.review_status);
     return `/api/clinical-documents${next.toString() ? `?${next.toString()}` : ""}`;
   }, [filter]);
   const documents = useApi<ClinicalDocument[]>(query, []);
@@ -121,7 +124,14 @@ export function ClinicalDocuments() {
         <input placeholder="Pretrazi dokumente" value={filter.q} onChange={(event) => setFilter({ ...filter, q: event.target.value })} />
         <input placeholder="Patient ID" value={filter.patient_id} onChange={(event) => setFilter({ ...filter, patient_id: event.target.value })} />
         <select value={filter.document_type} onChange={(event) => setFilter({ ...filter, document_type: event.target.value })}><option value="">Svi tipovi</option>{documentTypes.map((type) => <option key={type} value={type}>{documentTypeLabel(type)}</option>)}</select>
-        <select value={filter.review} onChange={(event) => setFilter({ ...filter, review: event.target.value })}><option value="">Svi statusi</option><option value="false">Ceka pregled</option><option value="true">Pregledano</option></select>
+        <select value={filter.review_status} onChange={(event) => setFilter({ ...filter, review_status: event.target.value, review: "" })}>
+          <option value="">Svi statusi pregleda</option>
+          <option value="draft">Draft / izvor zaprimljen</option>
+          <option value="needs_physician_review">Ceka lijecnicki pregled</option>
+          <option value="reviewed">Lijecnicki pregledano</option>
+          <option value="rejected">Odbijeno</option>
+          <option value="superseded">Zamijenjeno</option>
+        </select>
       </div>
 
       {showUpload && (

@@ -75,7 +75,7 @@ export function ClinicalDocumentDetail() {
       <WorkspaceHeader
         title={current.title}
         subtitle={`${documentTypeLabel(current.document_type)} / ${sourceTypeLabel(current.source_type)} / ${formatDate(current.document_date)}`}
-        badge={<span className={`readiness-badge ${current.physician_reviewed ? "readiness-check-ok" : "readiness-check-warning"}`}>{reviewStatusLabel(current.review_status)}</span>}
+        badge={<span className={`readiness-badge ${current.review_status === "reviewed" ? "readiness-check-ok" : "readiness-check-warning"}`}>{reviewStatusLabel(current.review_status)}</span>}
         actions={
           <>
             <ActionButton variant="ai" onClick={runExtraction} helpTitle="AI ekstrakcija" help="Pokrece placeholder ekstrakciju iz teksta. Rezultat nije sluzben dok ga lijecnik ne pregleda.">
@@ -105,7 +105,7 @@ export function ClinicalDocumentDetail() {
       <div className="dashboard-grid">
         <WorkspaceSection title="Strukturirano znanje">
           <div className="clinical-plan-card ai-suggestion">
-            <div><span>AI prijedlog, nije sluzbeno dok lijecnik ne potvrdi</span><strong>{current.physician_reviewed ? "Pregledano i potvrdeno" : "Ceka lijecnicki pregled"}</strong></div>
+            <div><span>AI prijedlog, nije sluzbeno dok lijecnik ne potvrdi</span><strong>{reviewStatusLabel(current.review_status)}</strong></div>
             <label>AI sazetak<textarea rows={4} value={summaryDraft} onChange={(event) => setSummaryDraft(event.target.value)} /></label>
             <label>Kljucni nalazi<textarea rows={5} value={findingsDraft} onChange={(event) => setFindingsDraft(event.target.value)} placeholder="Jedna stavka po retku" /></label>
             <label>Preporuke<textarea rows={5} value={recommendationsDraft} onChange={(event) => setRecommendationsDraft(event.target.value)} placeholder="Jedna stavka po retku" /></label>

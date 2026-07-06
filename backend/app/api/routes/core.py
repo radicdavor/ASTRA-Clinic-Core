@@ -171,6 +171,31 @@ def add_knowledge_item(items: list[PatientKnowledgeItem], text: str | None, docu
     items.append(PatientKnowledgeItem(text=cleaned, sources=[source]))
 
 
+def has_extracted_content(document: ClinicalDocument) -> bool:
+    return bool(document.ai_summary or document.key_findings or document.recommendations)
+
+
+def initial_document_review_status(values: dict) -> str:
+    if values.get("ai_summary") or values.get("key_findings") or values.get("recommendations"):
+        return "needs_physician_review"
+    return "draft"
+
+
+def mark_document_needs_review(document: ClinicalDocument) -> None:
+    document.review_status = "needs_physician_review" if has_extracted_content(document) or document.raw_text else "draft"
+    document.physician_reviewed = False
+    document.reviewed_by = None
+    document.reviewed_at = None
+
+
+def is_official_clinical_document(document: ClinicalDocument) -> bool:
+    return document.physician_reviewed is True and document.review_status == "reviewed"
+
+
+def is_document_awaiting_physician_review(document: ClinicalDocument) -> bool:
+    return document.review_status in {"extracted", "needs_physician_review"}
+
+
 def ten_minute_reception_slots(appointments: list[Appointment]) -> list[ReceptionSlot]:
     by_start = {appointment.start_time.strftime("%H:%M"): appointment for appointment in appointments}
     slots: list[ReceptionSlot] = []
@@ -319,12 +344,12 @@ def readiness(db: Session = Depends(get_db), actor: Actor = Depends(require_perm
     unpaid_invoice_count = scalar_count(db, select(func.count(Invoice.id)).where(Invoice.status != "draft", Invoice.payment_status != "paid"))
     episode_count = scalar_count(db, select(func.count(ClinicalEpisode.id)))
     appointments_without_episode = scalar_count(db, select(func.count(Appointment.id)).where(Appointment.episode_id.is_(None)))
-    documents_awaiting_review = scalar_count(db, select(func.count(ClinicalDocument.id)).where(ClinicalDocument.physician_reviewed.is_(False)))
+    documents_awaiting_review = scalar_count(db, select(func.count(ClinicalDocument.id)).where(ClinicalDocument.review_status.in_(["extracted", "needs_physician_review"])))
     rooms_without_services = scalar_count(db, select(func.count(Room.id)).where(Room.active.is_(True), ~Room.id.in_(select(room_services.c.room_id))))
     services_without_rooms = scalar_count(db, select(func.count(Service.id)).where(Service.active.is_(True), ~Service.id.in_(select(room_services.c.service_id))))
     providers_without_clinic = scalar_count(db, select(func.count(Provider.id)).where(Provider.active.is_(True), Provider.clinic_id.is_(None)))
     today_incomplete_appointments = scalar_count(db, select(func.count(Appointment.id)).where(Appointment.date == today, or_(Appointment.provider_id.is_(None), Appointment.room_id.is_(None), Appointment.service_id.is_(None))))
-    reviewed_documents = db.scalars(select(ClinicalDocument).where(ClinicalDocument.physician_reviewed.is_(True))).all()
+    reviewed_documents = db.scalars(select(ClinicalDocument).where(ClinicalDocument.physician_reviewed.is_(True), ClinicalDocument.review_status == "reviewed")).all()
     reviewed_summaries = db.scalars(select(PatientClinicalSummaryRecord).where(PatientClinicalSummaryRecord.status == "reviewed")).all()
     reviewed_summary_by_patient = {summary.patient_id: summary for summary in reviewed_summaries}
     stale_summary_patients = {
@@ -387,7 +412,7 @@ def readiness(db: Session = Depends(get_db), actor: Actor = Depends(require_perm
             message=f"Postoje dokumenti koji cekaju lijecnicki pregled ({documents_awaiting_review})." if documents_awaiting_review > 0 else "Nema klinickih dokumenata koji cekaju pregled.",
             count=documents_awaiting_review,
             action="Pregledati dokumente i potvrditi samo provjerene sazetke." if documents_awaiting_review > 0 else None,
-            target_path="/clinical-documents?physician_reviewed=false",
+            target_path="/clinical-documents?review_status=needs_physician_review",
             target_label="Pregledaj dokumente",
             decision_impact="review" if documents_awaiting_review > 0 else "none",
             severity_reason="Dokumenti bez pregleda ne ulaze u sluzbeni sazetak pacijenta." if documents_awaiting_review > 0 else None,
@@ -725,6 +750,7 @@ def list_clinical_documents(
     document_type: str | None = None,
     source_type: str | None = None,
     physician_reviewed: bool | None = None,
+    review_status: str | None = None,
     q: str | None = None,
     db: Session = Depends(get_db),
     actor: Actor = Depends(require_permission("clinical_documents.read")),
@@ -738,6 +764,8 @@ def list_clinical_documents(
         stmt = stmt.where(ClinicalDocument.source_type == source_type)
     if physician_reviewed is not None:
         stmt = stmt.where(ClinicalDocument.physician_reviewed.is_(physician_reviewed))
+    if review_status:
+        stmt = stmt.where(ClinicalDocument.review_status == review_status)
     if q:
         like = f"%{q}%"
         stmt = stmt.where(or_(ClinicalDocument.title.ilike(like), ClinicalDocument.origin.ilike(like), ClinicalDocument.institution.ilike(like), ClinicalDocument.raw_text.ilike(like), ClinicalDocument.ai_summary.ilike(like)))
@@ -752,7 +780,8 @@ def create_clinical_document(
     actor: Actor = Depends(require_permission("clinical_documents.write")),
 ):
     validate_document_links(db, payload.patient_id, payload.appointment_id)
-    document = ClinicalDocument(**payload.model_dump())
+    values = payload.model_dump()
+    document = ClinicalDocument(**values, review_status=initial_document_review_status(values), physician_reviewed=False)
     db.add(document)
     db.flush()
     audit(db, "create", "ClinicalDocument", document.id, f"Dodan klinicki dokument: {document.title}", actor.user_id, actor.actor_type, actor.api_key_id, None, snapshot(document), request)
@@ -795,6 +824,8 @@ def upload_clinical_document(
         raw_text=payload.raw_text,
         attachment_path=attachment_path,
         appointment_id=payload.appointment_id,
+        review_status="draft",
+        physician_reviewed=False,
     )
     db.add(document)
     db.flush()
@@ -834,9 +865,9 @@ def update_clinical_document(
     validate_document_links(db, update_data.get("patient_id", document.patient_id), update_data.get("appointment_id", document.appointment_id))
     before = snapshot(document)
     patch_model(document, update_data)
-    document.physician_reviewed = False
-    document.reviewed_by = None
-    document.reviewed_at = None
+    review_reset_fields = {"raw_text", "ai_summary", "key_findings", "recommendations"}
+    if review_reset_fields.intersection(update_data):
+        mark_document_needs_review(document)
     db.flush()
     extraction_fields = {"ai_summary", "key_findings", "recommendations"}
     action = "ai_document_extraction_edited" if extraction_fields.intersection(update_data) else "update"
@@ -857,6 +888,7 @@ def extract_clinical_document(
     document = get_document_or_404(db, document_id)
     before = snapshot(document)
     patch_model(document, extract_document_knowledge(document))
+    document.review_status = "needs_physician_review"
     document.physician_reviewed = False
     document.reviewed_by = None
     document.reviewed_at = None
@@ -878,6 +910,7 @@ def review_clinical_document(
     before = snapshot(document)
     if document.ai_summary is None and (document.raw_text or document.key_findings or document.recommendations):
         patch_model(document, extract_document_knowledge(document))
+    document.review_status = "reviewed"
     document.physician_reviewed = True
     document.reviewed_by = actor.user_id
     document.reviewed_at = datetime.now(timezone.utc)
@@ -900,6 +933,7 @@ def reject_clinical_document_summary(
     document.ai_summary = None
     document.key_findings = []
     document.recommendations = []
+    document.review_status = "rejected"
     document.physician_reviewed = False
     document.reviewed_by = None
     document.reviewed_at = None
@@ -922,11 +956,12 @@ def patient_clinical_summary(patient_id: int, db: Session = Depends(get_db), act
     if not db.get(Patient, patient_id):
         raise HTTPException(404, detail="Pacijent nije pronaden")
     documents = db.scalars(select(ClinicalDocument).where(ClinicalDocument.patient_id == patient_id).order_by(ClinicalDocument.document_date.desc().nulls_last(), ClinicalDocument.id.desc())).all()
-    reviewed = [document for document in documents if document.physician_reviewed]
+    reviewed = [document for document in documents if is_official_clinical_document(document)]
+    awaiting_review_count = len([document for document in documents if is_document_awaiting_physician_review(document)])
     summary = PatientClinicalSummary(
         patient_id=patient_id,
         generated_from_reviewed_documents=len(reviewed),
-        awaiting_review_count=len(documents) - len(reviewed),
+        awaiting_review_count=awaiting_review_count,
         reviewed_summary=latest_patient_summary_record(db, patient_id, ["reviewed"]),
         draft_summary=latest_patient_summary_record(db, patient_id, ["draft_ai", "needs_review", "stale"]),
         known_problems=[],
@@ -976,7 +1011,7 @@ def generate_patient_clinical_summary_draft(
 ):
     if not db.get(Patient, patient_id):
         raise HTTPException(404, detail="Pacijent nije pronaden")
-    reviewed = db.scalars(select(ClinicalDocument).where(ClinicalDocument.patient_id == patient_id, ClinicalDocument.physician_reviewed.is_(True)).order_by(ClinicalDocument.document_date.desc().nulls_last(), ClinicalDocument.id.desc())).all()
+    reviewed = db.scalars(select(ClinicalDocument).where(ClinicalDocument.patient_id == patient_id, ClinicalDocument.physician_reviewed.is_(True), ClinicalDocument.review_status == "reviewed").order_by(ClinicalDocument.document_date.desc().nulls_last(), ClinicalDocument.id.desc())).all()
     values = summary_record_from_documents(patient_id, reviewed)
     record = PatientClinicalSummaryRecord(**values)
     db.add(record)

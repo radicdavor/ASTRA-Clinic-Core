@@ -91,7 +91,7 @@ AI support je placeholder:
 | `Service` | `Service` model, `/api/services`, `Services.tsx` | Implemented | Katalog usluga s duration/price/module. | Specialty procedure semantics nisu formalizirane. |
 | `Provider` | `Provider` model, `/api/providers` | Implemented | Provider/staff role i clinic link postoje. | Granice physician vs nurse/admin confirmation treba formalizirati. |
 | `Room` | `Room` model, `/api/rooms`, room-services relation | Implemented | Resurs rasporeda. | Napredna resource capability pravila nisu dio Program 1. |
-| `ClinicalDocument` | `ClinicalDocument` model/schemas/routes/pages | Implemented | Source object za patient knowledge. | Lifecycle treba hardening; attachment/OCR su placeholderi. |
+| `ClinicalDocument` | `ClinicalDocument` model/schemas/routes/pages | Implemented | Source object za patient knowledge; `review_status` eksplicitno prati draft/needs review/reviewed/rejected lifecycle, a `physician_reviewed` ostaje compatibility field. | Attachment/OCR su placeholderi; supersede workflow nije implementiran. |
 | `Finding` | `key_findings` JSON na `ClinicalDocument` i summary itemi | Partially implemented | Nije zaseban object; može se zamijeniti s raw documentom. | Odlučiti ostaje li derived output ili postaje objekt. |
 | `Internal ClinicalDocument` | `source_type=internal` | Implemented | Podržano u schema validaciji i UI labelama. | Interni Medical Note/Procedure Report nisu formalni outputi. |
 | `External ClinicalDocument` | `source_type=external/scanned/uploaded` | Implemented | Vanjski dokumenti su first-class source inputs. | File storage/OCR nisu stvarni provider. |
@@ -160,7 +160,7 @@ AI support je placeholder:
 | `Appointment` | `Appointment` | Time/resource object s patient/service/provider/room/status. | Aligned | Dodati Clinical Readiness Gate kasnije bez pretvaranja termina u epizodu. |
 | `ClinicalEpisode` | `Clinical Episode` | Implementirani epizodni objekt. | Partially aligned / deferred | Ostaje compatibility/deferred; ne primary workflow. |
 | `ClinicalPlan` | `ClinicalPlan` | Episode-bound plan suggestion/confirmation model. | Partially aligned | Ne tretirati kao full workflow engine; razmotriti patient-level context kasnije. |
-| `ClinicalDocument` | `ClinicalDocument`, `Source Object` | Source object za patient knowledge. | Aligned | OCR/file storage/lifecycle hardening. |
+| `ClinicalDocument` | `ClinicalDocument`, `Source Object` | Source object za patient knowledge. | Aligned | `review_status` hardening postoji; OCR/file storage i supersede workflow ostaju future. |
 | `PatientClinicalSummaryRecord` | `Patient Clinical Summary` | Summary view/draft/review record. | Aligned with caution | Dokumentirati da nije source of truth. |
 | `Service` | `Service` | Katalog usluga. | Aligned | Procedure/treatment semantics tek kasnije. |
 | `Provider` | `Provider` | Pružatelj usluge i potencijalni physician owner. | Aligned | Confirmation role granice. |
@@ -358,7 +358,7 @@ AI support je placeholder:
 | `key_findings` | `ClinicalDocument`, `PatientClinicalSummaryRecord`, frontend types | Može se zamijeniti s future `Finding` objectom. | Pojasniti da su to extracted/reviewed strings, ne zaseban Finding object. |
 | `PatientClinicalSummaryRecord` | `domain.py`, summary routes | Može se pogrešno shvatiti kao source of truth. | U docs/API opisima naglasiti summary view, source truth je source-linked knowledge. |
 | `ai_summary`, `generated_by=ai_placeholder` | ClinicalDocument/summary logic | Može zvučati kao real AI provider. | U UI/docs koristiti `AI placeholder draft` dok nema real providera. |
-| `review_status` values `ai_extracted`, `summary_rejected` | `ClinicalDocumentOut` | Lokalni lifecycle nije usklađen s global AI Suggestion lifecycleom. | U sljedećem planu mapirati na `AI Suggestion` statuses. |
+| `review_status` | `ClinicalDocument` | Eksplicitni lifecycle sada koristi `draft`, `extracted`, `needs_physician_review`, `reviewed`, `rejected`, `superseded`; `physician_reviewed` ostaje compatibility field. | Buduci task moze dodati supersede workflow ako audit pokaze potrebu. |
 | `close_episode` | `/episodes/{id}/close` | Može djelovati kao formal Episode Closure. | Dokumentirati kao simple compatibility close, ne full closure. |
 | `findings` form field in EpisodeDetail plan generation | `EpisodeDetail.tsx` | Uneseni tekst može se zamijeniti s reviewed Findingom. | Buduće labeliranje: `procedure_findings_text` ili "tekst nalaza za prijedlog". |
 | `complete-with-consumption` | Appointment material route | Može spojiti completion i clinical outcome. | Jasno dokumentirati kao operational appointment/material completion. |

@@ -14,7 +14,7 @@ import { useApi } from "../hooks/useApi";
 import { Appointment, AuditLog, ClinicalDocument, Invoice, Patient, PatientClinicalSummary, PatientClinicalSummaryRecord, PatientKnowledgeItem } from "../types";
 import { formatDate, formatDateTime } from "../utils/date";
 import { formatPatientIdentity, formatPatientName } from "../utils/patientIdentity";
-import { documentTypeLabel, sourceTypeLabel } from "./ClinicalDocuments";
+import { documentTypeLabel, reviewStatusLabel, sourceTypeLabel } from "./ClinicalDocuments";
 
 function KnowledgeCard({ title, items }: { title: string; items: PatientKnowledgeItem[] }) {
   return (
@@ -70,8 +70,8 @@ export function PatientDetail() {
   const today = new Date().toISOString().slice(0, 10);
   const lastAppointment = [...sortedAppointments].reverse().find((appointment) => appointment.date <= today);
   const nextAppointment = sortedAppointments.find((appointment) => appointment.date >= today && !["completed", "cancelled", "no_show"].includes(appointment.status));
-  const reviewedDocuments = documents.data.filter((document) => document.physician_reviewed);
-  const awaitingReview = documents.data.filter((document) => !document.physician_reviewed);
+  const reviewedDocuments = documents.data.filter((document) => document.physician_reviewed && document.review_status === "reviewed");
+  const awaitingReview = documents.data.filter((document) => ["extracted", "needs_physician_review"].includes(document.review_status));
   const internalDocuments = documents.data.filter((document) => document.source_type === "internal");
   const externalDocuments = documents.data.filter((document) => ["external", "uploaded", "scanned"].includes(document.source_type));
   const procedures = documents.data.filter((document) => ["gastroscopy", "colonoscopy"].includes(document.document_type));
@@ -113,7 +113,7 @@ export function PatientDetail() {
     { header: "Datum", render: (row: ClinicalDocument) => formatDate(row.document_date) },
     { header: "Tip", render: (row: ClinicalDocument) => documentTypeLabel(row.document_type) },
     { header: "Izvor", render: (row: ClinicalDocument) => sourceTypeLabel(row.source_type) },
-    { header: "Pregled", render: (row: ClinicalDocument) => row.physician_reviewed ? "Pregledano" : "Ceka pregled" }
+    { header: "Pregled", render: (row: ClinicalDocument) => reviewStatusLabel(row.review_status) }
   ];
 
   if (patient.loading || !patient.data) {

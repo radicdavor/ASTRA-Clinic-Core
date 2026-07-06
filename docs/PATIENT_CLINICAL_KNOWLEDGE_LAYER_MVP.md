@@ -10,10 +10,11 @@ Status: implemented foundation with hardening
 - AI extraction placeholder for summary, findings and recommendations.
 - Editable extraction review before physician confirmation.
 - Physician review and summary rejection.
+- Explicit ClinicalDocument `review_status` with `physician_reviewed` retained for compatibility.
 - Patient Workspace clinical knowledge summary and right sidebar.
 - Source badges from every summary item to the original document.
 - Documents awaiting review warning in readiness.
-- Deep link from readiness to `/clinical-documents?physician_reviewed=false`.
+- Deep link from readiness to `/clinical-documents?review_status=needs_physician_review`.
 
 ## What Is Placeholder
 
@@ -35,6 +36,8 @@ The physician can edit:
 After confirmation, the document becomes eligible for the official Patient Clinical Summary.
 
 Rejecting the summary removes extracted structured items from official knowledge.
+
+Official knowledge requires `review_status=reviewed` and `physician_reviewed=true`. Draft, needs-review, rejected and superseded documents do not feed the official patient knowledge view.
 
 ## Source Rule
 

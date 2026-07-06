@@ -1,6 +1,6 @@
 # Program 1 - Phase A: Patient Knowledge Stabilization Plan
 
-Status: implementacijski plan, bez implementacije
+Status: implementacijski plan; Phase A1 djelomicno implementiran
 
 ## 1. Svrha
 
@@ -405,11 +405,18 @@ Suggested statuses:
 - `rejected`
 - `superseded`
 
+Current implementation:
+
+- `review_status` postoji na `ClinicalDocument`.
+- `physician_reviewed` je zadrzan kao compatibility field.
+- Official Patient Clinical Knowledge zahtijeva oba uvjeta: `review_status=reviewed` i `physician_reviewed=true`.
+- AI extraction ostaje deterministicki placeholder, nije stvarni AI/OCR provider.
+
 Relationship to current `physician_reviewed: bool`:
 
 - `physician_reviewed=True` približno odgovara `reviewed`.
-- `physician_reviewed=False` trenutno pokriva više značenja: draft, extracted, needs review, rejected.
-- Future schema change bi vjerojatno bio potreban za eksplicitni status.
+- `physician_reviewed=False` ostaje kompatibilni signal za ne-pregledano stanje, ali lifecycle se cita iz `review_status`.
+- Future schema change moze ukloniti compatibility boolean tek kad je sigurno za API klijente.
 
 ### AI extraction status
 

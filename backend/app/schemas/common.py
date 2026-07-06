@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import date as DateType, datetime as DateTimeType, time as TimeType
 from decimal import Decimal
 
-from pydantic import BaseModel, ConfigDict, EmailStr, computed_field, field_validator
+from pydantic import BaseModel, ConfigDict, EmailStr, field_validator
 
 
 EPISODE_STATUSES = {"open", "active", "waiting", "completed", "cancelled", "archived"}
@@ -25,6 +25,7 @@ CLINICAL_PLAN_NEXT_ACTIONS = {
 }
 CLINICAL_DOCUMENT_SOURCE_TYPES = {"internal", "external", "scanned", "uploaded"}
 CLINICAL_DOCUMENT_TYPES = {"consultation", "gastroscopy", "colonoscopy", "pathology", "laboratory", "radiology", "discharge", "referral", "other"}
+CLINICAL_DOCUMENT_REVIEW_STATUSES = {"draft", "extracted", "needs_physician_review", "reviewed", "rejected", "superseded"}
 
 
 class ORMModel(BaseModel):
@@ -414,6 +415,7 @@ class ClinicalDocumentUpdate(BaseModel):
 
 class ClinicalDocumentOut(ClinicalDocumentBase, ORMModel):
     id: int
+    review_status: str
     physician_reviewed: bool
     reviewed_by: int | None = None
     reviewed_at: DateTimeType | None = None
@@ -421,18 +423,12 @@ class ClinicalDocumentOut(ClinicalDocumentBase, ORMModel):
     created_at: DateTimeType
     updated_at: DateTimeType
 
-    @computed_field
-    @property
-    def review_status(self) -> str:
-        if self.physician_reviewed:
-            return "reviewed"
-        if not self.ai_summary and not self.key_findings and not self.recommendations:
-            if self.raw_text:
-                return "extraction_pending"
-            return "uploaded"
-        if self.raw_text and not self.ai_summary and self.key_findings == [] and self.recommendations == []:
-            return "summary_rejected"
-        return "ai_extracted"
+    @field_validator("review_status")
+    @classmethod
+    def validate_review_status(cls, value: str) -> str:
+        if value not in CLINICAL_DOCUMENT_REVIEW_STATUSES:
+            raise ValueError("Nepoznat status pregleda dokumenta")
+        return value
 
 
 class PatientKnowledgeSource(BaseModel):

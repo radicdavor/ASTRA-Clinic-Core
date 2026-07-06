@@ -112,6 +112,7 @@ def clinical_document(db, patient_obj=None, physician_reviewed=True):
         key_findings=["GERB/refluks naveden u dokumentu", "H. pylori status naveden u dokumentu"],
         recommendations=["Kontrola prema odluci lijecnika"],
         physician_reviewed=physician_reviewed,
+        review_status="reviewed" if physician_reviewed else "needs_physician_review",
     )
     db.add(obj)
     db.flush()

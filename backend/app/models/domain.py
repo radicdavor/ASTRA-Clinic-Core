@@ -195,6 +195,7 @@ class ClinicalDocument(TimestampMixin, Base):
     ai_summary: Mapped[str | None] = mapped_column(Text)
     key_findings: Mapped[list | None] = mapped_column(JSON)
     recommendations: Mapped[list | None] = mapped_column(JSON)
+    review_status: Mapped[str] = mapped_column(String(40), default="draft", index=True)
     physician_reviewed: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
     reviewed_by: Mapped[int | None] = mapped_column(ForeignKey("users.id"))
     reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

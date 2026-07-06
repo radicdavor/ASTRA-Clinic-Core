@@ -60,6 +60,17 @@ Only after review may the document contribute to the official patient summary.
 
 Rejecting a summary keeps it out of official patient knowledge.
 
+ClinicalDocument now stores an explicit `review_status` lifecycle:
+
+- `draft`
+- `extracted`
+- `needs_physician_review`
+- `reviewed`
+- `rejected`
+- `superseded`
+
+`physician_reviewed` remains as a compatibility field. Official Patient Clinical Knowledge requires both `review_status=reviewed` and `physician_reviewed=true`.
+
 ## 6. Official Patient Knowledge
 
 Official patient knowledge is generated only from reviewed Clinical Documents.

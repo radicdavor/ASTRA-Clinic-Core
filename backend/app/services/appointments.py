@@ -59,8 +59,8 @@ def validate_appointment_payload(
         if not provider:
             raise HTTPException(status_code=404, detail="Lijecnik nije pronaden")
         allowed = db.scalar(select(room_services.c.room_id).where(room_services.c.room_id == room_id, room_services.c.service_id == service_id).limit(1))
-        any_room_rules = db.scalar(select(room_services.c.room_id).where(room_services.c.service_id == service_id).limit(1))
-        if any_room_rules and not allowed:
+        room_has_service_rules = db.scalar(select(room_services.c.service_id).where(room_services.c.room_id == room_id).limit(1))
+        if room_has_service_rules and not allowed:
             raise HTTPException(status_code=409, detail="Usluga nije dopustena u odabranoj sobi")
         if room.clinic_id and provider.clinic_id and room.clinic_id != provider.clinic_id:
             raise HTTPException(status_code=409, detail="Lijecnik i soba nisu u istoj klinici")
