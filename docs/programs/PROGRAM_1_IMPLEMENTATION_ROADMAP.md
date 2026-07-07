@@ -436,6 +436,14 @@ Phase B35 update:
 - B35 ne uvodi endpoint, frontend UI, approval, clearance, Outcome Evidence ili Task engine
 - recommended next task je `Program 1 Phase B36 - Snapshot Permission UX and Error Wording Review`
 
+Phase B36 update:
+
+- stabilizirani su capture/supersession permission i helper tekstovi
+- UI naglasava da je snapshot saved preview record, nije klinicko odobrenje i ne mijenja termin
+- smoke test cuva safe wording i forbidden wording absence
+- B36 ne uvodi nove UI akcije ili backend ponasanje
+- recommended next task je `Program 1 Phase B37 - Snapshot CI Gate Documentation and Script Review`
+
 ## 5. Faza 2 - Findings Lifecycle Foundation
 
 Cilj:

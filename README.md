@@ -136,6 +136,7 @@ Pilot documents:
 - [Program 1 Phase B34 Snapshot Backup Restore Consistency Runbook](docs/programs/PROGRAM_1_PHASE_B34_SNAPSHOT_BACKUP_RESTORE_CONSISTENCY_RUNBOOK.md)
 - [Program 1 Phase B34 regression notes](docs/programs/PROGRAM_1_PHASE_B34_REGRESSION_NOTES.md)
 - [Program 1 Phase B35 regression notes](docs/programs/PROGRAM_1_PHASE_B35_REGRESSION_NOTES.md)
+- [Program 1 Phase B36 regression notes](docs/programs/PROGRAM_1_PHASE_B36_REGRESSION_NOTES.md)
 - [Lokalni LAN pristup](docs/LAN_ACCESS.md)
 - [Program 1 audit event naming](docs/programs/PROGRAM_1_AUDIT_EVENT_NAMING.md)
 - [Program 1 Phase A regression notes](docs/programs/PROGRAM_1_PHASE_A_REGRESSION_NOTES.md)

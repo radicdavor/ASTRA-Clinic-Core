@@ -206,7 +206,7 @@ export function AppointmentDetail() {
     } catch (err) {
       const detail = err instanceof Error ? err.message : "";
       const permissionError = ["403", "forbidden", "permission", "dozvol", "prava"].some((fragment) => detail.toLowerCase().includes(fragment));
-      setSnapshotCaptureError(permissionError ? "Nemate dozvolu za spremanje snapshotova." : "Snapshot nije spremljen. Provjerite dozvole ili pokusajte ponovno.");
+      setSnapshotCaptureError(permissionError ? "Nemate dozvolu za spremanje snapshot zapisa." : "Snapshot zapis nije spremljen. Provjerite dozvole ili pokusajte ponovno.");
     } finally {
       setSnapshotCaptureSaving(false);
     }
@@ -271,7 +271,7 @@ export function AppointmentDetail() {
     } catch (err) {
       const detail = err instanceof Error ? err.message : "";
       const permissionError = ["403", "forbidden", "permission", "dozvol", "prava"].some((fragment) => detail.toLowerCase().includes(fragment));
-      setSnapshotSupersedeError(permissionError ? "Nemate dozvolu za zamjenu snapshotova." : "Snapshot nije zamijenjen. Provjerite dozvole ili pokusajte ponovno.");
+      setSnapshotSupersedeError(permissionError ? "Nemate dozvolu za oznacavanje snapshot zapisa kao zamijenjenog." : "Snapshot nije zamijenjen. Provjerite dozvole ili pokusajte ponovno.");
     } finally {
       setSnapshotSupersedeSaving(false);
     }
@@ -418,7 +418,7 @@ export function AppointmentDetail() {
         <div className="modal-backdrop" role="presentation">
           <div className="modal-panel" role="dialog" aria-modal="true" aria-labelledby="snapshot-capture-title">
             <h2 id="snapshot-capture-title">Spremi snapshot Clinical Readiness Previewa</h2>
-            <p className="helper-text">Snapshot sprema trenutni server-side preview kao trajni zapis prikaza. Ne predstavlja odobrenje postupka, klinicku propusnicu, formalni dokaz ishoda, zaobilazenje upozorenja ili klinicku odluku.</p>
+            <p className="helper-text">Snapshot zapis je spremljeni preview zapis. Nije klinicko odobrenje, ne mijenja status termina i ne salje poruku pacijentu.</p>
             <form onSubmit={captureSnapshot}>
               <label>
                 Razlog spremanja snapshota
@@ -439,7 +439,7 @@ export function AppointmentDetail() {
         <div className="modal-backdrop" role="presentation">
           <div className="modal-panel" role="dialog" aria-modal="true" aria-labelledby="snapshot-supersede-title">
             <h2 id="snapshot-supersede-title">Zamijeni snapshot novim preview zapisom</h2>
-            <p className="helper-text">Ova radnja sprema novi snapshot trenutnog server-side previewa i oznacava stari snapshot kao zamijenjen novijim preview zapisom. Ne predstavlja odobrenje postupka, klinicku propusnicu, formalni dokaz ishoda, zaobilazenje upozorenja ili klinicku odluku.</p>
+            <p className="helper-text">Ova radnja sprema novi snapshot trenutnog server-side previewa i oznacava stari snapshot kao zamijenjen novijim preview zapisom. Zamjena ne mijenja stari sadrzaj i nije klinicko odobrenje.</p>
             <form onSubmit={supersedeSnapshot}>
               <label>
                 Razlog zamjene snapshota
