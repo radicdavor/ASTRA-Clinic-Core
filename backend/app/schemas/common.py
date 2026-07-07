@@ -443,6 +443,22 @@ class ClinicalDocumentOut(ClinicalDocumentBase, ORMModel):
         return value
 
 
+class ClinicalEvidenceTimelineItem(BaseModel):
+    id: int
+    action: str
+    object_type: str
+    object_id: int | None = None
+    message: str | None = None
+    actor_type: str | None = None
+    actor_user_id: int | None = None
+    actor_api_key_id: int | None = None
+    created_at: DateTimeType
+    clinical_event_category: str
+    clinical_event_label: str
+    knowledge_impact: str
+    is_clinical_evidence_event: bool
+
+
 class PatientKnowledgeSource(BaseModel):
     document_id: int
     title: str

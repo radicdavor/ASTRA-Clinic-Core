@@ -11,8 +11,9 @@ from app.auth.dependencies import Actor, require_permission
 from app.core.config import get_settings
 from app.core.database import get_db
 from app.models.domain import ApiKey, Appointment, AuditLog, Clinic, ClinicalDocument, ClinicalEpisode, ClinicalPlan, InventoryBatch, InventoryItem, Invoice, Module, Patient, PatientClinicalSummaryRecord, Provider, Room, Service, room_services
-from app.schemas.common import AppointmentCreate, AppointmentOut, AppointmentUpdate, ClinicOut, ClinicalDecisionTimelineItem, ClinicalDocumentCreate, ClinicalDocumentOut, ClinicalDocumentUpdate, ClinicalDocumentUpload, ClinicalEpisodeCreate, ClinicalEpisodeOut, ClinicalEpisodeUpdate, ClinicalPlanGenerate, ClinicalPlanOut, ClinicalPlanUpdate, ErrorResponse, InvoiceOut, PatientClinicalSummary, PatientClinicalSummaryRecordOut, PatientClinicalSummaryRecordUpdate, PatientCreate, PatientOut, PatientUpdate, ReadinessCheck, ReadinessOut, ReceptionArrivalRequest, ReceptionSlot, ServiceCreate, ServiceOut
+from app.schemas.common import AppointmentCreate, AppointmentOut, AppointmentUpdate, ClinicOut, ClinicalDecisionTimelineItem, ClinicalDocumentCreate, ClinicalDocumentOut, ClinicalDocumentUpdate, ClinicalDocumentUpload, ClinicalEpisodeCreate, ClinicalEpisodeOut, ClinicalEpisodeUpdate, ClinicalEvidenceTimelineItem, ClinicalPlanGenerate, ClinicalPlanOut, ClinicalPlanUpdate, ErrorResponse, InvoiceOut, PatientClinicalSummary, PatientClinicalSummaryRecordOut, PatientClinicalSummaryRecordUpdate, PatientCreate, PatientOut, PatientUpdate, ReadinessCheck, ReadinessOut, ReceptionArrivalRequest, ReceptionSlot, ServiceCreate, ServiceOut
 from app.services.appointments import validate_appointment_payload
+from app.services.clinical_evidence_timeline import classify_audit_log
 from app.services.patient_knowledge import DOCUMENT_REVIEW_AWAITING_STATUSES, GENERIC_OPEN_QUESTION_TEXT, add_knowledge_item, contains_unresolved_language, is_document_awaiting_physician_review, is_official_clinical_document, latest_patient_summary_record, latest_reviewed_document_updated_at, latest_summary_records_by_patient, official_patient_documents_statement, summary_record_from_documents, summary_record_is_stale
 
 ERROR_RESPONSES = {400: {"model": ErrorResponse}, 401: {"model": ErrorResponse}, 403: {"model": ErrorResponse}, 404: {"model": ErrorResponse}, 409: {"model": ErrorResponse}, 422: {"model": ErrorResponse}}
@@ -795,6 +796,33 @@ def search_clinical_documents(q: str, db: Session = Depends(get_db), actor: Acto
 @router.get("/clinical-documents/{document_id}", response_model=ClinicalDocumentOut)
 def get_clinical_document(document_id: int, db: Session = Depends(get_db), actor: Actor = Depends(require_permission("clinical_documents.read"))):
     return get_document_or_404(db, document_id)
+
+
+@router.get("/clinical-documents/{document_id}/evidence-timeline", response_model=list[ClinicalEvidenceTimelineItem])
+def clinical_document_evidence_timeline(document_id: int, db: Session = Depends(get_db), actor: Actor = Depends(require_permission("clinical_documents.read"))):
+    get_document_or_404(db, document_id)
+    logs = db.scalars(select(AuditLog).where(AuditLog.entity_type == "ClinicalDocument", AuditLog.entity_id == document_id).order_by(AuditLog.created_at.desc(), AuditLog.id.desc())).all()
+    items: list[ClinicalEvidenceTimelineItem] = []
+    for log in logs:
+        classification = classify_audit_log(log)
+        items.append(
+            ClinicalEvidenceTimelineItem(
+                id=log.id,
+                action=log.action,
+                object_type=log.entity_type,
+                object_id=log.entity_id,
+                message=log.summary,
+                actor_type=log.actor_type,
+                actor_user_id=log.actor_user_id,
+                actor_api_key_id=log.actor_api_key_id,
+                created_at=log.created_at,
+                clinical_event_category=classification.clinical_event_category,
+                clinical_event_label=classification.clinical_event_label,
+                knowledge_impact=classification.knowledge_impact,
+                is_clinical_evidence_event=classification.is_clinical_evidence_event,
+            )
+        )
+    return items
 
 
 @router.patch("/clinical-documents/{document_id}", response_model=ClinicalDocumentOut)

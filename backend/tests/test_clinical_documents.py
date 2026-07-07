@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from app.models.domain import PatientClinicalSummaryRecord
+from app.models.domain import AuditLog, PatientClinicalSummaryRecord
 from tests.conftest import login_token
 from tests.factories import appointment, clinical_document, patient
 
@@ -247,6 +247,61 @@ def test_rejected_and_superseded_document_details_remain_visible_but_not_officia
     summary = client.get(f"/api/patients/{p.id}/clinical-summary", headers=headers)
     assert summary.status_code == 200
     assert_no_official_knowledge(summary.json())
+
+
+def test_clinical_document_evidence_timeline_returns_classified_document_events(client, db, auth_setup):
+    headers = auth_headers(client)
+    p = patient(db)
+    created = client.post(
+        "/api/clinical-documents",
+        headers=headers,
+        json={
+            "patient_id": p.id,
+            "source_type": "external",
+            "document_type": "gastroscopy",
+            "origin": "Vanjska ustanova",
+            "document_date": "2026-07-05",
+            "title": "Evidence timeline dokument",
+            "raw_text": "GERB refluks. H. pylori negativan.",
+        },
+    )
+    assert created.status_code == 200
+    document_id = created.json()["id"]
+
+    extracted = client.post(f"/api/clinical-documents/{document_id}/extract", headers=headers)
+    assert extracted.status_code == 200
+    reviewed = client.post(f"/api/clinical-documents/{document_id}/review", headers=headers)
+    assert reviewed.status_code == 200
+    rejected = client.post(f"/api/clinical-documents/{document_id}/reject-summary", headers=headers)
+    assert rejected.status_code == 200
+    db.add(AuditLog(action="update", entity_type="Patient", entity_id=p.id, summary="Ne pripada timelineu dokumenta"))
+    db.commit()
+
+    response = client.get(f"/api/clinical-documents/{document_id}/evidence-timeline", headers=headers)
+    assert response.status_code == 200
+    body = response.json()
+    actions = [item["action"] for item in body]
+    assert actions == ["ai_document_summary_rejected", "clinical_document_reviewed", "ai_document_extracted", "create"]
+    assert [item["id"] for item in body] == sorted([item["id"] for item in body], reverse=True)
+    assert all(item["object_type"] == "ClinicalDocument" for item in body)
+    assert all(item["object_id"] == document_id for item in body)
+    assert "update" not in actions
+
+    extracted_item = next(item for item in body if item["action"] == "ai_document_extracted")
+    assert extracted_item["clinical_event_category"] == "ai_extraction"
+    assert extracted_item["clinical_event_label"] == "AI prijedlog generiran"
+    assert extracted_item["knowledge_impact"] == "no_official_knowledge_impact"
+
+    reviewed_item = next(item for item in body if item["action"] == "clinical_document_reviewed")
+    assert reviewed_item["clinical_event_category"] == "physician_review"
+    assert reviewed_item["clinical_event_label"] == "Lijecnicki pregledano"
+    assert reviewed_item["knowledge_impact"] == "may_enable_official_knowledge"
+
+
+def test_clinical_document_evidence_timeline_requires_existing_document(client, auth_setup):
+    headers = auth_headers(client)
+    response = client.get("/api/clinical-documents/999/evidence-timeline", headers=headers)
+    assert response.status_code == 404
 
 
 def test_document_appointment_must_belong_to_same_patient(client, db, auth_setup):
