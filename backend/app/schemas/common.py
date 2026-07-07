@@ -221,6 +221,42 @@ class ClinicalReadinessSnapshotHistoryResponse(BaseModel):
     warning: str
 
 
+class ClinicalReadinessSnapshotDetailResponse(BaseModel):
+    id: int
+    appointment_id: int
+    patient_id: int
+    service_id: int
+    created_at: DateTimeType
+    created_by_user_id: int
+    schema_version: str
+    preview_generated_at: DateTimeType
+    preview_status: str
+    preview_summary: str
+    template_key: str | None = None
+    template_label: str | None = None
+    template_version: str | None = None
+    template_binding_status: str | None = None
+    template_binding_warning: str | None = None
+    snapshot_reason: str
+    is_preview_snapshot: bool
+    disclaimer: str
+    items: list[dict]
+    limitations: list[str]
+    source_warnings: list[str]
+    source_refs: list[dict]
+    superseded_by_snapshot_id: int | None = None
+    superseded_at: DateTimeType | None = None
+    superseded_reason: str | None = None
+    warning: str
+
+    @field_validator("preview_status")
+    @classmethod
+    def validate_preview_status(cls, value: str) -> str:
+        if value not in CLINICAL_READINESS_STATUSES:
+            raise ValueError("Nepoznat status klinicke spremnosti")
+        return value
+
+
 class LoginRequest(BaseModel):
     email: str
     password: str
