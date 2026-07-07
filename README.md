@@ -92,6 +92,7 @@ Pilot documents:
 - [Program 1 Phase B9 Clinical Readiness Snapshot Lifecycle Governance](docs/programs/PROGRAM_1_PHASE_B9_CLINICAL_READINESS_SNAPSHOT_LIFECYCLE_GOVERNANCE.md)
 - [Program 1 Phase B9 Clinical Readiness Snapshot Regression Gate](docs/programs/PROGRAM_1_PHASE_B9_CLINICAL_READINESS_SNAPSHOT_REGRESSION_GATE.md)
 - [Program 1 Phase B9 regression notes](docs/programs/PROGRAM_1_PHASE_B9_REGRESSION_NOTES.md)
+- [Program 1 Phase B10 Snapshot Persistence Migration Review](docs/programs/PROGRAM_1_PHASE_B10_SNAPSHOT_PERSISTENCE_MIGRATION_REVIEW.md)
 - [Program 1 audit event naming](docs/programs/PROGRAM_1_AUDIT_EVENT_NAMING.md)
 - [Program 1 Phase A regression notes](docs/programs/PROGRAM_1_PHASE_A_REGRESSION_NOTES.md)
 - [Program 1 Phase A5 regression notes](docs/programs/PROGRAM_1_PHASE_A5_REGRESSION_NOTES.md)

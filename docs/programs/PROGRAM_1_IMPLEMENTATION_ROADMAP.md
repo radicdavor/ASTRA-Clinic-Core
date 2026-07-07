@@ -183,6 +183,15 @@ Phase B9 update:
 - B9 je documentation-only i ne uvodi DB tablicu, migraciju, capture endpoint, history UI, audit evente, Outcome Evidence, enforcement ili override
 - preporuceni sljedeci task je `Program 1 Phase B10 - Snapshot Persistence Migration Review`
 
+Phase B10 update:
+
+- snapshot persistence migration review je dokumentiran kroz `PROGRAM_1_PHASE_B10_SNAPSHOT_PERSISTENCE_MIGRATION_REVIEW.md`
+- B10 definira predlozeni DB model `ClinicalReadinessSnapshot` i tablicu `clinical_readiness_snapshots`
+- B10 potvrduje da snapshot mora spremiti immutable JSON kopiju preview sadrzaja i ne smije recomputeati povijesni prikaz
+- B10 dokumentira FK odnose, indeksiranje, rollback strategiju, migracijske rizike, audit implikacije i otvorene odluke
+- B10 je documentation-only i ne uvodi DB tablicu, migraciju, endpoint, runtime persistence, audit event, Outcome Evidence, task, override ili appointment status promjenu
+- preporuceni sljedeci task je `Program 1 Phase B11 - Snapshot Capture Endpoint Design`
+
 ## 5. Faza 2 - Findings Lifecycle Foundation
 
 Cilj:
