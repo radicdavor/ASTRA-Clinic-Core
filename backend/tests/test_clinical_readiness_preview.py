@@ -149,6 +149,10 @@ def test_colonoscopy_service_selects_colonoscopy_template(client, db, auth_setup
 
     assert response.status_code == 200
     body = response.json()
+    assert body["template_key"] == "colonoscopy"
+    assert body["template_label"] == "Kolonoskopija"
+    assert body["template_binding_status"] == "keyword_fallback"
+    assert body["template_binding_warning"] == "Template je odabran demo/pilot keyword matchingom prema nazivu usluge."
     assert "Koristi se demo/pilot template: Kolonoskopija." in body["limitations"]
     assert any(item["key"] == "template_colonoscopy_bowel_prep" for item in body["items"])
     assert any(item["key"] == "template_colonoscopy_polypectomy_materials" for item in body["items"])
@@ -167,6 +171,10 @@ def test_gastroscopy_service_selects_gastroscopy_template(client, db, auth_setup
 
     assert response.status_code == 200
     body = response.json()
+    assert body["template_key"] == "gastroscopy"
+    assert body["template_label"] == "Gastroskopija"
+    assert body["template_binding_status"] == "keyword_fallback"
+    assert body["template_binding_warning"] == "Template je odabran demo/pilot keyword matchingom prema nazivu usluge."
     assert "Koristi se demo/pilot template: Gastroskopija." in body["limitations"]
     assert any(item["key"] == "template_gastroscopy_fasting_check" for item in body["items"])
     assert any(item["key"] == "template_gastroscopy_sedation_escort" for item in body["items"])
@@ -183,6 +191,10 @@ def test_generic_service_falls_back_to_generic_template(client, db, auth_setup):
 
     assert response.status_code == 200
     body = response.json()
+    assert body["template_key"] == "generic"
+    assert body["template_label"] == "Genericki clinical readiness preview"
+    assert body["template_binding_status"] == "generic_fallback"
+    assert body["template_binding_warning"] == "Nema specificnog template matcha; koristi se genericki demo/pilot template."
     assert "Nema specificnog clinical readiness templatea za ovu uslugu; koristi se genericki preview." in body["limitations"]
     assert any(item["key"] == "template_generic_confirm_planned_service" for item in body["items"])
     assert any(item["key"] == "template_generic_confirm_consent_need" for item in body["items"])
@@ -200,6 +212,9 @@ def test_template_items_do_not_enforce_workflow(client, db, auth_setup):
 
     assert response.status_code == 200
     body = response.json()
+    assert body["is_preview"] is True
+    assert body["template_binding_status"] == "keyword_fallback"
+    assert body["template_binding_warning"]
     template_items = [item for item in body["items"] if item["key"].startswith("template_")]
     assert template_items
     assert body["status"] != "blocked"
@@ -207,6 +222,29 @@ def test_template_items_do_not_enforce_workflow(client, db, auth_setup):
     assert all(item["audit_required"] is False for item in template_items)
     db.expire(appt)
     assert appt.status == original_status
+    assert db.query(ClinicalEpisode).count() == episode_count
+    assert db.query(ClinicalPlan).count() == plan_count
+
+
+def test_template_metadata_does_not_create_workflow_objects(client, db, auth_setup):
+    gastroscopy = service(db, name="Gastroskopija")
+    appt = appointment(db, service_obj=gastroscopy, status="scheduled")
+    original_status = appt.status
+    episode_count = db.query(ClinicalEpisode).count()
+    plan_count = db.query(ClinicalPlan).count()
+    task_table_count = 1 if "tasks" in db.get_bind().dialect.get_table_names(db.connection()) else 0
+    headers = auth_headers(client)
+
+    response = preview(client, appt.id, headers)
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["template_key"] == "gastroscopy"
+    assert body["template_binding_status"] == "keyword_fallback"
+    assert body["template_binding_warning"]
+    db.expire(appt)
+    assert appt.status == original_status
+    assert task_table_count == 0
     assert db.query(ClinicalEpisode).count() == episode_count
     assert db.query(ClinicalPlan).count() == plan_count
 
