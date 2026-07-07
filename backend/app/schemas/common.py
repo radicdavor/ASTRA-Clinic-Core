@@ -28,6 +28,18 @@ CLINICAL_DOCUMENT_TYPES = {"consultation", "gastroscopy", "colonoscopy", "pathol
 CLINICAL_DOCUMENT_REVIEW_STATUSES = {"draft", "extracted", "needs_physician_review", "reviewed", "rejected", "superseded"}
 CLINICAL_DOCUMENT_AI_EXTRACTION_STATUSES = {"not_run", "generated", "edited", "accepted", "rejected", "superseded"}
 PATIENT_CLINICAL_SUMMARY_STATUSES = {"draft_ai", "needs_review", "reviewed", "stale", "rejected", "superseded"}
+CLINICAL_READINESS_STATUSES = {
+    "ready",
+    "ready_with_warning",
+    "not_ready",
+    "needs_physician_review",
+    "needs_nurse_action",
+    "needs_missing_document",
+    "needs_consent",
+    "needs_rescheduling",
+    "blocked",
+}
+CLINICAL_READINESS_SEVERITIES = {"info", "warning", "blocking", "critical"}
 
 
 class ORMModel(BaseModel):
@@ -60,6 +72,58 @@ class ReadinessOut(BaseModel):
     fiscalization_mode: str
     summary: dict[str, int]
     checks: list[ReadinessCheck]
+
+
+class ClinicalReadinessPreviewItem(BaseModel):
+    key: str
+    label: str
+    category: str
+    status: str
+    severity: str
+    responsible_role: str | None = None
+    source_type: str
+    source_ref: str | None = None
+    source_label: str | None = None
+    suggested_action: str | None = None
+    blocking: bool
+    override_allowed: bool
+    override_role: str | None = None
+    override_reason_required: bool
+    audit_required: bool
+
+    @field_validator("status")
+    @classmethod
+    def validate_status(cls, value: str) -> str:
+        if value not in CLINICAL_READINESS_STATUSES:
+            raise ValueError("Nepoznat status klinicke spremnosti")
+        return value
+
+    @field_validator("severity")
+    @classmethod
+    def validate_severity(cls, value: str) -> str:
+        if value not in CLINICAL_READINESS_SEVERITIES:
+            raise ValueError("Nepoznata tezina klinicke spremnosti")
+        return value
+
+
+class ClinicalReadinessPreviewResponse(BaseModel):
+    appointment_id: int
+    patient_id: int | None
+    service_id: int | None
+    status: str
+    is_preview: bool
+    generated_at: DateTimeType
+    summary: str
+    items: list[ClinicalReadinessPreviewItem]
+    source_warnings: list[str]
+    limitations: list[str]
+
+    @field_validator("status")
+    @classmethod
+    def validate_status(cls, value: str) -> str:
+        if value not in CLINICAL_READINESS_STATUSES:
+            raise ValueError("Nepoznat status klinicke spremnosti")
+        return value
 
 
 class LoginRequest(BaseModel):
