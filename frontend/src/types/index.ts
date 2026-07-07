@@ -283,6 +283,15 @@ export type ClinicalReadinessSnapshotResponse = {
   source_refs: Record<string, unknown>[];
 };
 
+export type ClinicalReadinessSnapshotDetailResponse = ClinicalReadinessSnapshotResponse & {
+  preview_summary: string;
+  template_binding_warning?: string | null;
+  superseded_by_snapshot_id?: number | null;
+  superseded_at?: string | null;
+  superseded_reason?: string | null;
+  warning: string;
+};
+
 export type ReceptionSlot = {
   time: string;
   appointment?: Appointment | null;

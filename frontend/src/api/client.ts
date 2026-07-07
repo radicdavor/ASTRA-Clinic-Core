@@ -1,4 +1,4 @@
-import type { ClinicalReadinessSnapshotCaptureRequest, ClinicalReadinessSnapshotHistoryResponse, ClinicalReadinessSnapshotResponse } from "../types";
+import type { ClinicalReadinessSnapshotCaptureRequest, ClinicalReadinessSnapshotDetailResponse, ClinicalReadinessSnapshotHistoryResponse, ClinicalReadinessSnapshotResponse } from "../types";
 
 function defaultApiBaseUrl() {
   if (typeof window === "undefined") return "http://localhost:8000";
@@ -111,4 +111,8 @@ export async function captureClinicalReadinessSnapshot(appointmentId: number, re
     method: "POST",
     body: JSON.stringify(request)
   });
+}
+
+export async function getClinicalReadinessSnapshotDetail(appointmentId: number, snapshotId: number) {
+  return api<ClinicalReadinessSnapshotDetailResponse>(`/api/appointments/${appointmentId}/clinical-readiness-snapshots/${snapshotId}`);
 }
