@@ -95,6 +95,16 @@ Phase B0 update:
 - prva buduca implementacija, ako bude odobrena, treba biti read-only preview u Appointment Workspaceu
 - preporuceni sljedeci task je `Program 1 Phase B1 - Clinical Readiness Vocabulary and Domain Mapping`
 
+Phase B1 update:
+
+- Clinical Readiness vocabulary je zakljucan kroz `PROGRAM_1_PHASE_B1_CLINICAL_READINESS_VOCABULARY.md`
+- domain mapping je definiran kroz `PROGRAM_1_PHASE_B1_CLINICAL_READINESS_DOMAIN_MAPPING.md`
+- status, severity, category i item taxonomy definirani su kroz `PROGRAM_1_PHASE_B1_CLINICAL_READINESS_STATUS_TAXONOMY.md`
+- source/evidence pravila definirana su kroz `PROGRAM_1_PHASE_B1_CLINICAL_READINESS_SOURCE_EVIDENCE_MAPPING.md`
+- B1 je documentation-only i ne uvodi implementaciju
+- preporuceni sljedeci task je `Program 1 Phase B2 - Clinical Readiness API and UI Contract`
+- B2 takoder treba poceti kao contract/design, ne kao code implementation
+
 ## 5. Faza 2 - Findings Lifecycle Foundation
 
 Cilj:

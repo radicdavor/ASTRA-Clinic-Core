@@ -116,7 +116,7 @@ AI support je placeholder:
 | `Administrative Closure` | Documentation-only | Future concept | Nema closure reason model. | Definirati uz Episode Closure. |
 | `Operational Readiness` | `/api/readiness`, `Readiness.tsx`, docs | Implemented | Demo/pilot readiness cockpit. | Ne miješati s Clinical Readiness Gateom. |
 | `ASTRA Readiness Model` | `ASTRA_READINESS_MODEL.md`, readiness route | Implemented | Read-only operational risk view. | Ostaje non-compliance. |
-| `Clinical Readiness Gate` | Program 1 Phase B0 docs | Documentation-only future concept | Nema backend/frontend object; B0 definira operating model, role, primjere i implementation boundaries. | Sljedeci korak je vocabulary/domain mapping prije bilo kakve implementacije. |
+| `Clinical Readiness Gate` | Program 1 Phase B0/B1 docs | Documentation-only future concept | Nema backend/frontend object; B0 definira operating model, a B1 zakljucava vocabulary, domain mapping, status taxonomy i source/evidence mapping. | Sljedeci korak je API/UI contract design prije bilo kakve implementacije. |
 | `Ready` | Documentation-only readiness status for future gate | Future concept | Nije runtime clinical status. | Koristiti kao `clinical_readiness_status`. |
 | `Ready with Warning` | Documentation-only | Future concept | Nije runtime clinical status. | Treba override/audit semantics. |
 | `Not Ready` | Documentation-only | Future concept | Nije runtime clinical status. | Treba reason i next action. |
@@ -213,7 +213,7 @@ AI support je placeholder:
 
 | Gap | Related canonical terms | Current state | Risk if implemented too early | Recommended future phase |
 | --- | --- | --- | --- | --- |
-| Clinical Readiness Gate not implemented | `Clinical Readiness Gate`, `Ready`, `Not Ready` | B0 documentation-only operating model | Confusion with `/readiness`; false clinical safety signal. | Clinical Readiness Vocabulary and Domain Mapping, then read-only prototype design |
+| Clinical Readiness Gate not implemented | `Clinical Readiness Gate`, `Clinical Readiness Status`, `Clinical Readiness Item` | B0/B1 documentation-only operating model and vocabulary mapping | Confusion with `/api/readiness`; false clinical safety signal; premature blockers without override governance. | Clinical Readiness API and UI Contract, then read-only prototype design |
 | Task object not implemented | `Task`, `Follow-up` | Not represented | Workarounds in notes/status fields. | Task and Follow-up Foundation |
 | Finding not a separate implemented object | `Finding`, `Source-Linked Statement` | JSON arrays/summary items | Duplicate facts or confusing source vs interpretation. | ClinicalDocument Review Hardening |
 | Outcome Evidence not implemented | `Outcome Evidence` | Documentation-only | Closure without evidence. | Outcome Evidence Foundation |
