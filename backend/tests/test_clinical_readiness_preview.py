@@ -151,6 +151,8 @@ def test_colonoscopy_service_selects_colonoscopy_template(client, db, auth_setup
     body = response.json()
     assert body["template_key"] == "colonoscopy"
     assert body["template_label"] == "Kolonoskopija"
+    assert body["template_version"] == "demo-v1"
+    assert body["template_version_warning"] == "Template version je demo/pilot oznaka iz staticne konfiguracije; nije produkcijsko verzioniranje."
     assert body["template_binding_status"] == "keyword_fallback"
     assert body["template_binding_warning"] == "Template je odabran demo/pilot keyword matchingom prema nazivu usluge."
     assert "Koristi se demo/pilot template: Kolonoskopija." in body["limitations"]
@@ -173,6 +175,8 @@ def test_gastroscopy_service_selects_gastroscopy_template(client, db, auth_setup
     body = response.json()
     assert body["template_key"] == "gastroscopy"
     assert body["template_label"] == "Gastroskopija"
+    assert body["template_version"] == "demo-v1"
+    assert body["template_version_warning"] == "Template version je demo/pilot oznaka iz staticne konfiguracije; nije produkcijsko verzioniranje."
     assert body["template_binding_status"] == "keyword_fallback"
     assert body["template_binding_warning"] == "Template je odabran demo/pilot keyword matchingom prema nazivu usluge."
     assert "Koristi se demo/pilot template: Gastroskopija." in body["limitations"]
@@ -193,6 +197,8 @@ def test_generic_service_falls_back_to_generic_template(client, db, auth_setup):
     body = response.json()
     assert body["template_key"] == "generic"
     assert body["template_label"] == "Genericki clinical readiness preview"
+    assert body["template_version"] == "demo-v1"
+    assert body["template_version_warning"] == "Template version je demo/pilot oznaka iz staticne konfiguracije; nije produkcijsko verzioniranje."
     assert body["template_binding_status"] == "generic_fallback"
     assert body["template_binding_warning"] == "Nema specificnog template matcha; koristi se genericki demo/pilot template."
     assert "Nema specificnog clinical readiness templatea za ovu uslugu; koristi se genericki preview." in body["limitations"]
@@ -240,6 +246,8 @@ def test_template_metadata_does_not_create_workflow_objects(client, db, auth_set
     assert response.status_code == 200
     body = response.json()
     assert body["template_key"] == "gastroscopy"
+    assert body["template_version"] == "demo-v1"
+    assert body["template_version_warning"]
     assert body["template_binding_status"] == "keyword_fallback"
     assert body["template_binding_warning"]
     db.expire(appt)
@@ -263,6 +271,8 @@ def test_explicit_service_code_binding_returns_explicit_metadata(client, db, aut
     assert body["is_preview"] is True
     assert body["template_key"] == "colonoscopy"
     assert body["template_label"] == "Kolonoskopija"
+    assert body["template_version"] == "demo-v1"
+    assert body["template_version_warning"] == "Template version je demo/pilot oznaka iz staticne konfiguracije; nije produkcijsko verzioniranje."
     assert body["template_binding_status"] == "explicit"
     assert body["template_binding_warning"] == "Template je odabran iz demo/pilot explicit service binding konfiguracije; nije produkcijsko pravilo."
     assert any(item["key"] == "template_colonoscopy_bowel_prep" for item in body["items"])
@@ -281,6 +291,7 @@ def test_explicit_service_binding_precedes_keyword_fallback(client, db, auth_set
     assert response.status_code == 200
     body = response.json()
     assert body["template_key"] == "colonoscopy"
+    assert body["template_version"] == "demo-v1"
     assert body["template_binding_status"] == "explicit"
     assert any(item["key"] == "template_colonoscopy_bowel_prep" for item in body["items"])
     assert not any(item["key"] == "template_gastroscopy_fasting_check" for item in body["items"])
@@ -301,11 +312,35 @@ def test_explicit_service_binding_does_not_create_workflow_objects(client, db, a
     assert response.status_code == 200
     body = response.json()
     assert body["template_binding_status"] == "explicit"
+    assert body["template_version"] == "demo-v1"
+    assert body["template_version_warning"]
     assert body["status"] != "blocked"
     assert all(item["blocking"] is False for item in body["items"] if item["key"].startswith("template_"))
     db.expire(appt)
     assert appt.status == original_status
     assert task_table_count == 0
+    assert db.query(ClinicalEpisode).count() == episode_count
+    assert db.query(ClinicalPlan).count() == plan_count
+
+
+def test_template_version_metadata_is_transparency_only(client, db, auth_setup):
+    explicit = service(db, name="Versioned demo service", price="100")
+    explicit.code = "COLO"
+    appt = appointment(db, service_obj=explicit, status="scheduled")
+    original_status = appt.status
+    episode_count = db.query(ClinicalEpisode).count()
+    plan_count = db.query(ClinicalPlan).count()
+    headers = auth_headers(client)
+
+    response = preview(client, appt.id, headers)
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["template_key"] == "colonoscopy"
+    assert body["template_version"] == "demo-v1"
+    assert body["template_version_warning"]
+    db.expire(appt)
+    assert appt.status == original_status
     assert db.query(ClinicalEpisode).count() == episode_count
     assert db.query(ClinicalPlan).count() == plan_count
 

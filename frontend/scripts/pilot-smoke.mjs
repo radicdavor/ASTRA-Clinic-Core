@@ -172,8 +172,11 @@ assertIncludes("src/pages/AppointmentDetail.tsx", "Read-only prikaz mogucih uvje
 assertIncludes("src/pages/AppointmentDetail.tsx", "PREVIEW");
 assertIncludes("src/pages/AppointmentDetail.tsx", "Clinical readiness preview trenutno nije dostupan.");
 assertIncludes("src/pages/AppointmentDetail.tsx", "Template");
+assertIncludes("src/pages/AppointmentDetail.tsx", "Verzija");
 assertIncludes("src/pages/AppointmentDetail.tsx", "Binding");
 assertIncludes("src/pages/AppointmentDetail.tsx", "Ovo nije produkcijsko pravilo.");
+assertIncludes("../backend/app/services/clinical_readiness_templates.py", "DEMO_TEMPLATE_VERSION");
+assertIncludes("../backend/app/services/clinical_readiness_templates.py", "DEMO_TEMPLATE_VERSION_WARNING");
 assertIncludes("../backend/app/services/clinical_readiness_preview.py", "Clinical readiness template je demo/pilot staticna definicija, nije produkcijsko pravilo.");
 assertIncludes("../backend/app/services/clinical_readiness_preview.py", "Nema specificnog clinical readiness templatea za ovu uslugu; koristi se genericki preview.");
 assertIncludes("../backend/app/services/clinical_readiness_preview.py", "Koristi se demo/pilot template");
