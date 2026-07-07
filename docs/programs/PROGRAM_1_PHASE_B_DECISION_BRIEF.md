@@ -876,3 +876,38 @@ Snapshot payload is immutable by route/service discipline. Future supersession m
 Preporuceni sljedeci task:
 
 `Program 1 Phase B22 - Snapshot Supersession Contract`
+
+## 31. Phase B22 outcome
+
+Phase B22 defines future Clinical Readiness Snapshot supersession before implementation.
+
+Dodano:
+
+- supersession contract
+- supersession audit contract
+- supersession no-go matrix
+- B22 regression notes
+
+B22 ostaje documentation-only:
+
+- bez backend koda
+- bez frontend koda
+- bez endpointa
+- bez servicea
+- bez DB schema changea
+- bez supersession UI-ja
+- bez edit/delete akcija
+- bez approvala
+- bez clearancea
+- bez overridea
+- bez Outcome Evidencea
+- bez Task enginea
+- bez appointment status promjene
+
+B22 decision:
+
+Supersession must be additive and historical: old snapshot remains stored, new snapshot is captured separately, and old snapshot may later point to the new snapshot through metadata and audit.
+
+Preporuceni sljedeci task:
+
+`Program 1 Phase B23 - Snapshot Supersession Service Prototype`

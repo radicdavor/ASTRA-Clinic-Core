@@ -312,6 +312,15 @@ Phase B21 update:
 - B21 ne uvodi supersession endpoint/UI, edit snapshot, delete snapshot, approval, clearance, override, Outcome Evidence, Task engine ili appointment status change
 - preporuceni sljedeci task je `Program 1 Phase B22 - Snapshot Supersession Contract`
 
+Phase B22 update:
+
+- snapshot supersession contract je dokumentiran
+- snapshot supersession audit contract je dokumentiran
+- snapshot supersession no-go matrix je dokumentiran
+- B22 je documentation-only
+- B22 ne uvodi backend kod, frontend kod, endpoint, service, DB schema change, supersession UI, edit/delete, approval, clearance, override, Outcome Evidence, Task engine ili appointment status change
+- preporuceni sljedeci task je `Program 1 Phase B23 - Snapshot Supersession Service Prototype`
+
 ## 5. Faza 2 - Findings Lifecycle Foundation
 
 Cilj:
