@@ -1,0 +1,278 @@
+from datetime import datetime, timezone
+
+from fastapi import APIRouter, Depends, HTTPException, Request
+from sqlalchemy import or_, select
+from sqlalchemy.orm import Session, joinedload
+
+from app.audit.service import audit, snapshot
+from app.auth.dependencies import Actor, require_permission
+from app.core.database import get_db
+from app.models.domain import AuditLog, ClinicalDocument, Patient
+from app.schemas.common import ClinicalDocumentCreate, ClinicalDocumentOut, ClinicalDocumentUpdate, ClinicalDocumentUpload, ClinicalEvidenceTimelineItem, ErrorResponse
+from app.services.clinical_documents import extract_document_knowledge, get_document_or_404, has_extracted_content, initial_ai_extraction_status, initial_document_review_status, mark_document_ai_extraction_edited, mark_document_needs_review, validate_document_links
+from app.services.clinical_evidence_timeline import classify_audit_log
+
+ERROR_RESPONSES = {400: {"model": ErrorResponse}, 401: {"model": ErrorResponse}, 403: {"model": ErrorResponse}, 404: {"model": ErrorResponse}, 409: {"model": ErrorResponse}, 422: {"model": ErrorResponse}}
+
+router = APIRouter(prefix="/api", tags=["clinical-documents"], responses=ERROR_RESPONSES)
+
+
+def patch_model(obj, data: dict) -> None:
+    for key, value in data.items():
+        setattr(obj, key, value)
+
+
+@router.get("/clinical-documents", response_model=list[ClinicalDocumentOut])
+def list_clinical_documents(
+    patient_id: int | None = None,
+    document_type: str | None = None,
+    source_type: str | None = None,
+    physician_reviewed: bool | None = None,
+    review_status: str | None = None,
+    q: str | None = None,
+    db: Session = Depends(get_db),
+    actor: Actor = Depends(require_permission("clinical_documents.read")),
+):
+    stmt = select(ClinicalDocument).options(joinedload(ClinicalDocument.patient)).order_by(ClinicalDocument.document_date.desc().nulls_last(), ClinicalDocument.id.desc())
+    if patient_id:
+        stmt = stmt.where(ClinicalDocument.patient_id == patient_id)
+    if document_type:
+        stmt = stmt.where(ClinicalDocument.document_type == document_type)
+    if source_type:
+        stmt = stmt.where(ClinicalDocument.source_type == source_type)
+    if physician_reviewed is not None:
+        stmt = stmt.where(ClinicalDocument.physician_reviewed.is_(physician_reviewed))
+    if review_status:
+        stmt = stmt.where(ClinicalDocument.review_status == review_status)
+    if q:
+        like = f"%{q}%"
+        stmt = stmt.where(or_(ClinicalDocument.title.ilike(like), ClinicalDocument.origin.ilike(like), ClinicalDocument.institution.ilike(like), ClinicalDocument.raw_text.ilike(like), ClinicalDocument.ai_summary.ilike(like)))
+    return db.scalars(stmt).all()
+
+
+@router.post("/clinical-documents", response_model=ClinicalDocumentOut)
+def create_clinical_document(
+    payload: ClinicalDocumentCreate,
+    request: Request,
+    db: Session = Depends(get_db),
+    actor: Actor = Depends(require_permission("clinical_documents.write")),
+):
+    validate_document_links(db, payload.patient_id, payload.appointment_id)
+    values = payload.model_dump()
+    now = datetime.now(timezone.utc)
+    initial_ai_status = initial_ai_extraction_status(values)
+    document = ClinicalDocument(
+        **values,
+        review_status=initial_document_review_status(values),
+        ai_extraction_status=initial_ai_status,
+        ai_extraction_generated_at=now if initial_ai_status != "not_run" else None,
+        ai_extraction_updated_at=now if initial_ai_status != "not_run" else None,
+        physician_reviewed=False,
+    )
+    db.add(document)
+    db.flush()
+    audit(db, "create", "ClinicalDocument", document.id, f"Dodan klinicki dokument: {document.title}", actor.user_id, actor.actor_type, actor.api_key_id, None, snapshot(document), request)
+    db.commit()
+    db.refresh(document)
+    return get_document_or_404(db, document.id)
+
+
+@router.post("/patients/{patient_id}/clinical-documents", response_model=ClinicalDocumentOut)
+def create_patient_clinical_document(
+    patient_id: int,
+    payload: ClinicalDocumentCreate,
+    request: Request,
+    db: Session = Depends(get_db),
+    actor: Actor = Depends(require_permission("clinical_documents.write")),
+):
+    if payload.patient_id != patient_id:
+        raise HTTPException(422, detail="Dokument mora pripadati pacijentu iz rute")
+    return create_clinical_document(payload, request, db, actor)
+
+
+@router.post("/clinical-documents/upload", response_model=ClinicalDocumentOut)
+def upload_clinical_document(
+    payload: ClinicalDocumentUpload,
+    request: Request,
+    db: Session = Depends(get_db),
+    actor: Actor = Depends(require_permission("clinical_documents.write")),
+):
+    validate_document_links(db, payload.patient_id, payload.appointment_id)
+    attachment_path = f"local-placeholder/{payload.attachment_name}" if payload.attachment_name else None
+    document = ClinicalDocument(
+        patient_id=payload.patient_id,
+        title=payload.title,
+        source_type=payload.source_type,
+        document_type=payload.document_type,
+        origin=payload.origin,
+        document_date=payload.document_date,
+        author=payload.author,
+        institution=payload.institution,
+        raw_text=payload.raw_text,
+        attachment_path=attachment_path,
+        appointment_id=payload.appointment_id,
+        review_status="draft",
+        ai_extraction_status="not_run",
+        physician_reviewed=False,
+    )
+    db.add(document)
+    db.flush()
+    audit(db, "upload", "ClinicalDocument", document.id, f"Upload placeholder dokumenta: {document.title}", actor.user_id, actor.actor_type, actor.api_key_id, None, snapshot(document), request)
+    db.commit()
+    db.refresh(document)
+    return get_document_or_404(db, document.id)
+
+
+@router.get("/clinical-documents/search", response_model=list[ClinicalDocumentOut])
+def search_clinical_documents(q: str, db: Session = Depends(get_db), actor: Actor = Depends(require_permission("clinical_documents.read"))):
+    like = f"%{q}%"
+    return db.scalars(
+        select(ClinicalDocument)
+        .options(joinedload(ClinicalDocument.patient))
+        .where(or_(ClinicalDocument.title.ilike(like), ClinicalDocument.origin.ilike(like), ClinicalDocument.institution.ilike(like), ClinicalDocument.raw_text.ilike(like), ClinicalDocument.ai_summary.ilike(like)))
+        .order_by(ClinicalDocument.document_date.desc().nulls_last(), ClinicalDocument.id.desc())
+        .limit(50)
+    ).all()
+
+
+@router.get("/clinical-documents/{document_id}", response_model=ClinicalDocumentOut)
+def get_clinical_document(document_id: int, db: Session = Depends(get_db), actor: Actor = Depends(require_permission("clinical_documents.read"))):
+    return get_document_or_404(db, document_id)
+
+
+@router.get("/clinical-documents/{document_id}/evidence-timeline", response_model=list[ClinicalEvidenceTimelineItem])
+def clinical_document_evidence_timeline(document_id: int, db: Session = Depends(get_db), actor: Actor = Depends(require_permission("clinical_documents.read"))):
+    get_document_or_404(db, document_id)
+    logs = db.scalars(select(AuditLog).where(AuditLog.entity_type == "ClinicalDocument", AuditLog.entity_id == document_id).order_by(AuditLog.created_at.desc(), AuditLog.id.desc())).all()
+    items: list[ClinicalEvidenceTimelineItem] = []
+    for log in logs:
+        classification = classify_audit_log(log)
+        items.append(
+            ClinicalEvidenceTimelineItem(
+                id=log.id,
+                action=log.action,
+                object_type=log.entity_type,
+                object_id=log.entity_id,
+                message=log.summary,
+                actor_type=log.actor_type,
+                actor_user_id=log.actor_user_id,
+                actor_api_key_id=log.actor_api_key_id,
+                created_at=log.created_at,
+                clinical_event_category=classification.clinical_event_category,
+                clinical_event_label=classification.clinical_event_label,
+                knowledge_impact=classification.knowledge_impact,
+                is_clinical_evidence_event=classification.is_clinical_evidence_event,
+            )
+        )
+    return items
+
+
+@router.patch("/clinical-documents/{document_id}", response_model=ClinicalDocumentOut)
+def update_clinical_document(
+    document_id: int,
+    payload: ClinicalDocumentUpdate,
+    request: Request,
+    db: Session = Depends(get_db),
+    actor: Actor = Depends(require_permission("clinical_documents.review")),
+):
+    document = get_document_or_404(db, document_id)
+    update_data = payload.model_dump(exclude_unset=True)
+    validate_document_links(db, update_data.get("patient_id", document.patient_id), update_data.get("appointment_id", document.appointment_id))
+    before = snapshot(document)
+    patch_model(document, update_data)
+    review_reset_fields = {"raw_text", "ai_summary", "key_findings", "recommendations"}
+    if review_reset_fields.intersection(update_data):
+        now = datetime.now(timezone.utc)
+        extraction_fields = {"ai_summary", "key_findings", "recommendations"}
+        if extraction_fields.intersection(update_data) or "raw_text" in update_data:
+            mark_document_ai_extraction_edited(document, now)
+        mark_document_needs_review(document)
+    db.flush()
+    extraction_fields = {"ai_summary", "key_findings", "recommendations"}
+    action = "ai_document_extraction_edited" if extraction_fields.intersection(update_data) else "update"
+    summary = "Uredjen AI prijedlog prije lijecnicke potvrde" if action == "ai_document_extraction_edited" else f"Azuriran klinicki dokument: {document.title}"
+    audit(db, action, "ClinicalDocument", document.id, summary, actor.user_id, actor.actor_type, actor.api_key_id, before, snapshot(document), request)
+    db.commit()
+    db.refresh(document)
+    return get_document_or_404(db, document.id)
+
+
+@router.post("/clinical-documents/{document_id}/extract", response_model=ClinicalDocumentOut)
+def extract_clinical_document(
+    document_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+    actor: Actor = Depends(require_permission("clinical_documents.review")),
+):
+    document = get_document_or_404(db, document_id)
+    before = snapshot(document)
+    now = datetime.now(timezone.utc)
+    patch_model(document, extract_document_knowledge(document))
+    document.ai_extraction_status = "generated"
+    document.ai_extraction_generated_at = now
+    document.ai_extraction_updated_at = now
+    document.review_status = "needs_physician_review"
+    document.physician_reviewed = False
+    document.reviewed_by = None
+    document.reviewed_at = None
+    db.flush()
+    audit(db, "ai_document_extracted", "ClinicalDocument", document.id, "AI placeholder je predlozio strukturirani sazetak dokumenta", actor.user_id, actor.actor_type, actor.api_key_id, before, snapshot(document), request)
+    db.commit()
+    db.refresh(document)
+    return get_document_or_404(db, document.id)
+
+
+@router.post("/clinical-documents/{document_id}/review", response_model=ClinicalDocumentOut)
+def review_clinical_document(
+    document_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+    actor: Actor = Depends(require_permission("clinical_documents.write")),
+):
+    document = get_document_or_404(db, document_id)
+    before = snapshot(document)
+    now = datetime.now(timezone.utc)
+    document.review_status = "reviewed"
+    if has_extracted_content(document):
+        document.ai_extraction_status = "accepted"
+        document.ai_extraction_updated_at = now
+    document.physician_reviewed = True
+    document.reviewed_by = actor.user_id
+    document.reviewed_at = now
+    db.flush()
+    audit(db, "clinical_document_reviewed", "ClinicalDocument", document.id, "Lijecnik je pregledao klinicki dokument", actor.user_id, actor.actor_type, actor.api_key_id, before, snapshot(document), request)
+    db.commit()
+    db.refresh(document)
+    return get_document_or_404(db, document.id)
+
+
+@router.post("/clinical-documents/{document_id}/reject-summary", response_model=ClinicalDocumentOut)
+def reject_clinical_document_summary(
+    document_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+    actor: Actor = Depends(require_permission("clinical_documents.write")),
+):
+    document = get_document_or_404(db, document_id)
+    before = snapshot(document)
+    document.ai_summary = None
+    document.key_findings = []
+    document.recommendations = []
+    document.ai_extraction_status = "rejected"
+    document.ai_extraction_updated_at = datetime.now(timezone.utc)
+    document.review_status = "draft"
+    document.physician_reviewed = False
+    document.reviewed_by = None
+    document.reviewed_at = None
+    db.flush()
+    audit(db, "ai_document_summary_rejected", "ClinicalDocument", document.id, "Lijecnik je odbio AI sazetak dokumenta", actor.user_id, actor.actor_type, actor.api_key_id, before, snapshot(document), request)
+    db.commit()
+    db.refresh(document)
+    return get_document_or_404(db, document.id)
+
+
+@router.get("/patients/{patient_id}/clinical-documents", response_model=list[ClinicalDocumentOut])
+def patient_clinical_documents(patient_id: int, db: Session = Depends(get_db), actor: Actor = Depends(require_permission("clinical_documents.read"))):
+    if not db.get(Patient, patient_id):
+        raise HTTPException(404, detail="Pacijent nije pronaden")
+    return db.scalars(select(ClinicalDocument).options(joinedload(ClinicalDocument.patient)).where(ClinicalDocument.patient_id == patient_id).order_by(ClinicalDocument.document_date.desc().nulls_last(), ClinicalDocument.id.desc())).all()

@@ -269,3 +269,17 @@ A12 je implementirao drugi niskorizicni route split:
 Preporuceni sljedeci zadatak nakon A12:
 
 `Program 1 Phase A13 - Split ClinicalDocument Routes`
+
+## 11. A13 implementation update
+
+A13 je implementirao ClinicalDocument route split:
+
+- ClinicalDocument endpointi su premjesteni u `backend/app/api/routes/clinical_documents.py`.
+- `backend/app/main.py` registrira `clinical_documents.router`.
+- ClinicalDocument helperi ostaju u `backend/app/services/clinical_documents.py`.
+- Patient Clinical Summary endpointi jos nisu premjesteni.
+- URL i API ugovor ostaju isti.
+
+Preporuceni sljedeci zadatak nakon A13:
+
+`Program 1 Phase A14 - Split Patient Clinical Summary Routes`

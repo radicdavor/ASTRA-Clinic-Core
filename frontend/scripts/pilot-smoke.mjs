@@ -179,6 +179,9 @@ assertIncludes("src/pages/ClinicalDocumentDetail.tsx", "Ovaj dokument je lijecni
 assertIncludes("src/pages/ClinicalDocumentDetail.tsx", "AI prijedlog je odbijen. Izvorni dokument ostaje dostupan za rucni pregled.");
 assertIncludes("src/pages/ClinicalDocumentDetail.tsx", "Izvor istine su pregledani, source-linked klinicki dokumenti.");
 assertIncludes("src/pages/ClinicalDocumentDetail.tsx", "/evidence-timeline");
+assertIncludes("../backend/app/api/routes/clinical_documents.py", '"/clinical-documents"');
+assertIncludes("../backend/app/api/routes/clinical_documents.py", '"/patients/{patient_id}/clinical-documents"');
+assertIncludes("../backend/app/main.py", "clinical_documents.router");
 assertIncludes("src/pages/ClinicalDocumentDetail.tsx", "Klinicki evidence timeline");
 assertIncludes("src/pages/ClinicalDocumentDetail.tsx", "Ovo je citljiv prikaz audit dogadjaja vezanih uz ovaj dokument. Ne stvara nove klinicke cinjenice.");
 assertIncludes("src/pages/ClinicalDocumentDetail.tsx", "Nema audit dogadjaja za ovaj dokument.");
