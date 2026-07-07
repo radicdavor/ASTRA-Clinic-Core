@@ -254,6 +254,35 @@ export type ClinicalReadinessSnapshotHistoryResponse = {
   warning: string;
 };
 
+export type ClinicalReadinessSnapshotCaptureRequest = {
+  reason: string;
+  client_preview_generated_at?: string | null;
+  idempotency_key?: string | null;
+};
+
+export type ClinicalReadinessSnapshotResponse = {
+  id: number;
+  appointment_id: number;
+  patient_id: number;
+  service_id: number;
+  created_at: string;
+  created_by_user_id: number;
+  schema_version: string;
+  preview_generated_at: string;
+  preview_status: string;
+  template_key?: string | null;
+  template_label?: string | null;
+  template_version?: string | null;
+  template_binding_status?: string | null;
+  snapshot_reason: string;
+  is_preview_snapshot: boolean;
+  disclaimer: string;
+  items: ClinicalReadinessPreviewItem[];
+  limitations: string[];
+  source_warnings: string[];
+  source_refs: Record<string, unknown>[];
+};
+
 export type ReceptionSlot = {
   time: string;
   appointment?: Appointment | null;

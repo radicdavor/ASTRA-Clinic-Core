@@ -1,4 +1,4 @@
-import type { ClinicalReadinessSnapshotHistoryResponse } from "../types";
+import type { ClinicalReadinessSnapshotCaptureRequest, ClinicalReadinessSnapshotHistoryResponse, ClinicalReadinessSnapshotResponse } from "../types";
 
 function defaultApiBaseUrl() {
   if (typeof window === "undefined") return "http://localhost:8000";
@@ -104,4 +104,11 @@ export async function login(email: string, password: string) {
 
 export async function getClinicalReadinessSnapshotHistory(appointmentId: number) {
   return api<ClinicalReadinessSnapshotHistoryResponse>(`/api/appointments/${appointmentId}/clinical-readiness-snapshots`);
+}
+
+export async function captureClinicalReadinessSnapshot(appointmentId: number, request: ClinicalReadinessSnapshotCaptureRequest) {
+  return api<ClinicalReadinessSnapshotResponse>(`/api/appointments/${appointmentId}/clinical-readiness-snapshots`, {
+    method: "POST",
+    body: JSON.stringify(request)
+  });
 }
