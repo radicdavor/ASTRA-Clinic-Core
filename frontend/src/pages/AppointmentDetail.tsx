@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useState } from "react";
+import { type FormEvent, useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { api, getClinicalReadinessSnapshotHistory, notifyUser } from "../api/client";
+import { api, captureClinicalReadinessSnapshot, getClinicalReadinessSnapshotHistory, notifyUser } from "../api/client";
 import { ActionButton } from "../components/ActionButton";
 import { AuditTimeline } from "../components/AuditTimeline";
 import { DataTable } from "../components/DataTable";
@@ -28,6 +28,11 @@ export function AppointmentDetail() {
   const [snapshotHistory, setSnapshotHistory] = useState<ClinicalReadinessSnapshotHistoryResponse | null>(null);
   const [snapshotHistoryLoading, setSnapshotHistoryLoading] = useState(true);
   const [snapshotHistoryError, setSnapshotHistoryError] = useState(false);
+  const [showSnapshotModal, setShowSnapshotModal] = useState(false);
+  const [snapshotReason, setSnapshotReason] = useState("");
+  const [snapshotValidationError, setSnapshotValidationError] = useState("");
+  const [snapshotCaptureError, setSnapshotCaptureError] = useState("");
+  const [snapshotCaptureSaving, setSnapshotCaptureSaving] = useState(false);
 
   const relatedInvoice = useMemo(() => invoices.data.find((invoice) => invoice.appointment_id === Number(id)), [invoices.data, id]);
   const relatedMovements = useMemo(() => movements.data.filter((movement) => movement.related_appointment_id === Number(id)), [movements.data, id]);
@@ -126,6 +131,35 @@ export function AppointmentDetail() {
     navigate(`/invoices?invoice=${invoice.id}`);
   }
 
+  async function captureSnapshot(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!appointment.data) return;
+    const reason = snapshotReason.trim();
+    if (!reason) {
+      setSnapshotValidationError("Razlog je obavezan.");
+      return;
+    }
+    setSnapshotValidationError("");
+    setSnapshotCaptureError("");
+    setSnapshotCaptureSaving(true);
+    try {
+      await captureClinicalReadinessSnapshot(appointment.data.id, {
+        reason,
+        client_preview_generated_at: clinicalReadiness.data?.generated_at ?? null
+      });
+      setMessage("Snapshot previewa je spremljen.");
+      notifyUser("Snapshot previewa je spremljen.");
+      setShowSnapshotModal(false);
+      setSnapshotReason("");
+    } catch (err) {
+      const detail = err instanceof Error ? err.message : "";
+      const permissionError = ["403", "forbidden", "permission", "dozvol", "prava"].some((fragment) => detail.toLowerCase().includes(fragment));
+      setSnapshotCaptureError(permissionError ? "Nemate dozvolu za spremanje snapshotova." : "Snapshot nije spremljen. Provjerite dozvole ili pokusajte ponovno.");
+    } finally {
+      setSnapshotCaptureSaving(false);
+    }
+  }
+
   if (!appointment.data) return <WorkspaceLayout><p>Ucitavanje termina...</p></WorkspaceLayout>;
 
   return (
@@ -215,7 +249,23 @@ export function AppointmentDetail() {
         ) : null}
       </WorkspaceSection>
 
-      <WorkspaceSection title="Povijest snapshotova klinicke spremnosti">
+      <WorkspaceSection
+        title="Povijest snapshotova klinicke spremnosti"
+        actions={
+          <ActionButton
+            variant="workflow"
+            onClick={() => {
+              setSnapshotValidationError("");
+              setSnapshotCaptureError("");
+              setShowSnapshotModal(true);
+            }}
+            helpTitle="Spremi snapshot previewa"
+            help="Sprema trenutni server-side preview kao zapis prikaza uz obavezni razlog. Ne mijenja termin i ne stvara zadatak."
+          >
+            Spremi snapshot previewa
+          </ActionButton>
+        }
+      >
         <p className="helper-text">Read-only prikaz spremljenih preview zapisa. Snapshot nije odluka da se postupak smije provesti.</p>
         {snapshotHistory?.warning && <p className="helper-text">{snapshotSafetyText(snapshotHistory.warning)}</p>}
         {snapshotHistoryError && <p className="form-error">Povijest snapshotova trenutno nije dostupna.</p>}
@@ -248,6 +298,27 @@ export function AppointmentDetail() {
           </div>
         )}
       </WorkspaceSection>
+
+      {showSnapshotModal && (
+        <div className="modal-backdrop" role="presentation">
+          <div className="modal-panel" role="dialog" aria-modal="true" aria-labelledby="snapshot-capture-title">
+            <h2 id="snapshot-capture-title">Spremi snapshot Clinical Readiness Previewa</h2>
+            <p className="helper-text">Snapshot sprema trenutni server-side preview kao trajni zapis prikaza. Ne predstavlja odobrenje postupka, klinicku propusnicu, formalni dokaz ishoda, zaobilazenje upozorenja ili klinicku odluku.</p>
+            <form onSubmit={captureSnapshot}>
+              <label>
+                Razlog spremanja snapshota
+                <textarea value={snapshotReason} onChange={(event) => setSnapshotReason(event.target.value)} rows={4} />
+              </label>
+              {snapshotValidationError && <p className="form-error">{snapshotValidationError}</p>}
+              {snapshotCaptureError && <p className="form-error">{snapshotCaptureError}</p>}
+              <div className="form-actions">
+                <button type="button" onClick={() => setShowSnapshotModal(false)} disabled={snapshotCaptureSaving}>Odustani</button>
+                <button className="primary" type="submit" disabled={snapshotCaptureSaving}>{snapshotCaptureSaving ? "Spremanje..." : "Spremi snapshot"}</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       <WorkspaceSection title="Materijali" actions={<button onClick={loadMaterials}>Ucitaj prijedlog</button>}>
         {materials.map((entry) => (
