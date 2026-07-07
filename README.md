@@ -141,6 +141,8 @@ Pilot documents:
 - [Program 1 Phase B37 regression notes](docs/programs/PROGRAM_1_PHASE_B37_REGRESSION_NOTES.md)
 - [Program 1 Phase B38 Snapshot Disclaimer Review](docs/programs/PROGRAM_1_PHASE_B38_SNAPSHOT_DISCLAIMER_REVIEW.md)
 - [Program 1 Phase B38 regression notes](docs/programs/PROGRAM_1_PHASE_B38_REGRESSION_NOTES.md)
+- [Program 1 Phase B39 Snapshot Real-Data No-Go Checklist](docs/programs/PROGRAM_1_PHASE_B39_SNAPSHOT_REAL_DATA_NO_GO_CHECKLIST.md)
+- [Program 1 Phase B39 regression notes](docs/programs/PROGRAM_1_PHASE_B39_REGRESSION_NOTES.md)
 - [Lokalni LAN pristup](docs/LAN_ACCESS.md)
 - [Program 1 audit event naming](docs/programs/PROGRAM_1_AUDIT_EVENT_NAMING.md)
 - [Program 1 Phase A regression notes](docs/programs/PROGRAM_1_PHASE_A_REGRESSION_NOTES.md)

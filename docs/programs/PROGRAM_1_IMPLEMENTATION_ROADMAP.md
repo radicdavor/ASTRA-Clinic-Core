@@ -460,6 +460,13 @@ Phase B38 update:
 - B38 ne uvodi runtime promjene
 - recommended next task je `Program 1 Phase B39 - Snapshot Real-Data No-Go Checklist`
 
+Phase B39 update:
+
+- snapshot real-data no-go checklist je dokumentiran
+- checklist pokriva GDPR/DPIA, access control, audit retention, backup/restore, security, training, legal wording, data minimization, incident response i maintainer approval
+- B39 ne omogucuje real patient data niti production deployment
+- recommended next task je `Program 1 Phase B40 - Snapshot Production Governance Closure Matrix`
+
 ## 5. Faza 2 - Findings Lifecycle Foundation
 
 Cilj:
