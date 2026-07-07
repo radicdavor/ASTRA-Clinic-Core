@@ -620,6 +620,17 @@ Status after A17:
 - `core.py` sada ostaje privremeno mjesto za catalog/search/audit rute do A18.
 - Nije uveden Clinical Readiness Gate, Task engine, Outcome Evidence, real AI/OCR ili Episode-Based Care kao primarni workflow.
 
+### Phase A18 route split update
+
+Status after A18:
+
+- Catalog rute su izdvojene u `backend/app/api/routes/catalog.py`.
+- Audit rute su izdvojene u `backend/app/api/routes/audit.py`.
+- Search ruta je izdvojena u `backend/app/api/routes/search.py`.
+- `core.py` vise nije aktivni backend route modul.
+- Javne adrese `/api/services`, `/api/clinics`, `/api/modules`, `/api/providers`, `/api/rooms`, `/api/audit-log` i `/api/search` ostaju iste.
+- Nije uveden Clinical Readiness Gate, Task engine, Workflow Engine, Outcome Evidence, real AI/OCR ili Episode-Based Care kao primarni workflow.
+
 ### Phase A5 implementation update
 
 Status after A5:

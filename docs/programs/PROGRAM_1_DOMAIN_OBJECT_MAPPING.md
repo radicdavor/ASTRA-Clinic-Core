@@ -182,14 +182,16 @@ AI support je placeholder:
 | Reception/day APIs | `reception.py`, `/api/reception/day`, `/appointments/{id}/mark-arrived` | `Reception Workspace`, `Human Confirmation` | Arrival/identity, ne clinical truth. | Zadrzati operativni scope. |
 | Clinical document APIs | `clinical_documents.py`, `/api/clinical-documents*` | `ClinicalDocument`, `AI Extraction`, `Physician Review`, Clinical Evidence Timeline | OCR/AI su placeholder; finding nije zaseban object; evidence timeline je read-only view preko audit loga. | Patient-wide evidence timeline ostaje future. |
 | Patient clinical summary APIs | `patient_clinical_summary.py`, `/patients/{id}/clinical-summary*` | `Patient Clinical Summary`, `Patient Clinical Knowledge` | Summary moze biti pogresno shvacen kao source of truth. | Jasnije API/docs semantics. |
+| Search API | `search.py`, `/api/search` | Operational lookup | Search nije clinical reasoning. | Buduci semantic/AI search zahtijeva posebnu odluku. |
+| Catalog APIs | `catalog.py`, `/api/services`, `/api/clinics`, `/api/modules`, `/api/providers`, `/api/rooms` | `Service`, `Provider`, `Room`, `Module`, clinic configuration | Operativni katalog, ne clinical workflow. | Procedure/treatment semantics tek kasnije. |
 | Episode APIs | `episodes.py`, `/api/episodes*` | `Clinical Episode`, `Episode Closure` | Deferred as primary workflow. | Ne siriti prije knowledge stabilization. |
 | Clinical plan APIs | `episodes.py`, `/episodes/{id}/clinical-plans*`, `/clinical-plans/{id}*` | `ClinicalPlan`, `AI Suggestion`, `Physician Confirmation` | Episode-bound i nije full workflow engine. | Lifecycle/naming mapping prije prosirenja. |
-| Readiness API | `/api/readiness` | `Operational Readiness`, `ASTRA Readiness Model` | Ime `readiness` može zbuniti s Clinical Readiness Gateom. | Budući clinical readiness mora imati kvalificirano ime. |
+| Readiness API | `readiness.py`, `/api/readiness` | `Operational Readiness`, `ASTRA Readiness Model` | Ime `readiness` moze zbuniti s Clinical Readiness Gateom. | Buduci clinical readiness mora imati kvalificirano ime. |
 | Inventory/material APIs | `inventory.py`, `/inventory/*`, `/services/{id}/materials`, `/appointments/{id}/consume-materials` | `Product`, `Batch/Lot`, `Inventory Movement`, `Material Consumption` | Operativno, ne formalno clinical treatment semantics. | Linkati s Procedure/Treatment tek kasnije. |
 | Invoice APIs | `/invoices*`, `/appointments/{id}/draft-invoice` | Billing object, audit | Fiscalization je noop/stub. | Ne koristiti kao real fiscalization. |
 | AI agent APIs | `ai.py`, `/api/ai/*` | AI/API agent access | Kreira pacijenta/termin i free slots; nije clinical AI. | Scope mora ostati minimalan. |
 | Auth/API key APIs | `auth.py`, `/auth/login`, `/auth/api-keys` | RBAC/API key control | Nije clinical governance samo po sebi. | Future AI agents need least privilege. |
-| Audit APIs | `/api/audit-log` | `Audit Evidence` | Generički entity/action log. | Dodati richer clinical event names kasnije. |
+| Audit APIs | `audit.py`, `/api/audit-log` | `Audit Evidence` | Genericki entity/action log. | Dodati richer clinical event names kasnije. |
 
 ## 7. Frontend surface mapping
 
