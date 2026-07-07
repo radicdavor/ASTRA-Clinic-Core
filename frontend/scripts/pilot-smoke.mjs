@@ -214,14 +214,14 @@ assertIncludes("src/pages/Readiness.tsx", "Nepregledani dokumenti ne ulaze u slu
 assertNotIncludes("src/pages/Readiness.tsx", "Clinical Readiness Gate");
 assertNotIncludes("src/pages/Readiness.tsx", "Ready with Warning");
 assertNotIncludes("src/pages/Readiness.tsx", "Not Ready");
-assertIncludes("../backend/app/api/routes/core.py", "/clinical-documents?review_status=needs_physician_review");
-assertIncludes("../backend/app/api/routes/core.py", "patient_summary_stale");
-assertIncludes("../backend/app/api/routes/core.py", "Episode Engine je eksperimentalno/deferred");
+assertIncludes("../backend/app/services/readiness.py", "/clinical-documents?review_status=needs_physician_review");
+assertIncludes("../backend/app/services/readiness.py", "patient_summary_stale");
+assertIncludes("../backend/app/services/readiness.py", "Episode Engine je eksperimentalno/deferred");
 
-const backendCore = read("../backend/app/api/routes/core.py");
+const backendReadiness = read("../backend/app/services/readiness.py");
 const appRoutes = read("src/routes/AppRoutes.tsx");
-const readinessTargetPaths = unique([...backendCore.matchAll(/target_path="([^"]+)"/g)].map((match) => match[1]));
-const readinessTargetLabels = unique([...backendCore.matchAll(/target_label="([^"]+)"/g)].map((match) => match[1]));
+const readinessTargetPaths = unique([...backendReadiness.matchAll(/target_path="([^"]+)"/g)].map((match) => match[1]));
+const readinessTargetLabels = unique([...backendReadiness.matchAll(/target_label="([^"]+)"/g)].map((match) => match[1]));
 
 if (readinessTargetPaths.length === 0) {
   throw new Error("No readiness target_path values found in backend readiness endpoint");

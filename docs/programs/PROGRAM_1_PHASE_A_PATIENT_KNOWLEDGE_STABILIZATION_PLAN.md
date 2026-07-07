@@ -223,7 +223,9 @@ Program 1 Phase A7 - Audit Timeline Clinical Evidence Pass je implementiran kao 
 
 Program 1 Phase A8 - Patient Knowledge Regression Gate je implementiran kao zastitni test/smoke/runbook sloj za Phase A invariants.
 
-Preporuceni sljedeci korak je Program 1 Phase A9 - Core Route Modularization Pass.
+Program 1 Phase A9 - Core Route Modularization Pass je implementiran kao uski servisni extraction pass: ClinicalDocument helper logika i Operational Readiness builder vise nisu inline u `core.py`.
+
+Preporuceni sljedeci korak je Program 1 Phase A10 - Core Route Domain Split Plan.
 
 ## 5. Proposed implementation work packages
 
