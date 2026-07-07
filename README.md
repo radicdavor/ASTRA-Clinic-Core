@@ -53,6 +53,7 @@ Pilot documents:
 - [Program 1 Phase A13 regression notes](docs/programs/PROGRAM_1_PHASE_A13_REGRESSION_NOTES.md)
 - [Program 1 Phase A14 regression notes](docs/programs/PROGRAM_1_PHASE_A14_REGRESSION_NOTES.md)
 - [Program 1 Phase A15 regression notes](docs/programs/PROGRAM_1_PHASE_A15_REGRESSION_NOTES.md)
+- [Program 1 Phase A16 Appointment and Reception Route Split](docs/programs/PROGRAM_1_PHASE_A16_APPOINTMENT_RECEPTION_ROUTE_SPLIT.md)
 - [Program 1 audit event naming](docs/programs/PROGRAM_1_AUDIT_EVENT_NAMING.md)
 - [Program 1 Phase A regression notes](docs/programs/PROGRAM_1_PHASE_A_REGRESSION_NOTES.md)
 - [Program 1 Phase A5 regression notes](docs/programs/PROGRAM_1_PHASE_A5_REGRESSION_NOTES.md)
