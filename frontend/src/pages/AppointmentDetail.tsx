@@ -108,14 +108,6 @@ export function AppointmentDetail() {
     return entry.requires_user_quantity ? "obavezno varijabilno" : "obavezno fiksno";
   }
 
-  function snapshotSafetyText(text?: string | null) {
-    if (!text) return "Snapshot history prikazuje spremljene preview zapise. Snapshot nije odluka da se postupak smije provesti.";
-    return text
-      .replace(new RegExp(["Outcome", "Evidence"].join(" "), "g"), "formalni dokaz ishoda")
-      .replace(new RegExp(["clinical", "approval"].join(" "), "g"), "klinicka odluka")
-      .replace(new RegExp(["readiness", "clearance"].join(" "), "g"), "klinicka odluka");
-  }
-
   function createSnapshotIdempotencyKey() {
     if (typeof crypto !== "undefined" && "randomUUID" in crypto) return crypto.randomUUID();
     return `snapshot-${Date.now()}-${Math.random().toString(36).slice(2)}`;
@@ -319,7 +311,7 @@ export function AppointmentDetail() {
         }
       >
         <p className="helper-text">Read-only prikaz spremljenih preview zapisa. Snapshot nije odluka da se postupak smije provesti.</p>
-        {snapshotHistory?.warning && <p className="helper-text">{snapshotSafetyText(snapshotHistory.warning)}</p>}
+        {snapshotHistory?.warning && <p className="helper-text">{snapshotHistory.warning}</p>}
         {snapshotHistoryRefreshWarning && <p className="form-error">{snapshotHistoryRefreshWarning}</p>}
         {snapshotHistoryError && <p className="form-error">Povijest snapshotova trenutno nije dostupna.</p>}
         {snapshotHistoryLoading ? (
@@ -345,7 +337,7 @@ export function AppointmentDetail() {
                   <p><span>Stanje zapisa</span><strong>{snapshot.superseded_by_snapshot_id ? `Zamijenjen snapshotom ${snapshot.superseded_by_snapshot_id}` : "Aktivan zapis povijesti"}</strong></p>
                 </div>
                 {snapshot.superseded_at && <p className="helper-text">Zamijenjen: {formatDateTime(snapshot.superseded_at)}. Razlog: {snapshot.superseded_reason ?? "-"}</p>}
-                {snapshot.disclaimer && <p className="helper-text">{snapshotSafetyText(snapshot.disclaimer)}</p>}
+                {snapshot.disclaimer && <p className="helper-text">{snapshot.disclaimer}</p>}
                 <button type="button" onClick={() => openSnapshotDetail(snapshot.id)}>Detalji snapshota</button>
               </article>
             ))}
@@ -382,7 +374,7 @@ export function AppointmentDetail() {
             {snapshotDetailError && <p className="form-error">{snapshotDetailError}</p>}
             {snapshotDetail && (
               <>
-                <p className="helper-text">{snapshotSafetyText(snapshotDetail.warning)}</p>
+                <p className="helper-text">{snapshotDetail.warning}</p>
                 <div className="detail-list">
                   <p><span>Spremljeno</span><strong>{formatDateTime(snapshotDetail.created_at)}</strong></p>
                   <p><span>Korisnik</span><strong>{snapshotDetail.created_by_user_id}</strong></p>
@@ -396,7 +388,7 @@ export function AppointmentDetail() {
                 </div>
                 {snapshotDetail.template_binding_warning && <p className="helper-text">{snapshotDetail.template_binding_warning}</p>}
                 <p>{snapshotDetail.preview_summary}</p>
-                {snapshotDetail.disclaimer && <p className="helper-text">{snapshotSafetyText(snapshotDetail.disclaimer)}</p>}
+                {snapshotDetail.disclaimer && <p className="helper-text">{snapshotDetail.disclaimer}</p>}
 
                 <h3>Ogranicenja</h3>
                 {snapshotDetail.limitations.length === 0 ? <p>Nema spremljenih ogranicenja.</p> : (
