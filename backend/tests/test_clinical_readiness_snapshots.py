@@ -4,6 +4,7 @@ import pytest
 from sqlalchemy.exc import IntegrityError
 
 from app.auth.dependencies import hash_api_key
+from app.core.security import hash_password
 from app.models.domain import (
     ApiKey,
     AuditLog,
@@ -11,6 +12,9 @@ from app.models.domain import (
     ClinicalPlan,
     ClinicalReadinessSnapshot,
     PatientClinicalSummaryRecord,
+    Permission,
+    Role,
+    User,
 )
 from app.services.clinical_readiness_snapshots import (
     CLINICAL_READINESS_SNAPSHOT_CAPTURED_EVENT,
@@ -1379,3 +1383,81 @@ def test_snapshot_lifecycle_end_to_end_without_workflow_side_effects(client, db,
     assert "outcome_evidence" not in table_names
     assert "tasks" not in table_names
     assert "patient_messages" not in table_names
+
+
+def test_snapshot_permission_matrix_regression(client, db, auth_setup):
+    read_permission = db.query(Permission).filter(Permission.name == "clinical_readiness.snapshots.read").one()
+    write_permission = db.query(Permission).filter(Permission.name == "clinical_readiness.snapshots.write").one()
+    supersede_permission = db.query(Permission).filter(Permission.name == "clinical_readiness.snapshots.supersede").one()
+    read_role = Role(name="snapshot-read-only", description="Snapshot read only", permissions=[read_permission])
+    write_role = Role(name="snapshot-write-only", description="Snapshot write only", permissions=[write_permission])
+    supersede_role = Role(name="snapshot-supersede-only", description="Snapshot supersede only", permissions=[supersede_permission])
+    read_user = User(
+        email="snapshot-read@test.local",
+        full_name="Snapshot Read",
+        password_hash=hash_password("secret"),
+        role=read_role,
+    )
+    write_user = User(
+        email="snapshot-write@test.local",
+        full_name="Snapshot Write",
+        password_hash=hash_password("secret"),
+        role=write_role,
+    )
+    supersede_user = User(
+        email="snapshot-supersede@test.local",
+        full_name="Snapshot Supersede",
+        password_hash=hash_password("secret"),
+        role=supersede_role,
+    )
+    db.add_all([read_role, write_role, supersede_role, read_user, write_user, supersede_user])
+    db.commit()
+
+    appt = appointment(db)
+    snapshot = capture_clinical_readiness_snapshot(
+        db,
+        appointment_id=appt.id,
+        actor_user_id=auth_setup["admin"].id,
+        reason="Permission matrix initial snapshot.",
+    )
+    read_headers = {"Authorization": f"Bearer {login_token(client, 'snapshot-read@test.local')}"}
+    write_headers = {"Authorization": f"Bearer {login_token(client, 'snapshot-write@test.local')}"}
+    supersede_headers = {"Authorization": f"Bearer {login_token(client, 'snapshot-supersede@test.local')}"}
+    limited_headers = {"Authorization": f"Bearer {login_token(client, 'limited@test.local')}"}
+
+    assert history_endpoint(client, appt.id, read_headers).status_code == 200
+    assert detail_endpoint(client, appt.id, snapshot.id, read_headers).status_code == 200
+    assert capture_endpoint(client, appt.id, read_headers, payload={"reason": "Read-only capture attempt."}).status_code == 403
+
+    write_capture = capture_endpoint(client, appt.id, write_headers, payload={"reason": "Write-only capture."})
+    assert write_capture.status_code == 200
+    assert supersede_endpoint(client, appt.id, snapshot.id, write_headers, payload={"reason": "Write-only supersede attempt."}).status_code == 403
+
+    supersede_response = supersede_endpoint(
+        client,
+        appt.id,
+        snapshot.id,
+        supersede_headers,
+        payload={"reason": "Supersede-only action."},
+    )
+    assert supersede_response.status_code == 200
+
+    assert history_endpoint(client, appt.id, limited_headers).status_code == 403
+    assert detail_endpoint(client, appt.id, snapshot.id, limited_headers).status_code == 403
+    assert capture_endpoint(client, appt.id, limited_headers, payload={"reason": "Limited capture attempt."}).status_code == 403
+
+    api_key = ApiKey(
+        name="Snapshot matrix API key",
+        key_hash=hash_api_key("matrix-api-key"),
+        scopes=["clinical_readiness.snapshots.write", "clinical_readiness.snapshots.supersede"],
+        active=True,
+    )
+    db.add(api_key)
+    db.commit()
+    api_headers = {"X-ASTRA-API-Key": "matrix-api-key"}
+
+    assert capture_endpoint(client, appt.id, api_headers, payload={"reason": "API capture attempt."}).status_code == 403
+    assert supersede_endpoint(client, appt.id, write_capture.json()["id"], api_headers, payload={"reason": "API supersede attempt."}).status_code == 403
+
+    admin_capture = capture_endpoint(client, appt.id, auth_headers(client), payload={"reason": "Admin still allowed."})
+    assert admin_capture.status_code == 200
