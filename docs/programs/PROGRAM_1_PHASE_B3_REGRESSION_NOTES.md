@@ -61,16 +61,19 @@ B3 preview:
 
 ## Tests/checks
 
-Planirani B3 regression gate:
+Izvedeni B3 regression gate:
 
-- `git diff --check`
-- `python -m py_compile app/main.py app/api/routes/appointments.py app/services/clinical_readiness_preview.py`
-- `docker compose run --rm -e PYTHONPATH=/app backend pytest`
-- `npm run typecheck`
-- `npm run build`
-- `npm run smoke`
+- `docker compose build backend` - proslo
+- `docker compose run --rm --entrypoint python -e PYTHONPATH=/app backend -m py_compile app/main.py app/api/routes/appointments.py app/services/clinical_readiness_preview.py` - proslo
+- `docker compose run --rm --entrypoint pytest -e PYTHONPATH=/app backend tests/test_clinical_readiness_preview.py` - proslo, 9 passed
+- `docker compose run --rm --entrypoint pytest -e PYTHONPATH=/app backend` - proslo, 154 passed, 9 skipped
+- `npm run typecheck` - proslo
+- `npm run build` - proslo uz postojece Tailwind/React Router bundler warninge
+- `npm run smoke` - proslo
 
-Stvarni rezultat se biljezi nakon zavrsnih provjera.
+Napomena:
+
+Standardni `docker compose run --rm -e PYTHONPATH=/app backend pytest` pokusaj nije dosao do testova jer lokalni Postgres Docker volume ima staru `alembic_version` kolonu prekratku za naziv migracije `0011_reception_resource_scheduling`. Testovi su zato pokrenuti kroz isti backend image s pytest entrypointom, koji koristi izoliranu SQLite test bazu kao postojece backend unit test fixturee.
 
 ## Remaining risks
 
@@ -89,4 +92,3 @@ Stvarni rezultat se biljezi nakon zavrsnih provjera.
 Razlog:
 
 Preview sada postoji kao read-only surface, ali nema sigurni service-specific template model. Prije hardeninga UI-ja ili bilo kakvog enforcementa treba definirati template design.
-
