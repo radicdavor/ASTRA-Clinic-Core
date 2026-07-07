@@ -200,6 +200,9 @@ assertIncludes("src/pages/AppointmentDetail.tsx", "Snapshot nije spremljen. Prov
 assertIncludes("src/pages/AppointmentDetail.tsx", "Nemate dozvolu za spremanje snapshotova.");
 assertIncludes("src/pages/AppointmentDetail.tsx", "Snapshot je spremljen, ali povijest nije osvjezena.");
 assertIncludes("src/pages/AppointmentDetail.tsx", "refreshSnapshotHistoryAfterCapture");
+assertIncludes("src/pages/AppointmentDetail.tsx", "createSnapshotIdempotencyKey");
+assertIncludes("src/pages/AppointmentDetail.tsx", "idempotency_key");
+assertIncludes("src/pages/AppointmentDetail.tsx", "randomUUID");
 assertIncludes("src/pages/AppointmentDetail.tsx", "Detalji snapshota");
 assertIncludes("src/pages/AppointmentDetail.tsx", "Detalji Clinical Readiness Snapshota");
 assertIncludes("src/pages/AppointmentDetail.tsx", "Detalji snapshota trenutno nisu dostupni.");

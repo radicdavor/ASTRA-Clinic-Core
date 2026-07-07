@@ -659,3 +659,111 @@ def test_detail_endpoint_response_excludes_forbidden_approval_fields(client, db,
     assert response.status_code == 200
     forbidden = {"approved", "cleared", "procedure_allowed", "task_created", "outcome_evidence_id", "override_status"}
     assert forbidden.isdisjoint(response.json().keys())
+
+
+def test_capture_without_idempotency_key_can_create_multiple_snapshots(db, auth_setup):
+    appt = appointment(db)
+
+    first = capture_clinical_readiness_snapshot(
+        db,
+        appointment_id=appt.id,
+        actor_user_id=auth_setup["admin"].id,
+        reason="Explicit first capture.",
+    )
+    second = capture_clinical_readiness_snapshot(
+        db,
+        appointment_id=appt.id,
+        actor_user_id=auth_setup["admin"].id,
+        reason="Explicit second capture.",
+    )
+
+    assert first.id != second.id
+    assert db.query(ClinicalReadinessSnapshot).count() == 2
+
+
+def test_capture_same_idempotency_key_and_fingerprint_returns_existing_snapshot_without_audit(db, auth_setup):
+    appt = appointment(db)
+
+    first = capture_clinical_readiness_snapshot(
+        db,
+        appointment_id=appt.id,
+        actor_user_id=auth_setup["admin"].id,
+        reason="Retry-safe capture.",
+        idempotency_key=" retry-key ",
+    )
+    audit_count = db.query(AuditLog).filter(AuditLog.action == CLINICAL_READINESS_SNAPSHOT_CAPTURED_EVENT).count()
+    second = capture_clinical_readiness_snapshot(
+        db,
+        appointment_id=appt.id,
+        actor_user_id=auth_setup["admin"].id,
+        reason="Retry-safe capture.",
+        idempotency_key="retry-key",
+    )
+
+    assert second.id == first.id
+    assert db.query(ClinicalReadinessSnapshot).count() == 1
+    assert db.query(AuditLog).filter(AuditLog.action == CLINICAL_READINESS_SNAPSHOT_CAPTURED_EVENT).count() == audit_count
+    assert first.idempotency_key == "retry-key"
+    assert first.idempotency_fingerprint
+
+
+def test_capture_endpoint_same_idempotency_key_different_reason_returns_conflict(client, db, auth_setup):
+    appt = appointment(db)
+    headers = auth_headers(client)
+
+    first = capture_endpoint(
+        client,
+        appt.id,
+        headers=headers,
+        payload={"reason": "Original reason.", "idempotency_key": "same-key"},
+    )
+    second = capture_endpoint(
+        client,
+        appt.id,
+        headers=headers,
+        payload={"reason": "Different reason.", "idempotency_key": "same-key"},
+    )
+
+    assert first.status_code == 200
+    assert second.status_code == 409
+    assert db.query(ClinicalReadinessSnapshot).count() == 1
+
+
+def test_capture_endpoint_idempotency_does_not_trust_client_preview_timestamp(client, db, auth_setup):
+    appt = appointment(db, status="scheduled")
+    original_status = appt.status
+    headers = auth_headers(client)
+    episode_count = db.query(ClinicalEpisode).count()
+    plan_count = db.query(ClinicalPlan).count()
+    table_names = set(db.get_bind().dialect.get_table_names(db.connection()))
+
+    first = capture_endpoint(
+        client,
+        appt.id,
+        headers=headers,
+        payload={
+            "reason": "Client timestamp ignored.",
+            "idempotency_key": "timestamp-key",
+            "client_preview_generated_at": "1999-01-01T00:00:00Z",
+        },
+    )
+    second = capture_endpoint(
+        client,
+        appt.id,
+        headers=headers,
+        payload={
+            "reason": "Client timestamp ignored.",
+            "idempotency_key": "timestamp-key",
+            "client_preview_generated_at": "2030-01-01T00:00:00Z",
+        },
+    )
+
+    assert first.status_code == 200
+    assert second.status_code == 200
+    assert first.json()["id"] == second.json()["id"]
+    db.expire(appt)
+    assert appt.status == original_status
+    assert db.query(ClinicalEpisode).count() == episode_count
+    assert db.query(ClinicalPlan).count() == plan_count
+    assert "outcome_evidence" not in table_names
+    assert "tasks" not in table_names
