@@ -371,6 +371,14 @@ Phase B27 update:
 - B27 ne uvodi nove endpointove, UI akcije, edit/delete, approval, clearance, override, Outcome Evidence, Task engine, appointment status change ili patient messaging
 - preporuceni sljedeci task je `Program 1 Phase B28 - Program 1 Phase B Snapshot Closure Gate`
 
+Phase B28 update:
+
+- Clinical Readiness Snapshot subphase je zatvoren closure reportom
+- go/no-go matrica formalno odvaja demo/pilot use od real-data, production i clinical enforcement no-go statusa
+- next-step decision brief preporucuje `Program 1 Phase B29 - Snapshot Production Risk Hardening`
+- B28 je documentation-only; ne uvodi backend/frontend runtime promjene
+- Clinical Readiness enforcement se ne pokrece dok production risk hardening nije razjasnjen
+
 ## 5. Faza 2 - Findings Lifecycle Foundation
 
 Cilj:
