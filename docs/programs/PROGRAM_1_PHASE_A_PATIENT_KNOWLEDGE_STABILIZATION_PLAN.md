@@ -598,6 +598,17 @@ Status after critical hardening pass:
 
 A5 remains deferred and should be handled separately: Open Questions and Unresolved Findings UI/Contract.
 
+### Phase A16 route split update
+
+Status after A16:
+
+- Appointment rute su izdvojene u `backend/app/api/routes/appointments.py`.
+- Reception rute su izdvojene u `backend/app/api/routes/reception.py`.
+- Javne adrese `/api/appointments`, `/api/schedule/day`, `/api/reception/day` i `/api/appointments/{appointment_id}/mark-arrived` ostaju iste.
+- Frontend smoke cuva prisutnost novih route modula.
+- `core.py` je smanjen, ali jos sadrzi episode/clinical plan, search/catalog i audit rute.
+- Nije uveden Clinical Readiness Gate, Task engine, Workflow Engine, real AI/OCR ili Episode-Based Care kao primarni workflow.
+
 ### Phase A5 implementation update
 
 Status after A5:
