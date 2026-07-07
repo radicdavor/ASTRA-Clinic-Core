@@ -174,6 +174,15 @@ Phase B8 update:
 - B8 ne uvodi DB tablicu, migraciju, capture endpoint, snapshot history, persistence, enforcement ili override
 - preporuceni sljedeci task je `Program 1 Phase B9 - Clinical Readiness Snapshot Persistence Design`
 
+Phase B9 update:
+
+- snapshot persistence model design je dokumentiran kroz `PROGRAM_1_PHASE_B9_CLINICAL_READINESS_SNAPSHOT_PERSISTENCE_MODEL.md`
+- snapshot audit model design je dokumentiran kroz `PROGRAM_1_PHASE_B9_CLINICAL_READINESS_SNAPSHOT_AUDIT_MODEL.md`
+- snapshot lifecycle governance design je dokumentiran kroz `PROGRAM_1_PHASE_B9_CLINICAL_READINESS_SNAPSHOT_LIFECYCLE_GOVERNANCE.md`
+- snapshot future regression gate je dokumentiran kroz `PROGRAM_1_PHASE_B9_CLINICAL_READINESS_SNAPSHOT_REGRESSION_GATE.md`
+- B9 je documentation-only i ne uvodi DB tablicu, migraciju, capture endpoint, history UI, audit evente, Outcome Evidence, enforcement ili override
+- preporuceni sljedeci task je `Program 1 Phase B10 - Snapshot Persistence Migration Review`
+
 ## 5. Faza 2 - Findings Lifecycle Foundation
 
 Cilj:

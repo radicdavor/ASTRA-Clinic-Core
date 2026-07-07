@@ -375,3 +375,39 @@ Preporuceni sljedeci task:
 `Program 1 Phase B9 - Clinical Readiness Snapshot Persistence Design`
 
 B9 treba ostati persistence design, ne implementacija, dok se ne definiraju schema, immutability, audit capture event i governance.
+
+## 18. Phase B9 outcome
+
+Phase B9 definira persistence design za buduci Clinical Readiness Snapshot bez implementacije.
+
+Implementirano:
+
+- `PROGRAM_1_PHASE_B9_CLINICAL_READINESS_SNAPSHOT_PERSISTENCE_MODEL.md`
+- `PROGRAM_1_PHASE_B9_CLINICAL_READINESS_SNAPSHOT_AUDIT_MODEL.md`
+- `PROGRAM_1_PHASE_B9_CLINICAL_READINESS_SNAPSHOT_LIFECYCLE_GOVERNANCE.md`
+- `PROGRAM_1_PHASE_B9_CLINICAL_READINESS_SNAPSHOT_REGRESSION_GATE.md`
+
+B9 ostaje:
+
+- documentation-only
+- bez DB tablice
+- bez migracije
+- bez capture endpointa
+- bez snapshot history UI-ja
+- bez audit event implementationa
+- bez Outcome Evidencea
+- bez enforcementa
+- bez overridea
+- bez Task enginea
+- bez Workflow Enginea
+- bez real AI/OCR
+- bez real patient data
+- bez production/certification claimova
+
+B9 decision:
+
+Buduci snapshot persistence mora spremiti immutable copy onoga sto je preview prikazao, uz audit capture event i preview-only disclaimer. Ne smije recomputeati povijesni sadrzaj i ne smije znaciti clinical approval.
+
+Preporuceni sljedeci task:
+
+`Program 1 Phase B10 - Snapshot Persistence Migration Review`
