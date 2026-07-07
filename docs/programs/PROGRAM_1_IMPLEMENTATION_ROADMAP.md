@@ -467,6 +467,13 @@ Phase B39 update:
 - B39 ne omogucuje real patient data niti production deployment
 - recommended next task je `Program 1 Phase B40 - Snapshot Production Governance Closure Matrix`
 
+Phase B40 update:
+
+- snapshot production governance closure matrix objedinjuje B29-B39
+- matrica potvrduje demo/pilot allowed with guardrails, real data no-go, production no-go i clinical enforcement no-go
+- B40 ne uvodi runtime promjene
+- recommended next task je `Program 1 Phase B41 - Program 1 Phase B Snapshot Hardening Closure`
+
 ## 5. Faza 2 - Findings Lifecycle Foundation
 
 Cilj:
