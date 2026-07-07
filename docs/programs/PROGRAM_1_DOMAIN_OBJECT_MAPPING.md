@@ -197,7 +197,7 @@ AI support je placeholder:
 | --- | --- | --- | --- | --- |
 | `PatientDetail` | Patient Workspace s knowledge summary, documents, appointments, invoices, audit. | `Patient Workspace`, `Patient Clinical Knowledge`, `Patient Clinical Summary` | Aligned | Bolje razdvojiti official knowledge od AI summary carda. |
 | `ClinicalDocuments` | Popis/filter/upload clinical documents. | `ClinicalDocument`, `Internal/External ClinicalDocument` | Aligned | Upload je metadata/raw text placeholder. |
-| `ClinicalDocumentDetail` | Review workspace za document, extraction i audit. | `ClinicalDocument`, `AI Extraction`, `Physician Review` | Aligned | Finding lifecycle nije formaliziran. |
+| `ClinicalDocumentDetail` | Review workspace za document, extraction, lijecnicki pregled i audit. | `ClinicalDocument`, `AI Extraction`, `Physician Review` | Aligned | Phase A6 jasno odvaja izvorni dokument, AI prijedlog i doprinos source-linked znanju; Finding lifecycle nije formaliziran. |
 | `EpisodeDetail` | Episode workspace s active/pending planovima. | `Clinical Episode`, `ClinicalPlan`, `AI Suggestion` | Partially aligned / deferred | Ostaje compatibility surface do reactivationa. |
 | `AppointmentDetail` | Appointment workspace, materials, invoice, audit. | `Appointment`, `Material Consumption`, `Inventory Movement` | Aligned | Clinical Readiness Gate nije implementiran. |
 | `Reception` | Day resource grid, arrival, identity verification. | `Reception Workspace`, `Human Confirmation` | Aligned | Week/month view deferred; no clinical truth. |

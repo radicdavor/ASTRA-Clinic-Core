@@ -82,6 +82,8 @@ ClinicalDocument now stores an explicit `review_status` lifecycle:
 
 `physician_reviewed` remains as a compatibility field. Official Patient Clinical Knowledge requires both `review_status=reviewed` and `physician_reviewed=true`.
 
+ClinicalDocument Detail must keep the source, AI extraction suggestion and physician review state visually separate. The screen must show whether a document can contribute to source-linked patient knowledge, and it must explain that rejecting an AI suggestion does not reject the raw source document.
+
 ## 6. Official Patient Knowledge
 
 Official patient knowledge is generated only from reviewed Clinical Documents.

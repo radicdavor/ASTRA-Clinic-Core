@@ -1,6 +1,6 @@
 # Program 1 - Phase A: Patient Knowledge Stabilization Plan
 
-Status: implementacijski plan; Phase A1, Phase A2, Phase A3 i Phase A4 djelomicno implementirani
+Status: implementacijski plan; Phase A1-A6 implemented foundation, demo/pilot only
 
 ## 1. Svrha
 
@@ -204,6 +204,22 @@ Phase A treba standardizirati nazive događaja i osigurati da se review/reject/e
 7. Episode Engine ostaje deferred.
 8. Clinical Readiness Gate ostaje future.
 9. Demo/pilot real-data guardrails ostaju netaknuti.
+
+## 4.1 Phase A6 implementation note
+
+Phase A6 implementira ClinicalDocument Detail review UX hardening.
+
+Dodano je:
+
+- ugovor za ClinicalDocument Detail UX
+- backend testiranje detail lifecycle stanja
+- jasnije UI razdvajanje izvornog dokumenta, AI prijedloga ekstrakcije i lijecnickog pregleda
+- jasna poruka doprinosi li dokument sluzbenom source-linked znanju pacijenta
+- smoke zastita za nove oznake i akcije
+
+Phase A6 ne uvodi Task engine, Clinical Readiness Gate, Episode-Based Care, Workflow Engine, real AI/OCR provider, formalni Finding object, formalni Medical Note output ili stvarne pacijentove podatke.
+
+Preporuceni sljedeci korak je Program 1 Phase A7 - Audit Timeline Clinical Evidence Pass.
 
 ## 5. Proposed implementation work packages
 
