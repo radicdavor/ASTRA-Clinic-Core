@@ -88,9 +88,9 @@ export function AppointmentDetail() {
   function snapshotSafetyText(text?: string | null) {
     if (!text) return "Snapshot history prikazuje spremljene preview zapise. Snapshot nije odluka da se postupak smije provesti.";
     return text
-      .replaceAll(["Outcome", "Evidence"].join(" "), "formalni dokaz ishoda")
-      .replaceAll(["clinical", "approval"].join(" "), "klinicka odluka")
-      .replaceAll(["readiness", "clearance"].join(" "), "klinicka odluka");
+      .replace(new RegExp(["Outcome", "Evidence"].join(" "), "g"), "formalni dokaz ishoda")
+      .replace(new RegExp(["clinical", "approval"].join(" "), "g"), "klinicka odluka")
+      .replace(new RegExp(["readiness", "clearance"].join(" "), "g"), "klinicka odluka");
   }
 
   async function completeWithMaterials() {
