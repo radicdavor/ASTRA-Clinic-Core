@@ -6,12 +6,14 @@ from sqlalchemy.orm import Session
 
 from app.models.domain import Appointment
 from app.schemas.common import ClinicalReadinessPreviewItem, ClinicalReadinessPreviewResponse
+from app.services.clinical_readiness_templates import ClinicalReadinessTemplateItem, select_clinical_readiness_template
 from app.services.patient_knowledge import official_patient_documents_statement, summary_record_from_documents
 
 
 DEMO_LIMITATION = "Ovo je demo/pilot read-only preview i nije produkcijska odluka."
 PREVIEW_SUMMARY = "Klinicka spremnost prikazana je kao read-only preview. Ne blokira termin i ne predstavlja klinicku odluku."
-NO_TEMPLATE_LIMITATION = "Nema definiranog clinical readiness templatea za ovu uslugu."
+TEMPLATE_LIMITATION = "Clinical readiness template je demo/pilot staticna definicija, nije produkcijsko pravilo."
+GENERIC_TEMPLATE_LIMITATION = "Nema specificnog clinical readiness templatea za ovu uslugu; koristi se genericki preview."
 NO_REVIEWED_DOCUMENTS_LIMITATION = "Nema pregledanih klinickih dokumenata za ovog pacijenta."
 
 
@@ -23,6 +25,31 @@ def aggregate_status(items: list[ClinicalReadinessPreviewItem]) -> str:
     if any(item.severity == "warning" or item.status == "ready_with_warning" for item in items):
         return "ready_with_warning"
     return "ready"
+
+
+def template_item_to_preview_item(
+    template_item: ClinicalReadinessTemplateItem,
+    *,
+    service_id: int,
+    service_name: str,
+) -> ClinicalReadinessPreviewItem:
+    return ClinicalReadinessPreviewItem(
+        key=f"template_{template_item.key}",
+        label=template_item.label,
+        category=template_item.category,
+        status=template_item.default_status,
+        severity=template_item.severity,
+        responsible_role=template_item.responsible_role,
+        source_type=template_item.source_type,
+        source_ref=f"Service:{service_id}",
+        source_label=service_name,
+        suggested_action=template_item.suggested_action,
+        blocking=False,
+        override_allowed=False,
+        override_role=None,
+        override_reason_required=False,
+        audit_required=False,
+    )
 
 
 def build_clinical_readiness_preview(db: Session, appointment: Appointment) -> ClinicalReadinessPreviewResponse:
@@ -72,25 +99,16 @@ def build_clinical_readiness_preview(db: Session, appointment: Appointment) -> C
             )
         )
     else:
-        limitations.append(NO_TEMPLATE_LIMITATION)
-        items.append(
-            ClinicalReadinessPreviewItem(
-                key="service_template_missing",
-                label="Clinical readiness template nije definiran za ovu uslugu",
-                category="service",
-                status="ready_with_warning",
-                severity="warning",
-                responsible_role="admin",
-                source_type="system_record",
-                source_ref=f"Service:{appointment.service_id}",
-                source_label=appointment.service.name if appointment.service else f"Usluga #{appointment.service_id}",
-                suggested_action="Nastaviti samo kao preview; template treba definirati u buducem B4 tasku.",
-                blocking=False,
-                override_allowed=False,
-                override_role=None,
-                override_reason_required=False,
-                audit_required=False,
-            )
+        service_name = appointment.service.name if appointment.service else f"Usluga #{appointment.service_id}"
+        template = select_clinical_readiness_template(service_name)
+        limitations.append(TEMPLATE_LIMITATION)
+        if template.specific:
+            limitations.append(f"Koristi se demo/pilot template: {template.name}.")
+        else:
+            limitations.append(GENERIC_TEMPLATE_LIMITATION)
+        items.extend(
+            template_item_to_preview_item(template_item, service_id=appointment.service_id, service_name=service_name)
+            for template_item in template.items
         )
 
     reviewed_documents = []
@@ -155,4 +173,3 @@ def build_clinical_readiness_preview(db: Session, appointment: Appointment) -> C
         source_warnings=source_warnings,
         limitations=limitations,
     )
-
