@@ -292,6 +292,18 @@ export type ClinicalReadinessSnapshotDetailResponse = ClinicalReadinessSnapshotR
   warning: string;
 };
 
+export type ClinicalReadinessSnapshotSupersedeRequest = {
+  reason: string;
+};
+
+export type ClinicalReadinessSnapshotSupersedeResponse = {
+  old_snapshot_id: number;
+  new_snapshot: ClinicalReadinessSnapshotResponse;
+  superseded_at: string;
+  superseded_reason: string;
+  warning: string;
+};
+
 export type ReceptionSlot = {
   time: string;
   appointment?: Appointment | null;
