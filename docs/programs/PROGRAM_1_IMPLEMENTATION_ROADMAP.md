@@ -164,6 +164,16 @@ Phase B7 update:
 - B7 ne uvodi DB versioning, migraciju, template editor, persistent snapshot ili enforcement
 - preporuceni sljedeci task je `Program 1 Phase B8 - Clinical Readiness Snapshot Design`
 
+Phase B8 update:
+
+- Clinical Readiness snapshot design je dokumentiran kroz `PROGRAM_1_PHASE_B8_CLINICAL_READINESS_SNAPSHOT_DESIGN.md`
+- granice izmedju snapshota, audita, outcome evidencea, taska i klinicke odluke dokumentirane su kroz `PROGRAM_1_PHASE_B8_CLINICAL_READINESS_SNAPSHOT_BOUNDARIES.md`
+- preview response sada sadrzi `snapshot_supported`, `snapshot_status` i `snapshot_warning`
+- Appointment Workspace prikazuje da snapshot nije implementiran i da se live preview ne sprema kao trajni zapis
+- regression coverage cuva da preview read ne stvara snapshot, audit, task, epizodu, ClinicalPlan ili Outcome Evidence i ne mijenja appointment status
+- B8 ne uvodi DB tablicu, migraciju, capture endpoint, snapshot history, persistence, enforcement ili override
+- preporuceni sljedeci task je `Program 1 Phase B9 - Clinical Readiness Snapshot Persistence Design`
+
 ## 5. Faza 2 - Findings Lifecycle Foundation
 
 Cilj:

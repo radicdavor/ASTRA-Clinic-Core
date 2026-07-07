@@ -337,3 +337,41 @@ Preporuceni sljedeci task:
 `Program 1 Phase B8 - Clinical Readiness Snapshot Design`
 
 B8 treba biti design-first i ne smije stvoriti Outcome Evidence objekt ili workflow enforcement.
+
+## 17. Phase B8 outcome
+
+Phase B8 definira buduci Clinical Readiness Snapshot prije implementacije persistencea.
+
+Implementirano:
+
+- `PROGRAM_1_PHASE_B8_CLINICAL_READINESS_SNAPSHOT_DESIGN.md`
+- `PROGRAM_1_PHASE_B8_CLINICAL_READINESS_SNAPSHOT_BOUNDARIES.md`
+- snapshot non-implementation metadata u preview responseu
+- Appointment Workspace snapshot warning
+- regression coverage za read-only i non-persistent ponasanje
+
+B8 ostaje:
+
+- read-only
+- appointment-scoped
+- non-blocking
+- demo/pilot-only
+- bez persistent snapshot modela
+- bez DB tablice
+- bez migracije
+- bez capture endpointa
+- bez snapshot history UI-ja
+- bez Outcome Evidencea
+- bez enforcementa
+- bez overridea
+- bez Task enginea
+- bez Workflow Enginea
+- bez real AI/OCR
+- bez real patient data
+- bez production/certification claimova
+
+Preporuceni sljedeci task:
+
+`Program 1 Phase B9 - Clinical Readiness Snapshot Persistence Design`
+
+B9 treba ostati persistence design, ne implementacija, dok se ne definiraju schema, immutability, audit capture event i governance.
