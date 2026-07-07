@@ -41,6 +41,7 @@ Pilot documents:
 - [V19 Architecture Bible compliance gate](docs/V19_ARCHITECTURE_BIBLE_COMPLIANCE_GATE.md)
 - [Pilot runbook](docs/PILOT_RUNBOOK.md)
 - [Program 1 Phase A hardening audit](docs/programs/PROGRAM_1_PHASE_A_HARDENING_AUDIT.md)
+- [Program 1 Open Questions Contract](docs/programs/PROGRAM_1_OPEN_QUESTIONS_CONTRACT.md)
 - [Program 1 audit event naming](docs/programs/PROGRAM_1_AUDIT_EVENT_NAMING.md)
 - [Program 1 Phase A regression notes](docs/programs/PROGRAM_1_PHASE_A_REGRESSION_NOTES.md)
 - [Real data readiness checklist](docs/REAL_DATA_READINESS_CHECKLIST.md)
