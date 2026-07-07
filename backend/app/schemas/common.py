@@ -135,6 +135,50 @@ class ClinicalReadinessPreviewResponse(BaseModel):
         return value
 
 
+class ClinicalReadinessSnapshotCaptureRequest(BaseModel):
+    reason: str
+    client_preview_generated_at: DateTimeType | None = None
+    idempotency_key: str | None = None
+
+    @field_validator("reason")
+    @classmethod
+    def validate_reason(cls, value: str) -> str:
+        cleaned = value.strip()
+        if not cleaned:
+            raise ValueError("Razlog spremanja snapshota je obavezan")
+        return cleaned
+
+
+class ClinicalReadinessSnapshotResponse(BaseModel):
+    id: int
+    appointment_id: int
+    patient_id: int
+    service_id: int
+    created_at: DateTimeType
+    created_by_user_id: int
+    schema_version: str
+    preview_generated_at: DateTimeType
+    preview_status: str
+    template_key: str | None = None
+    template_label: str | None = None
+    template_version: str | None = None
+    template_binding_status: str | None = None
+    snapshot_reason: str
+    is_preview_snapshot: bool
+    disclaimer: str
+    items: list[dict]
+    limitations: list[str]
+    source_warnings: list[str]
+    source_refs: list[dict]
+
+    @field_validator("preview_status")
+    @classmethod
+    def validate_preview_status(cls, value: str) -> str:
+        if value not in CLINICAL_READINESS_STATUSES:
+            raise ValueError("Nepoznat status klinicke spremnosti")
+        return value
+
+
 class LoginRequest(BaseModel):
     email: str
     password: str
