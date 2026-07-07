@@ -85,3 +85,24 @@ A17 ne uvodi:
 Korisnik ne bi smio primijetiti funkcionalnu promjenu. Postojece API adrese, permissioni, response schema i audit dogadjaji moraju ostati kompatibilni.
 
 Arhitektonska korist je jasnija granica: epizode i klinicki planovi ostaju izolirani compatibility/deferred route modul, a `core.py` se dalje smanjuje prema A18 razdvajanju catalog/search/audit ruta.
+
+## 7. Implementacijsko ozicenje
+
+A17 registrira `episodes.router` u `backend/app/main.py` prije preostalog `core.router`.
+
+Nakon izdvajanja:
+
+- `backend/app/api/routes/episodes.py` nosi Episode i ClinicalPlan compatibility/deferred rute.
+- `backend/app/api/routes/core.py` vise ne nosi Episode/ClinicalPlan route handlere.
+- `backend/app/api/routes/patients.py` i dalje nosi `/api/patients/{patient_id}/episodes` jer je to Patient Workspace endpoint.
+- `backend/app/api/routes/appointments.py` i dalje validira opcionalni `episode_id`, ali termini bez epizode ostaju dopusteni.
+- `backend/app/api/routes/core.py` ostaje privremeni modul za catalog/search/audit rute do A18.
+
+Smoke provjera dodatno cuva:
+
+- `episodes.router`
+- `/api/episodes`
+- `/api/episodes/{episode_id}/clinical-plans`
+- `/api/clinical-plans/{plan_id}/confirm`
+
+Ovo ozicenje ne mijenja javne API adrese i ne pretvara ClinicalPlan u Workflow Engine.
