@@ -771,3 +771,41 @@ Capture UI smije postojati samo kao reason-required preview snapshot action. Ne 
 Preporuceni sljedeci task:
 
 `Program 1 Phase B19 - Snapshot Detail Read-Only View`
+
+## 28. Phase B19 outcome
+
+Phase B19 dodaje read-only detail view za captured Clinical Readiness Snapshot.
+
+Dodano:
+
+- backend detail response schema
+- appointment-scoped detail endpoint
+- frontend detail type i API client
+- read-only detail panel u Appointment Workspaceu
+- prikaz items, limitations, source warnings, source refs, template metadata, reason i disclaimer
+- backend regression coverage
+- frontend smoke coverage
+
+B19 ostaje:
+
+- bez snapshot edita
+- bez snapshot deletea
+- bez supersessiona
+- bez approvala
+- bez clearancea
+- bez overridea
+- bez Outcome Evidencea
+- bez Task enginea
+- bez appointment status promjene
+- bez patient messaginga
+- bez production governancea
+- bez real AI/OCR
+- bez real patient data
+
+B19 decision:
+
+Snapshot detail smije prikazivati immutable copied payload samo kao read-only zapis previewa. Ne smije uvoditi odluku, odobrenje, clearance, override, task ili promjenu tijeka termina.
+
+Preporuceni sljedeci task:
+
+`Program 1 Phase B20 - Snapshot Idempotency and Duplicate-Capture Guard`

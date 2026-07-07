@@ -105,6 +105,7 @@ Pilot documents:
 - [Program 1 Phase B16 regression notes](docs/programs/PROGRAM_1_PHASE_B16_REGRESSION_NOTES.md)
 - [Program 1 Phase B17 regression notes](docs/programs/PROGRAM_1_PHASE_B17_REGRESSION_NOTES.md)
 - [Program 1 Phase B18 regression notes](docs/programs/PROGRAM_1_PHASE_B18_REGRESSION_NOTES.md)
+- [Program 1 Phase B19 regression notes](docs/programs/PROGRAM_1_PHASE_B19_REGRESSION_NOTES.md)
 - [Lokalni LAN pristup](docs/LAN_ACCESS.md)
 - [Program 1 audit event naming](docs/programs/PROGRAM_1_AUDIT_EVENT_NAMING.md)
 - [Program 1 Phase A regression notes](docs/programs/PROGRAM_1_PHASE_A_REGRESSION_NOTES.md)

@@ -277,6 +277,18 @@ Phase B18 update:
 - B18 ne uvodi clinical approval, readiness clearance, override, Outcome Evidence, Task engine, appointment status change, patient messaging, snapshot edit/delete, supersession UI, production governance, real AI/OCR ili real patient data
 - preporuceni sljedeci task je `Program 1 Phase B19 - Snapshot Detail Read-Only View`
 
+Phase B19 update:
+
+- backend snapshot detail response schema je dodana
+- endpoint `GET /api/appointments/{appointment_id}/clinical-readiness-snapshots/{snapshot_id}` je dodan
+- endpoint zahtijeva `clinical_readiness.snapshots.read`
+- endpoint provjerava appointment scope i vraca full copied snapshot payload
+- frontend client i tip za snapshot detail su dodani
+- Appointment Workspace prikazuje read-only detail panel za snapshot history item
+- regression coverage cuva auth, permission, appointment scope, full copied payload, read-only side effects i zabranu approval/clearance polja
+- B19 ne uvodi snapshot edit/delete, supersession, approval, clearance, override, Outcome Evidence, Task engine, appointment status change, patient messaging, production governance, real AI/OCR ili real patient data
+- preporuceni sljedeci task je `Program 1 Phase B20 - Snapshot Idempotency and Duplicate-Capture Guard`
+
 ## 5. Faza 2 - Findings Lifecycle Foundation
 
 Cilj:
