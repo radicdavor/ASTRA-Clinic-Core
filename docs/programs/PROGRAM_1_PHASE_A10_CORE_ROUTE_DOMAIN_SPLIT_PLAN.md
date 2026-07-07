@@ -244,3 +244,16 @@ Route split ne smije:
 `Program 1 Phase A11 - Split Operational Readiness Route`
 
 Razlog: readiness logika je vec u `backend/app/services/readiness.py`, pa route modul moze postati tanak i samostalan uz najmanji rizik.
+
+## 9. A11 implementation update
+
+A11 je implementirao prvi stvarni route split:
+
+- `GET /api/readiness` je premjesten u `backend/app/api/routes/readiness.py`.
+- `backend/app/main.py` registrira `readiness.router`.
+- `backend/app/services/readiness.py` ostaje canonical Operational Readiness builder.
+- URL i API ugovor ostaju isti.
+
+Preporuceni sljedeci zadatak nakon A11:
+
+`Program 1 Phase A12 - Split System Public Config Route`

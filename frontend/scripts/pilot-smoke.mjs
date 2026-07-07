@@ -214,6 +214,8 @@ assertIncludes("src/pages/Readiness.tsx", "Nepregledani dokumenti ne ulaze u slu
 assertNotIncludes("src/pages/Readiness.tsx", "Clinical Readiness Gate");
 assertNotIncludes("src/pages/Readiness.tsx", "Ready with Warning");
 assertNotIncludes("src/pages/Readiness.tsx", "Not Ready");
+assertIncludes("../backend/app/api/routes/readiness.py", '"/readiness"');
+assertIncludes("../backend/app/main.py", "readiness.router");
 assertIncludes("../backend/app/services/readiness.py", "/clinical-documents?review_status=needs_physician_review");
 assertIncludes("../backend/app/services/readiness.py", "patient_summary_stale");
 assertIncludes("../backend/app/services/readiness.py", "Episode Engine je eksperimentalno/deferred");

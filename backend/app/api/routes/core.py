@@ -11,12 +11,11 @@ from app.auth.dependencies import Actor, require_permission
 from app.core.config import get_settings
 from app.core.database import get_db
 from app.models.domain import Appointment, AuditLog, Clinic, ClinicalDocument, ClinicalEpisode, ClinicalPlan, Invoice, Module, Patient, PatientClinicalSummaryRecord, Provider, Room, Service
-from app.schemas.common import AppointmentCreate, AppointmentOut, AppointmentUpdate, ClinicOut, ClinicalDecisionTimelineItem, ClinicalDocumentCreate, ClinicalDocumentOut, ClinicalDocumentUpdate, ClinicalDocumentUpload, ClinicalEpisodeCreate, ClinicalEpisodeOut, ClinicalEpisodeUpdate, ClinicalEvidenceTimelineItem, ClinicalPlanGenerate, ClinicalPlanOut, ClinicalPlanUpdate, ErrorResponse, InvoiceOut, PatientClinicalSummary, PatientClinicalSummaryRecordOut, PatientClinicalSummaryRecordUpdate, PatientCreate, PatientOut, PatientUpdate, ReadinessOut, ReceptionArrivalRequest, ReceptionSlot, ServiceCreate, ServiceOut
+from app.schemas.common import AppointmentCreate, AppointmentOut, AppointmentUpdate, ClinicOut, ClinicalDecisionTimelineItem, ClinicalDocumentCreate, ClinicalDocumentOut, ClinicalDocumentUpdate, ClinicalDocumentUpload, ClinicalEpisodeCreate, ClinicalEpisodeOut, ClinicalEpisodeUpdate, ClinicalEvidenceTimelineItem, ClinicalPlanGenerate, ClinicalPlanOut, ClinicalPlanUpdate, ErrorResponse, InvoiceOut, PatientClinicalSummary, PatientClinicalSummaryRecordOut, PatientClinicalSummaryRecordUpdate, PatientCreate, PatientOut, PatientUpdate, ReceptionArrivalRequest, ReceptionSlot, ServiceCreate, ServiceOut
 from app.services.appointments import validate_appointment_payload
 from app.services.clinical_evidence_timeline import classify_audit_log
 from app.services.clinical_documents import extract_document_knowledge, get_document_or_404, initial_ai_extraction_status, initial_document_review_status, mark_document_ai_extraction_edited, mark_document_needs_review, validate_document_links
 from app.services.patient_knowledge import GENERIC_OPEN_QUESTION_TEXT, add_knowledge_item, contains_unresolved_language, is_document_awaiting_physician_review, is_official_clinical_document, latest_patient_summary_record, latest_reviewed_document_updated_at, official_patient_documents_statement, summary_record_from_documents, summary_record_is_stale
-from app.services.readiness import build_operational_readiness
 
 ERROR_RESPONSES = {400: {"model": ErrorResponse}, 401: {"model": ErrorResponse}, 403: {"model": ErrorResponse}, 404: {"model": ErrorResponse}, 409: {"model": ErrorResponse}, 422: {"model": ErrorResponse}}
 
@@ -174,11 +173,6 @@ def propose_plan(payload: ClinicalPlanGenerate, episode: ClinicalEpisode) -> dic
         "ai_confidence": confidence,
         "physician_confirmed": False,
     }
-
-
-@router.get("/readiness", response_model=ReadinessOut)
-def readiness(db: Session = Depends(get_db), actor: Actor = Depends(require_permission("audit.read"))):
-    return build_operational_readiness(db)
 
 
 def episode_with_count(db: Session, episode: ClinicalEpisode) -> ClinicalEpisodeOut:
