@@ -257,6 +257,28 @@ class ClinicalReadinessSnapshotDetailResponse(BaseModel):
         return value
 
 
+class ClinicalReadinessSnapshotSupersedeRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    reason: str
+
+    @field_validator("reason")
+    @classmethod
+    def validate_reason(cls, value: str) -> str:
+        cleaned = value.strip()
+        if not cleaned:
+            raise ValueError("Razlog zamjene snapshota je obavezan")
+        return cleaned
+
+
+class ClinicalReadinessSnapshotSupersedeResponse(BaseModel):
+    old_snapshot_id: int
+    new_snapshot: ClinicalReadinessSnapshotResponse
+    superseded_at: DateTimeType
+    superseded_reason: str
+    warning: str
+
+
 class LoginRequest(BaseModel):
     email: str
     password: str
