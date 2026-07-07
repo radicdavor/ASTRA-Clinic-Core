@@ -16,14 +16,16 @@ import { formatDate, formatDateTime } from "../utils/date";
 import { formatPatientIdentity, formatPatientName } from "../utils/patientIdentity";
 import { aiExtractionStatusLabel, documentTypeLabel, reviewStatusLabel, sourceTypeLabel } from "./ClinicalDocuments";
 
-function KnowledgeCard({ title, items }: { title: string; items: PatientKnowledgeItem[] }) {
+function KnowledgeCard({ title, items, help, emphasizeAttention = false }: { title: string; items: PatientKnowledgeItem[]; help?: string; emphasizeAttention?: boolean }) {
   return (
-    <article className="knowledge-card">
+    <article className={`knowledge-card ${emphasizeAttention ? "ai-suggestion" : ""}`}>
       <h3>{title}</h3>
+      {help && <p>{help}</p>}
       {items.length === 0 ? <p>Nema pregledanih stavki.</p> : (
         <ul>
           {items.map((item, index) => (
             <li key={`${title}-${index}`}>
+              {item.requires_attention && <strong>{item.severity === "warning" ? "Zahtijeva paznju: " : ""}</strong>}
               {item.text}
               <small>{item.sources.map((source) => <SourceBadge key={`${source.document_id}-${item.text}`} source={source} />)}</small>
             </li>
@@ -98,6 +100,7 @@ export function PatientDetail() {
   const activeSummaryIsStale = activeSummaryIsReviewed ? clinicalSummary.data?.reviewed_summary_is_stale : clinicalSummary.data?.draft_summary_is_stale;
   const activeSummaryTitle = activeSummaryIsReviewed ? "Pregledani sazetak pacijenta" : "AI draft sazetka";
   const sourceDocuments = documents.data.filter((document) => activeSummary?.source_document_ids?.includes(document.id));
+  const openQuestions = clinicalSummary.data?.open_questions ?? [];
 
   async function refreshClinicalSummary() {
     clinicalSummary.setData(await api<PatientClinicalSummary>(`/api/patients/${id}/clinical-summary`));
@@ -249,9 +252,16 @@ export function PatientDetail() {
                       <KnowledgeCard title="Laboratorij" items={clinicalSummary.data?.laboratory ?? []} />
                       <KnowledgeCard title="Radiologija" items={clinicalSummary.data?.imaging ?? []} />
                       <KnowledgeCard title="Terapija" items={clinicalSummary.data?.current_therapy ?? []} />
-                      <KnowledgeCard title="Otvorena pitanja" items={clinicalSummary.data?.open_questions ?? []} />
                       <KnowledgeCard title="Zadnje preporuke" items={clinicalSummary.data?.latest_recommendations ?? []} />
                     </div>
+                    <WorkspaceSection title={<>{`Otvorena pitanja`} <HelpHint title="Otvorena pitanja">Ovo su pregledane, source-linked stavke koje zahtijevaju klinicku paznju. Nisu automatske odluke niti zadaci.</HelpHint></>}>
+                      <KnowledgeCard
+                        title="Otvorena pitanja"
+                        items={openQuestions}
+                        emphasizeAttention
+                        help="Ovo su pregledane, source-linked stavke koje zahtijevaju klinicku paznju. Nisu automatske odluke niti zadaci."
+                      />
+                    </WorkspaceSection>
                   </>
                 )
               },
@@ -317,11 +327,13 @@ export function PatientDetail() {
               ))}
             </section>
           )}
-          {(clinicalSummary.data?.open_questions ?? []).length > 0 && (
+          {openQuestions.length > 0 && (
             <section>
-              <h3>Nerijeseno</h3>
-              {clinicalSummary.data?.open_questions.slice(0, 3).map((item, index) => (
+              <h3>Otvorena pitanja</h3>
+              <p>Nisu zadaci niti odluke; potrebno je pregledati izvore.</p>
+              {openQuestions.slice(0, 3).map((item, index) => (
                 <p key={index}>
+                  {item.requires_attention && <strong>Upozorenje: </strong>}
                   {item.text}
                   <small>{item.sources.map((source) => <SourceBadge key={`${source.document_id}-${item.text}`} source={source} />)}</small>
                 </p>

@@ -129,6 +129,8 @@ assertIncludes("src/pages/PatientDetail.tsx", "Pregledani sazetak");
 assertIncludes("src/pages/PatientDetail.tsx", "AI draft sazetka");
 assertIncludes("src/pages/PatientDetail.tsx", "Sluzbeno source-linked znanje");
 assertIncludes("src/pages/PatientDetail.tsx", "Sazetak je zastario");
+assertIncludes("src/pages/PatientDetail.tsx", "Ovo su pregledane, source-linked stavke koje zahtijevaju klinicku paznju. Nisu automatske odluke niti zadaci.");
+assertIncludes("src/pages/PatientDetail.tsx", "Nisu zadaci niti odluke; potrebno je pregledati izvore.");
 assertIncludes("src/pages/PatientDetail.tsx", "/clinical-summary/generate-draft");
 assertIncludes("src/pages/PatientDetail.tsx", "/clinical-summary/review");
 assertIncludes("src/pages/PatientDetail.tsx", "AI draft - potreban je lijecnicki pregled.");
