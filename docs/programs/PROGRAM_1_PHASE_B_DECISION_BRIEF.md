@@ -545,3 +545,45 @@ Buduci snapshot capture mora biti explicit user action, permission-gated, reason
 Preporuceni sljedeci task:
 
 `Program 1 Phase B13 - Snapshot Persistence Migration Draft`
+
+## 22. Phase B13 outcome
+
+Phase B13 dodaje migration/model-only persistence draft za buduci Clinical Readiness Snapshot.
+
+Implementirano:
+
+- SQLAlchemy model `ClinicalReadinessSnapshot`
+- Alembic migracija `0014_clinical_readiness_snapshots.py`
+- tablica `clinical_readiness_snapshots`
+- persistence-shape regression coverage
+- B13 regression notes
+
+B13 definira runtime foundation:
+
+- snapshot sprema copied preview payload
+- snapshot ima required reason
+- snapshot ima preview-only marker
+- snapshot ima disclaimer
+- snapshot ima template metadata
+- snapshot ima future supersession fields
+
+B13 ostaje:
+
+- bez capture endpointa
+- bez capture servicea
+- bez frontend UI-ja
+- bez permission enforcementa
+- bez audit write runtimea
+- bez snapshot history UI-ja
+- bez Outcome Evidencea
+- bez Task enginea
+- bez overridea
+- bez appointment status promjene
+
+B13 decision:
+
+DB schema smije postojati prije capturea, ali runtime ne smije spremati snapshot dok ne postoji odobren service koji rebuilda preview, validira reason, cuva permission/audit granice i ne mijenja workflow objekte.
+
+Preporuceni sljedeci task:
+
+`Program 1 Phase B14 - Snapshot Capture Service Prototype`

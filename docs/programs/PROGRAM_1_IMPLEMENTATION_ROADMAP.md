@@ -212,6 +212,15 @@ Phase B12 update:
 - B12 je documentation-only i ne uvodi backend kod, frontend kod, RBAC seed, DB migraciju, endpoint, audit runtime, snapshot history UI, Outcome Evidence, task, override ili appointment status promjenu
 - preporuceni sljedeci task je `Program 1 Phase B13 - Snapshot Persistence Migration Draft`
 
+Phase B13 update:
+
+- SQLAlchemy model `ClinicalReadinessSnapshot` je dodan
+- Alembic migracija `0014_clinical_readiness_snapshots.py` dodaje tablicu `clinical_readiness_snapshots`
+- persistence-shape regression coverage dokazuje da JSON payload moze biti spremljen i da preview GET ne stvara snapshot
+- B13 uvodi samo DB persistence shape; runtime preview ostaje read-only i non-persistent
+- B13 ne uvodi capture service, capture endpoint, frontend UI, permission enforcement, audit write, Outcome Evidence, Task engine, override ili appointment status promjenu
+- preporuceni sljedeci task je `Program 1 Phase B14 - Snapshot Capture Service Prototype`
+
 ## 5. Faza 2 - Findings Lifecycle Foundation
 
 Cilj:
