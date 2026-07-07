@@ -911,3 +911,37 @@ Supersession must be additive and historical: old snapshot remains stored, new s
 Preporuceni sljedeci task:
 
 `Program 1 Phase B23 - Snapshot Supersession Service Prototype`
+
+## 32. Phase B23 outcome
+
+Phase B23 implements internal Clinical Readiness Snapshot supersession service behavior without exposing a public route or UI.
+
+Dodano:
+
+- capture transaction helper refactor
+- `supersede_clinical_readiness_snapshot(...)` service
+- audit event `clinical_readiness_snapshot_superseded`
+- atomic creation of new snapshot, old snapshot supersession metadata update and audit write
+- regression coverage for rollback and workflow side-effect boundaries
+
+B23 ostaje:
+
+- bez supersession endpointa
+- bez frontend supersession UI-ja
+- bez supersession buttona
+- bez edit/delete akcija
+- bez approvala
+- bez clearancea
+- bez overridea
+- bez Outcome Evidencea
+- bez Task enginea
+- bez appointment status promjene
+- bez patient messaginga
+
+B23 decision:
+
+Supersession is additive. The old snapshot keeps its copied payload unchanged. The new snapshot is generated from the current server-side preview. The old snapshot points to the new snapshot through supersession metadata and audit records the historical relationship.
+
+Preporuceni sljedeci task:
+
+`Program 1 Phase B24 - Snapshot Supersession Endpoint Prototype`

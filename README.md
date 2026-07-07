@@ -113,6 +113,7 @@ Pilot documents:
 - [Program 1 Phase B22 Snapshot Supersession Audit Contract](docs/programs/PROGRAM_1_PHASE_B22_SNAPSHOT_SUPERSESSION_AUDIT_CONTRACT.md)
 - [Program 1 Phase B22 Snapshot Supersession No-Go Matrix](docs/programs/PROGRAM_1_PHASE_B22_SNAPSHOT_SUPERSESSION_NO_GO_MATRIX.md)
 - [Program 1 Phase B22 regression notes](docs/programs/PROGRAM_1_PHASE_B22_REGRESSION_NOTES.md)
+- [Program 1 Phase B23 regression notes](docs/programs/PROGRAM_1_PHASE_B23_REGRESSION_NOTES.md)
 - [Lokalni LAN pristup](docs/LAN_ACCESS.md)
 - [Program 1 audit event naming](docs/programs/PROGRAM_1_AUDIT_EVENT_NAMING.md)
 - [Program 1 Phase A regression notes](docs/programs/PROGRAM_1_PHASE_A_REGRESSION_NOTES.md)

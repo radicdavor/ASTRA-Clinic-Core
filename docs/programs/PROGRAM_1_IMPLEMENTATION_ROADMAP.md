@@ -321,6 +321,17 @@ Phase B22 update:
 - B22 ne uvodi backend kod, frontend kod, endpoint, service, DB schema change, supersession UI, edit/delete, approval, clearance, override, Outcome Evidence, Task engine ili appointment status change
 - preporuceni sljedeci task je `Program 1 Phase B23 - Snapshot Supersession Service Prototype`
 
+Phase B23 update:
+
+- capture internali su refactorirani u caller-owned transaction helper bez promjene capture endpoint ponasanja
+- interni service `supersede_clinical_readiness_snapshot(...)` je dodan
+- supersession service kreira novi server-side preview snapshot, oznacava stari snapshot kao zamijenjen i pise audit event u jednoj transakciji
+- audit event `clinical_readiness_snapshot_superseded` biljezi old/new snapshot id, appointment, patient, service, actor, reason, template metadata i preview statuse
+- stari snapshot payload ostaje nepromijenjen; mijenjaju se samo supersession metadata polja
+- regression coverage cuva reason/actor requirement, appointment scope, already-superseded rejection, rollback na audit failure, history/detail read ponasanje i zabranu workflow side effecta
+- B23 ne uvodi supersession endpoint, frontend UI, supersession button, edit/delete, approval, clearance, override, Outcome Evidence, Task engine, appointment status change ili patient messaging
+- preporuceni sljedeci task je `Program 1 Phase B24 - Snapshot Supersession Endpoint Prototype`
+
 ## 5. Faza 2 - Findings Lifecycle Foundation
 
 Cilj:
