@@ -171,10 +171,17 @@ assertIncludes("src/pages/AppointmentDetail.tsx", "Klinicka spremnost - preview"
 assertIncludes("src/pages/AppointmentDetail.tsx", "Read-only prikaz mogucih uvjeta za ovaj planirani klinicki cin. Ne donosi odluke i ne blokira postupak.");
 assertIncludes("src/pages/AppointmentDetail.tsx", "PREVIEW");
 assertIncludes("src/pages/AppointmentDetail.tsx", "Clinical readiness preview trenutno nije dostupan.");
+assertIncludes("../backend/app/services/clinical_readiness_preview.py", "Clinical readiness template je demo/pilot staticna definicija, nije produkcijsko pravilo.");
+assertIncludes("../backend/app/services/clinical_readiness_preview.py", "Nema specificnog clinical readiness templatea za ovu uslugu; koristi se genericki preview.");
+assertIncludes("../backend/app/services/clinical_readiness_preview.py", "Koristi se demo/pilot template");
+assertIncludes("../backend/app/services/clinical_readiness_templates.py", "select_clinical_readiness_template");
+assertIncludes("../backend/app/services/clinical_readiness_templates.py", "GASTROSCOPY_TEMPLATE");
+assertIncludes("../backend/app/services/clinical_readiness_templates.py", "COLONOSCOPY_TEMPLATE");
 assertNotIncludes("src/pages/AppointmentDetail.tsx", "AI cleared");
 assertNotIncludes("src/pages/AppointmentDetail.tsx", "Mark ready");
 assertNotIncludes("src/pages/AppointmentDetail.tsx", "Procedure allowed");
 assertNotIncludes("src/pages/AppointmentDetail.tsx", "Override readiness");
+assertNotIncludes("src/pages/AppointmentDetail.tsx", "Create task");
 assertIncludes("src/pages/AppointmentDetail.tsx", "Zavrsi uz potrosnju");
 assertIncludes("src/pages/Episodes.tsx", "/api/episodes");
 assertIncludes("src/pages/EpisodeForm.tsx", "/api/episodes");
