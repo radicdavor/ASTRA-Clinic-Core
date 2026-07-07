@@ -452,6 +452,14 @@ Phase B37 update:
 - B37 ne uvodi runtime ponasanje
 - recommended next task je `Program 1 Phase B38 - Snapshot Legal/Compliance Disclaimer Review`
 
+Phase B38 update:
+
+- snapshot disclaimer/legal wording review je dokumentiran
+- definirani su required disclaimer meaning, safe wording i forbidden wording
+- potvrdeno je da physician remains responsible i real patient data ostaje no-go
+- B38 ne uvodi runtime promjene
+- recommended next task je `Program 1 Phase B39 - Snapshot Real-Data No-Go Checklist`
+
 ## 5. Faza 2 - Findings Lifecycle Foundation
 
 Cilj:
