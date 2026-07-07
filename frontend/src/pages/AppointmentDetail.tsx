@@ -127,8 +127,12 @@ export function AppointmentDetail() {
             <p>{clinicalReadiness.data.summary}</p>
             <div className="detail-list">
               <p><span>Template</span><strong>{clinicalReadiness.data.template_label ?? "Nije vezan"}</strong></p>
+              <p><span>Verzija</span><strong>{clinicalReadiness.data.template_version ?? "-"}</strong></p>
               <p><span>Binding</span><strong>{clinicalReadiness.data.template_binding_status.replace("_", " ")}</strong></p>
             </div>
+            {clinicalReadiness.data.template_version_warning && (
+              <p className="helper-text">{clinicalReadiness.data.template_version_warning}</p>
+            )}
             {clinicalReadiness.data.template_binding_warning && (
               <p className="helper-text">{clinicalReadiness.data.template_binding_warning} Ovo nije produkcijsko pravilo.</p>
             )}

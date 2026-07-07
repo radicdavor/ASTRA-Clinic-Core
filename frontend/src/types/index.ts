@@ -205,6 +205,8 @@ export type ClinicalReadinessPreview = {
   service_id?: number | null;
   template_key?: string | null;
   template_label?: string | null;
+  template_version?: string | null;
+  template_version_warning?: string | null;
   template_binding_status: string;
   template_binding_warning?: string | null;
   status: string;

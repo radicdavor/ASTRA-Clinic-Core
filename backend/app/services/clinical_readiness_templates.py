@@ -29,6 +29,7 @@ class ClinicalReadinessTemplate:
     key: str
     name: str
     specific: bool
+    version: str
     items: tuple[ClinicalReadinessTemplateItem, ...]
 
 
@@ -41,6 +42,8 @@ class ClinicalReadinessTemplateSelection:
 
 KEYWORD_BINDING_WARNING = "Template je odabran demo/pilot keyword matchingom prema nazivu usluge."
 GENERIC_BINDING_WARNING = "Nema specificnog template matcha; koristi se genericki demo/pilot template."
+DEMO_TEMPLATE_VERSION = "demo-v1"
+DEMO_TEMPLATE_VERSION_WARNING = "Template version je demo/pilot oznaka iz staticne konfiguracije; nije produkcijsko verzioniranje."
 
 
 def _item(
@@ -72,6 +75,7 @@ GENERIC_TEMPLATE = ClinicalReadinessTemplate(
     key="generic",
     name="Genericki clinical readiness preview",
     specific=False,
+    version=DEMO_TEMPLATE_VERSION,
     items=(
         _item(
             "generic_confirm_planned_service",
@@ -99,6 +103,7 @@ GASTROSCOPY_TEMPLATE = ClinicalReadinessTemplate(
     key="gastroscopy",
     name="Gastroskopija",
     specific=True,
+    version=DEMO_TEMPLATE_VERSION,
     items=(
         _item("gastroscopy_fasting_check", "Provjera nataste", "preparation", "needs_nurse_action", "warning", "nurse", "Provjeriti je li status nataste dokumentiran ili klinicki pregledan."),
         _item("gastroscopy_medication_risk", "Pregled antikoagulansa/antiagregansa", "medication", "needs_physician_review", "warning", "physician", "Pregledati lijekove koji mogu utjecati na postupak. Preview ne donosi odluku."),
@@ -114,6 +119,7 @@ COLONOSCOPY_TEMPLATE = ClinicalReadinessTemplate(
     key="colonoscopy",
     name="Kolonoskopija",
     specific=True,
+    version=DEMO_TEMPLATE_VERSION,
     items=(
         _item("colonoscopy_bowel_prep", "Deklaracija pripreme crijeva", "preparation", "needs_nurse_action", "warning", "nurse", "Provjeriti je li priprema crijeva deklarirana ili pregledana."),
         _item("colonoscopy_anticoagulant_review", "Pregled antikoagulansa/antiagregansa", "medication", "needs_physician_review", "warning", "physician", "Pregledati lijekove koji mogu utjecati na kolonoskopiju ili polipektomiju."),
@@ -131,6 +137,7 @@ HPYLORI_TEMPLATE = ClinicalReadinessTemplate(
     key="hpylori",
     name="H. pylori",
     specific=True,
+    version=DEMO_TEMPLATE_VERSION,
     items=(
         _item("hpylori_prior_therapy", "Poznata prethodna eradikacijska terapija", "reviewed_evidence", "needs_physician_review", "warning", "physician", "Pregledati postoje li izvori o prethodnoj terapiji."),
         _item("hpylori_penicillin_allergy", "Pregled alergije na penicilin", "allergy", "needs_physician_review", "warning", "physician", "Provjeriti alergiju na penicilin prije odluke o terapiji."),
@@ -145,6 +152,7 @@ AESTHETIC_INJECTABLE_TEMPLATE = ClinicalReadinessTemplate(
     key="aesthetic_injectable",
     name="Estetski injektivni tretman",
     specific=True,
+    version=DEMO_TEMPLATE_VERSION,
     items=(
         _item("injectable_pregnancy_breastfeeding", "Trudnoca/dojenje deklaracija", "aesthetic_treatment_specific_risk", "needs_physician_review", "warning", "physician", "Pregledati status trudnoce/dojenja gdje je relevantno."),
         _item("injectable_active_infection", "Aktivna infekcija/herpes provjera", "aesthetic_treatment_specific_risk", "needs_physician_review", "warning", "physician", "Pregledati postoji li aktivna infekcija ili herpes."),
@@ -163,6 +171,7 @@ AESTHETIC_SKINBOOSTER_PN_TEMPLATE = ClinicalReadinessTemplate(
     key="aesthetic_skinbooster_pn",
     name="Skinbooster / polinukleotid",
     specific=True,
+    version=DEMO_TEMPLATE_VERSION,
     items=(
         _item("skinbooster_active_infection", "Aktivna infekcija provjera", "aesthetic_treatment_specific_risk", "needs_physician_review", "warning", "physician", "Pregledati postoji li aktivna infekcija."),
         _item("skinbooster_autoimmune_review", "Inflammatory/autoimmune concern pregled", "aesthetic_treatment_specific_risk", "needs_physician_review", "warning", "physician", "Pregledati relevantne upalne ili autoimune okolnosti ako postoje."),
@@ -179,6 +188,7 @@ AESTHETIC_ENERGY_DEVICE_TEMPLATE = ClinicalReadinessTemplate(
     key="aesthetic_energy_device",
     name="Estetski energy-device tretman",
     specific=True,
+    version=DEMO_TEMPLATE_VERSION,
     items=(
         _item("energy_device_implant_pacemaker", "Kontraindicirani uredaj/implantat/pacemaker provjera", "aesthetic_treatment_specific_risk", "needs_physician_review", "warning", "physician", "Pregledati relevantne uredaje ili implantate gdje je primjenjivo."),
         _item("energy_device_skin_condition", "Stanje koze u tretiranom podrucju", "aesthetic_treatment_specific_risk", "needs_physician_review", "warning", "physician", "Pregledati stanje koze u podrucju tretmana."),

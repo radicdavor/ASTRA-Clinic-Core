@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 
 from app.models.domain import Appointment
 from app.schemas.common import ClinicalReadinessPreviewItem, ClinicalReadinessPreviewResponse
-from app.services.clinical_readiness_templates import ClinicalReadinessTemplateItem, select_clinical_readiness_template
+from app.services.clinical_readiness_templates import ClinicalReadinessTemplateItem, DEMO_TEMPLATE_VERSION_WARNING, select_clinical_readiness_template
 from app.services.patient_knowledge import official_patient_documents_statement, summary_record_from_documents
 
 
@@ -58,6 +58,8 @@ def build_clinical_readiness_preview(db: Session, appointment: Appointment) -> C
     source_warnings: list[str] = []
     template_key: str | None = None
     template_label: str | None = None
+    template_version: str | None = None
+    template_version_warning: str | None = None
     template_binding_status = "unbound"
     template_binding_warning: str | None = None
 
@@ -109,6 +111,8 @@ def build_clinical_readiness_preview(db: Session, appointment: Appointment) -> C
         template = template_selection.template
         template_key = template.key
         template_label = template.name
+        template_version = template.version
+        template_version_warning = DEMO_TEMPLATE_VERSION_WARNING
         template_binding_status = template_selection.binding_status
         template_binding_warning = template_selection.binding_warning
         limitations.append(TEMPLATE_LIMITATION)
@@ -177,6 +181,8 @@ def build_clinical_readiness_preview(db: Session, appointment: Appointment) -> C
         service_id=appointment.service_id,
         template_key=template_key,
         template_label=template_label,
+        template_version=template_version,
+        template_version_warning=template_version_warning,
         template_binding_status=template_binding_status,
         template_binding_warning=template_binding_warning,
         status=aggregate_status(items),

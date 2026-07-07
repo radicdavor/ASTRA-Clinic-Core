@@ -112,6 +112,8 @@ class ClinicalReadinessPreviewResponse(BaseModel):
     service_id: int | None
     template_key: str | None = None
     template_label: str | None = None
+    template_version: str | None = None
+    template_version_warning: str | None = None
     template_binding_status: str
     template_binding_warning: str | None = None
     status: str
