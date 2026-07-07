@@ -91,6 +91,7 @@ def auth_setup(db: Session) -> dict[str, User]:
         "billing.mark_paid",
         "audit.read",
         "admin.manage_users",
+        "clinical_readiness.snapshots.write",
         "ai.appointments.create",
     ]
     permissions = {name: Permission(name=name, description=name) for name in permission_names}

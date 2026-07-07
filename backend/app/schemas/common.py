@@ -136,6 +136,8 @@ class ClinicalReadinessPreviewResponse(BaseModel):
 
 
 class ClinicalReadinessSnapshotCaptureRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     reason: str
     client_preview_generated_at: DateTimeType | None = None
     idempotency_key: str | None = None

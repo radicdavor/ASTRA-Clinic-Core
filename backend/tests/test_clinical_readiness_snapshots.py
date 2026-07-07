@@ -3,7 +3,8 @@ from datetime import UTC, datetime
 import pytest
 from sqlalchemy.exc import IntegrityError
 
-from app.models.domain import AuditLog, ClinicalEpisode, ClinicalPlan, ClinicalReadinessSnapshot, PatientClinicalSummaryRecord
+from app.auth.dependencies import hash_api_key
+from app.models.domain import ApiKey, AuditLog, ClinicalEpisode, ClinicalPlan, ClinicalReadinessSnapshot, PatientClinicalSummaryRecord
 from app.services.clinical_readiness_snapshots import (
     CLINICAL_READINESS_SNAPSHOT_CAPTURED_EVENT,
     CLINICAL_READINESS_SNAPSHOT_DISCLAIMER,
@@ -23,6 +24,14 @@ def auth_headers(client):
 
 def preview(client, appointment_id, headers):
     return client.get(f"/api/appointments/{appointment_id}/clinical-readiness-preview", headers=headers)
+
+
+def capture_endpoint(client, appointment_id, headers, payload=None):
+    return client.post(
+        f"/api/appointments/{appointment_id}/clinical-readiness-snapshots",
+        headers=headers,
+        json=payload if payload is not None else {"reason": "Endpoint capture reason."},
+    )
 
 
 def test_clinical_readiness_snapshot_table_exists_after_metadata_setup(db):
@@ -285,3 +294,119 @@ def test_capture_does_not_use_unreviewed_ai_as_official_source(db, auth_setup):
     labels = [item.get("label") for item in snapshot.items_json]
     assert "Unreviewed AI-only warning" not in labels
     assert all(ref.get("source_ref") != f"ClinicalDocument:{doc.id}" for ref in snapshot.source_refs_json)
+
+
+def test_capture_endpoint_requires_authentication(client, db):
+    appt = appointment(db)
+
+    response = capture_endpoint(client, appt.id, headers={})
+
+    assert response.status_code == 401
+
+
+def test_capture_endpoint_requires_snapshot_write_permission(client, db, auth_setup):
+    appt = appointment(db)
+    headers = {"Authorization": f"Bearer {login_token(client, 'limited@test.local')}"}
+
+    response = capture_endpoint(client, appt.id, headers=headers)
+
+    assert response.status_code == 403
+    assert "clinical_readiness.snapshots.write" in response.json()["detail"]
+
+
+def test_capture_endpoint_requires_reason(client, db, auth_setup):
+    appt = appointment(db)
+
+    response = capture_endpoint(client, appt.id, headers=auth_headers(client), payload={"reason": "   "})
+
+    assert response.status_code == 422
+
+
+def test_capture_endpoint_creates_snapshot_and_audit_without_workflow_side_effects(client, db, auth_setup):
+    colonoscopy = service(db, name="Kolonoskopija")
+    appt = appointment(db, service_obj=colonoscopy, status="scheduled")
+    original_status = appt.status
+    episode_count = db.query(ClinicalEpisode).count()
+    plan_count = db.query(ClinicalPlan).count()
+    table_names = set(db.get_bind().dialect.get_table_names(db.connection()))
+
+    response = capture_endpoint(client, appt.id, headers=auth_headers(client), payload={"reason": "Endpoint pilot review."})
+
+    assert response.status_code == 200
+    body = response.json()
+    snapshot = db.get(ClinicalReadinessSnapshot, body["id"])
+    assert snapshot is not None
+    assert body["appointment_id"] == appt.id
+    assert body["patient_id"] == appt.patient_id
+    assert body["service_id"] == appt.service_id
+    assert body["snapshot_reason"] == "Endpoint pilot review."
+    assert body["is_preview_snapshot"] is True
+    assert "Ne predstavlja clinical approval" in body["disclaimer"]
+    assert body["template_key"] == snapshot.template_key
+    assert body["template_version"] == snapshot.template_version
+    assert body["template_binding_status"] == snapshot.template_binding_status
+    assert body["items"] == snapshot.items_json
+    assert body["limitations"] == snapshot.limitations_json
+    assert body["source_warnings"] == snapshot.source_warnings_json
+    assert body["source_refs"] == snapshot.source_refs_json
+    assert db.query(ClinicalReadinessSnapshot).count() == 1
+    event = db.query(AuditLog).filter(AuditLog.action == CLINICAL_READINESS_SNAPSHOT_CAPTURED_EVENT).one()
+    assert event.entity_id == snapshot.id
+    assert event.after_json["capture_reason"] == "Endpoint pilot review."
+    db.expire(appt)
+    assert appt.status == original_status
+    assert db.query(ClinicalEpisode).count() == episode_count
+    assert db.query(ClinicalPlan).count() == plan_count
+    assert "outcome_evidence" not in table_names
+    assert "tasks" not in table_names
+
+
+def test_capture_endpoint_rejects_client_preview_payload(client, db, auth_setup):
+    appt = appointment(db)
+
+    response = capture_endpoint(
+        client,
+        appt.id,
+        headers=auth_headers(client),
+        payload={
+            "reason": "Do not trust client payload.",
+            "items": [{"key": "client_claim", "label": "Client supplied item"}],
+            "preview_status": "ready",
+        },
+    )
+
+    assert response.status_code == 422
+    assert db.query(ClinicalReadinessSnapshot).count() == 0
+    assert db.query(AuditLog).filter(AuditLog.action == CLINICAL_READINESS_SNAPSHOT_CAPTURED_EVENT).count() == 0
+
+
+def test_capture_endpoint_response_excludes_forbidden_approval_fields(client, db, auth_setup):
+    appt = appointment(db)
+
+    response = capture_endpoint(client, appt.id, headers=auth_headers(client))
+
+    assert response.status_code == 200
+    body = response.json()
+    forbidden = {"approved", "cleared", "procedure_allowed", "task_created", "outcome_evidence_id", "override_status"}
+    assert forbidden.isdisjoint(body.keys())
+
+
+def test_api_key_capture_denied_even_with_snapshot_scope(client, db):
+    appt = appointment(db)
+    api_key = ApiKey(
+        name="Snapshot integration",
+        key_hash=hash_api_key("raw-snapshot-key"),
+        scopes=["clinical_readiness.snapshots.write"],
+        active=True,
+    )
+    db.add(api_key)
+    db.commit()
+
+    response = capture_endpoint(
+        client,
+        appt.id,
+        headers={"X-ASTRA-API-Key": "raw-snapshot-key"},
+    )
+
+    assert response.status_code == 403
+    assert db.query(ClinicalReadinessSnapshot).count() == 0
