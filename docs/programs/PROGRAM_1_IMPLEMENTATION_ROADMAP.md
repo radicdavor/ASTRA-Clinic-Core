@@ -232,6 +232,18 @@ Phase B14 update:
 - idempotency persistence ostaje deferred jer B13 nije dodao idempotency storage
 - preporuceni sljedeci task je `Program 1 Phase B15 - Snapshot Capture Endpoint Prototype`
 
+Phase B15 update:
+
+- capture request/response schemas su dodane
+- endpoint `POST /api/appointments/{appointment_id}/clinical-readiness-snapshots` je dodan
+- endpoint zahtijeva `clinical_readiness.snapshots.write`
+- endpoint zahtijeva non-empty reason
+- endpoint odbija API key capture
+- endpoint poziva B14 service i time rebuilda server-side preview, sprema snapshot i pise audit event
+- endpoint regression coverage cuva auth, permission, reason, response safety, audit event i zabranu workflow side effecta
+- B15 ne uvodi frontend capture UI, capture button, snapshot history UI, Outcome Evidence, Task engine, override, patient messaging ili appointment status promjenu
+- preporuceni sljedeci task je `Program 1 Phase B16 - Snapshot History Read API Prototype`
+
 ## 5. Faza 2 - Findings Lifecycle Foundation
 
 Cilj:

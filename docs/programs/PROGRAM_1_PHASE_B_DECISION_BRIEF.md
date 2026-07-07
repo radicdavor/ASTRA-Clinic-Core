@@ -623,3 +623,38 @@ Capture logic sada postoji samo kao interni service. Ne smije se koristiti iz UI
 Preporuceni sljedeci task:
 
 `Program 1 Phase B15 - Snapshot Capture Endpoint Prototype`
+
+## 24. Phase B15 outcome
+
+Phase B15 izlaže Clinical Readiness Snapshot capture kroz prvi javni backend write endpoint.
+
+Implementirano:
+
+- `ClinicalReadinessSnapshotCaptureRequest`
+- `ClinicalReadinessSnapshotResponse`
+- `POST /api/appointments/{appointment_id}/clinical-readiness-snapshots`
+- route-level permission `clinical_readiness.snapshots.write`
+- reason-required capture
+- API key capture deny guard
+- endpoint regression coverage
+- B15 regression notes
+
+B15 ostaje:
+
+- bez frontend capture UI-ja
+- bez capture buttona
+- bez snapshot history UI-ja
+- bez supersession UX-a
+- bez Outcome Evidencea
+- bez Task enginea
+- bez overridea
+- bez appointment status promjene
+- bez patient messaginga
+
+B15 decision:
+
+Capture endpoint je backend-only i preview-only. Endpoint smije spremiti snapshot samo kroz B14 service, uz permission, reason i audit. Ne smije znaciti approval, clearance, override ili outcome.
+
+Preporuceni sljedeci task:
+
+`Program 1 Phase B16 - Snapshot History Read API Prototype`
