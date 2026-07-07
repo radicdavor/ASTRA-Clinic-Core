@@ -345,6 +345,34 @@ def test_template_version_metadata_is_transparency_only(client, db, auth_setup):
     assert db.query(ClinicalPlan).count() == plan_count
 
 
+def test_snapshot_metadata_is_non_persistent_and_read_only(client, db, auth_setup):
+    explicit = service(db, name="Snapshot demo service", price="100")
+    explicit.code = "GASTROSCOPY"
+    appt = appointment(db, service_obj=explicit, status="scheduled")
+    original_status = appt.status
+    audit_count = db.query(AuditLog).count()
+    episode_count = db.query(ClinicalEpisode).count()
+    plan_count = db.query(ClinicalPlan).count()
+    table_names = set(db.get_bind().dialect.get_table_names(db.connection()))
+    headers = auth_headers(client)
+
+    response = preview(client, appt.id, headers)
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["snapshot_supported"] is False
+    assert body["snapshot_status"] == "not_implemented"
+    assert body["snapshot_warning"] == "Snapshot nije implementiran. Ovaj prikaz je live read-only preview i ne sprema se kao trajni zapis."
+    assert "clinical_readiness_snapshots" not in table_names
+    assert "outcome_evidence" not in table_names
+    assert "tasks" not in table_names
+    db.expire(appt)
+    assert appt.status == original_status
+    assert db.query(AuditLog).count() == audit_count
+    assert db.query(ClinicalEpisode).count() == episode_count
+    assert db.query(ClinicalPlan).count() == plan_count
+
+
 def test_unreviewed_ai_extraction_remains_excluded_with_service_templates(client, db, auth_setup):
     colonoscopy = service(db, name="Kolonoskopija")
     appt = appointment(db, service_obj=colonoscopy)
