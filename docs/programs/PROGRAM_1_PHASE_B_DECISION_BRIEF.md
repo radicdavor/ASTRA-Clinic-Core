@@ -500,3 +500,48 @@ Capture mora biti eksplicitna write akcija s razlogom, permissionom, server-side
 Preporuceni sljedeci task:
 
 `Program 1 Phase B12 - Snapshot Permission and Audit Contract`
+
+## 21. Phase B12 outcome
+
+Phase B12 definira permission i audit contract za buduci Clinical Readiness Snapshot capture bez implementacije.
+
+Implementirano:
+
+- `PROGRAM_1_PHASE_B12_SNAPSHOT_PERMISSION_CONTRACT.md`
+- `PROGRAM_1_PHASE_B12_SNAPSHOT_AUDIT_PAYLOAD_CONTRACT.md`
+- `PROGRAM_1_PHASE_B12_SNAPSHOT_PERMISSION_AUDIT_NO_GO_MATRIX.md`
+- `PROGRAM_1_PHASE_B12_SNAPSHOT_IMPLEMENTATION_GATE.md`
+- `PROGRAM_1_PHASE_B12_REGRESSION_NOTES.md`
+
+B12 definira:
+
+- buduce permissions `clinical_readiness.snapshots.read`, `clinical_readiness.snapshots.write`, `clinical_readiness.snapshots.supersede` i `clinical_readiness.snapshots.audit_read`
+- role mapping za physician, nurse, reception/admin, clinic admin, AI agent, API key/integration i system job
+- required reason za capture i supersession
+- buduce audit evente `clinical_readiness_snapshot_captured`, `clinical_readiness_snapshot_viewed` i `clinical_readiness_snapshot_superseded`
+- capture/supersede audit payload shape
+- permission/audit no-go matrix
+- implementation gate prije migracije, endpointa ili UI-ja
+
+B12 ostaje:
+
+- documentation-only
+- bez backend koda
+- bez frontend koda
+- bez RBAC seed promjene
+- bez DB migracije
+- bez endpoint implementacije
+- bez audit runtime implementacije
+- bez snapshot history UI-ja
+- bez Outcome Evidencea
+- bez Task enginea
+- bez overridea
+- bez appointment status promjene
+
+B12 decision:
+
+Buduci snapshot capture mora biti explicit user action, permission-gated, reason-required, auditiran u istoj transakciji sa snapshot saveom i jasno preview-only. AI agent, system job i API key nemaju capture pravo by default.
+
+Preporuceni sljedeci task:
+
+`Program 1 Phase B13 - Snapshot Persistence Migration Draft`

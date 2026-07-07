@@ -201,6 +201,17 @@ Phase B11 update:
 - B11 je documentation-only i ne uvodi endpoint, backend kod, frontend kod, persistence, audit event, Outcome Evidence, task, override ili appointment status promjenu
 - preporuceni sljedeci task je `Program 1 Phase B12 - Snapshot Permission and Audit Contract`
 
+Phase B12 update:
+
+- snapshot permission contract je dokumentiran kroz `PROGRAM_1_PHASE_B12_SNAPSHOT_PERMISSION_CONTRACT.md`
+- snapshot audit payload contract je dokumentiran kroz `PROGRAM_1_PHASE_B12_SNAPSHOT_AUDIT_PAYLOAD_CONTRACT.md`
+- permission/audit no-go matrix je dokumentirana kroz `PROGRAM_1_PHASE_B12_SNAPSHOT_PERMISSION_AUDIT_NO_GO_MATRIX.md`
+- snapshot implementation gate je dokumentiran kroz `PROGRAM_1_PHASE_B12_SNAPSHOT_IMPLEMENTATION_GATE.md`
+- B12 zakljucava da buduci snapshot capture mora biti permission-gated, reason-required, auditiran, atomican i preview-only
+- B12 potvrduje default deny za AI agente, system job i API key capture
+- B12 je documentation-only i ne uvodi backend kod, frontend kod, RBAC seed, DB migraciju, endpoint, audit runtime, snapshot history UI, Outcome Evidence, task, override ili appointment status promjenu
+- preporuceni sljedeci task je `Program 1 Phase B13 - Snapshot Persistence Migration Draft`
+
 ## 5. Faza 2 - Findings Lifecycle Foundation
 
 Cilj:

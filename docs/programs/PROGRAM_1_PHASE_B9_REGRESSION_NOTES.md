@@ -90,3 +90,15 @@ B11 je odvojen kao capture endpoint design prije backend rute.
 Oba koraka ostaju documentation-only i ne mijenjaju B9 odluku:
 
 Snapshot persistence smije spremiti samo immutable kopiju preview prikaza, uz eksplicitni capture i buduci audit. Snapshot ne smije postati clinical approval, Outcome Evidence, Task, override ili appointment status.
+
+## Follow-up after B12 permission/audit contract
+
+B12 dodaje permission contract, audit payload contract, no-go matrix i implementation gate prije bilo kakve migracije ili endpointa.
+
+B12 ne mijenja B9 odluku:
+
+- snapshot je immutable copied preview payload
+- capture mora biti eksplicitna write akcija
+- capture mora imati permission, reason i audit
+- AI agent, system job i API key nemaju capture pravo by default
+- snapshot ne smije postati clinical approval, Outcome Evidence, Task, override ili appointment status
