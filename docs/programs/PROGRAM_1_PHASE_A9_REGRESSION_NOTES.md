@@ -58,3 +58,5 @@ No-Go za sirenje prema Task engineu, Clinical Readiness Gateu, Workflow Engineu,
 `Program 1 Phase A10 - Core Route Domain Split Plan`
 
 Razlog: `core.py` je vec smanjen, ali i dalje sadrzi route odgovornosti za vise domena. Prije daljnjeg cijepanja treba planirati granice po domenama i test coverage koji cuva URL/API kompatibilnost.
+
+A10 treba preferirati prvi stvarni split prema Operational Readiness route modulu jer je readiness builder vec izdvojen u servis.
