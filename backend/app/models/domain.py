@@ -267,6 +267,43 @@ class Appointment(TimestampMixin, Base):
     episode: Mapped[ClinicalEpisode | None] = relationship()
 
 
+class ClinicalReadinessSnapshot(Base):
+    __tablename__ = "clinical_readiness_snapshots"
+    __table_args__ = (CheckConstraint("length(trim(snapshot_reason)) > 0", name="ck_clinical_readiness_snapshots_reason_non_empty"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    appointment_id: Mapped[int] = mapped_column(ForeignKey("appointments.id"), index=True)
+    patient_id: Mapped[int] = mapped_column(ForeignKey("patients.id"), index=True)
+    service_id: Mapped[int] = mapped_column(ForeignKey("services.id"), index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), index=True)
+    created_by_user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    schema_version: Mapped[str] = mapped_column(String(80))
+    preview_generated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
+    preview_status: Mapped[str] = mapped_column(String(60), index=True)
+    preview_summary: Mapped[str] = mapped_column(Text)
+    template_key: Mapped[str | None] = mapped_column(String(120), index=True)
+    template_label: Mapped[str | None] = mapped_column(String(180))
+    template_version: Mapped[str | None] = mapped_column(String(80), index=True)
+    template_binding_status: Mapped[str | None] = mapped_column(String(80), index=True)
+    template_binding_warning: Mapped[str | None] = mapped_column(Text)
+    is_preview_snapshot: Mapped[bool] = mapped_column(Boolean, default=True)
+    items_json: Mapped[list] = mapped_column(JSON)
+    limitations_json: Mapped[list] = mapped_column(JSON)
+    source_warnings_json: Mapped[list] = mapped_column(JSON)
+    source_refs_json: Mapped[list] = mapped_column(JSON)
+    disclaimer: Mapped[str] = mapped_column(Text)
+    snapshot_reason: Mapped[str] = mapped_column(Text)
+    superseded_by_snapshot_id: Mapped[int | None] = mapped_column(ForeignKey("clinical_readiness_snapshots.id"), index=True)
+    superseded_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    superseded_reason: Mapped[str | None] = mapped_column(Text)
+
+    appointment: Mapped[Appointment] = relationship()
+    patient: Mapped[Patient] = relationship()
+    service: Mapped[Service] = relationship()
+    creator: Mapped[User] = relationship()
+    superseded_by_snapshot: Mapped["ClinicalReadinessSnapshot | None"] = relationship(remote_side=[id])
+
+
 class ApiKey(TimestampMixin, Base):
     __tablename__ = "api_keys"
     id: Mapped[int] = mapped_column(primary_key=True)
