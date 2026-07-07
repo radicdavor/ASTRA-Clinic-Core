@@ -192,8 +192,10 @@ assertIncludes("src/pages/AppointmentDetail.tsx", "Povijest snapshotova klinicke
 assertIncludes("src/pages/AppointmentDetail.tsx", "Read-only prikaz spremljenih preview zapisa. Snapshot nije klinicka odluka, nije odobrenje postupka i nije odluka da se postupak smije provesti.");
 assertIncludes("src/pages/AppointmentDetail.tsx", "Povijest snapshotova trenutno nije dostupna.");
 assertIncludes("src/pages/AppointmentDetail.tsx", "Nema spremljenih snapshotova za ovaj termin.");
+assertIncludes("src/pages/AppointmentDetail.tsx", "snapshotHistoryItems");
 assertIncludes("src/pages/AppointmentDetail.tsx", "Spremi snapshot previewa");
 assertIncludes("src/pages/AppointmentDetail.tsx", "Spremi snapshot Clinical Readiness Previewa");
+assertIncludes("src/pages/AppointmentDetail.tsx", "Snapshot sprema trenutni server-side preview kao trajni zapis prikaza.");
 assertIncludes("src/pages/AppointmentDetail.tsx", "Razlog spremanja snapshota");
 assertIncludes("src/pages/AppointmentDetail.tsx", "Razlog je obavezan.");
 assertIncludes("src/pages/AppointmentDetail.tsx", "Snapshot previewa je spremljen.");
@@ -211,6 +213,7 @@ assertIncludes("src/pages/AppointmentDetail.tsx", "Snapshot nema spremljene stav
 assertIncludes("src/pages/AppointmentDetail.tsx", "Potencijalni blocker u spremljenom previewu - ne blokira automatski workflow.");
 assertIncludes("src/pages/AppointmentDetail.tsx", "Spremi novi snapshot i oznaci ovaj kao zamijenjen");
 assertIncludes("src/pages/AppointmentDetail.tsx", "Zamijeni snapshot novim preview zapisom");
+assertIncludes("src/pages/AppointmentDetail.tsx", "Ova radnja sprema novi snapshot trenutnog server-side previewa");
 assertIncludes("src/pages/AppointmentDetail.tsx", "Nije zamijenjen");
 assertIncludes("src/pages/AppointmentDetail.tsx", "Zamijenjen novijim preview zapisom");
 assertIncludes("src/pages/AppointmentDetail.tsx", "Razlog zamjene snapshota");
@@ -222,8 +225,10 @@ assertIncludes("src/pages/AppointmentDetail.tsx", "client_preview_generated_at")
 assertIncludes("src/types/index.ts", "ClinicalReadinessSnapshotCaptureRequest");
 assertIncludes("src/types/index.ts", "ClinicalReadinessSnapshotResponse");
 assertIncludes("src/types/index.ts", "ClinicalReadinessSnapshotDetailResponse");
-assertIncludes("src/pages/AppointmentDetail.tsx", "snapshotHistoryItems");
 assertIncludes("src/pages/AppointmentDetail.tsx", "snapshotDetail.warning");
+assertIncludes("../backend/app/api/routes/appointments.py", '"/appointments/{appointment_id}/clinical-readiness-snapshots/{snapshot_id}/supersede"');
+assertIncludes("../backend/app/schemas/common.py", "ClinicalReadinessSnapshotSupersedeRequest");
+assertIncludes("../backend/app/schemas/common.py", "ClinicalReadinessSnapshotSupersedeResponse");
 assertIncludes("../backend/app/services/clinical_readiness_snapshots.py", "CLINICAL_READINESS_SNAPSHOT_DISCLAIMER");
 assertIncludes("../backend/app/services/clinical_readiness_snapshots.py", "Ne predstavlja clinical approval");
 assertIncludes("../backend/app/services/clinical_readiness_templates.py", "DEMO_TEMPLATE_VERSION");
