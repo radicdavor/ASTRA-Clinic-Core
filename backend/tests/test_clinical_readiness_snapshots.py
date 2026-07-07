@@ -1283,6 +1283,128 @@ def test_supersession_endpoint_keeps_normal_capture_working(client, db, auth_set
     assert response.json()["snapshot_reason"] == "Normal capture still works."
 
 
+def test_db_invariant_rejects_snapshot_payload_and_capture_metadata_mutation(db, auth_setup):
+    appt = appointment(db)
+    snapshot = capture_clinical_readiness_snapshot(
+        db,
+        appointment_id=appt.id,
+        actor_user_id=auth_setup["admin"].id,
+        reason="Immutable capture reason.",
+    )
+    original_items = list(snapshot.items_json)
+    original_reason = snapshot.snapshot_reason
+
+    snapshot.items_json = [{"key": "tampered", "label": "Tampered payload"}]
+
+    with pytest.raises(IntegrityError):
+        db.flush()
+
+    db.rollback()
+    stored = db.get(ClinicalReadinessSnapshot, snapshot.id)
+    assert stored.items_json == original_items
+    assert stored.snapshot_reason == original_reason
+
+    stored.snapshot_reason = "Mutated reason."
+
+    with pytest.raises(IntegrityError):
+        db.flush()
+
+    db.rollback()
+    stored = db.get(ClinicalReadinessSnapshot, snapshot.id)
+    assert stored.snapshot_reason == original_reason
+
+
+def test_db_invariant_rejects_snapshot_appointment_and_patient_reassignment(db, auth_setup):
+    appt = appointment(db)
+    other_appt = appointment(db, room_obj=room(db, name="Immutable reassignment room"))
+    snapshot = capture_clinical_readiness_snapshot(
+        db,
+        appointment_id=appt.id,
+        actor_user_id=auth_setup["admin"].id,
+        reason="Immutable linkage.",
+    )
+    original_appointment_id = snapshot.appointment_id
+    original_patient_id = snapshot.patient_id
+
+    snapshot.appointment_id = other_appt.id
+
+    with pytest.raises(IntegrityError):
+        db.flush()
+
+    db.rollback()
+    stored = db.get(ClinicalReadinessSnapshot, snapshot.id)
+    assert stored.appointment_id == original_appointment_id
+    assert stored.patient_id == original_patient_id
+
+    stored.patient_id = other_appt.patient_id
+
+    with pytest.raises(IntegrityError):
+        db.flush()
+
+    db.rollback()
+    stored = db.get(ClinicalReadinessSnapshot, snapshot.id)
+    assert stored.appointment_id == original_appointment_id
+    assert stored.patient_id == original_patient_id
+
+
+def test_db_invariant_allows_first_supersession_but_rejects_reassignment(db, auth_setup):
+    appt = appointment(db)
+    old_snapshot = capture_clinical_readiness_snapshot(
+        db,
+        appointment_id=appt.id,
+        actor_user_id=auth_setup["admin"].id,
+        reason="Initial immutable supersession snapshot.",
+    )
+    new_snapshot = supersede_clinical_readiness_snapshot(
+        db,
+        appointment_id=appt.id,
+        old_snapshot_id=old_snapshot.id,
+        actor_user_id=auth_setup["admin"].id,
+        reason="Allowed first supersession.",
+    )
+    replacement_attempt = capture_clinical_readiness_snapshot(
+        db,
+        appointment_id=appt.id,
+        actor_user_id=auth_setup["admin"].id,
+        reason="Replacement attempt.",
+    )
+    db.refresh(old_snapshot)
+
+    assert old_snapshot.superseded_by_snapshot_id == new_snapshot.id
+    assert old_snapshot.superseded_reason == "Allowed first supersession."
+    old_snapshot.superseded_by_snapshot_id = replacement_attempt.id
+    old_snapshot.superseded_reason = "Reassigned supersession."
+
+    with pytest.raises(IntegrityError):
+        db.flush()
+
+    db.rollback()
+    stored = db.get(ClinicalReadinessSnapshot, old_snapshot.id)
+    assert stored.superseded_by_snapshot_id == new_snapshot.id
+    assert stored.superseded_reason == "Allowed first supersession."
+
+
+def test_db_invariant_rejects_snapshot_row_deletion(db, auth_setup):
+    appt = appointment(db)
+    snapshot = capture_clinical_readiness_snapshot(
+        db,
+        appointment_id=appt.id,
+        actor_user_id=auth_setup["admin"].id,
+        reason="Deletion guard.",
+    )
+    snapshot_id = snapshot.id
+    snapshot_count = db.query(ClinicalReadinessSnapshot).count()
+
+    db.delete(snapshot)
+
+    with pytest.raises(IntegrityError):
+        db.flush()
+
+    db.rollback()
+    assert db.get(ClinicalReadinessSnapshot, snapshot_id) is not None
+    assert db.query(ClinicalReadinessSnapshot).count() == snapshot_count
+
+
 def test_snapshot_lifecycle_end_to_end_without_workflow_side_effects(client, db, auth_setup):
     colonoscopy = service(db, name="Kolonoskopija")
     appt = appointment(db, service_obj=colonoscopy, status="scheduled")

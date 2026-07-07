@@ -379,6 +379,22 @@ Phase B28 update:
 - B28 je documentation-only; ne uvodi backend/frontend runtime promjene
 - Clinical Readiness enforcement se ne pokrece dok production risk hardening nije razjasnjen
 
+Phase B29 update:
+
+- production risk hardening plan je dokumentiran
+- DB immutability trigger design je dokumentiran
+- B29 ostaje documentation-only i ne mijenja runtime ponasanje
+- recommended next task je `Program 1 Phase B30 - Snapshot DB Immutability Trigger Prototype`
+
+Phase B30 update:
+
+- dodana je migracija `0016_snapshot_db_immutability`
+- `clinical_readiness_snapshots` dobiva DB-level update/delete invariant za protected snapshot content
+- narrow first-time additive supersession metadata transition ostaje dozvoljen
+- direct payload, capture reason, appointment/patient reassignment, supersession reassignment i delete scenariji su pokriveni regresijskim testovima
+- B30 ne uvodi nove endpointove, frontend kontrole, approval, clearance, override, Outcome Evidence, Task engine, appointment status change ili patient messaging
+- recommended next task je `Program 1 Phase B31 - Snapshot Audit Review and Retention Runbook`
+
 ## 5. Faza 2 - Findings Lifecycle Foundation
 
 Cilj:

@@ -126,6 +126,8 @@ Pilot documents:
 - [Program 1 Phase B29 Snapshot Production Risk Hardening](docs/programs/PROGRAM_1_PHASE_B29_SNAPSHOT_PRODUCTION_RISK_HARDENING.md)
 - [Program 1 Phase B29 DB Immutability Trigger Design](docs/programs/PROGRAM_1_PHASE_B29_DB_IMMUTABILITY_TRIGGER_DESIGN.md)
 - [Program 1 Phase B29 regression notes](docs/programs/PROGRAM_1_PHASE_B29_REGRESSION_NOTES.md)
+- [Program 1 Phase B30 Snapshot DB Immutability Trigger Prototype](docs/programs/PROGRAM_1_PHASE_B30_SNAPSHOT_DB_IMMUTABILITY_TRIGGER_PROTOTYPE.md)
+- [Program 1 Phase B30 regression notes](docs/programs/PROGRAM_1_PHASE_B30_REGRESSION_NOTES.md)
 - [Lokalni LAN pristup](docs/LAN_ACCESS.md)
 - [Program 1 audit event naming](docs/programs/PROGRAM_1_AUDIT_EVENT_NAMING.md)
 - [Program 1 Phase A regression notes](docs/programs/PROGRAM_1_PHASE_A_REGRESSION_NOTES.md)

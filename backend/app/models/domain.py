@@ -4,7 +4,7 @@ from datetime import date, datetime, time
 from decimal import Decimal
 from enum import StrEnum
 
-from sqlalchemy import Boolean, CheckConstraint, Date, DateTime, ForeignKey, Integer, JSON, Numeric, String, Table, Text, Time, Column, UniqueConstraint, func
+from sqlalchemy import Boolean, CheckConstraint, Date, DateTime, DDL, ForeignKey, Integer, JSON, Numeric, String, Table, Text, Time, Column, UniqueConstraint, event, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
@@ -307,6 +307,87 @@ class ClinicalReadinessSnapshot(Base):
     service: Mapped[Service] = relationship()
     creator: Mapped[User] = relationship()
     superseded_by_snapshot: Mapped["ClinicalReadinessSnapshot | None"] = relationship(remote_side=[id])
+
+
+_SNAPSHOT_PROTECTED_FIELDS = [
+    "id",
+    "appointment_id",
+    "patient_id",
+    "service_id",
+    "created_at",
+    "created_by_user_id",
+    "schema_version",
+    "preview_generated_at",
+    "preview_status",
+    "preview_summary",
+    "template_key",
+    "template_label",
+    "template_version",
+    "template_binding_status",
+    "template_binding_warning",
+    "is_preview_snapshot",
+    "items_json",
+    "limitations_json",
+    "source_warnings_json",
+    "source_refs_json",
+    "disclaimer",
+    "snapshot_reason",
+    "idempotency_key",
+    "idempotency_fingerprint",
+]
+
+
+def _sqlite_snapshot_protected_fields_same() -> str:
+    return " AND ".join(f"NEW.{field} IS OLD.{field}" for field in _SNAPSHOT_PROTECTED_FIELDS)
+
+
+event.listen(
+    ClinicalReadinessSnapshot.__table__,
+    "after_create",
+    DDL(
+        f"""
+        CREATE TRIGGER IF NOT EXISTS trg_clinical_readiness_snapshots_immutable_update
+        BEFORE UPDATE ON clinical_readiness_snapshots
+        FOR EACH ROW
+        WHEN NOT (
+            (
+                {_sqlite_snapshot_protected_fields_same()}
+                AND NEW.superseded_by_snapshot_id IS OLD.superseded_by_snapshot_id
+                AND NEW.superseded_at IS OLD.superseded_at
+                AND NEW.superseded_reason IS OLD.superseded_reason
+            )
+            OR
+            (
+                {_sqlite_snapshot_protected_fields_same()}
+                AND OLD.superseded_by_snapshot_id IS NULL
+                AND OLD.superseded_at IS NULL
+                AND OLD.superseded_reason IS NULL
+                AND NEW.superseded_by_snapshot_id IS NOT NULL
+                AND NEW.superseded_at IS NOT NULL
+                AND NEW.superseded_reason IS NOT NULL
+            )
+        )
+        BEGIN
+            SELECT RAISE(ABORT, 'Clinical Readiness Snapshot is immutable after insert except first-time additive supersession metadata');
+        END;
+        """
+    ).execute_if(dialect="sqlite"),
+)
+
+event.listen(
+    ClinicalReadinessSnapshot.__table__,
+    "after_create",
+    DDL(
+        """
+        CREATE TRIGGER IF NOT EXISTS trg_clinical_readiness_snapshots_immutable_delete
+        BEFORE DELETE ON clinical_readiness_snapshots
+        FOR EACH ROW
+        BEGIN
+            SELECT RAISE(ABORT, 'Clinical Readiness Snapshot rows cannot be deleted');
+        END;
+        """
+    ).execute_if(dialect="sqlite"),
+)
 
 
 class ApiKey(TimestampMixin, Base):
