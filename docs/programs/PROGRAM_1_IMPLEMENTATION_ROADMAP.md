@@ -72,6 +72,21 @@ Izvan scopea:
 
 Phase A planning reference: `PROGRAM_1_PHASE_A_PATIENT_KNOWLEDGE_STABILIZATION_PLAN.md`.
 
+Phase A closure update:
+
+- Phase A je zatvorena uz guardrails kroz `PROGRAM_1_PHASE_A_CLOSURE_REPORT.md`
+- Patient Knowledge Regression Gate je uspostavljen
+- backend route modularization pass je zavrsen, ukljucujuci A16, A17 i A18 split
+- `core.py` je povucen kao aktivni backend route modul
+- Phase A ne odobrava produkciju, stvarne podatke pacijenata ili certificirani EMR / medical-device status
+- immediate Task engine, Workflow Engine, Episode-Based Care kao primarni workflow i real AI/OCR ostaju No-Go
+
+Preporuka nakon Phase A:
+
+`Program 1 Phase B0 - Clinical Readiness Gate Operating Model`
+
+Phase B treba poceti kao dokumentacijski operating model, ne kao implementacija.
+
 ## 5. Faza 2 - Findings Lifecycle Foundation
 
 Cilj:
