@@ -84,6 +84,8 @@ ClinicalDocument now stores an explicit `review_status` lifecycle:
 
 ClinicalDocument Detail must keep the source, AI extraction suggestion and physician review state visually separate. The screen must show whether a document can contribute to source-linked patient knowledge, and it must explain that rejecting an AI suggestion does not reject the raw source document.
 
+Clinical Evidence Timeline on the document detail screen is a read-only view over existing audit events. AI extraction events are labelled as suggestion events with no official knowledge impact. Physician review events are labelled as events that may enable official source-linked knowledge.
+
 ## 6. Official Patient Knowledge
 
 Official patient knowledge is generated only from reviewed Clinical Documents.

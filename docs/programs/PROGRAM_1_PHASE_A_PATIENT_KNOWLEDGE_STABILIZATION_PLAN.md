@@ -219,7 +219,9 @@ Dodano je:
 
 Phase A6 ne uvodi Task engine, Clinical Readiness Gate, Episode-Based Care, Workflow Engine, real AI/OCR provider, formalni Finding object, formalni Medical Note output ili stvarne pacijentove podatke.
 
-Preporuceni sljedeci korak je Program 1 Phase A7 - Audit Timeline Clinical Evidence Pass.
+Program 1 Phase A7 - Audit Timeline Clinical Evidence Pass je implementiran kao read-only timeline preko postojecih ClinicalDocument audit dogadjaja.
+
+Preporuceni sljedeci korak je Program 1 Phase A8 - Patient Knowledge Regression Gate.
 
 ## 5. Proposed implementation work packages
 

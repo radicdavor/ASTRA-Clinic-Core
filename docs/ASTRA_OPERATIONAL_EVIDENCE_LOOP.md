@@ -83,6 +83,8 @@ Documents awaiting review -> Clinical Documents -> edit extraction -> physician 
 
 Rejecting AI extraction does not reject the raw ClinicalDocument source. The source remains available as draft evidence until it is edited, re-extracted or physician-reviewed.
 
+ClinicalDocument Detail now includes a Clinical Evidence Timeline. This is a readable view over existing audit events for that document. It does not change audit history, create clinical facts, create tasks or replace the raw Audit Log.
+
 ### Reception Arrival
 
 Today's appointment -> Reception -> identity check -> mark arrived -> appointment audit -> dashboard/appointment workspace.

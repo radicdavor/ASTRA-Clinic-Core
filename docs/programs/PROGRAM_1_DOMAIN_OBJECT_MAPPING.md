@@ -140,7 +140,7 @@ AI support je placeholder:
 | `Consent` | Documentation-only | Future concept | Nema model/status. | Consent lifecycle i source storage. |
 | `Procedure Report` | ClinicalDocument document_type gastroscopy/colonoscopy | Partially implemented | Report može biti dokument, ali nije formalni output. | Definirati procedure output. |
 | `Treatment Record` | Documentation-only | Future concept | Nema formalni estetski treatment record. | Kasnije procedure/treatment templates. |
-| `Audit Evidence` | `AuditLog`, `audit()` service, `AuditTimeline` | Implemented | Tehnička audit infrastruktura postoji. | Bogatija clinical event semantika. |
+| `Audit Evidence` | `AuditLog`, `audit()` service, `AuditTimeline`, Clinical Evidence Timeline | Implemented | Tehnicka audit infrastruktura postoji; A7 dodaje citljiv, read-only timeline preko postojecih ClinicalDocument audit dogadjaja. | Bogatija patient-wide clinical event semantika ostaje future. |
 | `Clinical Evidence Loop` | Program docs | Documentation-only | Nije zasebni runtime layer. | Hardening nakon outcome evidence. |
 | `Operational Evidence Loop` | Readiness/audit/docs | Implemented concept | Operativni loop postoji. | Pilot docs ostaju decision source. |
 | `Source Object` | `ClinicalDocument`, future procedure/treatment reports | Partially implemented | ClinicalDocument je glavni source object. | Formalizirati druge source objecte. |
@@ -180,7 +180,7 @@ AI support je placeholder:
 | Patient APIs | `core.py`, `/api/patients`, `/api/patients/{id}` | `Patient` | Identity guardrails su osnovni. | Patient remains first anchor. |
 | Appointment APIs | `/api/appointments`, `/api/schedule/day` | `Appointment`, `Appointment Workspace` | Nema clinical readiness status. | Dodati gate kasnije kao zaseban kontekst. |
 | Reception/day APIs | `/api/reception/day`, `/appointments/{id}/mark-arrived` | `Reception Workspace`, `Human Confirmation` | Arrival/identity, ne clinical truth. | Zadržati operativni scope. |
-| Clinical document APIs | `/api/clinical-documents*` | `ClinicalDocument`, `AI Extraction`, `Physician Review` | OCR/AI su placeholder; finding nije zaseban object. | Prvi hardening kandidat. |
+| Clinical document APIs | `/api/clinical-documents*` | `ClinicalDocument`, `AI Extraction`, `Physician Review`, Clinical Evidence Timeline | OCR/AI su placeholder; finding nije zaseban object; evidence timeline je read-only view preko audit loga. | Patient-wide evidence timeline ostaje future. |
 | Patient clinical summary APIs | `/patients/{id}/clinical-summary*` | `Patient Clinical Summary`, `Patient Clinical Knowledge` | Summary može biti pogrešno shvaćen kao source of truth. | Jasnije API/docs semantics. |
 | Episode APIs | `/api/episodes*` | `Clinical Episode`, `Episode Closure` | Deferred as primary workflow. | Ne širiti prije knowledge stabilization. |
 | Clinical plan APIs | `/episodes/{id}/clinical-plans*`, `/clinical-plans/{id}*` | `ClinicalPlan`, `AI Suggestion`, `Physician Confirmation` | Episode-bound i nije full workflow engine. | Lifecycle/naming mapping prije proširenja. |
@@ -197,7 +197,7 @@ AI support je placeholder:
 | --- | --- | --- | --- | --- |
 | `PatientDetail` | Patient Workspace s knowledge summary, documents, appointments, invoices, audit. | `Patient Workspace`, `Patient Clinical Knowledge`, `Patient Clinical Summary` | Aligned | Bolje razdvojiti official knowledge od AI summary carda. |
 | `ClinicalDocuments` | Popis/filter/upload clinical documents. | `ClinicalDocument`, `Internal/External ClinicalDocument` | Aligned | Upload je metadata/raw text placeholder. |
-| `ClinicalDocumentDetail` | Review workspace za document, extraction, lijecnicki pregled i audit. | `ClinicalDocument`, `AI Extraction`, `Physician Review` | Aligned | Phase A6 jasno odvaja izvorni dokument, AI prijedlog i doprinos source-linked znanju; Finding lifecycle nije formaliziran. |
+| `ClinicalDocumentDetail` | Review workspace za document, extraction, lijecnicki pregled, audit i evidence timeline. | `ClinicalDocument`, `AI Extraction`, `Physician Review`, `Audit Evidence` | Aligned | Phase A7 dodaje read-only evidence timeline; Finding lifecycle nije formaliziran. |
 | `EpisodeDetail` | Episode workspace s active/pending planovima. | `Clinical Episode`, `ClinicalPlan`, `AI Suggestion` | Partially aligned / deferred | Ostaje compatibility surface do reactivationa. |
 | `AppointmentDetail` | Appointment workspace, materials, invoice, audit. | `Appointment`, `Material Consumption`, `Inventory Movement` | Aligned | Clinical Readiness Gate nije implementiran. |
 | `Reception` | Day resource grid, arrival, identity verification. | `Reception Workspace`, `Human Confirmation` | Aligned | Week/month view deferred; no clinical truth. |
