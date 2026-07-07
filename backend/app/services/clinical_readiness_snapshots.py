@@ -1,5 +1,9 @@
 from __future__ import annotations
 
+import hashlib
+import json
+
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.audit.service import audit
@@ -15,6 +19,10 @@ CLINICAL_READINESS_SNAPSHOT_DISCLAIMER = (
 CLINICAL_READINESS_SNAPSHOT_CAPTURED_EVENT = "clinical_readiness_snapshot_captured"
 
 
+class SnapshotIdempotencyConflict(ValueError):
+    pass
+
+
 def _require_reason(reason: str) -> str:
     cleaned = reason.strip()
     if not cleaned:
@@ -26,6 +34,24 @@ def _require_actor(actor_user_id: int | None) -> int:
     if actor_user_id is None:
         raise ValueError("Actor user id je obavezan za snapshot capture")
     return actor_user_id
+
+
+def _normalize_idempotency_key(idempotency_key: str | None) -> str | None:
+    if idempotency_key is None:
+        return None
+    cleaned = idempotency_key.strip()
+    return cleaned or None
+
+
+def _idempotency_fingerprint(*, appointment_id: int, actor_user_id: int, reason: str) -> str:
+    payload = {
+        "appointment_id": appointment_id,
+        "actor_user_id": actor_user_id,
+        "reason": reason,
+        "schema_version": CLINICAL_READINESS_SNAPSHOT_SCHEMA_VERSION,
+    }
+    encoded = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    return hashlib.sha256(encoded).hexdigest()
 
 
 def _source_refs_from_items(items: list) -> list[dict]:
@@ -77,12 +103,30 @@ def capture_clinical_readiness_snapshot(
     idempotency_key: str | None = None,
 ) -> ClinicalReadinessSnapshot:
     """Capture an internal preview snapshot; B14 intentionally exposes no route/UI."""
-    del idempotency_key
     snapshot_reason = _require_reason(reason)
     creator_id = _require_actor(actor_user_id)
+    normalized_idempotency_key = _normalize_idempotency_key(idempotency_key)
+    idempotency_fingerprint = (
+        _idempotency_fingerprint(appointment_id=appointment_id, actor_user_id=creator_id, reason=snapshot_reason)
+        if normalized_idempotency_key
+        else None
+    )
     appointment = db.get(Appointment, appointment_id)
     if not appointment:
         raise LookupError("Termin nije pronaden")
+
+    if normalized_idempotency_key:
+        existing_snapshot = db.scalar(
+            select(ClinicalReadinessSnapshot).where(
+                ClinicalReadinessSnapshot.appointment_id == appointment_id,
+                ClinicalReadinessSnapshot.created_by_user_id == creator_id,
+                ClinicalReadinessSnapshot.idempotency_key == normalized_idempotency_key,
+            )
+        )
+        if existing_snapshot:
+            if existing_snapshot.idempotency_fingerprint == idempotency_fingerprint:
+                return existing_snapshot
+            raise SnapshotIdempotencyConflict("Idempotency key je vec iskoristen za drugi snapshot capture")
 
     preview = build_clinical_readiness_preview(db, appointment)
     if preview.patient_id is None or preview.service_id is None:
@@ -110,6 +154,8 @@ def capture_clinical_readiness_snapshot(
             source_warnings_json=list(preview.source_warnings),
             source_refs_json=_source_refs_from_items(preview.items),
             disclaimer=CLINICAL_READINESS_SNAPSHOT_DISCLAIMER,
+            idempotency_key=normalized_idempotency_key,
+            idempotency_fingerprint=idempotency_fingerprint,
         )
         db.add(snapshot)
         db.flush()

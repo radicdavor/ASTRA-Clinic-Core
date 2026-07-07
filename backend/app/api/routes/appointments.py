@@ -11,7 +11,7 @@ from app.models.domain import Appointment, ClinicalEpisode, ClinicalReadinessSna
 from app.schemas.common import AppointmentCreate, AppointmentOut, AppointmentUpdate, ClinicalReadinessPreviewResponse, ClinicalReadinessSnapshotCaptureRequest, ClinicalReadinessSnapshotDetailResponse, ClinicalReadinessSnapshotHistoryItem, ClinicalReadinessSnapshotHistoryResponse, ClinicalReadinessSnapshotResponse, ErrorResponse
 from app.services.appointments import validate_appointment_payload
 from app.services.clinical_readiness_preview import build_clinical_readiness_preview
-from app.services.clinical_readiness_snapshots import capture_clinical_readiness_snapshot
+from app.services.clinical_readiness_snapshots import SnapshotIdempotencyConflict, capture_clinical_readiness_snapshot
 
 ERROR_RESPONSES = {
     400: {"model": ErrorResponse},
@@ -247,6 +247,8 @@ def capture_appointment_clinical_readiness_snapshot(
         )
     except LookupError as exc:
         raise HTTPException(404, detail=str(exc)) from exc
+    except SnapshotIdempotencyConflict as exc:
+        raise HTTPException(409, detail=str(exc)) from exc
     except ValueError as exc:
         raise HTTPException(422, detail=str(exc)) from exc
     return snapshot_response(snapshot_obj)
