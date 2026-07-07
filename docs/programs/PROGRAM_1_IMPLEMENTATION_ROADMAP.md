@@ -87,6 +87,14 @@ Preporuka nakon Phase A:
 
 Phase B treba poceti kao dokumentacijski operating model, ne kao implementacija.
 
+Phase B0 update:
+
+- Clinical Readiness Gate operating model je dokumentiran kao patient/service/procedure-specific gate
+- Operational Readiness i Clinical Readiness moraju ostati odvojeni
+- B0 je documentation-only i ne uvodi backend, frontend, API, DB model ili UI
+- prva buduca implementacija, ako bude odobrena, treba biti read-only preview u Appointment Workspaceu
+- preporuceni sljedeci task je `Program 1 Phase B1 - Clinical Readiness Vocabulary and Domain Mapping`
+
 ## 5. Faza 2 - Findings Lifecycle Foundation
 
 Cilj:

@@ -108,3 +108,27 @@ Ocekivani izlaz:
 - primjeri za gastroenterologiju i estetsku medicinu
 - jasni No-Go uvjeti prije implementacije
 
+## 9. Phase B0 outcome
+
+Phase B0 je documentation-only operating model.
+
+Novi B0 dokumenti:
+
+- `PROGRAM_1_PHASE_B0_CLINICAL_READINESS_GATE_OPERATING_MODEL.md`
+- `PROGRAM_1_PHASE_B0_CLINICAL_READINESS_ROLES.md`
+- `PROGRAM_1_PHASE_B0_CLINICAL_READINESS_SPECIALTY_EXAMPLES.md`
+- `PROGRAM_1_PHASE_B0_CLINICAL_READINESS_IMPLEMENTATION_BOUNDARIES.md`
+
+B0 zakljucak:
+
+- Clinical Readiness Gate je patient/service/procedure-specific concept
+- nije Operational Readiness
+- nije Task engine
+- nije Workflow Engine
+- nije Episode-Based Care
+- nije autonomous AI decision
+- prva buduca implementacija treba biti read-only preview, ne enforcing blocker
+
+Preporuceni sljedeci task:
+
+`Program 1 Phase B1 - Clinical Readiness Vocabulary and Domain Mapping`
