@@ -189,7 +189,7 @@ assertIncludes("../backend/app/api/routes/appointments.py", '"/appointments/{app
 assertIncludes("../backend/app/api/routes/appointments.py", '"/appointments/{appointment_id}/clinical-readiness-snapshots/{snapshot_id}"');
 assertIncludes("../backend/app/schemas/common.py", "ClinicalReadinessSnapshotDetailResponse");
 assertIncludes("src/pages/AppointmentDetail.tsx", "Povijest snapshotova klinicke spremnosti");
-assertIncludes("src/pages/AppointmentDetail.tsx", "Read-only prikaz spremljenih preview zapisa. Snapshot nije odluka da se postupak smije provesti.");
+assertIncludes("src/pages/AppointmentDetail.tsx", "Read-only prikaz spremljenih preview zapisa. Snapshot nije klinicka odluka, nije odobrenje postupka i nije odluka da se postupak smije provesti.");
 assertIncludes("src/pages/AppointmentDetail.tsx", "Povijest snapshotova trenutno nije dostupna.");
 assertIncludes("src/pages/AppointmentDetail.tsx", "Nema spremljenih snapshotova za ovaj termin.");
 assertIncludes("src/pages/AppointmentDetail.tsx", "Spremi snapshot previewa");
@@ -211,6 +211,8 @@ assertIncludes("src/pages/AppointmentDetail.tsx", "Snapshot nema spremljene stav
 assertIncludes("src/pages/AppointmentDetail.tsx", "Potencijalni blocker u spremljenom previewu - ne blokira automatski workflow.");
 assertIncludes("src/pages/AppointmentDetail.tsx", "Spremi novi snapshot i oznaci ovaj kao zamijenjen");
 assertIncludes("src/pages/AppointmentDetail.tsx", "Zamijeni snapshot novim preview zapisom");
+assertIncludes("src/pages/AppointmentDetail.tsx", "Nije zamijenjen");
+assertIncludes("src/pages/AppointmentDetail.tsx", "Zamijenjen novijim preview zapisom");
 assertIncludes("src/pages/AppointmentDetail.tsx", "Razlog zamjene snapshota");
 assertIncludes("src/pages/AppointmentDetail.tsx", "Razlog zamjene je obavezan.");
 assertIncludes("src/pages/AppointmentDetail.tsx", "Nemate dozvolu za zamjenu snapshotova.");
@@ -240,14 +242,19 @@ assertIncludes("../backend/app/services/clinical_readiness_templates.py", "GASTR
 assertIncludes("../backend/app/services/clinical_readiness_templates.py", "COLONOSCOPY_TEMPLATE");
 assertNotIncludes("src/pages/AppointmentDetail.tsx", "AI cleared");
 assertNotIncludes("src/pages/AppointmentDetail.tsx", "Mark ready");
+assertNotIncludes("src/pages/AppointmentDetail.tsx", "Approved");
+assertNotIncludes("src/pages/AppointmentDetail.tsx", "Cleared");
 assertNotIncludes("src/pages/AppointmentDetail.tsx", "Procedure allowed");
 assertNotIncludes("src/pages/AppointmentDetail.tsx", "Override readiness");
+assertNotIncludes("src/pages/AppointmentDetail.tsx", "Override accepted");
 assertNotIncludes("src/pages/AppointmentDetail.tsx", "Create task");
+assertNotIncludes("src/pages/AppointmentDetail.tsx", "Task completed");
 assertNotIncludes("src/pages/AppointmentDetail.tsx", "Capture snapshot");
 assertNotIncludes("src/pages/AppointmentDetail.tsx", "Save snapshot");
 assertNotIncludes("src/pages/AppointmentDetail.tsx", "Approve");
 assertNotIncludes("src/pages/AppointmentDetail.tsx", "Clear");
 assertNotIncludes("src/pages/AppointmentDetail.tsx", "Procedure approved");
+assertNotIncludes("src/pages/AppointmentDetail.tsx", "Outcome documented");
 assertNotIncludes("src/pages/AppointmentDetail.tsx", "Outcome Evidence");
 assertNotIncludes("src/pages/AppointmentDetail.tsx", "Clear readiness");
 assertNotIncludes("src/pages/AppointmentDetail.tsx", "clinical approval");

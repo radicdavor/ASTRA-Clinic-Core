@@ -379,7 +379,7 @@ export function AppointmentDetail() {
           </ActionButton>
         }
       >
-        <p className="helper-text">Read-only prikaz spremljenih preview zapisa. Snapshot nije odluka da se postupak smije provesti.</p>
+        <p className="helper-text">Read-only prikaz spremljenih preview zapisa. Snapshot nije klinicka odluka, nije odobrenje postupka i nije odluka da se postupak smije provesti.</p>
         {snapshotHistory?.warning && <p className="helper-text">{snapshotHistory.warning}</p>}
         {snapshotHistoryRefreshWarning && <p className="form-error">{snapshotHistoryRefreshWarning}</p>}
         {snapshotHistoryError && <p className="form-error">Povijest snapshotova trenutno nije dostupna.</p>}
@@ -439,7 +439,7 @@ export function AppointmentDetail() {
         <div className="modal-backdrop" role="presentation">
           <div className="modal-panel" role="dialog" aria-modal="true" aria-labelledby="snapshot-supersede-title">
             <h2 id="snapshot-supersede-title">Zamijeni snapshot novim preview zapisom</h2>
-            <p className="helper-text">Ova radnja sprema novi snapshot trenutnog server-side previewa i oznacava stari snapshot kao zamijenjen. Ne predstavlja odobrenje postupka, klinicku propusnicu, formalni dokaz ishoda, zaobilazenje upozorenja ili klinicku odluku.</p>
+            <p className="helper-text">Ova radnja sprema novi snapshot trenutnog server-side previewa i oznacava stari snapshot kao zamijenjen novijim preview zapisom. Ne predstavlja odobrenje postupka, klinicku propusnicu, formalni dokaz ishoda, zaobilazenje upozorenja ili klinicku odluku.</p>
             <form onSubmit={supersedeSnapshot}>
               <label>
                 Razlog zamjene snapshota
