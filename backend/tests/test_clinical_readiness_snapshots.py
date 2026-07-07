@@ -1655,3 +1655,59 @@ def test_snapshot_permission_matrix_regression(client, db, auth_setup):
 
     admin_capture = capture_endpoint(client, appt.id, auth_headers(client), payload={"reason": "Admin still allowed."})
     assert admin_capture.status_code == 200
+
+
+def test_snapshot_restore_consistency_regression(db, auth_setup):
+    appt = appointment(db, status="scheduled")
+    old_snapshot = capture_clinical_readiness_snapshot(
+        db,
+        appointment_id=appt.id,
+        actor_user_id=auth_setup["admin"].id,
+        reason="Restore validation capture.",
+        idempotency_key="restore-key",
+    )
+    old_payload = {
+        "items": list(old_snapshot.items_json),
+        "limitations": list(old_snapshot.limitations_json),
+        "source_warnings": list(old_snapshot.source_warnings_json),
+        "source_refs": list(old_snapshot.source_refs_json),
+        "reason": old_snapshot.snapshot_reason,
+        "idempotency_key": old_snapshot.idempotency_key,
+        "idempotency_fingerprint": old_snapshot.idempotency_fingerprint,
+    }
+
+    new_snapshot = supersede_clinical_readiness_snapshot(
+        db,
+        appointment_id=appt.id,
+        old_snapshot_id=old_snapshot.id,
+        actor_user_id=auth_setup["admin"].id,
+        reason="Restore validation supersession.",
+    )
+    db.refresh(old_snapshot)
+
+    capture_event = db.query(AuditLog).filter(AuditLog.action == CLINICAL_READINESS_SNAPSHOT_CAPTURED_EVENT).one()
+    supersession_event = db.query(AuditLog).filter(AuditLog.action == CLINICAL_READINESS_SNAPSHOT_SUPERSEDED_EVENT).one()
+    assert capture_event.entity_id == old_snapshot.id
+    assert capture_event.after_json["snapshot_id"] == old_snapshot.id
+    assert capture_event.after_json["appointment_id"] == appt.id
+    assert supersession_event.entity_id == old_snapshot.id
+    assert supersession_event.after_json["old_snapshot_id"] == old_snapshot.id
+    assert supersession_event.after_json["new_snapshot_id"] == new_snapshot.id
+    assert db.get(ClinicalReadinessSnapshot, supersession_event.after_json["new_snapshot_id"]) is not None
+    assert old_snapshot.superseded_by_snapshot_id == new_snapshot.id
+    assert old_snapshot.items_json == old_payload["items"]
+    assert old_snapshot.limitations_json == old_payload["limitations"]
+    assert old_snapshot.source_warnings_json == old_payload["source_warnings"]
+    assert old_snapshot.source_refs_json == old_payload["source_refs"]
+    assert old_snapshot.snapshot_reason == old_payload["reason"]
+    assert old_snapshot.idempotency_key == old_payload["idempotency_key"]
+    assert old_snapshot.idempotency_fingerprint == old_payload["idempotency_fingerprint"]
+
+    old_snapshot.preview_summary = "Restore tamper attempt."
+    with pytest.raises(IntegrityError):
+        db.flush()
+
+    db.rollback()
+    stored_old = db.get(ClinicalReadinessSnapshot, old_snapshot.id)
+    assert stored_old.preview_summary != "Restore tamper attempt."
+    assert stored_old.superseded_by_snapshot_id == new_snapshot.id

@@ -429,6 +429,13 @@ Phase B34 update:
 - B34 ne uvodi runtime promjene
 - recommended next task je `Program 1 Phase B35 - Snapshot Restore Validation Regression`
 
+Phase B35 update:
+
+- dodana je restore-consistency regresija bez stvarnog dump/restore workflowa
+- test provjerava snapshot, supersession, audit reference, idempotency metadata i DB invariant nakon simuliranog restore scenarija
+- B35 ne uvodi endpoint, frontend UI, approval, clearance, Outcome Evidence ili Task engine
+- recommended next task je `Program 1 Phase B36 - Snapshot Permission UX and Error Wording Review`
+
 ## 5. Faza 2 - Findings Lifecycle Foundation
 
 Cilj:
