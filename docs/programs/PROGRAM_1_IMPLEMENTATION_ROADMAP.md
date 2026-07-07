@@ -395,6 +395,15 @@ Phase B30 update:
 - B30 ne uvodi nove endpointove, frontend kontrole, approval, clearance, override, Outcome Evidence, Task engine, appointment status change ili patient messaging
 - recommended next task je `Program 1 Phase B31 - Snapshot Audit Review and Retention Runbook`
 
+Phase B31 update:
+
+- dodan je Snapshot Audit Review and Retention Runbook
+- dokumentirani su capture i supersession audit eventi
+- audit je eksplicitno odvojen od Outcome Evidence koncepta
+- retention/export/restore pretpostavke ostaju demo/pilot only
+- B31 ne uvodi runtime promjene
+- recommended next task je `Program 1 Phase B32 - Snapshot Audit Payload Stabilization`
+
 ## 5. Faza 2 - Findings Lifecycle Foundation
 
 Cilj:
