@@ -413,6 +413,22 @@ Phase B32 update:
 - B32 ne uvodi export endpoint, Outcome Evidence, Task engine, appointment status change ili patient messaging
 - recommended next task je `Program 1 Phase B33 - Snapshot Audit Export Contract`
 
+Phase B33 update:
+
+- snapshot audit export contract je dokumentiran
+- postojece read-only audit pattern-e treba preferirati prije novog endpointa
+- export ostaje demo/pilot only i ne predstavlja clinical decision export
+- B33 ne uvodi runtime promjene
+- recommended next task je `Program 1 Phase B34 - Snapshot Backup and Restore Consistency Runbook`
+
+Phase B34 update:
+
+- backup/restore consistency runbook je dokumentiran
+- pokriveni su snapshot row, audit row, supersession relationship, idempotency metadata i DB trigger validation
+- restore validation checklist ostaje demo/pilot hardening, ne production approval
+- B34 ne uvodi runtime promjene
+- recommended next task je `Program 1 Phase B35 - Snapshot Restore Validation Regression`
+
 ## 5. Faza 2 - Findings Lifecycle Foundation
 
 Cilj:
