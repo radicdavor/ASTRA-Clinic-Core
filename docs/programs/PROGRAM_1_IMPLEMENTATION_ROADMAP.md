@@ -444,6 +444,14 @@ Phase B36 update:
 - B36 ne uvodi nove UI akcije ili backend ponasanje
 - recommended next task je `Program 1 Phase B37 - Snapshot CI Gate Documentation and Script Review`
 
+Phase B37 update:
+
+- dokumentiran je Snapshot CI Gate
+- CI workflow sada eksplicitno vrti `tests/test_clinical_readiness_snapshots.py` prije punog backend suitea
+- gate cuva preview/capture/history/detail/idempotency/supersession/DB immutability regresije
+- B37 ne uvodi runtime ponasanje
+- recommended next task je `Program 1 Phase B38 - Snapshot Legal/Compliance Disclaimer Review`
+
 ## 5. Faza 2 - Findings Lifecycle Foundation
 
 Cilj:

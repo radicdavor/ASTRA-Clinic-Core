@@ -38,6 +38,9 @@ jobs:
       - name: Run database migrations
         working-directory: backend
         run: alembic upgrade head
+      - name: Run snapshot regression gate
+        working-directory: backend
+        run: python -m pytest tests/test_clinical_readiness_snapshots.py
       - name: Run backend tests
         working-directory: backend
         run: python -m pytest
