@@ -44,6 +44,14 @@ def detail_endpoint(client, appointment_id, snapshot_id, headers):
     return client.get(f"/api/appointments/{appointment_id}/clinical-readiness-snapshots/{snapshot_id}", headers=headers)
 
 
+def supersede_endpoint(client, appointment_id, snapshot_id, headers, payload=None):
+    return client.post(
+        f"/api/appointments/{appointment_id}/clinical-readiness-snapshots/{snapshot_id}/supersede",
+        headers=headers,
+        json=payload if payload is not None else {"reason": "Endpoint supersession reason."},
+    )
+
+
 def test_clinical_readiness_snapshot_table_exists_after_metadata_setup(db):
     table_names = set(db.get_bind().dialect.get_table_names(db.connection()))
 
@@ -1074,20 +1082,191 @@ def test_supersession_rolls_back_new_snapshot_and_old_metadata_when_audit_fails(
     assert stored_old.superseded_reason is None
 
 
-def test_supersession_route_is_not_implemented_in_b23(client, db, auth_setup):
+def test_supersession_endpoint_requires_authentication(client, db, auth_setup):
     appt = appointment(db)
     snapshot = capture_clinical_readiness_snapshot(
         db,
         appointment_id=appt.id,
         actor_user_id=auth_setup["admin"].id,
-        reason="Future supersession metadata only.",
+        reason="Endpoint auth.",
     )
 
-    assert hasattr(snapshot, "superseded_by_snapshot_id")
-    assert hasattr(snapshot, "superseded_at")
-    assert hasattr(snapshot, "superseded_reason")
-    assert client.post(
-        f"/api/appointments/{appt.id}/clinical-readiness-snapshots/{snapshot.id}/supersede",
+    response = supersede_endpoint(client, appt.id, snapshot.id, headers={})
+
+    assert response.status_code == 401
+
+
+def test_supersession_endpoint_requires_supersede_permission(client, db, auth_setup):
+    appt = appointment(db)
+    snapshot = capture_clinical_readiness_snapshot(
+        db,
+        appointment_id=appt.id,
+        actor_user_id=auth_setup["admin"].id,
+        reason="Endpoint permission.",
+    )
+    headers = {"Authorization": f"Bearer {login_token(client, 'limited@test.local')}"}
+
+    response = supersede_endpoint(client, appt.id, snapshot.id, headers=headers)
+
+    assert response.status_code == 403
+    assert "clinical_readiness.snapshots.supersede" in response.json()["detail"]
+
+
+def test_api_key_supersession_denied_even_with_snapshot_scope(client, db):
+    appt = appointment(db)
+    snapshot = capture_clinical_readiness_snapshot(
+        db,
+        appointment_id=appt.id,
+        actor_user_id=1,
+        reason="API key old snapshot.",
+    )
+    api_key = ApiKey(
+        name="Snapshot supersession integration",
+        key_hash=hash_api_key("raw-supersession-key"),
+        scopes=["clinical_readiness.snapshots.supersede"],
+        active=True,
+    )
+    db.add(api_key)
+    db.commit()
+
+    response = supersede_endpoint(
+        client,
+        appt.id,
+        snapshot.id,
+        headers={"X-ASTRA-API-Key": "raw-supersession-key"},
+    )
+
+    assert response.status_code == 403
+    db.refresh(snapshot)
+    assert snapshot.superseded_by_snapshot_id is None
+
+
+def test_supersession_endpoint_requires_reason(client, db, auth_setup):
+    appt = appointment(db)
+    snapshot = capture_clinical_readiness_snapshot(
+        db,
+        appointment_id=appt.id,
+        actor_user_id=auth_setup["admin"].id,
+        reason="Endpoint reason.",
+    )
+
+    response = supersede_endpoint(client, appt.id, snapshot.id, headers=auth_headers(client), payload={"reason": "   "})
+
+    assert response.status_code == 422
+
+
+def test_supersession_endpoint_supersedes_snapshot_without_workflow_side_effects(client, db, auth_setup):
+    appt = appointment(db, status="scheduled")
+    original_status = appt.status
+    old_snapshot = capture_clinical_readiness_snapshot(
+        db,
+        appointment_id=appt.id,
+        actor_user_id=auth_setup["admin"].id,
+        reason="Endpoint initial snapshot.",
+    )
+    old_payload = {
+        "items": list(old_snapshot.items_json),
+        "limitations": list(old_snapshot.limitations_json),
+        "source_warnings": list(old_snapshot.source_warnings_json),
+        "source_refs": list(old_snapshot.source_refs_json),
+        "reason": old_snapshot.snapshot_reason,
+    }
+    episode_count = db.query(ClinicalEpisode).count()
+    plan_count = db.query(ClinicalPlan).count()
+    table_names = set(db.get_bind().dialect.get_table_names(db.connection()))
+
+    response = supersede_endpoint(
+        client,
+        appt.id,
+        old_snapshot.id,
         headers=auth_headers(client),
-        json={"reason": "Not implemented"},
-    ).status_code in {404, 405}
+        payload={"reason": "Endpoint supersession."},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    new_snapshot = db.get(ClinicalReadinessSnapshot, body["new_snapshot"]["id"])
+    db.refresh(old_snapshot)
+    assert new_snapshot is not None
+    assert body["old_snapshot_id"] == old_snapshot.id
+    assert body["new_snapshot"]["appointment_id"] == appt.id
+    assert body["new_snapshot"]["snapshot_reason"] == "Supersession: Endpoint supersession."
+    assert body["superseded_at"] is not None
+    assert body["superseded_reason"] == "Endpoint supersession."
+    assert "Ne predstavlja clinical approval" in body["warning"]
+    forbidden = {"approved", "cleared", "procedure_allowed", "task_created", "outcome_evidence_id", "override_status"}
+    assert forbidden.isdisjoint(body.keys())
+    assert forbidden.isdisjoint(body["new_snapshot"].keys())
+    assert old_snapshot.superseded_by_snapshot_id == new_snapshot.id
+    assert old_snapshot.superseded_at is not None
+    assert old_snapshot.superseded_reason == "Endpoint supersession."
+    assert old_snapshot.items_json == old_payload["items"]
+    assert old_snapshot.limitations_json == old_payload["limitations"]
+    assert old_snapshot.source_warnings_json == old_payload["source_warnings"]
+    assert old_snapshot.source_refs_json == old_payload["source_refs"]
+    assert old_snapshot.snapshot_reason == old_payload["reason"]
+
+    event = db.query(AuditLog).filter(AuditLog.action == CLINICAL_READINESS_SNAPSHOT_SUPERSEDED_EVENT).one()
+    assert event.entity_id == old_snapshot.id
+    assert event.after_json["old_snapshot_id"] == old_snapshot.id
+    assert event.after_json["new_snapshot_id"] == new_snapshot.id
+    assert event.after_json["supersede_reason"] == "Endpoint supersession."
+
+    db.expire(appt)
+    assert appt.status == original_status
+    assert db.query(ClinicalEpisode).count() == episode_count
+    assert db.query(ClinicalPlan).count() == plan_count
+    assert "outcome_evidence" not in table_names
+    assert "tasks" not in table_names
+
+    history = history_endpoint(client, appt.id, auth_headers(client))
+    assert history.status_code == 200
+    old_history_item = next(item for item in history.json()["snapshots"] if item["id"] == old_snapshot.id)
+    assert old_history_item["superseded_by_snapshot_id"] == new_snapshot.id
+
+    detail = detail_endpoint(client, appt.id, old_snapshot.id, auth_headers(client))
+    assert detail.status_code == 200
+    detail_body = detail.json()
+    assert detail_body["items"] == old_payload["items"]
+    assert detail_body["limitations"] == old_payload["limitations"]
+    assert detail_body["source_warnings"] == old_payload["source_warnings"]
+    assert detail_body["source_refs"] == old_payload["source_refs"]
+
+
+def test_supersession_endpoint_rejects_wrong_appointment(client, db, auth_setup):
+    appt = appointment(db)
+    other_appt = appointment(db, room_obj=room(db, name="Wrong endpoint room"))
+    snapshot = capture_clinical_readiness_snapshot(
+        db,
+        appointment_id=appt.id,
+        actor_user_id=auth_setup["admin"].id,
+        reason="Wrong appointment endpoint.",
+    )
+
+    response = supersede_endpoint(client, other_appt.id, snapshot.id, headers=auth_headers(client))
+
+    assert response.status_code == 404
+
+
+def test_supersession_endpoint_rejects_already_superseded_snapshot(client, db, auth_setup):
+    appt = appointment(db)
+    snapshot = capture_clinical_readiness_snapshot(
+        db,
+        appointment_id=appt.id,
+        actor_user_id=auth_setup["admin"].id,
+        reason="Already superseded endpoint.",
+    )
+    first = supersede_endpoint(client, appt.id, snapshot.id, headers=auth_headers(client), payload={"reason": "First endpoint supersession."})
+    second = supersede_endpoint(client, appt.id, snapshot.id, headers=auth_headers(client), payload={"reason": "Second endpoint supersession."})
+
+    assert first.status_code == 200
+    assert second.status_code == 409
+
+
+def test_supersession_endpoint_keeps_normal_capture_working(client, db, auth_setup):
+    appt = appointment(db)
+
+    response = capture_endpoint(client, appt.id, headers=auth_headers(client), payload={"reason": "Normal capture still works."})
+
+    assert response.status_code == 200
+    assert response.json()["snapshot_reason"] == "Normal capture still works."
