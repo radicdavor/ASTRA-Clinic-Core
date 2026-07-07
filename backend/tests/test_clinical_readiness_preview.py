@@ -1,6 +1,7 @@
 from datetime import datetime
 
-from app.models.domain import AuditLog, ClinicalEpisode, ClinicalPlan, PatientClinicalSummaryRecord
+from app.models.domain import Appointment, AuditLog, ClinicalEpisode, ClinicalPlan, PatientClinicalSummaryRecord
+from app.services.clinical_readiness_preview import build_clinical_readiness_preview
 from tests.conftest import login_token
 from tests.factories import appointment, clinical_document, episode, patient
 
@@ -124,20 +125,16 @@ def test_patient_clinical_summary_alone_is_not_used_as_source_of_truth(client, d
     assert "Sazetak ne smije postati readiness izvor" not in labels
 
 
-def test_missing_service_returns_blocking_item_but_does_not_update_appointment(client, db, auth_setup):
-    appt = appointment(db)
-    appt.service_id = None
-    db.commit()
-    headers = auth_headers(client)
+def test_missing_service_returns_blocking_item_without_db_write(db):
+    p = patient(db)
+    appt = Appointment(id=999, patient_id=p.id, service_id=None)
 
-    response = preview(client, appt.id, headers)
+    response = build_clinical_readiness_preview(db, appt)
 
-    assert response.status_code == 200
-    body = response.json()
-    assert body["status"] == "blocked"
-    assert any(item["key"] == "missing_service" and item["blocking"] for item in body["items"])
-    db.expire(appt)
+    assert response.status == "blocked"
+    assert any(item.key == "missing_service" and item.blocking for item in response.items)
     assert appt.service_id is None
+    assert db.query(AuditLog).count() == 0
 
 
 def test_missing_template_returns_limitation_not_server_error(client, db, auth_setup):
