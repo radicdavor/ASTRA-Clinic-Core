@@ -844,3 +844,35 @@ Idempotency key je retry guard za eksplicitni capture. Ne mijenja preview semant
 Preporuceni sljedeci task:
 
 `Program 1 Phase B21 - Snapshot Canonical Disclaimer and Immutability Hardening`
+
+## 30. Phase B21 outcome
+
+Phase B21 hardens canonical disclaimer and immutability rules for Clinical Readiness Snapshot.
+
+Dodano:
+
+- canonical disclaimer rules document
+- UI uses stored server disclaimer directly
+- regression coverage for no update/delete/supersede endpoints
+- regression coverage for read-only history/detail payload behavior
+- regression coverage that capture creates new rows
+
+B21 ostaje:
+
+- bez supersession endpointa
+- bez supersession UI-ja
+- bez edit/delete akcija
+- bez approvala
+- bez clearancea
+- bez overridea
+- bez Outcome Evidencea
+- bez Task enginea
+- bez appointment status promjene
+
+B21 decision:
+
+Snapshot payload is immutable by route/service discipline. Future supersession must be additive and must not rewrite or delete old payload.
+
+Preporuceni sljedeci task:
+
+`Program 1 Phase B22 - Snapshot Supersession Contract`

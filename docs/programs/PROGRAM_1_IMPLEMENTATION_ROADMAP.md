@@ -301,6 +301,17 @@ Phase B20 update:
 - B20 ne uvodi supersession, edit/delete, approval, clearance, override, Outcome Evidence, Task engine, appointment status change, patient messaging ili production governance
 - preporuceni sljedeci task je `Program 1 Phase B21 - Snapshot Canonical Disclaimer and Immutability Hardening`
 
+Phase B21 update:
+
+- canonical disclaimer and immutability rules su dokumentirani
+- frontend vise ne radi ad-hoc rewrite server disclaimer teksta
+- Appointment Workspace prikazuje spremljeni disclaimer iz snapshota
+- regression coverage cuva da update/delete/supersede rute ne postoje
+- regression coverage cuva da detail/history read ne mutira snapshot payload
+- regression coverage cuva da novi capture stvara novi row umjesto updatea postojeceg payload
+- B21 ne uvodi supersession endpoint/UI, edit snapshot, delete snapshot, approval, clearance, override, Outcome Evidence, Task engine ili appointment status change
+- preporuceni sljedeci task je `Program 1 Phase B22 - Snapshot Supersession Contract`
+
 ## 5. Faza 2 - Findings Lifecycle Foundation
 
 Cilj:
