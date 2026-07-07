@@ -181,6 +181,46 @@ class ClinicalReadinessSnapshotResponse(BaseModel):
         return value
 
 
+class ClinicalReadinessSnapshotHistoryItem(BaseModel):
+    id: int
+    appointment_id: int
+    patient_id: int
+    service_id: int
+    created_at: DateTimeType
+    created_by_user_id: int
+    schema_version: str
+    preview_generated_at: DateTimeType
+    preview_status: str
+    template_key: str | None = None
+    template_label: str | None = None
+    template_version: str | None = None
+    template_binding_status: str | None = None
+    snapshot_reason: str
+    is_preview_snapshot: bool
+    disclaimer: str
+    item_count: int
+    limitation_count: int
+    source_warning_count: int
+    superseded_by_snapshot_id: int | None = None
+    superseded_at: DateTimeType | None = None
+    superseded_reason: str | None = None
+
+    @field_validator("preview_status")
+    @classmethod
+    def validate_preview_status(cls, value: str) -> str:
+        if value not in CLINICAL_READINESS_STATUSES:
+            raise ValueError("Nepoznat status klinicke spremnosti")
+        return value
+
+
+class ClinicalReadinessSnapshotHistoryResponse(BaseModel):
+    appointment_id: int
+    snapshots: list[ClinicalReadinessSnapshotHistoryItem]
+    count: int
+    is_preview_history: bool
+    warning: str
+
+
 class LoginRequest(BaseModel):
     email: str
     password: str
