@@ -4,7 +4,14 @@ import pytest
 from sqlalchemy.exc import IntegrityError
 
 from app.auth.dependencies import hash_api_key
-from app.models.domain import ApiKey, AuditLog, ClinicalEpisode, ClinicalPlan, ClinicalReadinessSnapshot, PatientClinicalSummaryRecord
+from app.models.domain import (
+    ApiKey,
+    AuditLog,
+    ClinicalEpisode,
+    ClinicalPlan,
+    ClinicalReadinessSnapshot,
+    PatientClinicalSummaryRecord,
+)
 from app.services.clinical_readiness_snapshots import (
     CLINICAL_READINESS_SNAPSHOT_CAPTURED_EVENT,
     CLINICAL_READINESS_SNAPSHOT_DISCLAIMER,
@@ -1270,3 +1277,105 @@ def test_supersession_endpoint_keeps_normal_capture_working(client, db, auth_set
 
     assert response.status_code == 200
     assert response.json()["snapshot_reason"] == "Normal capture still works."
+
+
+def test_snapshot_lifecycle_end_to_end_without_workflow_side_effects(client, db, auth_setup):
+    colonoscopy = service(db, name="Kolonoskopija")
+    appt = appointment(db, service_obj=colonoscopy, status="scheduled")
+    clinical_document(db, appt.patient, physician_reviewed=True)
+    original_status = appt.status
+    initial_snapshot_count = db.query(ClinicalReadinessSnapshot).count()
+    initial_audit_count = db.query(AuditLog).count()
+    episode_count = db.query(ClinicalEpisode).count()
+    plan_count = db.query(ClinicalPlan).count()
+    table_names = set(db.get_bind().dialect.get_table_names(db.connection()))
+    headers = auth_headers(client)
+
+    preview_response = preview(client, appt.id, headers)
+
+    assert preview_response.status_code == 200
+    assert db.query(ClinicalReadinessSnapshot).count() == initial_snapshot_count
+    assert db.query(AuditLog).count() == initial_audit_count
+
+    capture_response = capture_endpoint(
+        client,
+        appt.id,
+        headers=headers,
+        payload={"reason": "End-to-end capture.", "idempotency_key": "e2e-key"},
+    )
+
+    assert capture_response.status_code == 200
+    captured_body = capture_response.json()
+    captured_snapshot = db.get(ClinicalReadinessSnapshot, captured_body["id"])
+    assert captured_snapshot is not None
+    assert captured_snapshot.items_json == captured_body["items"]
+    assert db.query(AuditLog).filter(AuditLog.action == CLINICAL_READINESS_SNAPSHOT_CAPTURED_EVENT).count() == 1
+
+    retry_response = capture_endpoint(
+        client,
+        appt.id,
+        headers=headers,
+        payload={"reason": "End-to-end capture.", "idempotency_key": "e2e-key"},
+    )
+
+    assert retry_response.status_code == 200
+    assert retry_response.json()["id"] == captured_snapshot.id
+    assert db.query(ClinicalReadinessSnapshot).count() == initial_snapshot_count + 1
+    assert db.query(AuditLog).filter(AuditLog.action == CLINICAL_READINESS_SNAPSHOT_CAPTURED_EVENT).count() == 1
+
+    history_after_capture = history_endpoint(client, appt.id, headers)
+    assert history_after_capture.status_code == 200
+    assert history_after_capture.json()["snapshots"][0]["id"] == captured_snapshot.id
+
+    detail_after_capture = detail_endpoint(client, appt.id, captured_snapshot.id, headers)
+    assert detail_after_capture.status_code == 200
+    old_payload = {
+        "items": detail_after_capture.json()["items"],
+        "limitations": detail_after_capture.json()["limitations"],
+        "source_warnings": detail_after_capture.json()["source_warnings"],
+        "source_refs": detail_after_capture.json()["source_refs"],
+    }
+
+    supersede_response = supersede_endpoint(
+        client,
+        appt.id,
+        captured_snapshot.id,
+        headers=headers,
+        payload={"reason": "End-to-end supersession."},
+    )
+
+    assert supersede_response.status_code == 200
+    new_snapshot_id = supersede_response.json()["new_snapshot"]["id"]
+    new_snapshot = db.get(ClinicalReadinessSnapshot, new_snapshot_id)
+    db.refresh(captured_snapshot)
+    assert new_snapshot is not None
+    assert captured_snapshot.superseded_by_snapshot_id == new_snapshot.id
+    assert captured_snapshot.items_json == old_payload["items"]
+    assert captured_snapshot.limitations_json == old_payload["limitations"]
+    assert captured_snapshot.source_warnings_json == old_payload["source_warnings"]
+    assert captured_snapshot.source_refs_json == old_payload["source_refs"]
+
+    history_after_supersession = history_endpoint(client, appt.id, headers)
+    assert history_after_supersession.status_code == 200
+    history_items = history_after_supersession.json()["snapshots"]
+    assert history_items[0]["id"] == new_snapshot.id
+    old_history_item = next(item for item in history_items if item["id"] == captured_snapshot.id)
+    assert old_history_item["superseded_by_snapshot_id"] == new_snapshot.id
+
+    old_detail_after_supersession = detail_endpoint(client, appt.id, captured_snapshot.id, headers)
+    assert old_detail_after_supersession.status_code == 200
+    assert old_detail_after_supersession.json()["items"] == old_payload["items"]
+    assert old_detail_after_supersession.json()["limitations"] == old_payload["limitations"]
+    assert old_detail_after_supersession.json()["source_warnings"] == old_payload["source_warnings"]
+    assert old_detail_after_supersession.json()["source_refs"] == old_payload["source_refs"]
+
+    capture_event = db.query(AuditLog).filter(AuditLog.action == CLINICAL_READINESS_SNAPSHOT_CAPTURED_EVENT).one()
+    assert capture_event.entity_id == captured_snapshot.id
+    assert db.query(AuditLog).filter(AuditLog.action == CLINICAL_READINESS_SNAPSHOT_SUPERSEDED_EVENT).count() == 1
+    db.expire(appt)
+    assert appt.status == original_status
+    assert db.query(ClinicalEpisode).count() == episode_count
+    assert db.query(ClinicalPlan).count() == plan_count
+    assert "outcome_evidence" not in table_names
+    assert "tasks" not in table_names
+    assert "patient_messages" not in table_names
