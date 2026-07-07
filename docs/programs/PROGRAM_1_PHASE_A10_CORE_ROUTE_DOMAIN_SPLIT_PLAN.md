@@ -296,3 +296,15 @@ A14 je implementirao Patient Clinical Summary route split:
 Preporuceni sljedeci zadatak nakon A14:
 
 `Program 1 Phase A15 - Split Patient Routes`
+
+## 13. A15 implementation update
+
+A15 je implementirao Patient route split:
+
+- Patient CRUD i child endpointi su premjesteni u `backend/app/api/routes/patients.py`.
+- `backend/app/main.py` registrira `patients.router`.
+- URL i API ugovor ostaju isti.
+
+Preporuceni sljedeci zadatak nakon A15:
+
+`Program 1 Phase A16 - Split Appointment and Reception Routes`
