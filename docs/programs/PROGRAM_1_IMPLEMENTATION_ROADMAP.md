@@ -192,6 +192,15 @@ Phase B10 update:
 - B10 je documentation-only i ne uvodi DB tablicu, migraciju, endpoint, runtime persistence, audit event, Outcome Evidence, task, override ili appointment status promjenu
 - preporuceni sljedeci task je `Program 1 Phase B11 - Snapshot Capture Endpoint Design`
 
+Phase B11 update:
+
+- snapshot capture endpoint design je dokumentiran kroz `PROGRAM_1_PHASE_B11_SNAPSHOT_CAPTURE_ENDPOINT_DESIGN.md`
+- B11 predlaze buduci endpoint `POST /api/appointments/{appointment_id}/clinical-readiness-snapshots`
+- B11 definira tko smije captureati snapshot, ulazne parametre, response shape, error states, idempotency, transaction boundary, audit event i UI implikacije
+- B11 potvrduje da capture sprema ono sto server-side preview prikaze u trenutku capturea i da ne radi clinical approval
+- B11 je documentation-only i ne uvodi endpoint, backend kod, frontend kod, persistence, audit event, Outcome Evidence, task, override ili appointment status promjenu
+- preporuceni sljedeci task je `Program 1 Phase B12 - Snapshot Permission and Audit Contract`
+
 ## 5. Faza 2 - Findings Lifecycle Foundation
 
 Cilj:

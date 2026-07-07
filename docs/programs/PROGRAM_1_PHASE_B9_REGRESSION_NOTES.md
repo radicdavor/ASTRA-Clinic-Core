@@ -80,3 +80,13 @@ Razlog:
 Prije Alembic migracije treba posebno pregledati table shape, naming, indexes, JSON fields, audit event naming, immutability constraints i rollback rizike.
 
 Alternativni brzi put `Clinical Readiness Snapshot Persistence Prototype` nije preporucen bez tog migration reviewa.
+
+## Follow-up after B10/B11 design
+
+B10 je odvojen kao migration review prije Alembic migracije.
+
+B11 je odvojen kao capture endpoint design prije backend rute.
+
+Oba koraka ostaju documentation-only i ne mijenjaju B9 odluku:
+
+Snapshot persistence smije spremiti samo immutable kopiju preview prikaza, uz eksplicitni capture i buduci audit. Snapshot ne smije postati clinical approval, Outcome Evidence, Task, override ili appointment status.

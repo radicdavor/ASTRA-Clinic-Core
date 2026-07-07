@@ -456,3 +456,47 @@ Snapshot persistence mora spremiti immutable copied JSON payload onoga sto je pr
 Preporuceni sljedeci task:
 
 `Program 1 Phase B11 - Snapshot Capture Endpoint Design`
+
+## 20. Phase B11 outcome
+
+Phase B11 definira buduci capture endpoint za Clinical Readiness Snapshot bez implementacije.
+
+Implementirano:
+
+- `PROGRAM_1_PHASE_B11_SNAPSHOT_CAPTURE_ENDPOINT_DESIGN.md`
+
+B11 definira:
+
+- predlozeni endpoint `POST /api/appointments/{appointment_id}/clinical-readiness-snapshots`
+- tko smije captureati snapshot
+- ulazne parametre
+- response shape
+- error states
+- idempotency odluku
+- transaction boundary
+- buduci audit event `clinical_readiness_snapshot_captured`
+- sigurnosne napomene
+- odnos prema preview endpointu
+- UI implikacije za buduci snapshot history
+
+B11 ostaje:
+
+- documentation-only
+- bez backend koda
+- bez frontend koda
+- bez DB migracije
+- bez endpoint implementacije
+- bez persistencea
+- bez audit event implementationa
+- bez Outcome Evidencea
+- bez Task enginea
+- bez overridea
+- bez appointment status promjene
+
+B11 decision:
+
+Capture mora biti eksplicitna write akcija s razlogom, permissionom, server-side preview rebuildom, immutable copied payloadom i audit eventom. Capture ne smije znaciti clinical approval.
+
+Preporuceni sljedeci task:
+
+`Program 1 Phase B12 - Snapshot Permission and Audit Contract`
