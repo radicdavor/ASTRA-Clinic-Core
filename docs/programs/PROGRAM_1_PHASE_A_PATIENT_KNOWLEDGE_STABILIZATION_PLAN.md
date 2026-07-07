@@ -609,6 +609,17 @@ Status after A16:
 - `core.py` je smanjen, ali jos sadrzi episode/clinical plan, search/catalog i audit rute.
 - Nije uveden Clinical Readiness Gate, Task engine, Workflow Engine, real AI/OCR ili Episode-Based Care kao primarni workflow.
 
+### Phase A17 route split update
+
+Status after A17:
+
+- Episode i ClinicalPlan rute su izdvojene u `backend/app/api/routes/episodes.py`.
+- Javne adrese `/api/episodes*` i `/api/clinical-plans*` ostaju iste.
+- Episode Workspace ostaje experimental/deferred compatibility surface.
+- ClinicalPlan ostaje episode-bound suggestion/confirmation objekt i nije Workflow Engine.
+- `core.py` sada ostaje privremeno mjesto za catalog/search/audit rute do A18.
+- Nije uveden Clinical Readiness Gate, Task engine, Outcome Evidence, real AI/OCR ili Episode-Based Care kao primarni workflow.
+
 ### Phase A5 implementation update
 
 Status after A5:
