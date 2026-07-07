@@ -115,6 +115,15 @@ Phase B2 update:
 - buduca prva code faza, ako bude odobrena, treba biti `Program 1 Phase B3 - Clinical Readiness Read-Only Preview Prototype`
 - B3 mora ostati demo/pilot-only, non-blocking i bez task/override/AI-clear ponasanja
 
+Phase B3 update:
+
+- read-only appointment-scoped preview endpoint je implementiran
+- deterministic preview service je implementiran
+- Appointment Workspace prikazuje `Klinicka spremnost - preview`
+- regression tests i smoke coverage cuvaju non-blocking/read-only granice
+- B3 ne uvodi enforcement, taskove, override, AI clearance, production claims, DB model ili migraciju
+- preporuceni sljedeci task je `Program 1 Phase B4 - Clinical Readiness Template Design`
+
 ## 5. Faza 2 - Findings Lifecycle Foundation
 
 Cilj:

@@ -116,7 +116,7 @@ AI support je placeholder:
 | `Administrative Closure` | Documentation-only | Future concept | Nema closure reason model. | Definirati uz Episode Closure. |
 | `Operational Readiness` | `/api/readiness`, `Readiness.tsx`, docs | Implemented | Demo/pilot readiness cockpit. | Ne miješati s Clinical Readiness Gateom. |
 | `ASTRA Readiness Model` | `ASTRA_READINESS_MODEL.md`, readiness route | Implemented | Read-only operational risk view. | Ostaje non-compliance. |
-| `Clinical Readiness Gate` | Program 1 Phase B0/B1/B2 docs | Documentation-only future concept | Nema backend/frontend object; B0 definira operating model, B1 zakljucava vocabulary/domain/source mapping, a B2 definira API/UI/data/safety contract za read-only preview. | Sljedeci korak moze biti non-blocking read-only prototype ako ga maintainer odobri. |
+| `Clinical Readiness Gate` | Program 1 Phase B0/B1/B2 docs plus B3 preview | Implemented read-only preview only | B3 dodaje appointment-scoped, non-blocking preview endpoint i Appointment Workspace prikaz. Nema enforcement, override, task, DB model ili persistent gate. | Sljedeci korak je Clinical Readiness Template Design. |
 | `Ready` | Documentation-only readiness status for future gate | Future concept | Nije runtime clinical status. | Koristiti kao `clinical_readiness_status`. |
 | `Ready with Warning` | Documentation-only | Future concept | Nije runtime clinical status. | Treba override/audit semantics. |
 | `Not Ready` | Documentation-only | Future concept | Nije runtime clinical status. | Treba reason i next action. |
@@ -213,7 +213,7 @@ AI support je placeholder:
 
 | Gap | Related canonical terms | Current state | Risk if implemented too early | Recommended future phase |
 | --- | --- | --- | --- | --- |
-| Clinical Readiness Gate not implemented | `Clinical Readiness Gate`, `Clinical Readiness Status`, `Clinical Readiness Item` | B0/B1/B2 documentation-only operating model, vocabulary mapping and API/UI contract | Confusion with `/api/readiness`; false clinical safety signal; premature blockers without override governance. | Optional read-only prototype, non-blocking and demo/pilot-only |
+| Clinical Readiness Gate not fully implemented | `Clinical Readiness Gate`, `Clinical Readiness Status`, `Clinical Readiness Item` | B3 read-only preview prototype | Confusion with `/api/readiness`; false clinical safety signal; premature blockers without override governance. | Template Design before any hardening or enforcement |
 | Task object not implemented | `Task`, `Follow-up` | Not represented | Workarounds in notes/status fields. | Task and Follow-up Foundation |
 | Finding not a separate implemented object | `Finding`, `Source-Linked Statement` | JSON arrays/summary items | Duplicate facts or confusing source vs interpretation. | ClinicalDocument Review Hardening |
 | Outcome Evidence not implemented | `Outcome Evidence` | Documentation-only | Closure without evidence. | Outcome Evidence Foundation |
