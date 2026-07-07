@@ -1,6 +1,6 @@
 import { type FormEvent, useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { api, captureClinicalReadinessSnapshot, getClinicalReadinessSnapshotHistory, notifyUser } from "../api/client";
+import { api, captureClinicalReadinessSnapshot, getClinicalReadinessSnapshotDetail, getClinicalReadinessSnapshotHistory, notifyUser } from "../api/client";
 import { ActionButton } from "../components/ActionButton";
 import { AuditTimeline } from "../components/AuditTimeline";
 import { DataTable } from "../components/DataTable";
@@ -9,7 +9,7 @@ import { WorkspaceHeader } from "../components/workspace/WorkspaceHeader";
 import { WorkspaceLayout } from "../components/workspace/WorkspaceLayout";
 import { WorkspaceSection } from "../components/workspace/WorkspaceSection";
 import { useApi } from "../hooks/useApi";
-import { Appointment, AuditLog, ClinicalReadinessPreview, ClinicalReadinessSnapshotHistoryResponse, Invoice, StockMovement } from "../types";
+import { Appointment, AuditLog, ClinicalReadinessPreview, ClinicalReadinessSnapshotDetailResponse, ClinicalReadinessSnapshotHistoryResponse, Invoice, StockMovement } from "../types";
 import { formatDate, formatDateTime } from "../utils/date";
 import { formatPatientIdentity, formatPatientName } from "../utils/patientIdentity";
 
@@ -34,6 +34,9 @@ export function AppointmentDetail() {
   const [snapshotCaptureError, setSnapshotCaptureError] = useState("");
   const [snapshotCaptureSaving, setSnapshotCaptureSaving] = useState(false);
   const [snapshotHistoryRefreshWarning, setSnapshotHistoryRefreshWarning] = useState("");
+  const [snapshotDetail, setSnapshotDetail] = useState<ClinicalReadinessSnapshotDetailResponse | null>(null);
+  const [snapshotDetailLoading, setSnapshotDetailLoading] = useState(false);
+  const [snapshotDetailError, setSnapshotDetailError] = useState("");
 
   const relatedInvoice = useMemo(() => invoices.data.find((invoice) => invoice.appointment_id === Number(id)), [invoices.data, id]);
   const relatedMovements = useMemo(() => movements.data.filter((movement) => movement.related_appointment_id === Number(id)), [movements.data, id]);
@@ -175,6 +178,21 @@ export function AppointmentDetail() {
     }
   }
 
+  async function openSnapshotDetail(snapshotId: number) {
+    if (!appointment.data) return;
+    setSnapshotDetail(null);
+    setSnapshotDetailError("");
+    setSnapshotDetailLoading(true);
+    try {
+      const response = await getClinicalReadinessSnapshotDetail(appointment.data.id, snapshotId);
+      setSnapshotDetail(response);
+    } catch {
+      setSnapshotDetailError("Detalji snapshota trenutno nisu dostupni.");
+    } finally {
+      setSnapshotDetailLoading(false);
+    }
+  }
+
   if (!appointment.data) return <WorkspaceLayout><p>Ucitavanje termina...</p></WorkspaceLayout>;
 
   return (
@@ -309,6 +327,7 @@ export function AppointmentDetail() {
                 </div>
                 {snapshot.superseded_at && <p className="helper-text">Zamijenjen: {formatDateTime(snapshot.superseded_at)}. Razlog: {snapshot.superseded_reason ?? "-"}</p>}
                 {snapshot.disclaimer && <p className="helper-text">{snapshotSafetyText(snapshot.disclaimer)}</p>}
+                <button type="button" onClick={() => openSnapshotDetail(snapshot.id)}>Detalji snapshota</button>
               </article>
             ))}
           </div>
@@ -332,6 +351,78 @@ export function AppointmentDetail() {
                 <button className="primary" type="submit" disabled={snapshotCaptureSaving}>{snapshotCaptureSaving ? "Spremanje..." : "Spremi snapshot"}</button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {(snapshotDetailLoading || snapshotDetailError || snapshotDetail) && (
+        <div className="modal-backdrop" role="presentation">
+          <div className="modal-panel" role="dialog" aria-modal="true" aria-labelledby="snapshot-detail-title">
+            <h2 id="snapshot-detail-title">Detalji Clinical Readiness Snapshota</h2>
+            {snapshotDetailLoading && <p>Ucitavanje detalja snapshota...</p>}
+            {snapshotDetailError && <p className="form-error">{snapshotDetailError}</p>}
+            {snapshotDetail && (
+              <>
+                <p className="helper-text">{snapshotSafetyText(snapshotDetail.warning)}</p>
+                <div className="detail-list">
+                  <p><span>Spremljeno</span><strong>{formatDateTime(snapshotDetail.created_at)}</strong></p>
+                  <p><span>Korisnik</span><strong>{snapshotDetail.created_by_user_id}</strong></p>
+                  <p><span>Razlog</span><strong>{snapshotDetail.snapshot_reason}</strong></p>
+                  <p><span>Preview generiran</span><strong>{formatDateTime(snapshotDetail.preview_generated_at)}</strong></p>
+                  <p><span>Status previewa</span><strong>{snapshotDetail.preview_status}</strong></p>
+                  <p><span>Template</span><strong>{snapshotDetail.template_label ?? snapshotDetail.template_key ?? "Nije vezan"}</strong></p>
+                  <p><span>Verzija</span><strong>{snapshotDetail.template_version ?? "-"}</strong></p>
+                  <p><span>Binding</span><strong>{snapshotDetail.template_binding_status?.replace("_", " ") ?? "-"}</strong></p>
+                  <p><span>Schema</span><strong>{snapshotDetail.schema_version}</strong></p>
+                </div>
+                {snapshotDetail.template_binding_warning && <p className="helper-text">{snapshotDetail.template_binding_warning}</p>}
+                <p>{snapshotDetail.preview_summary}</p>
+                {snapshotDetail.disclaimer && <p className="helper-text">{snapshotSafetyText(snapshotDetail.disclaimer)}</p>}
+
+                <h3>Ogranicenja</h3>
+                {snapshotDetail.limitations.length === 0 ? <p>Nema spremljenih ogranicenja.</p> : (
+                  <ul>{snapshotDetail.limitations.map((limitation) => <li key={limitation}>{limitation}</li>)}</ul>
+                )}
+
+                <h3>Upozorenja o izvorima</h3>
+                {snapshotDetail.source_warnings.length === 0 ? <p>Nema spremljenih upozorenja o izvorima.</p> : (
+                  <ul>{snapshotDetail.source_warnings.map((warning) => <li key={warning}>{warning}</li>)}</ul>
+                )}
+
+                <h3>Izvori</h3>
+                {snapshotDetail.source_refs.length === 0 ? <p>Nema spremljenih izvora.</p> : (
+                  <div className="timeline-list">
+                    {snapshotDetail.source_refs.map((source, index) => (
+                      <article className="timeline-item" key={`${source.source_ref ?? source.id ?? index}`}>
+                        <strong>{String(source.source_label ?? source.source_ref ?? source.id ?? `Izvor ${index + 1}`)}</strong>
+                        <small>{String(source.source_type ?? source.type ?? "-")}</small>
+                      </article>
+                    ))}
+                  </div>
+                )}
+
+                <h3>Stavke previewa</h3>
+                {snapshotDetail.items.length === 0 ? <p>Snapshot nema spremljene stavke.</p> : (
+                  <div className="timeline-list">
+                    {snapshotDetail.items.map((item, index) => (
+                      <article className="timeline-item" key={item.key ?? `${item.label}-${index}`}>
+                        <strong>{item.label}</strong>
+                        <small>{item.category} / {item.status} / {item.severity} / uloga: {item.responsible_role ?? "-"}</small>
+                        <p>Izvor: {item.source_label ? `${item.source_label} (${item.source_type})` : item.source_type}{item.source_ref ? ` / ${item.source_ref}` : ""}</p>
+                        {item.suggested_action && <p>{item.suggested_action}</p>}
+                        {item.blocking && <p className="helper-text">Potencijalni blocker u spremljenom previewu - ne blokira automatski workflow.</p>}
+                      </article>
+                    ))}
+                  </div>
+                )}
+              </>
+            )}
+            <div className="form-actions">
+              <button type="button" onClick={() => {
+                setSnapshotDetail(null);
+                setSnapshotDetailError("");
+              }}>Zatvori</button>
+            </div>
           </div>
         </div>
       )}
