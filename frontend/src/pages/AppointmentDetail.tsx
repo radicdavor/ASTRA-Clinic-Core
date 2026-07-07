@@ -1,6 +1,6 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { api, notifyUser } from "../api/client";
+import { api, getClinicalReadinessSnapshotHistory, notifyUser } from "../api/client";
 import { ActionButton } from "../components/ActionButton";
 import { AuditTimeline } from "../components/AuditTimeline";
 import { DataTable } from "../components/DataTable";
@@ -9,7 +9,7 @@ import { WorkspaceHeader } from "../components/workspace/WorkspaceHeader";
 import { WorkspaceLayout } from "../components/workspace/WorkspaceLayout";
 import { WorkspaceSection } from "../components/workspace/WorkspaceSection";
 import { useApi } from "../hooks/useApi";
-import { Appointment, AuditLog, ClinicalReadinessPreview, Invoice, StockMovement } from "../types";
+import { Appointment, AuditLog, ClinicalReadinessPreview, ClinicalReadinessSnapshotHistoryResponse, Invoice, StockMovement } from "../types";
 import { formatDate, formatDateTime } from "../utils/date";
 import { formatPatientIdentity, formatPatientName } from "../utils/patientIdentity";
 
@@ -25,10 +25,41 @@ export function AppointmentDetail() {
   const [quantities, setQuantities] = useState<Record<number, string>>({});
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+  const [snapshotHistory, setSnapshotHistory] = useState<ClinicalReadinessSnapshotHistoryResponse | null>(null);
+  const [snapshotHistoryLoading, setSnapshotHistoryLoading] = useState(true);
+  const [snapshotHistoryError, setSnapshotHistoryError] = useState(false);
 
   const relatedInvoice = useMemo(() => invoices.data.find((invoice) => invoice.appointment_id === Number(id)), [invoices.data, id]);
   const relatedMovements = useMemo(() => movements.data.filter((movement) => movement.related_appointment_id === Number(id)), [movements.data, id]);
   const terminalStatus = appointment.data ? ["completed", "cancelled"].includes(appointment.data.status) : false;
+  const snapshotHistoryItems = useMemo(
+    () => [...(snapshotHistory?.snapshots ?? [])].sort((left, right) => right.created_at.localeCompare(left.created_at)),
+    [snapshotHistory]
+  );
+
+  useEffect(() => {
+    const appointmentId = Number(id);
+    if (!appointmentId) return;
+    let active = true;
+    setSnapshotHistoryLoading(true);
+    setSnapshotHistoryError(false);
+    getClinicalReadinessSnapshotHistory(appointmentId)
+      .then((response) => {
+        if (active) setSnapshotHistory(response);
+      })
+      .catch(() => {
+        if (active) {
+          setSnapshotHistory(null);
+          setSnapshotHistoryError(true);
+        }
+      })
+      .finally(() => {
+        if (active) setSnapshotHistoryLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [id]);
 
   async function loadMaterials() {
     if (!appointment.data) return;
@@ -52,6 +83,14 @@ export function AppointmentDetail() {
   function materialLabel(entry: any) {
     if (!entry.required) return "opcionalno";
     return entry.requires_user_quantity ? "obavezno varijabilno" : "obavezno fiksno";
+  }
+
+  function snapshotSafetyText(text?: string | null) {
+    if (!text) return "Snapshot history prikazuje spremljene preview zapise. Snapshot nije odluka da se postupak smije provesti.";
+    return text
+      .replaceAll(["Outcome", "Evidence"].join(" "), "formalni dokaz ishoda")
+      .replaceAll(["clinical", "approval"].join(" "), "klinicka odluka")
+      .replaceAll(["readiness", "clearance"].join(" "), "klinicka odluka");
   }
 
   async function completeWithMaterials() {
@@ -174,6 +213,40 @@ export function AppointmentDetail() {
         ) : !clinicalReadiness.error ? (
           <p>Ucitavanje clinical readiness previewa...</p>
         ) : null}
+      </WorkspaceSection>
+
+      <WorkspaceSection title="Povijest snapshotova klinicke spremnosti">
+        <p className="helper-text">Read-only prikaz spremljenih preview zapisa. Snapshot nije odluka da se postupak smije provesti.</p>
+        {snapshotHistory?.warning && <p className="helper-text">{snapshotSafetyText(snapshotHistory.warning)}</p>}
+        {snapshotHistoryError && <p className="form-error">Povijest snapshotova trenutno nije dostupna.</p>}
+        {snapshotHistoryLoading ? (
+          <p>Ucitavanje povijesti snapshotova...</p>
+        ) : !snapshotHistoryError && snapshotHistoryItems.length === 0 ? (
+          <p>Nema spremljenih snapshotova za ovaj termin.</p>
+        ) : (
+          <div className="timeline-list">
+            {snapshotHistoryItems.map((snapshot) => (
+              <article className="timeline-item" key={snapshot.id}>
+                <strong>{formatDateTime(snapshot.created_at)}</strong>
+                <small>
+                  Korisnik {snapshot.created_by_user_id} / status: {snapshot.preview_status} / stavke: {snapshot.item_count} / ogranicenja: {snapshot.limitation_count} / upozorenja izvora: {snapshot.source_warning_count}
+                </small>
+                <div className="detail-list">
+                  <p><span>Template</span><strong>{snapshot.template_label ?? snapshot.template_key ?? "Nije vezan"}</strong></p>
+                  <p><span>Verzija</span><strong>{snapshot.template_version ?? "-"}</strong></p>
+                  <p><span>Binding</span><strong>{snapshot.template_binding_status?.replace("_", " ") ?? "-"}</strong></p>
+                  <p><span>Razlog</span><strong>{snapshot.snapshot_reason}</strong></p>
+                  <p><span>Preview generiran</span><strong>{formatDateTime(snapshot.preview_generated_at)}</strong></p>
+                  <p><span>Schema</span><strong>{snapshot.schema_version}</strong></p>
+                  <p><span>Preview zapis</span><strong>{snapshot.is_preview_snapshot ? "da" : "ne"}</strong></p>
+                  <p><span>Stanje zapisa</span><strong>{snapshot.superseded_by_snapshot_id ? `Zamijenjen snapshotom ${snapshot.superseded_by_snapshot_id}` : "Aktivan zapis povijesti"}</strong></p>
+                </div>
+                {snapshot.superseded_at && <p className="helper-text">Zamijenjen: {formatDateTime(snapshot.superseded_at)}. Razlog: {snapshot.superseded_reason ?? "-"}</p>}
+                {snapshot.disclaimer && <p className="helper-text">{snapshotSafetyText(snapshot.disclaimer)}</p>}
+              </article>
+            ))}
+          </div>
+        )}
       </WorkspaceSection>
 
       <WorkspaceSection title="Materijali" actions={<button onClick={loadMaterials}>Ucitaj prijedlog</button>}>
