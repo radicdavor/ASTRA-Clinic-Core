@@ -767,3 +767,95 @@ def test_capture_endpoint_idempotency_does_not_trust_client_preview_timestamp(cl
     assert db.query(ClinicalPlan).count() == plan_count
     assert "outcome_evidence" not in table_names
     assert "tasks" not in table_names
+
+
+def test_snapshot_update_and_delete_endpoints_do_not_exist(client, db, auth_setup):
+    appt = appointment(db)
+    snapshot = capture_clinical_readiness_snapshot(
+        db,
+        appointment_id=appt.id,
+        actor_user_id=auth_setup["admin"].id,
+        reason="No mutation endpoints.",
+    )
+    path = f"/api/appointments/{appt.id}/clinical-readiness-snapshots/{snapshot.id}"
+    headers = auth_headers(client)
+
+    patch_response = client.patch(path, headers=headers, json={"snapshot_reason": "Edited"})
+    delete_response = client.delete(path, headers=headers)
+
+    assert patch_response.status_code == 405
+    assert delete_response.status_code == 405
+
+
+def test_snapshot_detail_and_history_reads_do_not_mutate_snapshot_payload(client, db, auth_setup):
+    appt = appointment(db)
+    snapshot = capture_clinical_readiness_snapshot(
+        db,
+        appointment_id=appt.id,
+        actor_user_id=auth_setup["admin"].id,
+        reason="Immutable read.",
+    )
+    before = {
+        "items": list(snapshot.items_json),
+        "limitations": list(snapshot.limitations_json),
+        "source_warnings": list(snapshot.source_warnings_json),
+        "source_refs": list(snapshot.source_refs_json),
+        "summary": snapshot.preview_summary,
+        "reason": snapshot.snapshot_reason,
+        "disclaimer": snapshot.disclaimer,
+    }
+
+    assert history_endpoint(client, appt.id, auth_headers(client)).status_code == 200
+    assert detail_endpoint(client, appt.id, snapshot.id, auth_headers(client)).status_code == 200
+    db.refresh(snapshot)
+
+    assert snapshot.items_json == before["items"]
+    assert snapshot.limitations_json == before["limitations"]
+    assert snapshot.source_warnings_json == before["source_warnings"]
+    assert snapshot.source_refs_json == before["source_refs"]
+    assert snapshot.preview_summary == before["summary"]
+    assert snapshot.snapshot_reason == before["reason"]
+    assert snapshot.disclaimer == before["disclaimer"]
+
+
+def test_capture_creates_new_row_and_does_not_update_existing_snapshot_payload(db, auth_setup):
+    appt = appointment(db)
+    first = capture_clinical_readiness_snapshot(
+        db,
+        appointment_id=appt.id,
+        actor_user_id=auth_setup["admin"].id,
+        reason="Initial immutable payload.",
+    )
+    first_payload = list(first.items_json)
+
+    second = capture_clinical_readiness_snapshot(
+        db,
+        appointment_id=appt.id,
+        actor_user_id=auth_setup["admin"].id,
+        reason="Second explicit capture.",
+    )
+    db.refresh(first)
+
+    assert second.id != first.id
+    assert first.items_json == first_payload
+    assert first.snapshot_reason == "Initial immutable payload."
+    assert db.query(ClinicalReadinessSnapshot).count() == 2
+
+
+def test_supersession_fields_exist_but_no_supersession_runtime_is_implemented(client, db, auth_setup):
+    appt = appointment(db)
+    snapshot = capture_clinical_readiness_snapshot(
+        db,
+        appointment_id=appt.id,
+        actor_user_id=auth_setup["admin"].id,
+        reason="Future supersession metadata only.",
+    )
+
+    assert hasattr(snapshot, "superseded_by_snapshot_id")
+    assert hasattr(snapshot, "superseded_at")
+    assert hasattr(snapshot, "superseded_reason")
+    assert client.post(
+        f"/api/appointments/{appt.id}/clinical-readiness-snapshots/{snapshot.id}/supersede",
+        headers=auth_headers(client),
+        json={"reason": "Not implemented"},
+    ).status_code == 405
