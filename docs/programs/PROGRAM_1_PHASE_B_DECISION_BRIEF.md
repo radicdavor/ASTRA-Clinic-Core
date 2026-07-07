@@ -1009,3 +1009,34 @@ Snapshot supersession is now user-visible, but only as a reason-required preview
 Preporuceni sljedeci task:
 
 `Program 1 Phase B26 - Snapshot Governance and Safety Label Stabilization`
+
+## 35. Phase B26 outcome
+
+Phase B26 stabilizes snapshot governance wording and UI safety labels.
+
+Dodano:
+
+- governance stabilization document
+- safe active/superseded labels
+- stronger preview-only helper text
+- smoke coverage for forbidden wording
+
+B26 ostaje:
+
+- bez novih runtime akcija
+- bez edit/delete akcija
+- bez approvala
+- bez clearancea
+- bez overridea
+- bez Outcome Evidencea
+- bez Task enginea
+- bez appointment status promjene
+- bez patient messaginga
+
+B26 decision:
+
+Snapshot UI must communicate saved preview history, not approval or workflow enforcement.
+
+Preporuceni sljedeci task:
+
+`Program 1 Phase B27 - Snapshot End-to-End Regression Hardening`

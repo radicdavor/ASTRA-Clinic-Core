@@ -354,6 +354,15 @@ Phase B25 update:
 - B25 ne uvodi edit/delete, approval, clearance, override, Outcome Evidence, Task engine, appointment status change ili patient messaging
 - preporuceni sljedeci task je `Program 1 Phase B26 - Snapshot Governance and Safety Label Stabilization`
 
+Phase B26 update:
+
+- snapshot governance stabilization rules su dokumentirani
+- Appointment Workspace snapshot helper tekstovi naglasavaju da snapshot nije klinicka odluka ni odobrenje postupka
+- active/superseded UI labeli su stabilizirani kao `Nije zamijenjen` i `Zamijenjen novijim preview zapisom`
+- smoke coverage cuva safe label presence i forbidden wording absence
+- B26 ne uvodi nove runtime akcije, edit/delete, approval, clearance, override, Outcome Evidence, Task engine, appointment status change ili patient messaging
+- preporuceni sljedeci task je `Program 1 Phase B27 - Snapshot End-to-End Regression Hardening`
+
 ## 5. Faza 2 - Findings Lifecycle Foundation
 
 Cilj:

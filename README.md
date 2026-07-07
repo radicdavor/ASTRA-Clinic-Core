@@ -116,6 +116,8 @@ Pilot documents:
 - [Program 1 Phase B23 regression notes](docs/programs/PROGRAM_1_PHASE_B23_REGRESSION_NOTES.md)
 - [Program 1 Phase B24 regression notes](docs/programs/PROGRAM_1_PHASE_B24_REGRESSION_NOTES.md)
 - [Program 1 Phase B25 regression notes](docs/programs/PROGRAM_1_PHASE_B25_REGRESSION_NOTES.md)
+- [Program 1 Phase B26 Snapshot Governance Stabilization](docs/programs/PROGRAM_1_PHASE_B26_SNAPSHOT_GOVERNANCE_STABILIZATION.md)
+- [Program 1 Phase B26 regression notes](docs/programs/PROGRAM_1_PHASE_B26_REGRESSION_NOTES.md)
 - [Lokalni LAN pristup](docs/LAN_ACCESS.md)
 - [Program 1 audit event naming](docs/programs/PROGRAM_1_AUDIT_EVENT_NAMING.md)
 - [Program 1 Phase A regression notes](docs/programs/PROGRAM_1_PHASE_A_REGRESSION_NOTES.md)
