@@ -8,7 +8,7 @@ services:
       POSTGRES_USER: ${POSTGRES_USER:-astra}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-astra}
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -28,7 +28,7 @@ services:
       REAL_DATA_ALLOWED: ${REAL_DATA_ALLOWED:-false}
       FISCALIZATION_MODE: ${FISCALIZATION_MODE:-noop}
     ports:
-      - "8000:8000"
+      - "0.0.0.0:8000:8000"
     depends_on:
       db:
         condition: service_healthy
@@ -41,7 +41,7 @@ services:
     environment:
       VITE_API_BASE_URL: ${VITE_API_BASE_URL:-}
     ports:
-      - "5173:80"
+      - "0.0.0.0:5173:80"
     depends_on:
       - backend
 

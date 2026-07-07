@@ -14,6 +14,13 @@ Open:
 - Frontend: http://localhost:5173
 - API docs: http://localhost:8000/docs
 
+For another device on the same local network:
+
+- Frontend: `http://COMPUTER-LAN-IP:5173`
+- API docs: `http://COMPUTER-LAN-IP:8000/docs`
+
+Keep `VITE_API_BASE_URL` empty for LAN demo so the browser calls the same LAN host on port `8000`. See `docs/LAN_ACCESS.md`.
+
 Demo login:
 
 - Admin: `demo.admin@astra.local`
