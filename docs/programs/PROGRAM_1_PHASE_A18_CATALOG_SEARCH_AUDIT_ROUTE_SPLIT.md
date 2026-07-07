@@ -75,3 +75,25 @@ A18 ne uvodi:
 Nakon A18 `core.py` treba biti uklonjen ili sveden na minimalni dokumentirani compatibility router. Ako nema preostalih ruta, `core.router` se uklanja iz `backend/app/main.py`.
 
 Korisnik ne bi smio primijetiti funkcionalnu promjenu. Dobitak je jasnija arhitektura i zavrsen route modularization pass prije Phase A closure odluke.
+
+## 7. Implementacijsko ozicenje
+
+A18 registrira tri nova routera u `backend/app/main.py`:
+
+- `catalog.router`
+- `audit.router`
+- `search.router`
+
+Nakon izdvajanja `core.py` vise nije potreban kao backend route modul i `core.router` se ne registrira u aplikaciji.
+
+Javne API adrese ostaju iste:
+
+- `/api/services`
+- `/api/clinics`
+- `/api/modules`
+- `/api/providers`
+- `/api/rooms`
+- `/api/audit-log`
+- `/api/search`
+
+Smoke provjera cuva prisutnost novih route modula i izostanak `core.router` registracije.
