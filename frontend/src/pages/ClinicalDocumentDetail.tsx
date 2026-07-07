@@ -13,6 +13,21 @@ import { formatDate, formatDateTime } from "../utils/date";
 import { formatPatientName } from "../utils/patientIdentity";
 import { aiExtractionStatusLabel, documentTypeLabel, reviewStatusLabel, sourceTypeLabel } from "./ClinicalDocuments";
 
+function documentContributionText(document: ClinicalDocument) {
+  if (document.review_status === "reviewed" && document.physician_reviewed) {
+    return "Ovaj dokument je lijecnicki pregledan i moze doprinositi source-linked znanju pacijenta.";
+  }
+  if (document.review_status === "rejected" || document.review_status === "superseded") {
+    return "Ovaj dokument ne doprinosi sluzbenom klinickom znanju pacijenta.";
+  }
+  return "Ovaj dokument jos ne doprinosi sluzbenom klinickom znanju pacijenta.";
+}
+
+function documentContributionClass(document: ClinicalDocument) {
+  if (document.review_status === "reviewed" && document.physician_reviewed) return "readiness-check-ok";
+  return "readiness-check-warning";
+}
+
 export function ClinicalDocumentDetail() {
   const { id } = useParams();
   const document = useApi<ClinicalDocument | null>(`/api/clinical-documents/${id}`, null);
@@ -78,22 +93,25 @@ export function ClinicalDocumentDetail() {
         badge={<span className={`readiness-badge ${current.review_status === "reviewed" ? "readiness-check-ok" : "readiness-check-warning"}`}>{reviewStatusLabel(current.review_status)}</span>}
         actions={
           <>
-            <ActionButton variant="ai" onClick={runExtraction} helpTitle="AI ekstrakcija" help="Pokrece placeholder ekstrakciju iz teksta. Rezultat nije sluzben dok ga lijecnik ne pregleda.">
-              AI ekstrakcija
+            <ActionButton variant="ai" onClick={runExtraction} helpTitle="Pokreni AI ekstrakciju" help="Pokrece placeholder ekstrakciju iz teksta. Rezultat je samo prijedlog i nije sluzben dok ga lijecnik ne pregleda.">
+              Pokreni AI ekstrakciju
             </ActionButton>
-            <ActionButton variant="update" onClick={review} helpTitle="Potvrdi pregled" help="Oznacava dokument kao lijecnicki pregledan. Tek tada njegove stavke ulaze u pacijentov sazetak znanja.">
-              Potvrdi pregled
+            <ActionButton variant="update" onClick={review} helpTitle="Potvrdi lijecnicki pregled" help="Oznacava dokument kao lijecnicki pregledan. Tek tada dokument moze postati izvor za Patient Clinical Knowledge.">
+              Potvrdi lijecnicki pregled
             </ActionButton>
-            <ActionButton variant="danger" requiresConfirm confirmMessage="Odbiti AI prijedlog dokumenta?" onClick={rejectSummary} helpTitle="Odbij AI prijedlog" help="Uklanja AI sazetak i strukturirane stavke, ali izvorni dokument ostaje dostupan kao draft.">
+            <ActionButton variant="danger" requiresConfirm confirmMessage="Odbiti samo AI prijedlog dokumenta?" onClick={rejectSummary} helpTitle="Odbij AI prijedlog" help="Uklanja AI sazetak i strukturirane stavke. Izvorni dokument ostaje vidljiv i moze se rucno pregledati.">
               Odbij AI prijedlog
             </ActionButton>
           </>
         }
       />
 
-      <WorkspaceSection title={<>Izvor <HelpHint title="Izvor dokumenta">Svaka AI tvrdnja u sazetku pacijenta mora voditi do izvornog dokumenta.</HelpHint></>}>
+      <WorkspaceSection title={<>Izvorni dokument <HelpHint title="Izvorni dokument">Svaka AI tvrdnja u sazetku pacijenta mora voditi do izvornog dokumenta. Izvor ostaje vidljiv i kada se AI prijedlog odbije.</HelpHint></>}>
         <div className="detail-list">
           <p><span>Pacijent</span><strong>{current.patient ? <Link to={`/patients/${current.patient_id}`}>{formatPatientName(current.patient)}</Link> : current.patient_id}</strong></p>
+          <p><span>Tip dokumenta</span><strong>{documentTypeLabel(current.document_type)}</strong></p>
+          <p><span>Vrsta izvora</span><strong>{sourceTypeLabel(current.source_type)}</strong></p>
+          <p><span>Datum dokumenta</span><strong>{formatDate(current.document_date)}</strong></p>
           <p><span>Origin</span><strong>{current.origin ?? "-"}</strong></p>
           <p><span>Ustanova</span><strong>{current.institution ?? "-"}</strong></p>
           <p><span>Autor</span><strong>{current.author ?? "-"}</strong></p>
@@ -104,10 +122,24 @@ export function ClinicalDocumentDetail() {
         </div>
       </WorkspaceSection>
 
+      <WorkspaceSection title={<>Lijecnicki pregled <HelpHint title="Lijecnicki pregled">Pregled dokumenta ne donosi medicinsku odluku automatski. On samo oznacava da izvor moze doprinositi source-linked znanju pacijenta.</HelpHint></>}>
+        <div className={`clinical-plan-card ${documentContributionClass(current)}`}>
+          <div>
+            <span>Doprinos sluzbenom znanju</span>
+            <strong>{documentContributionText(current)}</strong>
+          </div>
+          <p><span>Status pregleda</span><strong>{reviewStatusLabel(current.review_status)}</strong></p>
+          <p><span>Pregledao</span><strong>{current.reviewed_by ?? "-"}</strong></p>
+          <p><span>Vrijeme pregleda</span><strong>{current.reviewed_at ? formatDateTime(current.reviewed_at) : "-"}</strong></p>
+          <p><span>Pravilo</span><strong>Izvor istine su pregledani, source-linked klinicki dokumenti.</strong></p>
+        </div>
+      </WorkspaceSection>
+
       <div className="dashboard-grid">
-        <WorkspaceSection title="Strukturirano znanje">
+        <WorkspaceSection title={<>AI prijedlog ekstrakcije <HelpHint title="AI prijedlog ekstrakcije">Ovo je prijedlog za strukturiranje dokumenta. Nije sluzbena klinicka cinjenica dok lijecnik ne pregleda dokument.</HelpHint></>}>
           <div className="clinical-plan-card ai-suggestion">
-            <div><span>AI prijedlog, nije sluzbeno dok lijecnik ne potvrdi</span><strong>{aiExtractionStatusLabel(current.ai_extraction_status)}</strong></div>
+            <div><span>AI prijedlog ekstrakcije</span><strong>{aiExtractionStatusLabel(current.ai_extraction_status)}</strong></div>
+            {current.ai_extraction_status === "rejected" && <p><span>Napomena</span><strong>AI prijedlog je odbijen. Izvorni dokument ostaje dostupan za rucni pregled.</strong></p>}
             <div><span>Lijecnicki pregled dokumenta</span><strong>{reviewStatusLabel(current.review_status)}</strong></div>
             <div><span>Zadnja AI izmjena</span><strong>{current.ai_extraction_updated_at ? formatDateTime(current.ai_extraction_updated_at) : "-"}</strong></div>
             <label>AI sazetak<textarea rows={4} value={summaryDraft} onChange={(event) => setSummaryDraft(event.target.value)} /></label>
@@ -120,8 +152,8 @@ export function ClinicalDocumentDetail() {
             </div>
           </div>
         </WorkspaceSection>
-        <WorkspaceSection title="Originalni tekst">
-          <textarea rows={10} value={rawText} onChange={(event) => setRawText(event.target.value)} />
+        <WorkspaceSection title={<>Izvorni tekst <HelpHint title="Izvorni tekst">Ovdje je OCR placeholder ili rucno uneseni tekst izvora. Spremanje teksta vraca dokument na pregled.</HelpHint></>}>
+          <textarea rows={10} value={rawText} onChange={(event) => setRawText(event.target.value)} placeholder="Nema tekstualnog sadrzaja. Datoteka/OCR spremanje je jos placeholder." />
           <div className="quick-actions">
             <ActionButton variant="update" onClick={updateText} helpTitle="Spremi tekst" help="Sprema OCR ili rucno uneseni tekst i vraca dokument u status koji ceka pregled.">
               Spremi tekst

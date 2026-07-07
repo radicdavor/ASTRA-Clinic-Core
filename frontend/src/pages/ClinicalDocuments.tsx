@@ -35,11 +35,11 @@ export function sourceTypeLabel(value: string) {
 
 export function reviewStatusLabel(value: ClinicalDocument["review_status"]) {
   const labels: Record<ClinicalDocument["review_status"], string> = {
-    draft: "Draft / izvor zaprimljen",
+    draft: "Izvor zaprimljen",
     extracted: "AI ekstrakcija izradena",
     needs_physician_review: "Ceka lijecnicki pregled",
     reviewed: "Lijecnicki pregledano",
-    rejected: "Odbijeno",
+    rejected: "Dokument odbijen",
     superseded: "Zamijenjeno"
   };
   return labels[value] ?? value;
