@@ -134,6 +134,16 @@ Phase B4 update:
 - B4 ne uvodi DB template model, template editor, override, enforcement, real AI/OCR, real patient data ili produkcijske tvrdnje
 - preporuceni sljedeci task je `Program 1 Phase B5 - Clinical Readiness Template Binding Design`
 
+Phase B5 update:
+
+- Clinical Readiness template binding design je dokumentiran kroz `PROGRAM_1_PHASE_B5_CLINICAL_READINESS_TEMPLATE_BINDING_DESIGN.md`
+- template governance model je dokumentiran kroz `PROGRAM_1_PHASE_B5_CLINICAL_READINESS_TEMPLATE_GOVERNANCE.md`
+- preview response sada izlaže template selection metadata: `template_key`, `template_label`, `template_binding_status`, `template_binding_warning`
+- Appointment Workspace prikazuje template label, binding status i binding warning
+- runtime binding statusi ostaju samo `keyword_fallback` i `generic_fallback`
+- B5 ne uvodi DB binding field, migraciju, template editor, explicit service binding persistence, enforcement ili override
+- preporuceni sljedeci task je `Program 1 Phase B6 - Clinical Readiness Explicit Service Binding Prototype`
+
 ## 5. Faza 2 - Findings Lifecycle Foundation
 
 Cilj:

@@ -246,3 +246,34 @@ Preporuceni sljedeci task:
 `Program 1 Phase B5 - Clinical Readiness Template Binding Design`
 
 B5 treba definirati kako se templatei kasnije sigurno vezu na katalog usluga bez pretvaranja u produkcijska pravila.
+
+## 14. Phase B5 outcome
+
+Phase B5 definira buduci binding model i governance prije bilo kakvog DB bindinga ili editora.
+
+Implementirano:
+
+- `PROGRAM_1_PHASE_B5_CLINICAL_READINESS_TEMPLATE_BINDING_DESIGN.md`
+- `PROGRAM_1_PHASE_B5_CLINICAL_READINESS_TEMPLATE_GOVERNANCE.md`
+- template selection metadata u preview responseu
+- template binding transparency u Appointment Workspaceu
+- regression coverage za metadata i no-go kontrole
+
+B5 ostaje:
+
+- read-only
+- non-blocking
+- appointment-scoped
+- demo/pilot-only
+- bez DB binding fielda
+- bez migracija
+- bez template editora
+- bez explicit service binding persistencea
+- bez production governance workflowa
+- bez enforcementa
+
+Preporuceni sljedeci task:
+
+`Program 1 Phase B6 - Clinical Readiness Explicit Service Binding Prototype`
+
+B6 smije ici samo kao demo/pilot-only prototype i treba preferirati non-migrating configuration pristup prije bilo kakvog DB fielda.
