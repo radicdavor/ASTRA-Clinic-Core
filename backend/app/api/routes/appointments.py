@@ -8,8 +8,9 @@ from app.audit.service import audit, snapshot
 from app.auth.dependencies import Actor, require_permission
 from app.core.database import get_db
 from app.models.domain import Appointment, ClinicalEpisode, Patient, Service
-from app.schemas.common import AppointmentCreate, AppointmentOut, AppointmentUpdate, ErrorResponse
+from app.schemas.common import AppointmentCreate, AppointmentOut, AppointmentUpdate, ClinicalReadinessPreviewResponse, ErrorResponse
 from app.services.appointments import validate_appointment_payload
+from app.services.clinical_readiness_preview import build_clinical_readiness_preview
 
 ERROR_RESPONSES = {
     400: {"model": ErrorResponse},
@@ -127,6 +128,17 @@ def get_appointment(
     actor: Actor = Depends(require_permission("appointments.read")),
 ):
     return get_appointment_or_404(db, appointment_id)
+
+
+@router.get("/appointments/{appointment_id}/clinical-readiness-preview", response_model=ClinicalReadinessPreviewResponse)
+def get_appointment_clinical_readiness_preview(
+    appointment_id: int,
+    db: Session = Depends(get_db),
+    actor: Actor = Depends(require_permission("appointments.read")),
+):
+    """Demo/pilot read-only preview; not enforcement, production decision, medical-device decision or AI clearance."""
+    appointment = get_appointment_or_404(db, appointment_id)
+    return build_clinical_readiness_preview(db, appointment)
 
 
 @router.patch("/appointments/{appointment_id}", response_model=AppointmentOut)
