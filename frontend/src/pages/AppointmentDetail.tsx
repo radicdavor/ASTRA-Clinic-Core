@@ -33,6 +33,7 @@ export function AppointmentDetail() {
   const [snapshotValidationError, setSnapshotValidationError] = useState("");
   const [snapshotCaptureError, setSnapshotCaptureError] = useState("");
   const [snapshotCaptureSaving, setSnapshotCaptureSaving] = useState(false);
+  const [snapshotHistoryRefreshWarning, setSnapshotHistoryRefreshWarning] = useState("");
 
   const relatedInvoice = useMemo(() => invoices.data.find((invoice) => invoice.appointment_id === Number(id)), [invoices.data, id]);
   const relatedMovements = useMemo(() => movements.data.filter((movement) => movement.related_appointment_id === Number(id)), [movements.data, id]);
@@ -65,6 +66,19 @@ export function AppointmentDetail() {
       active = false;
     };
   }, [id]);
+
+  async function refreshSnapshotHistoryAfterCapture(appointmentId: number) {
+    try {
+      const response = await getClinicalReadinessSnapshotHistory(appointmentId);
+      setSnapshotHistory(response);
+      setSnapshotHistoryError(false);
+      setSnapshotHistoryRefreshWarning("");
+      return true;
+    } catch {
+      setSnapshotHistoryRefreshWarning("Snapshot je spremljen, ali povijest nije osvjezena.");
+      return false;
+    }
+  }
 
   async function loadMaterials() {
     if (!appointment.data) return;
@@ -151,6 +165,7 @@ export function AppointmentDetail() {
       notifyUser("Snapshot previewa je spremljen.");
       setShowSnapshotModal(false);
       setSnapshotReason("");
+      await refreshSnapshotHistoryAfterCapture(appointment.data.id);
     } catch (err) {
       const detail = err instanceof Error ? err.message : "";
       const permissionError = ["403", "forbidden", "permission", "dozvol", "prava"].some((fragment) => detail.toLowerCase().includes(fragment));
@@ -268,6 +283,7 @@ export function AppointmentDetail() {
       >
         <p className="helper-text">Read-only prikaz spremljenih preview zapisa. Snapshot nije odluka da se postupak smije provesti.</p>
         {snapshotHistory?.warning && <p className="helper-text">{snapshotSafetyText(snapshotHistory.warning)}</p>}
+        {snapshotHistoryRefreshWarning && <p className="form-error">{snapshotHistoryRefreshWarning}</p>}
         {snapshotHistoryError && <p className="form-error">Povijest snapshotova trenutno nije dostupna.</p>}
         {snapshotHistoryLoading ? (
           <p>Ucitavanje povijesti snapshotova...</p>
