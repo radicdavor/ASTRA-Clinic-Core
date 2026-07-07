@@ -13,7 +13,7 @@ from app.core.database import get_db
 from app.models.domain import ApiKey, Appointment, AuditLog, Clinic, ClinicalDocument, ClinicalEpisode, ClinicalPlan, InventoryBatch, InventoryItem, Invoice, Module, Patient, PatientClinicalSummaryRecord, Provider, Room, Service, room_services
 from app.schemas.common import AppointmentCreate, AppointmentOut, AppointmentUpdate, ClinicOut, ClinicalDecisionTimelineItem, ClinicalDocumentCreate, ClinicalDocumentOut, ClinicalDocumentUpdate, ClinicalDocumentUpload, ClinicalEpisodeCreate, ClinicalEpisodeOut, ClinicalEpisodeUpdate, ClinicalPlanGenerate, ClinicalPlanOut, ClinicalPlanUpdate, ErrorResponse, InvoiceOut, PatientClinicalSummary, PatientClinicalSummaryRecordOut, PatientClinicalSummaryRecordUpdate, PatientCreate, PatientOut, PatientUpdate, ReadinessCheck, ReadinessOut, ReceptionArrivalRequest, ReceptionSlot, ServiceCreate, ServiceOut
 from app.services.appointments import validate_appointment_payload
-from app.services.patient_knowledge import DOCUMENT_REVIEW_AWAITING_STATUSES, add_knowledge_item, is_document_awaiting_physician_review, is_official_clinical_document, latest_patient_summary_record, latest_reviewed_document_updated_at, latest_summary_records_by_patient, official_patient_documents_statement, summary_record_from_documents, summary_record_is_stale
+from app.services.patient_knowledge import DOCUMENT_REVIEW_AWAITING_STATUSES, GENERIC_OPEN_QUESTION_TEXT, add_knowledge_item, contains_unresolved_language, is_document_awaiting_physician_review, is_official_clinical_document, latest_patient_summary_record, latest_reviewed_document_updated_at, latest_summary_records_by_patient, official_patient_documents_statement, summary_record_from_documents, summary_record_is_stale
 
 ERROR_RESPONSES = {400: {"model": ErrorResponse}, 401: {"model": ErrorResponse}, 403: {"model": ErrorResponse}, 404: {"model": ErrorResponse}, 409: {"model": ErrorResponse}, 422: {"model": ErrorResponse}}
 
@@ -946,7 +946,7 @@ def patient_clinical_summary(patient_id: int, db: Session = Depends(get_db), act
         latest_recommendations=[],
     )
     for document in reviewed:
-        text_blob = " ".join([document.raw_text or "", document.ai_summary or "", " ".join(document.key_findings or []), " ".join(document.recommendations or [])]).lower()
+        source_text_blob = " ".join([document.raw_text or "", document.ai_summary or "", " ".join(document.key_findings or [])]).lower()
         for finding in document.key_findings or []:
             lower = finding.lower()
             if document.document_type in {"gastroscopy", "colonoscopy"} or "gastroskop" in lower or "kolonoskop" in lower:
@@ -962,15 +962,15 @@ def patient_clinical_summary(patient_id: int, db: Session = Depends(get_db), act
             else:
                 add_knowledge_item(summary.known_problems, finding, document)
         for recommendation in document.recommendations or []:
-            if "ceka" in recommendation.lower() or "pending" in recommendation.lower() or "otvoreno" in recommendation.lower():
+            if contains_unresolved_language(recommendation):
                 add_knowledge_item(summary.open_questions, recommendation, document)
             else:
                 add_knowledge_item(summary.latest_recommendations, recommendation, document)
         if document.document_type in {"pathology", "laboratory", "radiology"} and not document.key_findings:
             target = summary.pathology if document.document_type == "pathology" else summary.laboratory if document.document_type == "laboratory" else summary.imaging
             add_knowledge_item(target, document.ai_summary or document.title, document)
-        if "ceka se" in text_blob or "pending" in text_blob:
-            add_knowledge_item(summary.open_questions, "Dokument sadrzi otvoreno pitanje koje zahtijeva pregled.", document)
+        if contains_unresolved_language(source_text_blob):
+            add_knowledge_item(summary.open_questions, GENERIC_OPEN_QUESTION_TEXT, document)
     return summary
 
 

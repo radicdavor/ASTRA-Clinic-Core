@@ -373,6 +373,96 @@ def test_open_questions_require_reviewed_sources(client, db, auth_setup):
     assert {source["document_id"] for source in open_questions[0]["sources"]} == {reviewed.id}
 
 
+def test_open_question_recommendation_keywords_are_classified(client, db, auth_setup):
+    headers = auth_headers(client)
+    p = patient(db)
+    keywords = ["ceka nalaz patologije", "čeka nalaz patologije", "pending patologija", "otvoreno pitanje kontrole"]
+    for text in keywords:
+        doc = clinical_document(db, p, physician_reviewed=True)
+        doc.key_findings = []
+        doc.recommendations = [text]
+    db.commit()
+
+    summary = client.get(f"/api/patients/{p.id}/clinical-summary", headers=headers)
+    assert summary.status_code == 200
+    body = summary.json()
+    open_question_texts = [item["text"] for item in body["open_questions"]]
+    assert set(open_question_texts) == set(keywords)
+    assert body["latest_recommendations"] == []
+
+
+def test_reviewed_recommendation_without_unresolved_language_is_latest_recommendation(client, db, auth_setup):
+    headers = auth_headers(client)
+    p = patient(db)
+    doc = clinical_document(db, p, physician_reviewed=True)
+    doc.key_findings = []
+    doc.recommendations = ["Kontrola prema odluci lijecnika"]
+    db.commit()
+
+    summary = client.get(f"/api/patients/{p.id}/clinical-summary", headers=headers)
+    assert summary.status_code == 200
+    body = summary.json()
+    assert body["open_questions"] == []
+    assert body["latest_recommendations"][0]["text"] == "Kontrola prema odluci lijecnika"
+    assert body["latest_recommendations"][0]["sources"][0]["document_id"] == doc.id
+
+
+def test_reviewed_raw_text_with_pending_language_creates_generic_open_question(client, db, auth_setup):
+    headers = auth_headers(client)
+    p = patient(db)
+    first = clinical_document(db, p, physician_reviewed=True)
+    first.key_findings = []
+    first.recommendations = []
+    first.raw_text = "Čeka se nalaz patologije."
+    second = clinical_document(db, p, physician_reviewed=True)
+    second.key_findings = []
+    second.recommendations = []
+    second.raw_text = "Pathology pending."
+    db.commit()
+
+    summary = client.get(f"/api/patients/{p.id}/clinical-summary", headers=headers)
+    assert summary.status_code == 200
+    open_questions = summary.json()["open_questions"]
+    assert len(open_questions) == 1
+    assert open_questions[0]["text"] == "Dokument sadrzi otvoreno pitanje koje zahtijeva pregled."
+    assert {source["document_id"] for source in open_questions[0]["sources"]} == {first.id, second.id}
+
+
+def test_rejected_and_superseded_documents_never_create_open_questions(client, db, auth_setup):
+    headers = auth_headers(client)
+    p = patient(db)
+    rejected = clinical_document(db, p, physician_reviewed=False)
+    rejected.review_status = "rejected"
+    rejected.recommendations = ["Postoji otvoreno pitanje koje ceka pregled"]
+    superseded = clinical_document(db, p, physician_reviewed=True)
+    superseded.review_status = "superseded"
+    superseded.recommendations = ["Postoji otvoreno pitanje koje ceka pregled"]
+    draft = clinical_document(db, p, physician_reviewed=False)
+    draft.review_status = "draft"
+    draft.recommendations = ["Postoji otvoreno pitanje koje ceka pregled"]
+    db.commit()
+
+    summary = client.get(f"/api/patients/{p.id}/clinical-summary", headers=headers)
+    assert summary.status_code == 200
+    assert summary.json()["open_questions"] == []
+
+
+def test_open_questions_remain_separate_from_known_problems_and_recommendations(client, db, auth_setup):
+    headers = auth_headers(client)
+    p = patient(db)
+    doc = clinical_document(db, p, physician_reviewed=True)
+    doc.key_findings = ["GERB/refluks naveden u dokumentu"]
+    doc.recommendations = ["Postoji otvoreno pitanje koje ceka nalaz ili rucni pregled", "Kontrola prema odluci lijecnika"]
+    db.commit()
+
+    summary = client.get(f"/api/patients/{p.id}/clinical-summary", headers=headers)
+    assert summary.status_code == 200
+    body = summary.json()
+    assert [item["text"] for item in body["open_questions"]] == ["Postoji otvoreno pitanje koje ceka nalaz ili rucni pregled"]
+    assert [item["text"] for item in body["latest_recommendations"]] == ["Kontrola prema odluci lijecnika"]
+    assert all(item["text"] != "Postoji otvoreno pitanje koje ceka nalaz ili rucni pregled" for item in body["known_problems"])
+
+
 def test_review_without_ai_extraction_keeps_ai_status_not_run(client, db, auth_setup):
     headers = auth_headers(client)
     p = patient(db)

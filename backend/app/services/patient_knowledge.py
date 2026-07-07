@@ -10,6 +10,17 @@ from app.schemas.common import PatientKnowledgeItem, PatientKnowledgeSource
 
 
 DOCUMENT_REVIEW_AWAITING_STATUSES = {"extracted", "needs_physician_review"}
+UNRESOLVED_LANGUAGE_MARKERS = ("ceka", "pending", "otvoreno")
+GENERIC_OPEN_QUESTION_TEXT = "Dokument sadrzi otvoreno pitanje koje zahtijeva pregled."
+
+
+def normalize_clinical_text(value: str | None) -> str:
+    return (value or "").lower().replace("č", "c").replace("ć", "c").replace("š", "s").replace("ž", "z").replace("đ", "d")
+
+
+def contains_unresolved_language(value: str | None) -> bool:
+    normalized = normalize_clinical_text(value)
+    return any(marker in normalized for marker in UNRESOLVED_LANGUAGE_MARKERS)
 
 
 def source_for_document(document: ClinicalDocument) -> PatientKnowledgeSource:
@@ -94,7 +105,7 @@ def summary_record_from_documents(patient_id: int, documents: list[ClinicalDocum
             if finding not in target:
                 target.append(finding)
         for recommendation in document.recommendations or []:
-            if "ceka" in recommendation.lower() or "pending" in recommendation.lower() or "otvoreno" in recommendation.lower():
+            if contains_unresolved_language(recommendation):
                 if recommendation not in open_items:
                     open_items.append(recommendation)
             elif recommendation not in recommendations:
