@@ -265,6 +265,18 @@ Phase B17 update:
 - B17 ne uvodi capture button, reason modal, frontend POST/capture action, snapshot detail UI, supersession UI, edit/delete, Outcome Evidence, Task engine, override, appointment status promjenu, clinical approval, patient messaging, real AI/OCR ili real patient data
 - preporuceni sljedeci task je `Program 1 Phase B18 - Snapshot Capture UI Reason Modal`
 
+Phase B18 update:
+
+- frontend capture request/response tipovi su dodani
+- API client metoda `captureClinicalReadinessSnapshot` koristi postojeci B15 endpoint
+- Appointment Workspace ima sigurni capture button `Spremi snapshot previewa`
+- capture modal zahtijeva razlog i blokira prazan submit
+- uspjesan capture zatvara modal, prikazuje poruku i osvjezava snapshot history
+- permission error prikazuje poruku bez skrivanja history sekcije
+- smoke coverage cuva capture label, modal, reason validation i zabranu approval/clearance/task signala
+- B18 ne uvodi clinical approval, readiness clearance, override, Outcome Evidence, Task engine, appointment status change, patient messaging, snapshot edit/delete, supersession UI, production governance, real AI/OCR ili real patient data
+- preporuceni sljedeci task je `Program 1 Phase B19 - Snapshot Detail Read-Only View`
+
 ## 5. Faza 2 - Findings Lifecycle Foundation
 
 Cilj:

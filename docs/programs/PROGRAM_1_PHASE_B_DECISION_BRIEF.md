@@ -732,3 +732,42 @@ Snapshot history sada je vidljiv u Appointment Workspaceu samo kao read-only pre
 Preporuceni sljedeci task:
 
 `Program 1 Phase B18 - Snapshot Capture UI Reason Modal`
+
+## 27. Phase B18 outcome
+
+Phase B18 dodaje prvi frontend capture workflow za Clinical Readiness Snapshot.
+
+Dodano:
+
+- frontend capture request/response tipovi
+- API client metoda za postojeci B15 capture endpoint
+- sigurni capture button label `Spremi snapshot previewa`
+- reason-required modal
+- empty reason validation
+- success/error handling
+- 403 permission message
+- history refresh nakon uspjesnog capturea
+- smoke coverage za capture UI granice
+
+B18 ostaje:
+
+- bez clinical approvala
+- bez readiness clearancea
+- bez overridea
+- bez Outcome Evidencea
+- bez Task enginea
+- bez appointment status promjene
+- bez patient messaginga
+- bez snapshot edit/delete
+- bez supersession UI-ja
+- bez production governancea
+- bez real AI/OCR
+- bez real patient data
+
+B18 decision:
+
+Capture UI smije postojati samo kao reason-required preview snapshot action. Ne smije izgledati kao odobrenje, clearance, override, task ili odluka da se postupak smije provesti.
+
+Preporuceni sljedeci task:
+
+`Program 1 Phase B19 - Snapshot Detail Read-Only View`
