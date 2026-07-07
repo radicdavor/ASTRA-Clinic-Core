@@ -49,6 +49,7 @@ Pilot documents:
 - [Program 1 Phase A9 Core Route Modularization](docs/programs/PROGRAM_1_PHASE_A9_CORE_ROUTE_MODULARIZATION.md)
 - [Program 1 Phase A10 Core Route Domain Split Plan](docs/programs/PROGRAM_1_PHASE_A10_CORE_ROUTE_DOMAIN_SPLIT_PLAN.md)
 - [Program 1 Phase A11 regression notes](docs/programs/PROGRAM_1_PHASE_A11_REGRESSION_NOTES.md)
+- [Program 1 Phase A12 regression notes](docs/programs/PROGRAM_1_PHASE_A12_REGRESSION_NOTES.md)
 - [Program 1 audit event naming](docs/programs/PROGRAM_1_AUDIT_EVENT_NAMING.md)
 - [Program 1 Phase A regression notes](docs/programs/PROGRAM_1_PHASE_A_REGRESSION_NOTES.md)
 - [Program 1 Phase A5 regression notes](docs/programs/PROGRAM_1_PHASE_A5_REGRESSION_NOTES.md)

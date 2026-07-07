@@ -194,6 +194,8 @@ assertIncludes("src/pages/ApiKeys.tsx", "opasni scopeovi");
 assertIncludes("src/pages/AppointmentDetail.tsx", "Potvrditi zavrsetak termina");
 assertIncludes("src/pages/PurchaseOrders.tsx", "Potvrditi zaprimanje robe");
 assertIncludes("src/pages/Readiness.tsx", "/api/readiness");
+assertIncludes("../backend/app/api/routes/system.py", '"/public-config"');
+assertIncludes("../backend/app/main.py", "system.router");
 assertIncludes("src/pages/Readiness.tsx", "Ne mijenja podatke");
 assertIncludes("src/pages/Readiness.tsx", "target_path");
 assertIncludes("src/pages/Readiness.tsx", "target_label");

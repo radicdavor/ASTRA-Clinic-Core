@@ -257,3 +257,15 @@ A11 je implementirao prvi stvarni route split:
 Preporuceni sljedeci zadatak nakon A11:
 
 `Program 1 Phase A12 - Split System Public Config Route`
+
+## 10. A12 implementation update
+
+A12 je implementirao drugi niskorizicni route split:
+
+- `GET /api/public-config` je premjesten u `backend/app/api/routes/system.py`.
+- `backend/app/main.py` registrira `system.router`.
+- URL i API ugovor ostaju isti.
+
+Preporuceni sljedeci zadatak nakon A12:
+
+`Program 1 Phase A13 - Split ClinicalDocument Routes`

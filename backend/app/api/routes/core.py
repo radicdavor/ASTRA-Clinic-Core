@@ -8,7 +8,6 @@ from sqlalchemy.orm import Session, joinedload
 
 from app.audit.service import audit, snapshot
 from app.auth.dependencies import Actor, require_permission
-from app.core.config import get_settings
 from app.core.database import get_db
 from app.models.domain import Appointment, AuditLog, Clinic, ClinicalDocument, ClinicalEpisode, ClinicalPlan, Invoice, Module, Patient, PatientClinicalSummaryRecord, Provider, Room, Service
 from app.schemas.common import AppointmentCreate, AppointmentOut, AppointmentUpdate, ClinicOut, ClinicalDecisionTimelineItem, ClinicalDocumentCreate, ClinicalDocumentOut, ClinicalDocumentUpdate, ClinicalDocumentUpload, ClinicalEpisodeCreate, ClinicalEpisodeOut, ClinicalEpisodeUpdate, ClinicalEvidenceTimelineItem, ClinicalPlanGenerate, ClinicalPlanOut, ClinicalPlanUpdate, ErrorResponse, InvoiceOut, PatientClinicalSummary, PatientClinicalSummaryRecordOut, PatientClinicalSummaryRecordUpdate, PatientCreate, PatientOut, PatientUpdate, ReceptionArrivalRequest, ReceptionSlot, ServiceCreate, ServiceOut
@@ -41,19 +40,6 @@ def flush_or_conflict(db: Session) -> None:
     except IntegrityError as exc:
         db.rollback()
         raise HTTPException(409, detail="Zapis s istim jedinstvenim identifikatorom vec postoji") from exc
-
-
-@router.get("/public-config")
-def public_config():
-    settings = get_settings()
-    return {
-        "app_name": settings.app_name,
-        "app_env": settings.app_env,
-        "demo_mode": settings.demo_mode,
-        "real_data_allowed": settings.real_data_allowed,
-        "fiscalization_mode": settings.fiscalization_mode,
-        "warnings": settings.public_warnings,
-    }
 
 
 def scalar_count(db: Session, stmt) -> int:
