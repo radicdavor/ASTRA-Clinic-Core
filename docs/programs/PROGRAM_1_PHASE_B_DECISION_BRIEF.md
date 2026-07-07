@@ -1040,3 +1040,34 @@ Snapshot UI must communicate saved preview history, not approval or workflow enf
 Preporuceni sljedeci task:
 
 `Program 1 Phase B27 - Snapshot End-to-End Regression Hardening`
+
+## 36. Phase B27 outcome
+
+Phase B27 hardens the snapshot line with end-to-end regression coverage.
+
+Dodano:
+
+- backend lifecycle regression from preview to supersession
+- permission matrix regression
+- frontend smoke workflow hardening
+
+B27 ostaje:
+
+- bez novih API endpointova
+- bez novih UI akcija
+- bez edit/delete akcija
+- bez approvala
+- bez clearancea
+- bez overridea
+- bez Outcome Evidencea
+- bez Task enginea
+- bez appointment status promjene
+- bez patient messaginga
+
+B27 decision:
+
+Clinical Readiness Snapshot flow is regression-protected as preview history, not clinical enforcement.
+
+Preporuceni sljedeci task:
+
+`Program 1 Phase B28 - Program 1 Phase B Snapshot Closure Gate`

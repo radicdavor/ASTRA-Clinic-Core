@@ -363,6 +363,14 @@ Phase B26 update:
 - B26 ne uvodi nove runtime akcije, edit/delete, approval, clearance, override, Outcome Evidence, Task engine, appointment status change ili patient messaging
 - preporuceni sljedeci task je `Program 1 Phase B27 - Snapshot End-to-End Regression Hardening`
 
+Phase B27 update:
+
+- end-to-end backend regresija pokriva preview -> capture -> history -> detail -> idempotent retry -> supersession -> history/detail read
+- permission matrix regresija cuva read/write/supersede razdvajanje i odbijanje API key runtime write/supersede akcija
+- frontend smoke dodatno cuva preview/history/detail/capture/supersession safe wording
+- B27 ne uvodi nove endpointove, UI akcije, edit/delete, approval, clearance, override, Outcome Evidence, Task engine, appointment status change ili patient messaging
+- preporuceni sljedeci task je `Program 1 Phase B28 - Program 1 Phase B Snapshot Closure Gate`
+
 ## 5. Faza 2 - Findings Lifecycle Foundation
 
 Cilj:
