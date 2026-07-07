@@ -8,10 +8,10 @@ from app.audit.service import audit, snapshot
 from app.auth.dependencies import Actor, require_permission
 from app.core.database import get_db
 from app.models.domain import Appointment, ClinicalEpisode, ClinicalReadinessSnapshot, Patient, Service
-from app.schemas.common import AppointmentCreate, AppointmentOut, AppointmentUpdate, ClinicalReadinessPreviewResponse, ClinicalReadinessSnapshotCaptureRequest, ClinicalReadinessSnapshotDetailResponse, ClinicalReadinessSnapshotHistoryItem, ClinicalReadinessSnapshotHistoryResponse, ClinicalReadinessSnapshotResponse, ErrorResponse
+from app.schemas.common import AppointmentCreate, AppointmentOut, AppointmentUpdate, ClinicalReadinessPreviewResponse, ClinicalReadinessSnapshotCaptureRequest, ClinicalReadinessSnapshotDetailResponse, ClinicalReadinessSnapshotHistoryItem, ClinicalReadinessSnapshotHistoryResponse, ClinicalReadinessSnapshotResponse, ClinicalReadinessSnapshotSupersedeRequest, ClinicalReadinessSnapshotSupersedeResponse, ErrorResponse
 from app.services.appointments import validate_appointment_payload
 from app.services.clinical_readiness_preview import build_clinical_readiness_preview
-from app.services.clinical_readiness_snapshots import SnapshotIdempotencyConflict, capture_clinical_readiness_snapshot
+from app.services.clinical_readiness_snapshots import SnapshotIdempotencyConflict, capture_clinical_readiness_snapshot, supersede_clinical_readiness_snapshot
 
 ERROR_RESPONSES = {
     400: {"model": ErrorResponse},
@@ -23,6 +23,7 @@ ERROR_RESPONSES = {
 }
 SNAPSHOT_HISTORY_WARNING = "Snapshot history prikazuje spremljene preview zapise. Ne predstavlja clinical approval, readiness clearance, Outcome Evidence ili odluku da se postupak smije provesti."
 SNAPSHOT_DETAIL_WARNING = "Snapshot detail prikazuje spremljeni preview payload. Ne predstavlja clinical approval, readiness clearance, Outcome Evidence ili odluku da se postupak smije provesti."
+SNAPSHOT_SUPERSESSION_WARNING = "Supersession sprema novi preview snapshot i oznacava prethodni kao zamijenjen. Ne predstavlja clinical approval, readiness clearance, Outcome Evidence ili odluku da se postupak smije provesti."
 
 router = APIRouter(prefix="/api", tags=["appointments"], responses=ERROR_RESPONSES)
 
@@ -296,6 +297,44 @@ def appointment_clinical_readiness_snapshot_detail(
     if not snapshot_obj:
         raise HTTPException(404, detail="Snapshot nije pronaden")
     return snapshot_detail_response(snapshot_obj)
+
+
+@router.post("/appointments/{appointment_id}/clinical-readiness-snapshots/{snapshot_id}/supersede", response_model=ClinicalReadinessSnapshotSupersedeResponse)
+def supersede_appointment_clinical_readiness_snapshot(
+    appointment_id: int,
+    snapshot_id: int,
+    payload: ClinicalReadinessSnapshotSupersedeRequest,
+    db: Session = Depends(get_db),
+    actor: Actor = Depends(require_permission("clinical_readiness.snapshots.supersede")),
+):
+    """Supersede an immutable preview snapshot; not clinical approval, override, task or outcome evidence."""
+    if actor.actor_type != "user" or actor.user_id is None:
+        raise HTTPException(403, detail="Snapshot supersession zahtijeva prijavljenog korisnika")
+    try:
+        new_snapshot = supersede_clinical_readiness_snapshot(
+            db,
+            appointment_id=appointment_id,
+            old_snapshot_id=snapshot_id,
+            actor_user_id=actor.user_id,
+            reason=payload.reason,
+        )
+    except LookupError as exc:
+        raise HTTPException(404, detail=str(exc)) from exc
+    except ValueError as exc:
+        message = str(exc)
+        status_code = 409 if "vec" in message.lower() else 422
+        raise HTTPException(status_code, detail=message) from exc
+
+    old_snapshot = db.get(ClinicalReadinessSnapshot, snapshot_id)
+    if old_snapshot is None or old_snapshot.superseded_at is None or old_snapshot.superseded_reason is None:
+        raise HTTPException(500, detail="Supersession metadata nije dostupna")
+    return ClinicalReadinessSnapshotSupersedeResponse(
+        old_snapshot_id=snapshot_id,
+        new_snapshot=snapshot_response(new_snapshot),
+        superseded_at=old_snapshot.superseded_at,
+        superseded_reason=old_snapshot.superseded_reason,
+        warning=SNAPSHOT_SUPERSESSION_WARNING,
+    )
 
 
 @router.patch("/appointments/{appointment_id}", response_model=AppointmentOut)
