@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+from datetime import UTC, datetime
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -17,6 +18,7 @@ CLINICAL_READINESS_SNAPSHOT_DISCLAIMER = (
     "readiness clearance, Outcome Evidence ili odluku da se postupak smije provesti."
 )
 CLINICAL_READINESS_SNAPSHOT_CAPTURED_EVENT = "clinical_readiness_snapshot_captured"
+CLINICAL_READINESS_SNAPSHOT_SUPERSEDED_EVENT = "clinical_readiness_snapshot_superseded"
 
 
 class SnapshotIdempotencyConflict(ValueError):
@@ -91,6 +93,33 @@ def _audit_payload(snapshot: ClinicalReadinessSnapshot) -> dict:
         "source_warning_count": len(snapshot.source_warnings_json or []),
         "is_preview_snapshot": snapshot.is_preview_snapshot,
         "disclaimer": snapshot.disclaimer,
+    }
+
+
+def _supersession_audit_payload(
+    *,
+    old_snapshot: ClinicalReadinessSnapshot,
+    new_snapshot: ClinicalReadinessSnapshot,
+    actor_user_id: int,
+    reason: str,
+) -> dict:
+    return {
+        "old_snapshot_id": old_snapshot.id,
+        "new_snapshot_id": new_snapshot.id,
+        "appointment_id": old_snapshot.appointment_id,
+        "patient_id": old_snapshot.patient_id,
+        "service_id": old_snapshot.service_id,
+        "superseded_by_user_id": actor_user_id,
+        "supersede_reason": reason,
+        "old_template_key": old_snapshot.template_key,
+        "old_template_version": old_snapshot.template_version,
+        "new_template_key": new_snapshot.template_key,
+        "new_template_version": new_snapshot.template_version,
+        "old_preview_status": old_snapshot.preview_status,
+        "new_preview_status": new_snapshot.preview_status,
+        "old_created_at": old_snapshot.created_at.isoformat() if old_snapshot.created_at else None,
+        "new_created_at": new_snapshot.created_at.isoformat() if new_snapshot.created_at else None,
+        "is_preview_snapshot": new_snapshot.is_preview_snapshot,
     }
 
 
@@ -196,6 +225,62 @@ def capture_clinical_readiness_snapshot(
         db.commit()
         db.refresh(snapshot)
         return snapshot
+    except Exception:
+        db.rollback()
+        raise
+
+
+def supersede_clinical_readiness_snapshot(
+    db: Session,
+    *,
+    appointment_id: int,
+    old_snapshot_id: int,
+    actor_user_id: int | None,
+    reason: str,
+) -> ClinicalReadinessSnapshot:
+    """Create a new preview snapshot and mark the old snapshot as superseded atomically."""
+    cleaned_reason = _require_reason(reason)
+    superseded_by_user_id = _require_actor(actor_user_id)
+    old_snapshot = db.get(ClinicalReadinessSnapshot, old_snapshot_id)
+    if not old_snapshot:
+        raise LookupError("Snapshot nije pronaden")
+    if old_snapshot.appointment_id != appointment_id:
+        raise LookupError("Snapshot nije pronaden za ovaj termin")
+    if old_snapshot.superseded_by_snapshot_id is not None:
+        raise ValueError("Snapshot je vec oznacen kao zamijenjen")
+
+    try:
+        new_snapshot = _capture_clinical_readiness_snapshot_without_commit(
+            db,
+            appointment_id=appointment_id,
+            actor_user_id=superseded_by_user_id,
+            reason=f"Supersession: {cleaned_reason}",
+            idempotency_key=None,
+            write_capture_audit=False,
+        )
+        old_snapshot.superseded_by_snapshot_id = new_snapshot.id
+        old_snapshot.superseded_at = datetime.now(UTC)
+        old_snapshot.superseded_reason = cleaned_reason
+        db.flush()
+
+        payload = _supersession_audit_payload(
+            old_snapshot=old_snapshot,
+            new_snapshot=new_snapshot,
+            actor_user_id=superseded_by_user_id,
+            reason=cleaned_reason,
+        )
+        audit(
+            db,
+            CLINICAL_READINESS_SNAPSHOT_SUPERSEDED_EVENT,
+            "ClinicalReadinessSnapshot",
+            old_snapshot.id,
+            "Clinical Readiness Snapshot zamijenjen novim preview zapisom",
+            actor_user_id=superseded_by_user_id,
+            after_json=payload,
+        )
+        db.commit()
+        db.refresh(new_snapshot)
+        return new_snapshot
     except Exception:
         db.rollback()
         raise
