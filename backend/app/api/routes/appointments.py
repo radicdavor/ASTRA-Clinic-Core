@@ -7,10 +7,11 @@ from sqlalchemy.orm import Session, joinedload
 from app.audit.service import audit, snapshot
 from app.auth.dependencies import Actor, require_permission
 from app.core.database import get_db
-from app.models.domain import Appointment, ClinicalEpisode, Patient, Service
-from app.schemas.common import AppointmentCreate, AppointmentOut, AppointmentUpdate, ClinicalReadinessPreviewResponse, ErrorResponse
+from app.models.domain import Appointment, ClinicalEpisode, ClinicalReadinessSnapshot, Patient, Service
+from app.schemas.common import AppointmentCreate, AppointmentOut, AppointmentUpdate, ClinicalReadinessPreviewResponse, ClinicalReadinessSnapshotCaptureRequest, ClinicalReadinessSnapshotResponse, ErrorResponse
 from app.services.appointments import validate_appointment_payload
 from app.services.clinical_readiness_preview import build_clinical_readiness_preview
+from app.services.clinical_readiness_snapshots import capture_clinical_readiness_snapshot
 
 ERROR_RESPONSES = {
     400: {"model": ErrorResponse},
@@ -49,6 +50,31 @@ def get_appointment_or_404(db: Session, appointment_id: int) -> Appointment:
     if not appointment:
         raise HTTPException(404, detail="Termin nije pronaden")
     return appointment
+
+
+def snapshot_response(snapshot_obj: ClinicalReadinessSnapshot) -> ClinicalReadinessSnapshotResponse:
+    return ClinicalReadinessSnapshotResponse(
+        id=snapshot_obj.id,
+        appointment_id=snapshot_obj.appointment_id,
+        patient_id=snapshot_obj.patient_id,
+        service_id=snapshot_obj.service_id,
+        created_at=snapshot_obj.created_at,
+        created_by_user_id=snapshot_obj.created_by_user_id,
+        schema_version=snapshot_obj.schema_version,
+        preview_generated_at=snapshot_obj.preview_generated_at,
+        preview_status=snapshot_obj.preview_status,
+        template_key=snapshot_obj.template_key,
+        template_label=snapshot_obj.template_label,
+        template_version=snapshot_obj.template_version,
+        template_binding_status=snapshot_obj.template_binding_status,
+        snapshot_reason=snapshot_obj.snapshot_reason,
+        is_preview_snapshot=snapshot_obj.is_preview_snapshot,
+        disclaimer=snapshot_obj.disclaimer,
+        items=snapshot_obj.items_json or [],
+        limitations=snapshot_obj.limitations_json or [],
+        source_warnings=snapshot_obj.source_warnings_json or [],
+        source_refs=snapshot_obj.source_refs_json or [],
+    )
 
 
 def validate_episode_for_patient(db: Session, episode_id: int | None, patient_id: int) -> ClinicalEpisode | None:
@@ -139,6 +165,31 @@ def get_appointment_clinical_readiness_preview(
     """Demo/pilot read-only preview; not enforcement, production decision, medical-device decision or AI clearance."""
     appointment = get_appointment_or_404(db, appointment_id)
     return build_clinical_readiness_preview(db, appointment)
+
+
+@router.post("/appointments/{appointment_id}/clinical-readiness-snapshots", response_model=ClinicalReadinessSnapshotResponse)
+def capture_appointment_clinical_readiness_snapshot(
+    appointment_id: int,
+    payload: ClinicalReadinessSnapshotCaptureRequest,
+    db: Session = Depends(get_db),
+    actor: Actor = Depends(require_permission("clinical_readiness.snapshots.write")),
+):
+    """Explicit preview snapshot capture; not clinical approval, override, task or outcome evidence."""
+    if actor.actor_type != "user" or actor.user_id is None:
+        raise HTTPException(403, detail="Snapshot capture zahtijeva prijavljenog korisnika")
+    try:
+        snapshot_obj = capture_clinical_readiness_snapshot(
+            db,
+            appointment_id=appointment_id,
+            actor_user_id=actor.user_id,
+            reason=payload.reason,
+            idempotency_key=payload.idempotency_key,
+        )
+    except LookupError as exc:
+        raise HTTPException(404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(422, detail=str(exc)) from exc
+    return snapshot_response(snapshot_obj)
 
 
 @router.patch("/appointments/{appointment_id}", response_model=AppointmentOut)
