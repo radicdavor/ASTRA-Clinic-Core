@@ -576,6 +576,18 @@ Status after critical hardening pass:
 
 A5 remains deferred and should be handled separately: Open Questions and Unresolved Findings UI/Contract.
 
+### Phase A5 implementation update
+
+Status after A5:
+
+- Open Questions contract postoji u `docs/programs/PROGRAM_1_OPEN_QUESTIONS_CONTRACT.md`.
+- Open Questions su definirana kao reviewed, source-linked nerazrijesena pitanja/upozorenja.
+- Backend testovi pokrivaju ukljucivanje i iskljucivanje otvorenih pitanja iz reviewed/draft/rejected/superseded izvora.
+- `PatientClinicalSummaryRecord.open_items` ostaje summary view i ne stvara official open questions.
+- Open question API itemi nose display metadata: `display_kind=open_question`, `severity=warning`, `requires_attention=true`.
+- Patient Workspace prikazuje Otvorena pitanja odvojeno od poznatih problema, preporuka, summary viewa i dokumenata koji cekaju pregled.
+- Nije uveden Task engine, Clinical Readiness Gate, Episode-Based Care, Outcome Evidence, real AI ili real OCR.
+
 ## 12. Risks and non-goals
 
 ### Risks

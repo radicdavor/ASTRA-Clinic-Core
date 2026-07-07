@@ -68,6 +68,20 @@ The source-linked structured patient summary also renders source badges for indi
 
 The concise summary is not the source of truth. Reviewed ClinicalDocuments and source-linked knowledge items remain authoritative.
 
+## Open Questions
+
+Open questions are source-linked unresolved items from reviewed ClinicalDocuments.
+
+They are displayed separately from known problems, latest recommendations and the Patient Clinical Summary view.
+
+For UI clarity, open question items expose optional metadata:
+
+- `display_kind=open_question`
+- `severity=warning`
+- `requires_attention=true`
+
+This metadata does not create tasks, decisions, Clinical Readiness Gate blockers or episode workflow.
+
 ## Phase A Hardening Status
 
 Current Phase A hardening adds:
@@ -78,6 +92,7 @@ Current Phase A hardening adds:
 - conservative AI extraction rejection semantics
 - aligned Operational Readiness document review semantics
 - documented audit event naming direction
+- Phase A5 Open Questions contract, classification tests, display metadata and Patient Workspace separation
 
 This does not make the system production-ready and does not enable real patient data.
 

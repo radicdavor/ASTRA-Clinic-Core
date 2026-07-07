@@ -132,7 +132,15 @@ Examples:
 - follow-up interval needs review
 - external report needs reconciliation
 
-They are operational warnings, not automatic decisions.
+They are visible warning/question items, not automatic decisions, tasks, diagnoses or patient-facing instructions.
+
+In the API, open question items may carry display metadata:
+
+- `display_kind=open_question`
+- `severity=warning`
+- `requires_attention=true`
+
+This metadata is for UI clarity only. It does not create a Task engine, Clinical Readiness Gate or Workflow Engine.
 
 ## 9. External Documents And Fragmented Care
 
