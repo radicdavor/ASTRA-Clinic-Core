@@ -4,7 +4,7 @@ from datetime import date, datetime, time
 from decimal import Decimal
 from enum import StrEnum
 
-from sqlalchemy import Boolean, CheckConstraint, Date, DateTime, ForeignKey, Integer, JSON, Numeric, String, Table, Text, Time, Column, func
+from sqlalchemy import Boolean, CheckConstraint, Date, DateTime, ForeignKey, Integer, JSON, Numeric, String, Table, Text, Time, Column, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
@@ -269,7 +269,10 @@ class Appointment(TimestampMixin, Base):
 
 class ClinicalReadinessSnapshot(Base):
     __tablename__ = "clinical_readiness_snapshots"
-    __table_args__ = (CheckConstraint("length(trim(snapshot_reason)) > 0", name="ck_clinical_readiness_snapshots_reason_non_empty"),)
+    __table_args__ = (
+        CheckConstraint("length(trim(snapshot_reason)) > 0", name="ck_clinical_readiness_snapshots_reason_non_empty"),
+        UniqueConstraint("appointment_id", "created_by_user_id", "idempotency_key", name="uq_clinical_readiness_snapshot_idempotency_key"),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True)
     appointment_id: Mapped[int] = mapped_column(ForeignKey("appointments.id"), index=True)
@@ -296,6 +299,8 @@ class ClinicalReadinessSnapshot(Base):
     superseded_by_snapshot_id: Mapped[int | None] = mapped_column(ForeignKey("clinical_readiness_snapshots.id"), index=True)
     superseded_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     superseded_reason: Mapped[str | None] = mapped_column(Text)
+    idempotency_key: Mapped[str | None] = mapped_column(String(160), index=True)
+    idempotency_fingerprint: Mapped[str | None] = mapped_column(String(64))
 
     appointment: Mapped[Appointment] = relationship()
     patient: Mapped[Patient] = relationship()
