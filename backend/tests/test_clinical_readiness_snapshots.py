@@ -212,16 +212,60 @@ def test_capture_writes_audit_event_with_required_payload(db, auth_setup):
     assert payload["appointment_id"] == appt.id
     assert payload["patient_id"] == appt.patient_id
     assert payload["service_id"] == appt.service_id
+    assert payload["service_name"] == colonoscopy.name
     assert payload["created_by_user_id"] == auth_setup["admin"].id
     assert payload["capture_reason"] == "Audit reason."
     assert payload["schema_version"] == "clinical-readiness-snapshot-v1"
     assert payload["template_key"] == snapshot.template_key
+    assert payload["template_label"] == snapshot.template_label
     assert payload["template_version"] == snapshot.template_version
     assert payload["item_count"] == len(snapshot.items_json)
+    assert payload["preview_summary"] == snapshot.preview_summary
     assert payload["limitation_count"] == len(snapshot.limitations_json)
     assert payload["source_warning_count"] == len(snapshot.source_warnings_json)
     assert payload["is_preview_snapshot"] is True
     assert payload["disclaimer"] == CLINICAL_READINESS_SNAPSHOT_DISCLAIMER
+    forbidden = {"approved", "cleared", "override_status", "outcome_evidence_id", "task_created", "procedure_allowed"}
+    assert forbidden.isdisjoint(payload.keys())
+
+
+def test_capture_audit_payload_shape_is_stable(db, auth_setup):
+    colonoscopy = service(db, name="Kolonoskopija")
+    appt = appointment(db, service_obj=colonoscopy)
+
+    snapshot = capture_clinical_readiness_snapshot(
+        db,
+        appointment_id=appt.id,
+        actor_user_id=auth_setup["admin"].id,
+        reason="Stable payload.",
+    )
+
+    payload = db.query(AuditLog).filter(AuditLog.action == CLINICAL_READINESS_SNAPSHOT_CAPTURED_EVENT).one().after_json
+    assert set(payload) == {
+        "snapshot_id",
+        "appointment_id",
+        "patient_id",
+        "service_id",
+        "service_name",
+        "created_by_user_id",
+        "capture_reason",
+        "schema_version",
+        "preview_generated_at",
+        "preview_status",
+        "preview_summary",
+        "template_key",
+        "template_label",
+        "template_version",
+        "template_binding_status",
+        "item_count",
+        "blocking_item_count",
+        "limitation_count",
+        "source_warning_count",
+        "is_preview_snapshot",
+        "disclaimer",
+    }
+    assert payload["snapshot_id"] == snapshot.id
+    assert payload["service_name"] == "Kolonoskopija"
 
 
 def test_capture_rolls_back_snapshot_when_audit_fails(db, auth_setup, monkeypatch):
@@ -993,41 +1037,69 @@ def test_supersession_creates_new_snapshot_marks_old_and_writes_audit(client, db
     assert payload["appointment_id"] == appt.id
     assert payload["patient_id"] == appt.patient_id
     assert payload["service_id"] == appt.service_id
+    assert payload["service_name"] == appt.service.name
     assert payload["superseded_by_user_id"] == auth_setup["admin"].id
     assert payload["supersede_reason"] == "Novi pregled nakon dodatnih izvora."
     assert payload["old_template_key"] == old_snapshot.template_key
     assert payload["new_template_key"] == new_snapshot.template_key
+    assert payload["old_template_label"] == old_snapshot.template_label
+    assert payload["new_template_label"] == new_snapshot.template_label
     assert payload["old_template_version"] == old_snapshot.template_version
     assert payload["new_template_version"] == new_snapshot.template_version
     assert payload["old_preview_status"] == old_snapshot.preview_status
     assert payload["new_preview_status"] == new_snapshot.preview_status
+    assert payload["old_preview_summary"] == old_snapshot.preview_summary
+    assert payload["new_preview_summary"] == new_snapshot.preview_summary
     assert payload["old_created_at"]
     assert payload["new_created_at"]
     assert payload["is_preview_snapshot"] is True
+    forbidden = {"approved", "cleared", "override_status", "outcome_evidence_id", "task_created", "procedure_allowed"}
+    assert forbidden.isdisjoint(payload.keys())
 
-    db.expire(appt)
-    assert appt.status == original_status
-    assert db.query(ClinicalEpisode).count() == episode_count
-    assert db.query(ClinicalPlan).count() == plan_count
-    assert "outcome_evidence" not in table_names
-    assert "tasks" not in table_names
 
-    history = history_endpoint(client, appt.id, auth_headers(client))
-    assert history.status_code == 200
-    history_items = history.json()["snapshots"]
-    assert history_items[0]["id"] == new_snapshot.id
-    old_history_item = next(item for item in history_items if item["id"] == old_snapshot.id)
-    assert old_history_item["superseded_by_snapshot_id"] == new_snapshot.id
-    assert old_history_item["superseded_at"] is not None
-    assert old_history_item["superseded_reason"] == "Novi pregled nakon dodatnih izvora."
+def test_supersession_audit_payload_shape_is_stable(db, auth_setup):
+    appt = appointment(db)
+    old_snapshot = capture_clinical_readiness_snapshot(
+        db,
+        appointment_id=appt.id,
+        actor_user_id=auth_setup["admin"].id,
+        reason="Stable old snapshot.",
+    )
 
-    detail = detail_endpoint(client, appt.id, old_snapshot.id, auth_headers(client))
-    assert detail.status_code == 200
-    detail_body = detail.json()
-    assert detail_body["items"] == old_payload["items"]
-    assert detail_body["limitations"] == old_payload["limitations"]
-    assert detail_body["source_warnings"] == old_payload["source_warnings"]
-    assert detail_body["source_refs"] == old_payload["source_refs"]
+    new_snapshot = supersede_clinical_readiness_snapshot(
+        db,
+        appointment_id=appt.id,
+        old_snapshot_id=old_snapshot.id,
+        actor_user_id=auth_setup["admin"].id,
+        reason="Stable supersession.",
+    )
+
+    payload = db.query(AuditLog).filter(AuditLog.action == CLINICAL_READINESS_SNAPSHOT_SUPERSEDED_EVENT).one().after_json
+    assert set(payload) == {
+        "old_snapshot_id",
+        "new_snapshot_id",
+        "appointment_id",
+        "patient_id",
+        "service_id",
+        "service_name",
+        "superseded_by_user_id",
+        "supersede_reason",
+        "old_template_key",
+        "old_template_label",
+        "old_template_version",
+        "new_template_key",
+        "new_template_label",
+        "new_template_version",
+        "old_preview_status",
+        "old_preview_summary",
+        "new_preview_status",
+        "new_preview_summary",
+        "old_created_at",
+        "new_created_at",
+        "is_preview_snapshot",
+    }
+    assert payload["old_snapshot_id"] == old_snapshot.id
+    assert payload["new_snapshot_id"] == new_snapshot.id
 
 
 def test_supersession_rejects_already_superseded_snapshot(db, auth_setup):

@@ -130,6 +130,7 @@ Pilot documents:
 - [Program 1 Phase B30 regression notes](docs/programs/PROGRAM_1_PHASE_B30_REGRESSION_NOTES.md)
 - [Program 1 Phase B31 Snapshot Audit Review and Retention Runbook](docs/programs/PROGRAM_1_PHASE_B31_SNAPSHOT_AUDIT_REVIEW_AND_RETENTION_RUNBOOK.md)
 - [Program 1 Phase B31 regression notes](docs/programs/PROGRAM_1_PHASE_B31_REGRESSION_NOTES.md)
+- [Program 1 Phase B32 regression notes](docs/programs/PROGRAM_1_PHASE_B32_REGRESSION_NOTES.md)
 - [Lokalni LAN pristup](docs/LAN_ACCESS.md)
 - [Program 1 audit event naming](docs/programs/PROGRAM_1_AUDIT_EVENT_NAMING.md)
 - [Program 1 Phase A regression notes](docs/programs/PROGRAM_1_PHASE_A_REGRESSION_NOTES.md)

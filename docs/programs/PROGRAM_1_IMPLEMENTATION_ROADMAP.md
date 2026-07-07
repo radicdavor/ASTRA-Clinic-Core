@@ -404,6 +404,15 @@ Phase B31 update:
 - B31 ne uvodi runtime promjene
 - recommended next task je `Program 1 Phase B32 - Snapshot Audit Payload Stabilization`
 
+Phase B32 update:
+
+- capture audit payload shape je regresijski zakljucan
+- supersession audit payload shape je regresijski zakljucan
+- dodani su neklinicki review metadata: service name, preview summary i template label polja
+- testovi potvrduju da payload ne sadrzi approval/clearance/override/outcome/task semantiku
+- B32 ne uvodi export endpoint, Outcome Evidence, Task engine, appointment status change ili patient messaging
+- recommended next task je `Program 1 Phase B33 - Snapshot Audit Export Contract`
+
 ## 5. Faza 2 - Findings Lifecycle Foundation
 
 Cilj:
