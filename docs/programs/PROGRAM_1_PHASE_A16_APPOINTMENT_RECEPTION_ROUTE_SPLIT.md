@@ -79,3 +79,25 @@ Ako Docker ili drugi podrzani backend runtime nije dostupan, to se mora evidenti
 ## Ocekivani ishod
 
 Nakon A16 korisnik ne bi smio primijetiti funkcionalnu promjenu. Korist je arhitektonska: termin, dnevni raspored i recepcija postaju zasebne, citljive cjeline koje se mogu dalje stabilizirati bez povecavanja `core.py`.
+
+## Implementacijsko ozicenje
+
+A16 zadrzava postojece API ugovore, ali mijenja mjesto implementacije:
+
+| Podrucje | Route modul | Napomena |
+| --- | --- | --- |
+| Termini | `backend/app/api/routes/appointments.py` | Kreiranje, popis, detalj, izmjena, brisanje i dnevni raspored. |
+| Recepcija | `backend/app/api/routes/reception.py` | Recepcijski dnevni slotovi i oznacavanje dolaska pacijenta. |
+| Materijali i racuni povezani s terminom | `backend/app/api/routes/inventory.py` | Ostaju u inventory/billing kontekstu jer mijenjaju zalihe i racune. |
+| Epizodni prikaz termina | `backend/app/api/routes/core.py` | Privremeno ostaje uz eksperimentalni/deferred Episode Engine dok se taj blok ne izdvoji zasebno. |
+
+`backend/app/main.py` registrira `appointments.router` i `reception.router` prije preostalog `core.router`, tako da javne adrese ostaju kompatibilne s postojecom frontend aplikacijom i testovima.
+
+Smoke provjera dodatno cuva prisutnost:
+
+- `appointments.router`
+- `reception.router`
+- `/api/appointments`
+- `/api/schedule/day`
+- `/api/reception/day`
+- `/api/appointments/{appointment_id}/mark-arrived`
