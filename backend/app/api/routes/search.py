@@ -7,9 +7,16 @@ from app.core.database import get_db
 from app.models.domain import Appointment, Patient, Service
 from app.schemas.common import ErrorResponse
 
-ERROR_RESPONSES = {400: {"model": ErrorResponse}, 401: {"model": ErrorResponse}, 403: {"model": ErrorResponse}, 404: {"model": ErrorResponse}, 409: {"model": ErrorResponse}, 422: {"model": ErrorResponse}}
+ERROR_RESPONSES = {
+    400: {"model": ErrorResponse},
+    401: {"model": ErrorResponse},
+    403: {"model": ErrorResponse},
+    404: {"model": ErrorResponse},
+    409: {"model": ErrorResponse},
+    422: {"model": ErrorResponse},
+}
 
-router = APIRouter(prefix="/api", tags=["clinic"], responses=ERROR_RESPONSES)
+router = APIRouter(prefix="/api", tags=["search"], responses=ERROR_RESPONSES)
 
 
 @router.get("/search")
