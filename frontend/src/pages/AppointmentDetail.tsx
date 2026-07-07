@@ -144,15 +144,16 @@ export function AppointmentDetail() {
             {clinicalReadiness.data.items.length === 0 ? (
               <p>Nema prikazanih stavki u ovom previewu.</p>
             ) : (
-              <DataTable rows={clinicalReadiness.data.items} columns={[
-                { header: "Stavka", render: (row) => <strong>{row.label}</strong> },
-                { header: "Kategorija", render: (row) => row.category },
-                { header: "Status", render: (row) => row.status },
-                { header: "Tezina", render: (row) => row.severity },
-                { header: "Uloga", render: (row) => row.responsible_role ?? "-" },
-                { header: "Izvor", render: (row) => row.source_label ? `${row.source_label} (${row.source_type})` : row.source_type },
-                { header: "Radnja", render: (row) => row.suggested_action ?? "-" }
-              ]} />
+              <div className="timeline-list">
+                {clinicalReadiness.data.items.map((item) => (
+                  <article className="timeline-item" key={item.key}>
+                    <strong>{item.label}</strong>
+                    <small>{item.category} / {item.status} / {item.severity} / uloga: {item.responsible_role ?? "-"}</small>
+                    <p>Izvor: {item.source_label ? `${item.source_label} (${item.source_type})` : item.source_type}</p>
+                    {item.suggested_action && <p>{item.suggested_action}</p>}
+                  </article>
+                ))}
+              </div>
             )}
           </div>
         ) : !clinicalReadiness.error ? (
