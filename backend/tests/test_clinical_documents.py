@@ -172,6 +172,83 @@ def test_rejected_ai_extraction_requires_review_before_official_knowledge(client
     assert any(item["text"] == "Rucno strukturirana tvrdnja iz izvora" for item in all_knowledge_items(body))
 
 
+def test_clinical_document_detail_exposes_source_ai_and_review_lifecycle(client, db, auth_setup):
+    headers = auth_headers(client)
+    p = patient(db)
+    created = client.post(
+        "/api/clinical-documents",
+        headers=headers,
+        json={
+            "patient_id": p.id,
+            "source_type": "external",
+            "document_type": "colonoscopy",
+            "origin": "Vanjska ustanova",
+            "document_date": "2026-07-05",
+            "title": "Vanjska kolonoskopija",
+            "raw_text": "Kolonoskopija: polip odstranjen. Ceka se PHD nalaz.",
+        },
+    )
+    assert created.status_code == 200
+    document_id = created.json()["id"]
+
+    detail_before = client.get(f"/api/clinical-documents/{document_id}", headers=headers)
+    assert detail_before.status_code == 200
+    assert detail_before.json()["raw_text"] == "Kolonoskopija: polip odstranjen. Ceka se PHD nalaz."
+    assert detail_before.json()["review_status"] == "draft"
+    assert detail_before.json()["ai_extraction_status"] == "not_run"
+    assert detail_before.json()["physician_reviewed"] is False
+
+    extracted = client.post(f"/api/clinical-documents/{document_id}/extract", headers=headers)
+    assert extracted.status_code == 200
+    detail_after_extraction = client.get(f"/api/clinical-documents/{document_id}", headers=headers)
+    assert detail_after_extraction.status_code == 200
+    assert detail_after_extraction.json()["review_status"] == "needs_physician_review"
+    assert detail_after_extraction.json()["ai_extraction_status"] == "generated"
+    assert detail_after_extraction.json()["key_findings"]
+
+    rejected = client.post(f"/api/clinical-documents/{document_id}/reject-summary", headers=headers)
+    assert rejected.status_code == 200
+    detail_after_reject = client.get(f"/api/clinical-documents/{document_id}", headers=headers)
+    assert detail_after_reject.status_code == 200
+    assert detail_after_reject.json()["raw_text"] == "Kolonoskopija: polip odstranjen. Ceka se PHD nalaz."
+    assert detail_after_reject.json()["key_findings"] == []
+    assert detail_after_reject.json()["recommendations"] == []
+    assert detail_after_reject.json()["review_status"] == "draft"
+    assert detail_after_reject.json()["ai_extraction_status"] == "rejected"
+    assert detail_after_reject.json()["physician_reviewed"] is False
+
+    summary = client.get(f"/api/patients/{p.id}/clinical-summary", headers=headers)
+    assert summary.status_code == 200
+    assert_no_official_knowledge(summary.json())
+
+
+def test_rejected_and_superseded_document_details_remain_visible_but_not_official(client, db, auth_setup):
+    headers = auth_headers(client)
+    p = patient(db)
+    rejected = clinical_document(db, p, physician_reviewed=False)
+    rejected.review_status = "rejected"
+    rejected.ai_extraction_status = "rejected"
+    rejected.key_findings = ["Odbijeni nalaz ne smije biti sluzben"]
+    superseded = clinical_document(db, p, physician_reviewed=True)
+    superseded.review_status = "superseded"
+    superseded.ai_extraction_status = "superseded"
+    superseded.key_findings = ["Zamijenjeni nalaz ne smije biti sluzben"]
+    db.commit()
+
+    rejected_detail = client.get(f"/api/clinical-documents/{rejected.id}", headers=headers)
+    superseded_detail = client.get(f"/api/clinical-documents/{superseded.id}", headers=headers)
+    assert rejected_detail.status_code == 200
+    assert superseded_detail.status_code == 200
+    assert rejected_detail.json()["review_status"] == "rejected"
+    assert rejected_detail.json()["key_findings"] == ["Odbijeni nalaz ne smije biti sluzben"]
+    assert superseded_detail.json()["review_status"] == "superseded"
+    assert superseded_detail.json()["key_findings"] == ["Zamijenjeni nalaz ne smije biti sluzben"]
+
+    summary = client.get(f"/api/patients/{p.id}/clinical-summary", headers=headers)
+    assert summary.status_code == 200
+    assert_no_official_knowledge(summary.json())
+
+
 def test_document_appointment_must_belong_to_same_patient(client, db, auth_setup):
     headers = auth_headers(client)
     p = patient(db, "Doc", "Patient")
