@@ -80,6 +80,8 @@ Pilot documents:
 - [Program 1 Phase B5 Clinical Readiness Template Binding Design](docs/programs/PROGRAM_1_PHASE_B5_CLINICAL_READINESS_TEMPLATE_BINDING_DESIGN.md)
 - [Program 1 Phase B5 Clinical Readiness Template Governance](docs/programs/PROGRAM_1_PHASE_B5_CLINICAL_READINESS_TEMPLATE_GOVERNANCE.md)
 - [Program 1 Phase B5 regression notes](docs/programs/PROGRAM_1_PHASE_B5_REGRESSION_NOTES.md)
+- [Program 1 Phase B6 Explicit Service Binding Prototype](docs/programs/PROGRAM_1_PHASE_B6_EXPLICIT_SERVICE_BINDING_PROTOTYPE.md)
+- [Program 1 Phase B6 regression notes](docs/programs/PROGRAM_1_PHASE_B6_REGRESSION_NOTES.md)
 - [Program 1 audit event naming](docs/programs/PROGRAM_1_AUDIT_EVENT_NAMING.md)
 - [Program 1 Phase A regression notes](docs/programs/PROGRAM_1_PHASE_A_REGRESSION_NOTES.md)
 - [Program 1 Phase A5 regression notes](docs/programs/PROGRAM_1_PHASE_A5_REGRESSION_NOTES.md)

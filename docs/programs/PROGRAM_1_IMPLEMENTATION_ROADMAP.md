@@ -144,6 +144,16 @@ Phase B5 update:
 - B5 ne uvodi DB binding field, migraciju, template editor, explicit service binding persistence, enforcement ili override
 - preporuceni sljedeci task je `Program 1 Phase B6 - Clinical Readiness Explicit Service Binding Prototype`
 
+Phase B6 update:
+
+- explicit service binding prototype je dokumentiran kroz `PROGRAM_1_PHASE_B6_EXPLICIT_SERVICE_BINDING_PROTOTYPE.md`
+- staticna demo explicit service binding konfiguracija postoji u backend service sloju
+- runtime selection sada koristi explicit demo binding prije keyword fallbacka
+- preview response moze prikazati `template_binding_status="explicit"`
+- regression coverage cuva precedence, read-only ponasanje i zabranu workflow objekata
+- B6 ne uvodi DB binding field, migraciju, template editor, persistent binding, enforcement ili override
+- preporuceni sljedeci task je `Program 1 Phase B7 - Clinical Readiness Template Versioning Design`
+
 ## 5. Faza 2 - Findings Lifecycle Foundation
 
 Cilj:

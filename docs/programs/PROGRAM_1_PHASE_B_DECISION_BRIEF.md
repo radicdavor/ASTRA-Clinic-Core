@@ -277,3 +277,33 @@ Preporuceni sljedeci task:
 `Program 1 Phase B6 - Clinical Readiness Explicit Service Binding Prototype`
 
 B6 smije ici samo kao demo/pilot-only prototype i treba preferirati non-migrating configuration pristup prije bilo kakvog DB fielda.
+
+## 15. Phase B6 outcome
+
+Phase B6 uvodi prvi demo/pilot explicit service binding prototype bez migracije.
+
+Implementirano:
+
+- `PROGRAM_1_PHASE_B6_EXPLICIT_SERVICE_BINDING_PROTOTYPE.md`
+- staticni demo service binding config
+- explicit binding precedence prije keyword fallbacka
+- `template_binding_status="explicit"` kada binding dolazi iz demo konfiguracije
+- regression coverage za explicit binding i safety granice
+
+B6 ostaje:
+
+- read-only
+- appointment-scoped
+- non-blocking
+- demo/pilot-only
+- bez DB binding fielda
+- bez migracija
+- bez template editora
+- bez persistent binding workflowa
+- bez enforcementa
+
+Preporuceni sljedeci task:
+
+`Program 1 Phase B7 - Clinical Readiness Template Versioning Design`
+
+B7 treba definirati verzioniranje template contenta i bindinga prije DB modela ili editora.
