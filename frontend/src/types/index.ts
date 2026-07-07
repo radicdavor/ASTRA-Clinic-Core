@@ -221,6 +221,39 @@ export type ClinicalReadinessPreview = {
   limitations: string[];
 };
 
+export type ClinicalReadinessSnapshotHistoryItem = {
+  id: number;
+  appointment_id: number;
+  patient_id: number;
+  service_id: number;
+  created_at: string;
+  created_by_user_id: number;
+  schema_version: string;
+  preview_generated_at: string;
+  preview_status: string;
+  template_key?: string | null;
+  template_label?: string | null;
+  template_version?: string | null;
+  template_binding_status?: string | null;
+  snapshot_reason: string;
+  is_preview_snapshot: boolean;
+  disclaimer: string;
+  item_count: number;
+  limitation_count: number;
+  source_warning_count: number;
+  superseded_by_snapshot_id?: number | null;
+  superseded_at?: string | null;
+  superseded_reason?: string | null;
+};
+
+export type ClinicalReadinessSnapshotHistoryResponse = {
+  appointment_id: number;
+  snapshots: ClinicalReadinessSnapshotHistoryItem[];
+  count: number;
+  is_preview_history: boolean;
+  warning: string;
+};
+
 export type ReceptionSlot = {
   time: string;
   appointment?: Appointment | null;

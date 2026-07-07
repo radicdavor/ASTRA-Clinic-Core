@@ -1,3 +1,5 @@
+import type { ClinicalReadinessSnapshotHistoryResponse } from "../types";
+
 function defaultApiBaseUrl() {
   if (typeof window === "undefined") return "http://localhost:8000";
   return `${window.location.protocol}//${window.location.hostname}:8000`;
@@ -98,4 +100,8 @@ export async function login(email: string, password: string) {
   });
   setToken(result.access_token);
   return result;
+}
+
+export async function getClinicalReadinessSnapshotHistory(appointmentId: number) {
+  return api<ClinicalReadinessSnapshotHistoryResponse>(`/api/appointments/${appointmentId}/clinical-readiness-snapshots`);
 }
