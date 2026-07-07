@@ -289,6 +289,18 @@ Phase B19 update:
 - B19 ne uvodi snapshot edit/delete, supersession, approval, clearance, override, Outcome Evidence, Task engine, appointment status change, patient messaging, production governance, real AI/OCR ili real patient data
 - preporuceni sljedeci task je `Program 1 Phase B20 - Snapshot Idempotency and Duplicate-Capture Guard`
 
+Phase B20 update:
+
+- snapshot idempotency persistence columns su dodane
+- Alembic migracija `0015_snapshot_idempotency.py` dodaje key/fingerprint i unique appointment/user/key constraint
+- capture service normalizira key i racuna fingerprint iz appointmenta, usera, reasona i schema versiona
+- isti key/fingerprint vraca postojeci snapshot bez drugog audit eventa
+- isti key s drugim fingerprintom vraca conflict
+- frontend generira i salje idempotency key kroz reason modal
+- regression coverage cuva duplicate-capture guard i workflow side-effect granice
+- B20 ne uvodi supersession, edit/delete, approval, clearance, override, Outcome Evidence, Task engine, appointment status change, patient messaging ili production governance
+- preporuceni sljedeci task je `Program 1 Phase B21 - Snapshot Canonical Disclaimer and Immutability Hardening`
+
 ## 5. Faza 2 - Findings Lifecycle Foundation
 
 Cilj:

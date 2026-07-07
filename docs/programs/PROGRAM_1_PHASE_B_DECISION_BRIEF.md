@@ -809,3 +809,38 @@ Snapshot detail smije prikazivati immutable copied payload samo kao read-only za
 Preporuceni sljedeci task:
 
 `Program 1 Phase B20 - Snapshot Idempotency and Duplicate-Capture Guard`
+
+## 29. Phase B20 outcome
+
+Phase B20 uvodi idempotency guard za Clinical Readiness Snapshot capture.
+
+Dodano:
+
+- `idempotency_key`
+- `idempotency_fingerprint`
+- migration `0015_snapshot_idempotency.py`
+- service-level duplicate-capture guard
+- 409 conflict za isti key s drugim fingerprintom
+- frontend idempotency key generation
+- regression coverage
+
+B20 ostaje:
+
+- bez supersessiona
+- bez edit/delete akcija
+- bez approvala
+- bez clearancea
+- bez overridea
+- bez Outcome Evidencea
+- bez Task enginea
+- bez appointment status promjene
+- bez patient messaginga
+- bez production governancea
+
+B20 decision:
+
+Idempotency key je retry guard za eksplicitni capture. Ne mijenja preview semantics, ne vjeruje client preview payloadu i ne pretvara snapshot u klinicku odluku.
+
+Preporuceni sljedeci task:
+
+`Program 1 Phase B21 - Snapshot Canonical Disclaimer and Immutability Hardening`
