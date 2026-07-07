@@ -693,3 +693,42 @@ History endpoint je read-only i sluzi buducem UI prikazu spremljenih preview sna
 Preporuceni sljedeci task:
 
 `Program 1 Phase B17 - Snapshot History UI Read-Only Surface`
+
+## 26. Phase B17 outcome
+
+Phase B17 dodaje prvu frontend read-only povrsinu za Clinical Readiness Snapshot history.
+
+Dodano:
+
+- frontend tipovi za snapshot history response
+- API client read metoda za B16 history endpoint
+- Appointment Workspace sekcija `Povijest snapshotova klinicke spremnosti`
+- non-blocking error state
+- empty state
+- summary prikaz snapshot metapodataka
+- smoke coverage za read-only povrsinu i zabranu capture/write/approval kontrola
+
+B17 ostaje:
+
+- bez capture buttona
+- bez reason modala
+- bez frontend POST/capture akcije
+- bez snapshot detail UI-ja
+- bez supersession UI-ja
+- bez edit/delete akcija
+- bez Outcome Evidencea
+- bez Task enginea
+- bez overridea
+- bez appointment status promjene
+- bez clinical approvala
+- bez patient messaginga
+- bez real AI/OCR
+- bez real patient data
+
+B17 decision:
+
+Snapshot history sada je vidljiv u Appointment Workspaceu samo kao read-only pregled spremljenih preview zapisa. UI ne smije sugerirati da snapshot znaci odobrenje, clearance, task, outcome ili promjenu statusa termina.
+
+Preporuceni sljedeci task:
+
+`Program 1 Phase B18 - Snapshot Capture UI Reason Modal`

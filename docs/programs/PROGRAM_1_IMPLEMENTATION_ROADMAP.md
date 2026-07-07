@@ -255,6 +255,16 @@ Phase B16 update:
 - B16 ne uvodi frontend history UI, capture button, detail endpoint, edit/delete, supersession UI, Outcome Evidence, Task engine, override ili appointment status promjenu
 - preporuceni sljedeci task je `Program 1 Phase B17 - Snapshot History UI Read-Only Surface`
 
+Phase B17 update:
+
+- frontend snapshot history tipovi su dodani
+- API client read metoda `getClinicalReadinessSnapshotHistory` koristi postojeci B16 endpoint
+- Appointment Workspace prikazuje read-only sekciju `Povijest snapshotova klinicke spremnosti`
+- history UI ima non-blocking error state i empty state
+- smoke coverage cuva da read-only history surface postoji i da nema capture/write/approval kontrola
+- B17 ne uvodi capture button, reason modal, frontend POST/capture action, snapshot detail UI, supersession UI, edit/delete, Outcome Evidence, Task engine, override, appointment status promjenu, clinical approval, patient messaging, real AI/OCR ili real patient data
+- preporuceni sljedeci task je `Program 1 Phase B18 - Snapshot Capture UI Reason Modal`
+
 ## 5. Faza 2 - Findings Lifecycle Foundation
 
 Cilj:
