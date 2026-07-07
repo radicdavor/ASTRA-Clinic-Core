@@ -51,6 +51,7 @@ PERMISSIONS = [
     "billing.mark_paid",
     "audit.read",
     "admin.manage_users",
+    "clinical_readiness.snapshots.read",
     "clinical_readiness.snapshots.write",
     "ai.appointments.create",
     "ai.patients.create",
@@ -59,8 +60,8 @@ PERMISSIONS = [
 
 ROLE_PERMISSIONS = {
     "admin": PERMISSIONS,
-    "physician": ["patients.read", "patients.write", "appointments.read", "appointments.write", "episodes.read", "episodes.write", "clinical_plans.read", "clinical_plans.write", "clinical_documents.read", "clinical_documents.write", "clinical_documents.review", "services.read", "inventory.read", "billing.read", "clinical_readiness.snapshots.write"],
-    "nurse": ["patients.read", "appointments.read", "appointments.write", "episodes.read", "clinical_plans.read", "clinical_documents.read", "clinical_documents.write", "clinical_documents.review", "inventory.read", "inventory.write"],
+    "physician": ["patients.read", "patients.write", "appointments.read", "appointments.write", "episodes.read", "episodes.write", "clinical_plans.read", "clinical_plans.write", "clinical_documents.read", "clinical_documents.write", "clinical_documents.review", "services.read", "inventory.read", "billing.read", "clinical_readiness.snapshots.read", "clinical_readiness.snapshots.write"],
+    "nurse": ["patients.read", "appointments.read", "appointments.write", "episodes.read", "clinical_plans.read", "clinical_documents.read", "clinical_documents.write", "clinical_documents.review", "inventory.read", "inventory.write", "clinical_readiness.snapshots.read"],
     "receptionist": ["patients.read", "patients.write", "appointments.read", "appointments.write", "episodes.read", "clinical_plans.read", "clinical_documents.read", "services.read", "billing.read"],
     "inventory_manager": ["inventory.read", "inventory.write", "inventory.adjust", "inventory.write_off", "inventory.transfer", "procurement.read", "procurement.write"],
     "billing": ["billing.read", "billing.write", "billing.mark_paid", "patients.read", "appointments.read"],
