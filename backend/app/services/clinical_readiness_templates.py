@@ -4,6 +4,8 @@ from dataclasses import dataclass
 import re
 import unicodedata
 
+from app.services.clinical_readiness_template_bindings import EXPLICIT_BINDING_WARNING, find_demo_explicit_binding
+
 
 @dataclass(frozen=True)
 class ClinicalReadinessTemplateItem:
@@ -226,8 +228,27 @@ def generic_selection() -> ClinicalReadinessTemplateSelection:
     )
 
 
-def select_clinical_readiness_template(service_name: str | None) -> ClinicalReadinessTemplateSelection:
+def explicit_selection(template_key: str) -> ClinicalReadinessTemplateSelection | None:
+    template = TEMPLATES.get(template_key)
+    if not template:
+        return None
+    return ClinicalReadinessTemplateSelection(
+        template=template,
+        binding_status="explicit",
+        binding_warning=EXPLICIT_BINDING_WARNING,
+    )
+
+
+def select_clinical_readiness_template(
+    service_name: str | None,
+    service_code: str | None = None,
+) -> ClinicalReadinessTemplateSelection:
     normalized = normalize_service_name(service_name)
+    explicit_binding = find_demo_explicit_binding(service_code=service_code, normalized_service_name=normalized)
+    if explicit_binding:
+        selection = explicit_selection(explicit_binding.template_key)
+        if selection:
+            return selection
 
     if "kolonoskop" in normalized:
         return keyword_selection(COLONOSCOPY_TEMPLATE)

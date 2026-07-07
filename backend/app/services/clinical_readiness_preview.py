@@ -104,7 +104,8 @@ def build_clinical_readiness_preview(db: Session, appointment: Appointment) -> C
         )
     else:
         service_name = appointment.service.name if appointment.service else f"Usluga #{appointment.service_id}"
-        template_selection = select_clinical_readiness_template(service_name)
+        service_code = appointment.service.code if appointment.service else None
+        template_selection = select_clinical_readiness_template(service_name, service_code)
         template = template_selection.template
         template_key = template.key
         template_label = template.name
