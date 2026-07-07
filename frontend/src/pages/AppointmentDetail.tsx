@@ -1,6 +1,6 @@
 import { type FormEvent, useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { api, captureClinicalReadinessSnapshot, getClinicalReadinessSnapshotDetail, getClinicalReadinessSnapshotHistory, notifyUser } from "../api/client";
+import { api, captureClinicalReadinessSnapshot, getClinicalReadinessSnapshotDetail, getClinicalReadinessSnapshotHistory, notifyUser, supersedeClinicalReadinessSnapshot } from "../api/client";
 import { ActionButton } from "../components/ActionButton";
 import { AuditTimeline } from "../components/AuditTimeline";
 import { DataTable } from "../components/DataTable";
@@ -38,6 +38,12 @@ export function AppointmentDetail() {
   const [snapshotDetail, setSnapshotDetail] = useState<ClinicalReadinessSnapshotDetailResponse | null>(null);
   const [snapshotDetailLoading, setSnapshotDetailLoading] = useState(false);
   const [snapshotDetailError, setSnapshotDetailError] = useState("");
+  const [showSnapshotSupersedeModal, setShowSnapshotSupersedeModal] = useState(false);
+  const [snapshotSupersedeTargetId, setSnapshotSupersedeTargetId] = useState<number | null>(null);
+  const [snapshotSupersedeReason, setSnapshotSupersedeReason] = useState("");
+  const [snapshotSupersedeValidationError, setSnapshotSupersedeValidationError] = useState("");
+  const [snapshotSupersedeError, setSnapshotSupersedeError] = useState("");
+  const [snapshotSupersedeSaving, setSnapshotSupersedeSaving] = useState(false);
 
   const relatedInvoice = useMemo(() => invoices.data.find((invoice) => invoice.appointment_id === Number(id)), [invoices.data, id]);
   const relatedMovements = useMemo(() => movements.data.filter((movement) => movement.related_appointment_id === Number(id)), [movements.data, id]);
@@ -80,6 +86,19 @@ export function AppointmentDetail() {
       return true;
     } catch {
       setSnapshotHistoryRefreshWarning("Snapshot je spremljen, ali povijest nije osvjezena.");
+      return false;
+    }
+  }
+
+  async function refreshSnapshotHistoryAfterSupersession(appointmentId: number) {
+    try {
+      const response = await getClinicalReadinessSnapshotHistory(appointmentId);
+      setSnapshotHistory(response);
+      setSnapshotHistoryError(false);
+      setSnapshotHistoryRefreshWarning("");
+      return true;
+    } catch {
+      setSnapshotHistoryRefreshWarning("Novi snapshot je spremljen, ali povijest nije osvjezena.");
       return false;
     }
   }
@@ -205,6 +224,56 @@ export function AppointmentDetail() {
       setSnapshotDetailError("Detalji snapshota trenutno nisu dostupni.");
     } finally {
       setSnapshotDetailLoading(false);
+    }
+  }
+
+  function openSnapshotSupersedeModal(snapshotId: number) {
+    setSnapshotSupersedeTargetId(snapshotId);
+    setSnapshotSupersedeReason("");
+    setSnapshotSupersedeValidationError("");
+    setSnapshotSupersedeError("");
+    setShowSnapshotSupersedeModal(true);
+  }
+
+  function closeSnapshotSupersedeModal() {
+    setShowSnapshotSupersedeModal(false);
+    setSnapshotSupersedeTargetId(null);
+    setSnapshotSupersedeReason("");
+    setSnapshotSupersedeValidationError("");
+    setSnapshotSupersedeError("");
+  }
+
+  async function supersedeSnapshot(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!appointment.data || snapshotSupersedeTargetId == null) return;
+    const reason = snapshotSupersedeReason.trim();
+    if (!reason) {
+      setSnapshotSupersedeValidationError("Razlog zamjene je obavezan.");
+      return;
+    }
+    setSnapshotSupersedeValidationError("");
+    setSnapshotSupersedeError("");
+    setSnapshotSupersedeSaving(true);
+    try {
+      await supersedeClinicalReadinessSnapshot(appointment.data.id, snapshotSupersedeTargetId, { reason });
+      setMessage("Novi snapshot je spremljen, a prethodni je oznacen kao zamijenjen.");
+      notifyUser("Novi snapshot je spremljen, a prethodni je oznacen kao zamijenjen.");
+      const oldSnapshotId = snapshotSupersedeTargetId;
+      closeSnapshotSupersedeModal();
+      await refreshSnapshotHistoryAfterSupersession(appointment.data.id);
+      if (snapshotDetail?.id === oldSnapshotId) {
+        try {
+          setSnapshotDetail(await getClinicalReadinessSnapshotDetail(appointment.data.id, oldSnapshotId));
+        } catch {
+          setSnapshotDetailError("Detalji snapshota trenutno nisu dostupni.");
+        }
+      }
+    } catch (err) {
+      const detail = err instanceof Error ? err.message : "";
+      const permissionError = ["403", "forbidden", "permission", "dozvol", "prava"].some((fragment) => detail.toLowerCase().includes(fragment));
+      setSnapshotSupersedeError(permissionError ? "Nemate dozvolu za zamjenu snapshotova." : "Snapshot nije zamijenjen. Provjerite dozvole ili pokusajte ponovno.");
+    } finally {
+      setSnapshotSupersedeSaving(false);
     }
   }
 
@@ -334,7 +403,7 @@ export function AppointmentDetail() {
                   <p><span>Preview generiran</span><strong>{formatDateTime(snapshot.preview_generated_at)}</strong></p>
                   <p><span>Schema</span><strong>{snapshot.schema_version}</strong></p>
                   <p><span>Preview zapis</span><strong>{snapshot.is_preview_snapshot ? "da" : "ne"}</strong></p>
-                  <p><span>Stanje zapisa</span><strong>{snapshot.superseded_by_snapshot_id ? `Zamijenjen snapshotom ${snapshot.superseded_by_snapshot_id}` : "Aktivan zapis povijesti"}</strong></p>
+                  <p><span>Stanje zapisa</span><strong>{snapshot.superseded_by_snapshot_id ? `Zamijenjen novijim preview zapisom ${snapshot.superseded_by_snapshot_id}` : "Nije zamijenjen"}</strong></p>
                 </div>
                 {snapshot.superseded_at && <p className="helper-text">Zamijenjen: {formatDateTime(snapshot.superseded_at)}. Razlog: {snapshot.superseded_reason ?? "-"}</p>}
                 {snapshot.disclaimer && <p className="helper-text">{snapshot.disclaimer}</p>}
@@ -366,6 +435,27 @@ export function AppointmentDetail() {
         </div>
       )}
 
+      {showSnapshotSupersedeModal && (
+        <div className="modal-backdrop" role="presentation">
+          <div className="modal-panel" role="dialog" aria-modal="true" aria-labelledby="snapshot-supersede-title">
+            <h2 id="snapshot-supersede-title">Zamijeni snapshot novim preview zapisom</h2>
+            <p className="helper-text">Ova radnja sprema novi snapshot trenutnog server-side previewa i oznacava stari snapshot kao zamijenjen. Ne predstavlja odobrenje postupka, klinicku propusnicu, formalni dokaz ishoda, zaobilazenje upozorenja ili klinicku odluku.</p>
+            <form onSubmit={supersedeSnapshot}>
+              <label>
+                Razlog zamjene snapshota
+                <textarea value={snapshotSupersedeReason} onChange={(event) => setSnapshotSupersedeReason(event.target.value)} rows={4} />
+              </label>
+              {snapshotSupersedeValidationError && <p className="form-error">{snapshotSupersedeValidationError}</p>}
+              {snapshotSupersedeError && <p className="form-error">{snapshotSupersedeError}</p>}
+              <div className="form-actions">
+                <button type="button" onClick={closeSnapshotSupersedeModal} disabled={snapshotSupersedeSaving}>Odustani</button>
+                <button className="primary" type="submit" disabled={snapshotSupersedeSaving}>{snapshotSupersedeSaving ? "Spremanje..." : "Spremi novi snapshot"}</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
       {(snapshotDetailLoading || snapshotDetailError || snapshotDetail) && (
         <div className="modal-backdrop" role="presentation">
           <div className="modal-panel" role="dialog" aria-modal="true" aria-labelledby="snapshot-detail-title">
@@ -385,7 +475,9 @@ export function AppointmentDetail() {
                   <p><span>Verzija</span><strong>{snapshotDetail.template_version ?? "-"}</strong></p>
                   <p><span>Binding</span><strong>{snapshotDetail.template_binding_status?.replace("_", " ") ?? "-"}</strong></p>
                   <p><span>Schema</span><strong>{snapshotDetail.schema_version}</strong></p>
+                  <p><span>Stanje zapisa</span><strong>{snapshotDetail.superseded_by_snapshot_id ? `Zamijenjen novijim preview zapisom ${snapshotDetail.superseded_by_snapshot_id}` : "Nije zamijenjen"}</strong></p>
                 </div>
+                {snapshotDetail.superseded_at && <p className="helper-text">Zamijenjen: {formatDateTime(snapshotDetail.superseded_at)}. Razlog: {snapshotDetail.superseded_reason ?? "-"}</p>}
                 {snapshotDetail.template_binding_warning && <p className="helper-text">{snapshotDetail.template_binding_warning}</p>}
                 <p>{snapshotDetail.preview_summary}</p>
                 {snapshotDetail.disclaimer && <p className="helper-text">{snapshotDetail.disclaimer}</p>}
@@ -429,6 +521,11 @@ export function AppointmentDetail() {
               </>
             )}
             <div className="form-actions">
+              {snapshotDetail && !snapshotDetail.superseded_by_snapshot_id && (
+                <button type="button" onClick={() => openSnapshotSupersedeModal(snapshotDetail.id)}>
+                  Spremi novi snapshot i oznaci ovaj kao zamijenjen
+                </button>
+              )}
               <button type="button" onClick={() => {
                 setSnapshotDetail(null);
                 setSnapshotDetailError("");
