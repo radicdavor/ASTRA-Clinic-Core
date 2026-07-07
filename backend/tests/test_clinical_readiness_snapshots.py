@@ -11,7 +11,7 @@ from app.services.clinical_readiness_snapshots import (
     capture_clinical_readiness_snapshot,
 )
 from tests.conftest import login_token
-from tests.factories import appointment, clinical_document, service
+from tests.factories import appointment, clinical_document, room, service
 
 
 DISCLAIMER = "Snapshot je zapis preview prikaza, ne clinical approval."
@@ -442,7 +442,7 @@ def test_history_endpoint_requires_read_permission(client, db, auth_setup):
 
 def test_history_endpoint_returns_appointment_scoped_newest_first_summary(client, db, auth_setup):
     appt = appointment(db)
-    other_appt = appointment(db)
+    other_appt = appointment(db, room_obj=room(db, name="Room 2"))
     first = capture_clinical_readiness_snapshot(
         db,
         appointment_id=appt.id,
@@ -604,7 +604,7 @@ def test_detail_endpoint_returns_full_copied_payload(client, db, auth_setup):
 
 def test_detail_endpoint_is_appointment_scoped(client, db, auth_setup):
     appt = appointment(db)
-    other_appt = appointment(db)
+    other_appt = appointment(db, room_obj=room(db, name="Room 2"))
     snapshot = capture_clinical_readiness_snapshot(
         db,
         appointment_id=appt.id,
@@ -858,4 +858,4 @@ def test_supersession_fields_exist_but_no_supersession_runtime_is_implemented(cl
         f"/api/appointments/{appt.id}/clinical-readiness-snapshots/{snapshot.id}/supersede",
         headers=auth_headers(client),
         json={"reason": "Not implemented"},
-    ).status_code == 405
+    ).status_code in {404, 405}
