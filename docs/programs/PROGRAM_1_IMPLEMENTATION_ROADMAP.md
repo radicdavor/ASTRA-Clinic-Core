@@ -105,6 +105,16 @@ Phase B1 update:
 - preporuceni sljedeci task je `Program 1 Phase B2 - Clinical Readiness API and UI Contract`
 - B2 takoder treba poceti kao contract/design, ne kao code implementation
 
+Phase B2 update:
+
+- Clinical Readiness API contract je dokumentiran kroz `PROGRAM_1_PHASE_B2_CLINICAL_READINESS_API_CONTRACT.md`
+- Clinical Readiness UI contract je dokumentiran kroz `PROGRAM_1_PHASE_B2_CLINICAL_READINESS_UI_CONTRACT.md`
+- preview data contract je dokumentiran kroz `PROGRAM_1_PHASE_B2_CLINICAL_READINESS_PREVIEW_DATA_CONTRACT.md`
+- safety/regression contract je dokumentiran kroz `PROGRAM_1_PHASE_B2_CLINICAL_READINESS_SAFETY_REGRESSION_CONTRACT.md`
+- B2 je documentation-only API/UI contract i ne uvodi endpoint, UI, model ili migraciju
+- buduca prva code faza, ako bude odobrena, treba biti `Program 1 Phase B3 - Clinical Readiness Read-Only Preview Prototype`
+- B3 mora ostati demo/pilot-only, non-blocking i bez task/override/AI-clear ponasanja
+
 ## 5. Faza 2 - Findings Lifecycle Foundation
 
 Cilj:

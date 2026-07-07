@@ -158,3 +158,31 @@ Preporuceni sljedeci task:
 `Program 1 Phase B2 - Clinical Readiness API and UI Contract`
 
 B2 treba ostati contract/design first.
+
+## 11. Phase B2 outcome
+
+Phase B2 je documentation-only API/UI contract pass.
+
+Novi B2 dokumenti:
+
+- `PROGRAM_1_PHASE_B2_CLINICAL_READINESS_API_CONTRACT.md`
+- `PROGRAM_1_PHASE_B2_CLINICAL_READINESS_UI_CONTRACT.md`
+- `PROGRAM_1_PHASE_B2_CLINICAL_READINESS_PREVIEW_DATA_CONTRACT.md`
+- `PROGRAM_1_PHASE_B2_CLINICAL_READINESS_SAFETY_REGRESSION_CONTRACT.md`
+
+B2 zakljucak:
+
+- buduci prvi endpoint treba biti read-only appointment-scoped preview
+- buduca prva UI povrsina treba biti Appointment Workspace
+- preview ne smije blokirati workflow
+- preview ne smije kreirati taskove
+- preview ne smije clearati readiness
+- preview ne smije koristiti unreviewed AI kao source
+- preview ne smije koristiti Patient Clinical Summary kao source of truth
+- preview mora ostati odvojen od `/api/readiness`
+
+Preporuceni sljedeci task:
+
+`Program 1 Phase B3 - Clinical Readiness Read-Only Preview Prototype`
+
+B3 smije biti code task samo ako ostane demo/pilot-only, non-blocking i read-only.
