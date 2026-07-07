@@ -125,6 +125,13 @@ export function AppointmentDetail() {
           <div className="readiness-detail">
             <p><strong>PREVIEW</strong> / status: <StatusBadge status={clinicalReadiness.data.status} /></p>
             <p>{clinicalReadiness.data.summary}</p>
+            <div className="detail-list">
+              <p><span>Template</span><strong>{clinicalReadiness.data.template_label ?? "Nije vezan"}</strong></p>
+              <p><span>Binding</span><strong>{clinicalReadiness.data.template_binding_status.replace("_", " ")}</strong></p>
+            </div>
+            {clinicalReadiness.data.template_binding_warning && (
+              <p className="helper-text">{clinicalReadiness.data.template_binding_warning} Ovo nije produkcijsko pravilo.</p>
+            )}
             {clinicalReadiness.data.limitations.length > 0 && (
               <div>
                 <strong>Ogranicenja</strong>

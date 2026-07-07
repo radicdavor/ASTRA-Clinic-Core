@@ -30,6 +30,17 @@ class ClinicalReadinessTemplate:
     items: tuple[ClinicalReadinessTemplateItem, ...]
 
 
+@dataclass(frozen=True)
+class ClinicalReadinessTemplateSelection:
+    template: ClinicalReadinessTemplate
+    binding_status: str
+    binding_warning: str
+
+
+KEYWORD_BINDING_WARNING = "Template je odabran demo/pilot keyword matchingom prema nazivu usluge."
+GENERIC_BINDING_WARNING = "Nema specificnog template matcha; koristi se genericki demo/pilot template."
+
+
 def _item(
     key: str,
     label: str,
@@ -199,20 +210,36 @@ def _has_word(text: str, word: str) -> bool:
     return bool(re.search(rf"(^|[^a-z0-9]){re.escape(word)}([^a-z0-9]|$)", text))
 
 
-def select_clinical_readiness_template(service_name: str | None) -> ClinicalReadinessTemplate:
+def keyword_selection(template: ClinicalReadinessTemplate) -> ClinicalReadinessTemplateSelection:
+    return ClinicalReadinessTemplateSelection(
+        template=template,
+        binding_status="keyword_fallback",
+        binding_warning=KEYWORD_BINDING_WARNING,
+    )
+
+
+def generic_selection() -> ClinicalReadinessTemplateSelection:
+    return ClinicalReadinessTemplateSelection(
+        template=GENERIC_TEMPLATE,
+        binding_status="generic_fallback",
+        binding_warning=GENERIC_BINDING_WARNING,
+    )
+
+
+def select_clinical_readiness_template(service_name: str | None) -> ClinicalReadinessTemplateSelection:
     normalized = normalize_service_name(service_name)
 
     if "kolonoskop" in normalized:
-        return COLONOSCOPY_TEMPLATE
+        return keyword_selection(COLONOSCOPY_TEMPLATE)
     if "gastroskop" in normalized:
-        return GASTROSCOPY_TEMPLATE
+        return keyword_selection(GASTROSCOPY_TEMPLATE)
     if "h. pylori" in normalized or "helicobacter" in normalized or "hpylori" in normalized:
-        return HPYLORI_TEMPLATE
+        return keyword_selection(HPYLORI_TEMPLATE)
     if "skinbooster" in normalized or "polinukleotid" in normalized or _has_word(normalized, "pn"):
-        return AESTHETIC_SKINBOOSTER_PN_TEMPLATE
+        return keyword_selection(AESTHETIC_SKINBOOSTER_PN_TEMPLATE)
     if "laser" in normalized or _has_word(normalized, "rf") or "exion" in normalized or "energy" in normalized:
-        return AESTHETIC_ENERGY_DEVICE_TEMPLATE
+        return keyword_selection(AESTHETIC_ENERGY_DEVICE_TEMPLATE)
     if "filler" in normalized or "botox" in normalized:
-        return AESTHETIC_INJECTABLE_TEMPLATE
+        return keyword_selection(AESTHETIC_INJECTABLE_TEMPLATE)
 
-    return GENERIC_TEMPLATE
+    return generic_selection()

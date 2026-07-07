@@ -56,6 +56,10 @@ def build_clinical_readiness_preview(db: Session, appointment: Appointment) -> C
     items: list[ClinicalReadinessPreviewItem] = []
     limitations = [DEMO_LIMITATION]
     source_warnings: list[str] = []
+    template_key: str | None = None
+    template_label: str | None = None
+    template_binding_status = "unbound"
+    template_binding_warning: str | None = None
 
     if not appointment.patient_id:
         items.append(
@@ -100,7 +104,12 @@ def build_clinical_readiness_preview(db: Session, appointment: Appointment) -> C
         )
     else:
         service_name = appointment.service.name if appointment.service else f"Usluga #{appointment.service_id}"
-        template = select_clinical_readiness_template(service_name)
+        template_selection = select_clinical_readiness_template(service_name)
+        template = template_selection.template
+        template_key = template.key
+        template_label = template.name
+        template_binding_status = template_selection.binding_status
+        template_binding_warning = template_selection.binding_warning
         limitations.append(TEMPLATE_LIMITATION)
         if template.specific:
             limitations.append(f"Koristi se demo/pilot template: {template.name}.")
@@ -165,6 +174,10 @@ def build_clinical_readiness_preview(db: Session, appointment: Appointment) -> C
         appointment_id=appointment.id,
         patient_id=appointment.patient_id,
         service_id=appointment.service_id,
+        template_key=template_key,
+        template_label=template_label,
+        template_binding_status=template_binding_status,
+        template_binding_warning=template_binding_warning,
         status=aggregate_status(items),
         is_preview=True,
         generated_at=datetime.now(UTC),

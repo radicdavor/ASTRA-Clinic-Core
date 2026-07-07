@@ -110,6 +110,10 @@ class ClinicalReadinessPreviewResponse(BaseModel):
     appointment_id: int
     patient_id: int | None
     service_id: int | None
+    template_key: str | None = None
+    template_label: str | None = None
+    template_binding_status: str
+    template_binding_warning: str | None = None
     status: str
     is_preview: bool
     generated_at: DateTimeType

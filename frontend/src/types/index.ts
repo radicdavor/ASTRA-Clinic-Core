@@ -203,6 +203,10 @@ export type ClinicalReadinessPreview = {
   appointment_id: number;
   patient_id?: number | null;
   service_id?: number | null;
+  template_key?: string | null;
+  template_label?: string | null;
+  template_binding_status: string;
+  template_binding_warning?: string | null;
   status: string;
   is_preview: boolean;
   generated_at: string;
