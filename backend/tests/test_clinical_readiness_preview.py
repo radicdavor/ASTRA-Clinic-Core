@@ -201,7 +201,7 @@ def test_generic_service_falls_back_to_generic_template(client, db, auth_setup):
 
 
 def test_template_items_do_not_enforce_workflow(client, db, auth_setup):
-    colonoscopy = service(db, name="Kolonoskopija")
+    colonoscopy = service(db, name="Kolonoskopija kontrolni demo")
     appt = appointment(db, service_obj=colonoscopy, status="scheduled")
     original_status = appt.status
     episode_count = db.query(ClinicalEpisode).count()
@@ -227,7 +227,7 @@ def test_template_items_do_not_enforce_workflow(client, db, auth_setup):
 
 
 def test_template_metadata_does_not_create_workflow_objects(client, db, auth_setup):
-    gastroscopy = service(db, name="Gastroskopija")
+    gastroscopy = service(db, name="Gastroskopija uz sedaciju")
     appt = appointment(db, service_obj=gastroscopy, status="scheduled")
     original_status = appt.status
     episode_count = db.query(ClinicalEpisode).count()
@@ -242,6 +242,67 @@ def test_template_metadata_does_not_create_workflow_objects(client, db, auth_set
     assert body["template_key"] == "gastroscopy"
     assert body["template_binding_status"] == "keyword_fallback"
     assert body["template_binding_warning"]
+    db.expire(appt)
+    assert appt.status == original_status
+    assert task_table_count == 0
+    assert db.query(ClinicalEpisode).count() == episode_count
+    assert db.query(ClinicalPlan).count() == plan_count
+
+
+def test_explicit_service_code_binding_returns_explicit_metadata(client, db, auth_setup):
+    explicit = service(db, name="Endoskopski pregled", price="100")
+    explicit.code = "COLONOSCOPY"
+    appt = appointment(db, service_obj=explicit, status="scheduled")
+    original_status = appt.status
+    headers = auth_headers(client)
+
+    response = preview(client, appt.id, headers)
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["is_preview"] is True
+    assert body["template_key"] == "colonoscopy"
+    assert body["template_label"] == "Kolonoskopija"
+    assert body["template_binding_status"] == "explicit"
+    assert body["template_binding_warning"] == "Template je odabran iz demo/pilot explicit service binding konfiguracije; nije produkcijsko pravilo."
+    assert any(item["key"] == "template_colonoscopy_bowel_prep" for item in body["items"])
+    db.expire(appt)
+    assert appt.status == original_status
+
+
+def test_explicit_service_binding_precedes_keyword_fallback(client, db, auth_setup):
+    explicit = service(db, name="Gastroskopija posebni demo naziv", price="100")
+    explicit.code = "COLONOSCOPY"
+    appt = appointment(db, service_obj=explicit)
+    headers = auth_headers(client)
+
+    response = preview(client, appt.id, headers)
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["template_key"] == "colonoscopy"
+    assert body["template_binding_status"] == "explicit"
+    assert any(item["key"] == "template_colonoscopy_bowel_prep" for item in body["items"])
+    assert not any(item["key"] == "template_gastroscopy_fasting_check" for item in body["items"])
+
+
+def test_explicit_service_binding_does_not_create_workflow_objects(client, db, auth_setup):
+    explicit = service(db, name="Demo bound service", price="100")
+    explicit.code = "GASTROSCOPY"
+    appt = appointment(db, service_obj=explicit, status="scheduled")
+    original_status = appt.status
+    episode_count = db.query(ClinicalEpisode).count()
+    plan_count = db.query(ClinicalPlan).count()
+    task_table_count = 1 if "tasks" in db.get_bind().dialect.get_table_names(db.connection()) else 0
+    headers = auth_headers(client)
+
+    response = preview(client, appt.id, headers)
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["template_binding_status"] == "explicit"
+    assert body["status"] != "blocked"
+    assert all(item["blocking"] is False for item in body["items"] if item["key"].startswith("template_"))
     db.expire(appt)
     assert appt.status == original_status
     assert task_table_count == 0

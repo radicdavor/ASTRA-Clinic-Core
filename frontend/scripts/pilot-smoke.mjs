@@ -180,6 +180,9 @@ assertIncludes("../backend/app/services/clinical_readiness_preview.py", "Koristi
 assertIncludes("../backend/app/services/clinical_readiness_templates.py", "select_clinical_readiness_template");
 assertIncludes("../backend/app/services/clinical_readiness_templates.py", "keyword_fallback");
 assertIncludes("../backend/app/services/clinical_readiness_templates.py", "generic_fallback");
+assertIncludes("../backend/app/services/clinical_readiness_templates.py", "binding_status=\"explicit\"");
+assertIncludes("../backend/app/services/clinical_readiness_template_bindings.py", "DEMO_SERVICE_CODE_BINDINGS");
+assertIncludes("../backend/app/services/clinical_readiness_template_bindings.py", "EXPLICIT_BINDING_WARNING");
 assertIncludes("../backend/app/services/clinical_readiness_templates.py", "GASTROSCOPY_TEMPLATE");
 assertIncludes("../backend/app/services/clinical_readiness_templates.py", "COLONOSCOPY_TEMPLATE");
 assertNotIncludes("src/pages/AppointmentDetail.tsx", "AI cleared");
