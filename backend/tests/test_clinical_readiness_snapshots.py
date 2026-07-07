@@ -34,6 +34,10 @@ def capture_endpoint(client, appointment_id, headers, payload=None):
     )
 
 
+def history_endpoint(client, appointment_id, headers):
+    return client.get(f"/api/appointments/{appointment_id}/clinical-readiness-snapshots", headers=headers)
+
+
 def test_clinical_readiness_snapshot_table_exists_after_metadata_setup(db):
     table_names = set(db.get_bind().dialect.get_table_names(db.connection()))
 
@@ -410,3 +414,123 @@ def test_api_key_capture_denied_even_with_snapshot_scope(client, db):
 
     assert response.status_code == 403
     assert db.query(ClinicalReadinessSnapshot).count() == 0
+
+
+def test_history_endpoint_requires_authentication(client, db):
+    appt = appointment(db)
+
+    response = history_endpoint(client, appt.id, headers={})
+
+    assert response.status_code == 401
+
+
+def test_history_endpoint_requires_read_permission(client, db, auth_setup):
+    appt = appointment(db)
+    auth_setup["limited"].role.permissions = []
+    db.commit()
+    headers = {"Authorization": f"Bearer {login_token(client, 'limited@test.local')}"}
+
+    response = history_endpoint(client, appt.id, headers=headers)
+
+    assert response.status_code == 403
+    assert "clinical_readiness.snapshots.read" in response.json()["detail"]
+
+
+def test_history_endpoint_returns_appointment_scoped_newest_first_summary(client, db, auth_setup):
+    appt = appointment(db)
+    other_appt = appointment(db)
+    first = capture_clinical_readiness_snapshot(
+        db,
+        appointment_id=appt.id,
+        actor_user_id=auth_setup["admin"].id,
+        reason="First snapshot.",
+    )
+    second = capture_clinical_readiness_snapshot(
+        db,
+        appointment_id=appt.id,
+        actor_user_id=auth_setup["admin"].id,
+        reason="Second snapshot.",
+    )
+    capture_clinical_readiness_snapshot(
+        db,
+        appointment_id=other_appt.id,
+        actor_user_id=auth_setup["admin"].id,
+        reason="Other appointment snapshot.",
+    )
+
+    response = history_endpoint(client, appt.id, auth_headers(client))
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["appointment_id"] == appt.id
+    assert body["count"] == 2
+    assert body["is_preview_history"] is True
+    assert "Ne predstavlja clinical approval" in body["warning"]
+    ids = [snapshot["id"] for snapshot in body["snapshots"]]
+    assert ids == [second.id, first.id]
+    assert all(snapshot["appointment_id"] == appt.id for snapshot in body["snapshots"])
+    item = body["snapshots"][0]
+    assert item["item_count"] == len(second.items_json)
+    assert item["limitation_count"] == len(second.limitations_json)
+    assert item["source_warning_count"] == len(second.source_warnings_json)
+    assert "items" not in item
+    assert "limitations" not in item
+    assert "source_refs" not in item
+
+
+def test_history_endpoint_response_excludes_approval_fields(client, db, auth_setup):
+    appt = appointment(db)
+    capture_clinical_readiness_snapshot(
+        db,
+        appointment_id=appt.id,
+        actor_user_id=auth_setup["admin"].id,
+        reason="Response safety.",
+    )
+
+    response = history_endpoint(client, appt.id, auth_headers(client))
+
+    assert response.status_code == 200
+    forbidden = {"approved", "cleared", "procedure_allowed", "task_created", "outcome_evidence_id", "override_status"}
+    body = response.json()
+    assert forbidden.isdisjoint(body.keys())
+    assert forbidden.isdisjoint(body["snapshots"][0].keys())
+
+
+def test_history_endpoint_is_read_only_and_writes_no_audit(client, db, auth_setup):
+    appt = appointment(db, status="scheduled")
+    capture_clinical_readiness_snapshot(
+        db,
+        appointment_id=appt.id,
+        actor_user_id=auth_setup["admin"].id,
+        reason="Existing snapshot.",
+    )
+    original_status = appt.status
+    snapshot_count = db.query(ClinicalReadinessSnapshot).count()
+    audit_count = db.query(AuditLog).count()
+    episode_count = db.query(ClinicalEpisode).count()
+    plan_count = db.query(ClinicalPlan).count()
+    table_names = set(db.get_bind().dialect.get_table_names(db.connection()))
+
+    response = history_endpoint(client, appt.id, auth_headers(client))
+
+    assert response.status_code == 200
+    db.expire(appt)
+    assert appt.status == original_status
+    assert db.query(ClinicalReadinessSnapshot).count() == snapshot_count
+    assert db.query(AuditLog).count() == audit_count
+    assert db.query(ClinicalEpisode).count() == episode_count
+    assert db.query(ClinicalPlan).count() == plan_count
+    assert "outcome_evidence" not in table_names
+    assert "tasks" not in table_names
+
+
+def test_capture_endpoint_still_requires_write_permission_with_read_permission(client, db, auth_setup):
+    appt = appointment(db)
+    auth_setup["limited"].role.permissions = [permission for permission in auth_setup["admin"].role.permissions if permission.name == "clinical_readiness.snapshots.read"]
+    db.commit()
+    headers = {"Authorization": f"Bearer {login_token(client, 'limited@test.local')}"}
+
+    response = capture_endpoint(client, appt.id, headers=headers)
+
+    assert response.status_code == 403
+    assert "clinical_readiness.snapshots.write" in response.json()["detail"]
