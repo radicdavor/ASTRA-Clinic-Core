@@ -75,6 +75,8 @@ Pilot documents:
 - [Program 1 Phase B2 Clinical Readiness Preview Data Contract](docs/programs/PROGRAM_1_PHASE_B2_CLINICAL_READINESS_PREVIEW_DATA_CONTRACT.md)
 - [Program 1 Phase B2 Clinical Readiness Safety Regression Contract](docs/programs/PROGRAM_1_PHASE_B2_CLINICAL_READINESS_SAFETY_REGRESSION_CONTRACT.md)
 - [Program 1 Phase B3 regression notes](docs/programs/PROGRAM_1_PHASE_B3_REGRESSION_NOTES.md)
+- [Program 1 Phase B4 Clinical Readiness Template Design](docs/programs/PROGRAM_1_PHASE_B4_CLINICAL_READINESS_TEMPLATE_DESIGN.md)
+- [Program 1 Phase B4 regression notes](docs/programs/PROGRAM_1_PHASE_B4_REGRESSION_NOTES.md)
 - [Program 1 audit event naming](docs/programs/PROGRAM_1_AUDIT_EVENT_NAMING.md)
 - [Program 1 Phase A regression notes](docs/programs/PROGRAM_1_PHASE_A_REGRESSION_NOTES.md)
 - [Program 1 Phase A5 regression notes](docs/programs/PROGRAM_1_PHASE_A5_REGRESSION_NOTES.md)

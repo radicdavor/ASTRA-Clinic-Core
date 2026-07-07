@@ -124,6 +124,16 @@ Phase B3 update:
 - B3 ne uvodi enforcement, taskove, override, AI clearance, production claims, DB model ili migraciju
 - preporuceni sljedeci task je `Program 1 Phase B4 - Clinical Readiness Template Design`
 
+Phase B4 update:
+
+- Clinical Readiness template design je dokumentiran kroz `PROGRAM_1_PHASE_B4_CLINICAL_READINESS_TEMPLATE_DESIGN.md`
+- staticne demo/pilot template definicije postoje u backend service sloju
+- preview koristi service-name matching i generic fallback
+- template-generated itemi su preview-only i ne provode workflow blokade
+- regression coverage cuva da templatei ne mijenjaju appointment status, ne stvaraju taskove, epizode ili ClinicalPlan i ne koriste unreviewed AI ili Patient Clinical Summary kao source truth
+- B4 ne uvodi DB template model, template editor, override, enforcement, real AI/OCR, real patient data ili produkcijske tvrdnje
+- preporuceni sljedeci task je `Program 1 Phase B5 - Clinical Readiness Template Binding Design`
+
 ## 5. Faza 2 - Findings Lifecycle Foundation
 
 Cilj:
