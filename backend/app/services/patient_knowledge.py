@@ -34,11 +34,18 @@ def source_for_document(document: ClinicalDocument) -> PatientKnowledgeSource:
     )
 
 
-def knowledge_item(text: str, document: ClinicalDocument) -> PatientKnowledgeItem:
-    return PatientKnowledgeItem(text=text, sources=[source_for_document(document)])
+def knowledge_item(text: str, document: ClinicalDocument, display_kind: str | None = None, severity: str | None = None, requires_attention: bool = False) -> PatientKnowledgeItem:
+    return PatientKnowledgeItem(text=text, sources=[source_for_document(document)], display_kind=display_kind, severity=severity, requires_attention=requires_attention)
 
 
-def add_knowledge_item(items: list[PatientKnowledgeItem], text: str | None, document: ClinicalDocument) -> None:
+def add_knowledge_item(
+    items: list[PatientKnowledgeItem],
+    text: str | None,
+    document: ClinicalDocument,
+    display_kind: str | None = None,
+    severity: str | None = None,
+    requires_attention: bool = False,
+) -> None:
     cleaned = (text or "").strip()
     if not cleaned:
         return
@@ -50,8 +57,13 @@ def add_knowledge_item(items: list[PatientKnowledgeItem], text: str | None, docu
         if " ".join(item.text.lower().split()) == normalized:
             if all(existing.document_id != source.document_id for existing in item.sources):
                 item.sources.append(source)
+            if display_kind:
+                item.display_kind = display_kind
+            if severity:
+                item.severity = severity
+            item.requires_attention = item.requires_attention or requires_attention
             return
-    items.append(PatientKnowledgeItem(text=cleaned, sources=[source]))
+    items.append(PatientKnowledgeItem(text=cleaned, sources=[source], display_kind=display_kind, severity=severity, requires_attention=requires_attention))
 
 
 def is_official_clinical_document(document: ClinicalDocument) -> bool:

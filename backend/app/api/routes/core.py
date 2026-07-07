@@ -963,14 +963,14 @@ def patient_clinical_summary(patient_id: int, db: Session = Depends(get_db), act
                 add_knowledge_item(summary.known_problems, finding, document)
         for recommendation in document.recommendations or []:
             if contains_unresolved_language(recommendation):
-                add_knowledge_item(summary.open_questions, recommendation, document)
+                add_knowledge_item(summary.open_questions, recommendation, document, display_kind="open_question", severity="warning", requires_attention=True)
             else:
                 add_knowledge_item(summary.latest_recommendations, recommendation, document)
         if document.document_type in {"pathology", "laboratory", "radiology"} and not document.key_findings:
             target = summary.pathology if document.document_type == "pathology" else summary.laboratory if document.document_type == "laboratory" else summary.imaging
             add_knowledge_item(target, document.ai_summary or document.title, document)
         if contains_unresolved_language(source_text_blob):
-            add_knowledge_item(summary.open_questions, GENERIC_OPEN_QUESTION_TEXT, document)
+            add_knowledge_item(summary.open_questions, GENERIC_OPEN_QUESTION_TEXT, document, display_kind="open_question", severity="warning", requires_attention=True)
     return summary
 
 

@@ -371,6 +371,9 @@ def test_open_questions_require_reviewed_sources(client, db, auth_setup):
     open_questions = summary.json()["open_questions"]
     assert len(open_questions) == 1
     assert {source["document_id"] for source in open_questions[0]["sources"]} == {reviewed.id}
+    assert open_questions[0]["display_kind"] == "open_question"
+    assert open_questions[0]["severity"] == "warning"
+    assert open_questions[0]["requires_attention"] is True
 
 
 def test_open_question_recommendation_keywords_are_classified(client, db, auth_setup):
@@ -405,6 +408,9 @@ def test_reviewed_recommendation_without_unresolved_language_is_latest_recommend
     assert body["open_questions"] == []
     assert body["latest_recommendations"][0]["text"] == "Kontrola prema odluci lijecnika"
     assert body["latest_recommendations"][0]["sources"][0]["document_id"] == doc.id
+    assert body["latest_recommendations"][0]["display_kind"] is None
+    assert body["latest_recommendations"][0]["severity"] is None
+    assert body["latest_recommendations"][0]["requires_attention"] is False
 
 
 def test_reviewed_raw_text_with_pending_language_creates_generic_open_question(client, db, auth_setup):
@@ -426,6 +432,9 @@ def test_reviewed_raw_text_with_pending_language_creates_generic_open_question(c
     assert len(open_questions) == 1
     assert open_questions[0]["text"] == "Dokument sadrzi otvoreno pitanje koje zahtijeva pregled."
     assert {source["document_id"] for source in open_questions[0]["sources"]} == {first.id, second.id}
+    assert open_questions[0]["display_kind"] == "open_question"
+    assert open_questions[0]["severity"] == "warning"
+    assert open_questions[0]["requires_attention"] is True
 
 
 def test_rejected_and_superseded_documents_never_create_open_questions(client, db, auth_setup):

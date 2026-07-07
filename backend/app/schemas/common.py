@@ -455,6 +455,9 @@ class PatientKnowledgeSource(BaseModel):
 class PatientKnowledgeItem(BaseModel):
     text: str
     sources: list[PatientKnowledgeSource]
+    display_kind: str | None = None
+    severity: str | None = None
+    requires_attention: bool = False
 
 
 class PatientClinicalSummaryRecordUpdate(BaseModel):

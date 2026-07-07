@@ -113,6 +113,9 @@ export type PatientKnowledgeSource = {
 export type PatientKnowledgeItem = {
   text: string;
   sources: PatientKnowledgeSource[];
+  display_kind?: string | null;
+  severity?: string | null;
+  requires_attention: boolean;
 };
 
 export type PatientClinicalSummaryRecord = {
