@@ -181,6 +181,37 @@ export type Appointment = {
   episode?: ClinicalEpisode | null;
 };
 
+export type ClinicalReadinessPreviewItem = {
+  key: string;
+  label: string;
+  category: string;
+  status: string;
+  severity: string;
+  responsible_role?: string | null;
+  source_type: string;
+  source_ref?: string | null;
+  source_label?: string | null;
+  suggested_action?: string | null;
+  blocking: boolean;
+  override_allowed: boolean;
+  override_role?: string | null;
+  override_reason_required: boolean;
+  audit_required: boolean;
+};
+
+export type ClinicalReadinessPreview = {
+  appointment_id: number;
+  patient_id?: number | null;
+  service_id?: number | null;
+  status: string;
+  is_preview: boolean;
+  generated_at: string;
+  summary: string;
+  items: ClinicalReadinessPreviewItem[];
+  source_warnings: string[];
+  limitations: string[];
+};
+
 export type ReceptionSlot = {
   time: string;
   appointment?: Appointment | null;

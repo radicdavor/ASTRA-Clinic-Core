@@ -9,7 +9,7 @@ import { WorkspaceHeader } from "../components/workspace/WorkspaceHeader";
 import { WorkspaceLayout } from "../components/workspace/WorkspaceLayout";
 import { WorkspaceSection } from "../components/workspace/WorkspaceSection";
 import { useApi } from "../hooks/useApi";
-import { Appointment, AuditLog, Invoice, StockMovement } from "../types";
+import { Appointment, AuditLog, ClinicalReadinessPreview, Invoice, StockMovement } from "../types";
 import { formatDate, formatDateTime } from "../utils/date";
 import { formatPatientIdentity, formatPatientName } from "../utils/patientIdentity";
 
@@ -20,6 +20,7 @@ export function AppointmentDetail() {
   const invoices = useApi<Invoice[]>("/api/invoices", []);
   const movements = useApi<StockMovement[]>("/api/inventory/stock-movements", []);
   const audit = useApi<AuditLog[]>(`/api/audit-log?entity_type=Appointment&entity_id=${id}`, []);
+  const clinicalReadiness = useApi<ClinicalReadinessPreview | null>(`/api/appointments/${id}/clinical-readiness-preview`, null);
   const [materials, setMaterials] = useState<any[]>([]);
   const [quantities, setQuantities] = useState<Record<number, string>>({});
   const [message, setMessage] = useState("");
@@ -116,6 +117,48 @@ export function AppointmentDetail() {
           <p>To nije blokada za v0.1-pilot, ali za klinicko pracenje preporucuje se povezati termin s epizodom pacijenta.</p>
         </div>
       )}
+
+      <WorkspaceSection title="Klinicka spremnost - preview">
+        <p className="helper-text">Read-only prikaz mogucih uvjeta za ovaj planirani klinicki cin. Ne donosi odluke i ne blokira postupak.</p>
+        {clinicalReadiness.error && <p className="form-error">Clinical readiness preview trenutno nije dostupan.</p>}
+        {clinicalReadiness.data ? (
+          <div className="readiness-detail">
+            <p><strong>PREVIEW</strong> / status: <StatusBadge status={clinicalReadiness.data.status} /></p>
+            <p>{clinicalReadiness.data.summary}</p>
+            {clinicalReadiness.data.limitations.length > 0 && (
+              <div>
+                <strong>Ogranicenja</strong>
+                <ul>
+                  {clinicalReadiness.data.limitations.map((limitation) => <li key={limitation}>{limitation}</li>)}
+                </ul>
+              </div>
+            )}
+            {clinicalReadiness.data.source_warnings.length > 0 && (
+              <div>
+                <strong>Upozorenja o izvorima</strong>
+                <ul>
+                  {clinicalReadiness.data.source_warnings.map((warning) => <li key={warning}>{warning}</li>)}
+                </ul>
+              </div>
+            )}
+            {clinicalReadiness.data.items.length === 0 ? (
+              <p>Nema prikazanih stavki u ovom previewu.</p>
+            ) : (
+              <DataTable rows={clinicalReadiness.data.items} columns={[
+                { header: "Stavka", render: (row) => <strong>{row.label}</strong> },
+                { header: "Kategorija", render: (row) => row.category },
+                { header: "Status", render: (row) => row.status },
+                { header: "Tezina", render: (row) => row.severity },
+                { header: "Uloga", render: (row) => row.responsible_role ?? "-" },
+                { header: "Izvor", render: (row) => row.source_label ? `${row.source_label} (${row.source_type})` : row.source_type },
+                { header: "Radnja", render: (row) => row.suggested_action ?? "-" }
+              ]} />
+            )}
+          </div>
+        ) : !clinicalReadiness.error ? (
+          <p>Ucitavanje clinical readiness previewa...</p>
+        ) : null}
+      </WorkspaceSection>
 
       <WorkspaceSection title="Materijali" actions={<button onClick={loadMaterials}>Ucitaj prijedlog</button>}>
         {materials.map((entry) => (
