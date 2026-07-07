@@ -154,6 +154,16 @@ Phase B6 update:
 - B6 ne uvodi DB binding field, migraciju, template editor, persistent binding, enforcement ili override
 - preporuceni sljedeci task je `Program 1 Phase B7 - Clinical Readiness Template Versioning Design`
 
+Phase B7 update:
+
+- Clinical Readiness template versioning design je dokumentiran kroz `PROGRAM_1_PHASE_B7_CLINICAL_READINESS_TEMPLATE_VERSIONING_DESIGN.md`
+- staticni demo template version metadata postoji u backend template definicijama
+- preview response sada izlaže `template_version` i `template_version_warning`
+- Appointment Workspace prikazuje verziju templatea
+- regression coverage cuva da version metadata ne mijenja appointment status i ne stvara workflow objekte
+- B7 ne uvodi DB versioning, migraciju, template editor, persistent snapshot ili enforcement
+- preporuceni sljedeci task je `Program 1 Phase B8 - Clinical Readiness Snapshot Design`
+
 ## 5. Faza 2 - Findings Lifecycle Foundation
 
 Cilj:
