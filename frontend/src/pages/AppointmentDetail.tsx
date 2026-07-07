@@ -33,6 +33,7 @@ export function AppointmentDetail() {
   const [snapshotValidationError, setSnapshotValidationError] = useState("");
   const [snapshotCaptureError, setSnapshotCaptureError] = useState("");
   const [snapshotCaptureSaving, setSnapshotCaptureSaving] = useState(false);
+  const [snapshotIdempotencyKey, setSnapshotIdempotencyKey] = useState<string | null>(null);
   const [snapshotHistoryRefreshWarning, setSnapshotHistoryRefreshWarning] = useState("");
   const [snapshotDetail, setSnapshotDetail] = useState<ClinicalReadinessSnapshotDetailResponse | null>(null);
   const [snapshotDetailLoading, setSnapshotDetailLoading] = useState(false);
@@ -115,6 +116,26 @@ export function AppointmentDetail() {
       .replace(new RegExp(["readiness", "clearance"].join(" "), "g"), "klinicka odluka");
   }
 
+  function createSnapshotIdempotencyKey() {
+    if (typeof crypto !== "undefined" && "randomUUID" in crypto) return crypto.randomUUID();
+    return `snapshot-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  }
+
+  function openSnapshotCaptureModal() {
+    setSnapshotValidationError("");
+    setSnapshotCaptureError("");
+    setSnapshotIdempotencyKey(createSnapshotIdempotencyKey());
+    setShowSnapshotModal(true);
+  }
+
+  function closeSnapshotCaptureModal() {
+    setShowSnapshotModal(false);
+    setSnapshotReason("");
+    setSnapshotValidationError("");
+    setSnapshotCaptureError("");
+    setSnapshotIdempotencyKey(null);
+  }
+
   async function completeWithMaterials() {
     if (!appointment.data) return;
     if (missingRequiredVariable || exceedsStock || terminalStatus) {
@@ -162,12 +183,14 @@ export function AppointmentDetail() {
     try {
       await captureClinicalReadinessSnapshot(appointment.data.id, {
         reason,
-        client_preview_generated_at: clinicalReadiness.data?.generated_at ?? null
+        client_preview_generated_at: clinicalReadiness.data?.generated_at ?? null,
+        idempotency_key: snapshotIdempotencyKey
       });
       setMessage("Snapshot previewa je spremljen.");
       notifyUser("Snapshot previewa je spremljen.");
       setShowSnapshotModal(false);
       setSnapshotReason("");
+      setSnapshotIdempotencyKey(null);
       await refreshSnapshotHistoryAfterCapture(appointment.data.id);
     } catch (err) {
       const detail = err instanceof Error ? err.message : "";
@@ -287,11 +310,7 @@ export function AppointmentDetail() {
         actions={
           <ActionButton
             variant="workflow"
-            onClick={() => {
-              setSnapshotValidationError("");
-              setSnapshotCaptureError("");
-              setShowSnapshotModal(true);
-            }}
+            onClick={openSnapshotCaptureModal}
             helpTitle="Spremi snapshot previewa"
             help="Sprema trenutni server-side preview kao zapis prikaza uz obavezni razlog. Ne mijenja termin i ne stvara zadatak."
           >
@@ -347,7 +366,7 @@ export function AppointmentDetail() {
               {snapshotValidationError && <p className="form-error">{snapshotValidationError}</p>}
               {snapshotCaptureError && <p className="form-error">{snapshotCaptureError}</p>}
               <div className="form-actions">
-                <button type="button" onClick={() => setShowSnapshotModal(false)} disabled={snapshotCaptureSaving}>Odustani</button>
+                <button type="button" onClick={closeSnapshotCaptureModal} disabled={snapshotCaptureSaving}>Odustani</button>
                 <button className="primary" type="submit" disabled={snapshotCaptureSaving}>{snapshotCaptureSaving ? "Spremanje..." : "Spremi snapshot"}</button>
               </div>
             </form>
