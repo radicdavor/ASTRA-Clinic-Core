@@ -145,6 +145,8 @@ Pilot documents:
 - [Program 1 Phase B39 regression notes](docs/programs/PROGRAM_1_PHASE_B39_REGRESSION_NOTES.md)
 - [Program 1 Phase B40 Snapshot Production Governance Closure Matrix](docs/programs/PROGRAM_1_PHASE_B40_SNAPSHOT_PRODUCTION_GOVERNANCE_CLOSURE_MATRIX.md)
 - [Program 1 Phase B40 regression notes](docs/programs/PROGRAM_1_PHASE_B40_REGRESSION_NOTES.md)
+- [Program 1 Phase B31-B41 Snapshot Hardening Closure Report](docs/programs/PROGRAM_1_PHASE_B31_B41_SNAPSHOT_HARDENING_CLOSURE_REPORT.md)
+- [Program 1 Phase B41 regression notes](docs/programs/PROGRAM_1_PHASE_B41_REGRESSION_NOTES.md)
 - [Lokalni LAN pristup](docs/LAN_ACCESS.md)
 - [Program 1 audit event naming](docs/programs/PROGRAM_1_AUDIT_EVENT_NAMING.md)
 - [Program 1 Phase A regression notes](docs/programs/PROGRAM_1_PHASE_A_REGRESSION_NOTES.md)

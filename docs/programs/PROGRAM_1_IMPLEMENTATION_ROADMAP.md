@@ -474,6 +474,14 @@ Phase B40 update:
 - B40 ne uvodi runtime promjene
 - recommended next task je `Program 1 Phase B41 - Program 1 Phase B Snapshot Hardening Closure`
 
+Phase B41 update:
+
+- B31-B41 snapshot hardening closure report je dodan
+- zatvoreni su audit/retention/export/restore/governance hardening dokumenti
+- runtime promjene ostaju hardening-only: audit payload metadata, UI wording i CI targeted gate
+- real data, production i clinical enforcement ostaju no-go
+- recommended next task je `Program 1 Phase C0 - Clinical Readiness Enforcement Readiness Design`
+
 ## 5. Faza 2 - Findings Lifecycle Foundation
 
 Cilj:
