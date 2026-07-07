@@ -8,7 +8,9 @@ from app.models.domain import ApiKey, AuditLog, ClinicalEpisode, ClinicalPlan, C
 from app.services.clinical_readiness_snapshots import (
     CLINICAL_READINESS_SNAPSHOT_CAPTURED_EVENT,
     CLINICAL_READINESS_SNAPSHOT_DISCLAIMER,
+    CLINICAL_READINESS_SNAPSHOT_SUPERSEDED_EVENT,
     capture_clinical_readiness_snapshot,
+    supersede_clinical_readiness_snapshot,
 )
 from tests.conftest import login_token
 from tests.factories import appointment, clinical_document, room, service
@@ -842,7 +844,237 @@ def test_capture_creates_new_row_and_does_not_update_existing_snapshot_payload(d
     assert db.query(ClinicalReadinessSnapshot).count() == 2
 
 
-def test_supersession_fields_exist_but_no_supersession_runtime_is_implemented(client, db, auth_setup):
+def test_supersession_requires_non_empty_reason(db, auth_setup):
+    appt = appointment(db)
+    snapshot = capture_clinical_readiness_snapshot(
+        db,
+        appointment_id=appt.id,
+        actor_user_id=auth_setup["admin"].id,
+        reason="Initial snapshot.",
+    )
+
+    with pytest.raises(ValueError):
+        supersede_clinical_readiness_snapshot(
+            db,
+            appointment_id=appt.id,
+            old_snapshot_id=snapshot.id,
+            actor_user_id=auth_setup["admin"].id,
+            reason="   ",
+        )
+
+
+def test_supersession_requires_actor_user_id(db, auth_setup):
+    appt = appointment(db)
+    snapshot = capture_clinical_readiness_snapshot(
+        db,
+        appointment_id=appt.id,
+        actor_user_id=auth_setup["admin"].id,
+        reason="Initial snapshot.",
+    )
+
+    with pytest.raises(ValueError):
+        supersede_clinical_readiness_snapshot(
+            db,
+            appointment_id=appt.id,
+            old_snapshot_id=snapshot.id,
+            actor_user_id=None,
+            reason="Needs human actor.",
+        )
+
+
+def test_supersession_rejects_unknown_old_snapshot(db, auth_setup):
+    appt = appointment(db)
+
+    with pytest.raises(LookupError):
+        supersede_clinical_readiness_snapshot(
+            db,
+            appointment_id=appt.id,
+            old_snapshot_id=999999,
+            actor_user_id=auth_setup["admin"].id,
+            reason="Unknown snapshot.",
+        )
+
+
+def test_supersession_rejects_wrong_appointment(db, auth_setup):
+    appt = appointment(db)
+    other_appt = appointment(db, room_obj=room(db, name="Supersession room"))
+    snapshot = capture_clinical_readiness_snapshot(
+        db,
+        appointment_id=appt.id,
+        actor_user_id=auth_setup["admin"].id,
+        reason="Initial snapshot.",
+    )
+
+    with pytest.raises(LookupError):
+        supersede_clinical_readiness_snapshot(
+            db,
+            appointment_id=other_appt.id,
+            old_snapshot_id=snapshot.id,
+            actor_user_id=auth_setup["admin"].id,
+            reason="Wrong appointment.",
+        )
+
+
+def test_supersession_creates_new_snapshot_marks_old_and_writes_audit(client, db, auth_setup):
+    appt = appointment(db, status="scheduled")
+    original_status = appt.status
+    old_snapshot = capture_clinical_readiness_snapshot(
+        db,
+        appointment_id=appt.id,
+        actor_user_id=auth_setup["admin"].id,
+        reason="Initial snapshot.",
+    )
+    old_payload = {
+        "items": list(old_snapshot.items_json),
+        "limitations": list(old_snapshot.limitations_json),
+        "source_warnings": list(old_snapshot.source_warnings_json),
+        "source_refs": list(old_snapshot.source_refs_json),
+        "disclaimer": old_snapshot.disclaimer,
+        "preview_status": old_snapshot.preview_status,
+        "template_key": old_snapshot.template_key,
+        "template_version": old_snapshot.template_version,
+        "reason": old_snapshot.snapshot_reason,
+    }
+    episode_count = db.query(ClinicalEpisode).count()
+    plan_count = db.query(ClinicalPlan).count()
+    table_names = set(db.get_bind().dialect.get_table_names(db.connection()))
+
+    new_snapshot = supersede_clinical_readiness_snapshot(
+        db,
+        appointment_id=appt.id,
+        old_snapshot_id=old_snapshot.id,
+        actor_user_id=auth_setup["admin"].id,
+        reason="Novi pregled nakon dodatnih izvora.",
+    )
+    db.refresh(old_snapshot)
+
+    assert new_snapshot.id != old_snapshot.id
+    assert new_snapshot.appointment_id == appt.id
+    assert new_snapshot.snapshot_reason == "Supersession: Novi pregled nakon dodatnih izvora."
+    assert old_snapshot.superseded_by_snapshot_id == new_snapshot.id
+    assert old_snapshot.superseded_at is not None
+    assert old_snapshot.superseded_reason == "Novi pregled nakon dodatnih izvora."
+    assert old_snapshot.items_json == old_payload["items"]
+    assert old_snapshot.limitations_json == old_payload["limitations"]
+    assert old_snapshot.source_warnings_json == old_payload["source_warnings"]
+    assert old_snapshot.source_refs_json == old_payload["source_refs"]
+    assert old_snapshot.disclaimer == old_payload["disclaimer"]
+    assert old_snapshot.preview_status == old_payload["preview_status"]
+    assert old_snapshot.template_key == old_payload["template_key"]
+    assert old_snapshot.template_version == old_payload["template_version"]
+    assert old_snapshot.snapshot_reason == old_payload["reason"]
+
+    event = db.query(AuditLog).filter(AuditLog.action == CLINICAL_READINESS_SNAPSHOT_SUPERSEDED_EVENT).one()
+    assert event.entity_type == "ClinicalReadinessSnapshot"
+    assert event.entity_id == old_snapshot.id
+    assert event.summary == "Clinical Readiness Snapshot zamijenjen novim preview zapisom"
+    payload = event.after_json
+    assert payload["old_snapshot_id"] == old_snapshot.id
+    assert payload["new_snapshot_id"] == new_snapshot.id
+    assert payload["appointment_id"] == appt.id
+    assert payload["patient_id"] == appt.patient_id
+    assert payload["service_id"] == appt.service_id
+    assert payload["superseded_by_user_id"] == auth_setup["admin"].id
+    assert payload["supersede_reason"] == "Novi pregled nakon dodatnih izvora."
+    assert payload["old_template_key"] == old_snapshot.template_key
+    assert payload["new_template_key"] == new_snapshot.template_key
+    assert payload["old_template_version"] == old_snapshot.template_version
+    assert payload["new_template_version"] == new_snapshot.template_version
+    assert payload["old_preview_status"] == old_snapshot.preview_status
+    assert payload["new_preview_status"] == new_snapshot.preview_status
+    assert payload["old_created_at"]
+    assert payload["new_created_at"]
+    assert payload["is_preview_snapshot"] is True
+
+    db.expire(appt)
+    assert appt.status == original_status
+    assert db.query(ClinicalEpisode).count() == episode_count
+    assert db.query(ClinicalPlan).count() == plan_count
+    assert "outcome_evidence" not in table_names
+    assert "tasks" not in table_names
+
+    history = history_endpoint(client, appt.id, auth_headers(client))
+    assert history.status_code == 200
+    history_items = history.json()["snapshots"]
+    assert history_items[0]["id"] == new_snapshot.id
+    old_history_item = next(item for item in history_items if item["id"] == old_snapshot.id)
+    assert old_history_item["superseded_by_snapshot_id"] == new_snapshot.id
+    assert old_history_item["superseded_at"] is not None
+    assert old_history_item["superseded_reason"] == "Novi pregled nakon dodatnih izvora."
+
+    detail = detail_endpoint(client, appt.id, old_snapshot.id, auth_headers(client))
+    assert detail.status_code == 200
+    detail_body = detail.json()
+    assert detail_body["items"] == old_payload["items"]
+    assert detail_body["limitations"] == old_payload["limitations"]
+    assert detail_body["source_warnings"] == old_payload["source_warnings"]
+    assert detail_body["source_refs"] == old_payload["source_refs"]
+
+
+def test_supersession_rejects_already_superseded_snapshot(db, auth_setup):
+    appt = appointment(db)
+    snapshot = capture_clinical_readiness_snapshot(
+        db,
+        appointment_id=appt.id,
+        actor_user_id=auth_setup["admin"].id,
+        reason="Initial snapshot.",
+    )
+    supersede_clinical_readiness_snapshot(
+        db,
+        appointment_id=appt.id,
+        old_snapshot_id=snapshot.id,
+        actor_user_id=auth_setup["admin"].id,
+        reason="First supersession.",
+    )
+
+    with pytest.raises(ValueError):
+        supersede_clinical_readiness_snapshot(
+            db,
+            appointment_id=appt.id,
+            old_snapshot_id=snapshot.id,
+            actor_user_id=auth_setup["admin"].id,
+            reason="Second supersession.",
+        )
+
+
+def test_supersession_rolls_back_new_snapshot_and_old_metadata_when_audit_fails(db, auth_setup, monkeypatch):
+    import app.services.clinical_readiness_snapshots as snapshot_service
+
+    appt = appointment(db)
+    old_snapshot = capture_clinical_readiness_snapshot(
+        db,
+        appointment_id=appt.id,
+        actor_user_id=auth_setup["admin"].id,
+        reason="Initial snapshot.",
+    )
+    snapshot_count = db.query(ClinicalReadinessSnapshot).count()
+    audit_count = db.query(AuditLog).count()
+
+    def fail_supersession_audit(*args, **kwargs):
+        if args[1] == CLINICAL_READINESS_SNAPSHOT_SUPERSEDED_EVENT:
+            raise RuntimeError("supersession audit failed")
+        return None
+
+    monkeypatch.setattr(snapshot_service, "audit", fail_supersession_audit)
+
+    with pytest.raises(RuntimeError):
+        snapshot_service.supersede_clinical_readiness_snapshot(
+            db,
+            appointment_id=appt.id,
+            old_snapshot_id=old_snapshot.id,
+            actor_user_id=auth_setup["admin"].id,
+            reason="Audit rollback.",
+        )
+
+    stored_old = db.get(ClinicalReadinessSnapshot, old_snapshot.id)
+    assert db.query(ClinicalReadinessSnapshot).count() == snapshot_count
+    assert db.query(AuditLog).count() == audit_count
+    assert stored_old.superseded_by_snapshot_id is None
+    assert stored_old.superseded_at is None
+    assert stored_old.superseded_reason is None
+
+
+def test_supersession_route_is_not_implemented_in_b23(client, db, auth_setup):
     appt = appointment(db)
     snapshot = capture_clinical_readiness_snapshot(
         db,
