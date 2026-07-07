@@ -221,6 +221,17 @@ Phase B13 update:
 - B13 ne uvodi capture service, capture endpoint, frontend UI, permission enforcement, audit write, Outcome Evidence, Task engine, override ili appointment status promjenu
 - preporuceni sljedeci task je `Program 1 Phase B14 - Snapshot Capture Service Prototype`
 
+Phase B14 update:
+
+- interni capture service je dodan kroz `backend/app/services/clinical_readiness_snapshots.py`
+- service rebuilda server-side Clinical Readiness Preview i sprema immutable copied payload u `clinical_readiness_snapshots`
+- service pise audit event `clinical_readiness_snapshot_captured`
+- snapshot save i audit write su atomicni u service funkciji
+- regression coverage cuva reason/actor requirement, payload copy, audit payload, rollback na audit failure i zabranu workflow side effecta
+- B14 ne uvodi capture endpoint, frontend UI, capture button, snapshot history UI, route-level permission enforcement, Outcome Evidence, Task engine, override ili appointment status promjenu
+- idempotency persistence ostaje deferred jer B13 nije dodao idempotency storage
+- preporuceni sljedeci task je `Program 1 Phase B15 - Snapshot Capture Endpoint Prototype`
+
 ## 5. Faza 2 - Findings Lifecycle Foundation
 
 Cilj:

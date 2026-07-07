@@ -587,3 +587,39 @@ DB schema smije postojati prije capturea, ali runtime ne smije spremati snapshot
 Preporuceni sljedeci task:
 
 `Program 1 Phase B14 - Snapshot Capture Service Prototype`
+
+## 23. Phase B14 outcome
+
+Phase B14 dodaje interni backend service prototype za Clinical Readiness Snapshot capture.
+
+Implementirano:
+
+- `backend/app/services/clinical_readiness_snapshots.py`
+- `capture_clinical_readiness_snapshot(...)`
+- server-side rebuild previewa
+- immutable copied preview payload persistence
+- audit event `clinical_readiness_snapshot_captured`
+- rollback ako audit write ne uspije
+- regression coverage
+- B14 regression notes
+
+B14 ostaje:
+
+- bez capture endpointa
+- bez frontend UI-ja
+- bez capture buttona
+- bez snapshot history UI-ja
+- bez route-level permission enforcementa
+- bez idempotency persistencea
+- bez Outcome Evidencea
+- bez Task enginea
+- bez overridea
+- bez appointment status promjene
+
+B14 decision:
+
+Capture logic sada postoji samo kao interni service. Ne smije se koristiti iz UI-ja ili eksternog API-ja dok B15 ne doda permission-gated, reason-required endpoint.
+
+Preporuceni sljedeci task:
+
+`Program 1 Phase B15 - Snapshot Capture Endpoint Prototype`
