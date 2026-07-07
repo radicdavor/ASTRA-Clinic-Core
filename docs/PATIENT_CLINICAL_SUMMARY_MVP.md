@@ -95,6 +95,7 @@ Current Phase A hardening adds:
 - Phase A5 Open Questions contract, classification tests, display metadata and Patient Workspace separation
 - Phase A6 ClinicalDocument Detail UX contract, lifecycle state tests, clearer review guidance and smoke protection
 - Phase A7 Clinical Evidence Timeline contract, audit event classification helpers, document timeline endpoint and read-only UI display
+- Phase A8 Patient Knowledge Regression Gate, high-level backend invariant tests, frontend smoke gate coverage and runbook
 
 This does not make the system production-ready and does not enable real patient data.
 
