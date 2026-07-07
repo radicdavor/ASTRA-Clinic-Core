@@ -658,3 +658,38 @@ Capture endpoint je backend-only i preview-only. Endpoint smije spremiti snapsho
 Preporuceni sljedeci task:
 
 `Program 1 Phase B16 - Snapshot History Read API Prototype`
+
+## 25. Phase B16 outcome
+
+Phase B16 dodaje read-only backend endpoint za Clinical Readiness Snapshot history.
+
+Implementirano:
+
+- `ClinicalReadinessSnapshotHistoryItem`
+- `ClinicalReadinessSnapshotHistoryResponse`
+- `GET /api/appointments/{appointment_id}/clinical-readiness-snapshots`
+- route-level permission `clinical_readiness.snapshots.read`
+- appointment-scoped summary-only history list
+- newest-first sorting
+- preview-only warning
+- B16 regression notes
+
+B16 ostaje:
+
+- bez frontend history UI-ja
+- bez capture buttona
+- bez snapshot detail endpointa
+- bez snapshot delete/edit
+- bez supersession UI-ja
+- bez Outcome Evidencea
+- bez Task enginea
+- bez overridea
+- bez appointment status promjene
+
+B16 decision:
+
+History endpoint je read-only i sluzi buducem UI prikazu spremljenih preview snapshotova. Ne pise audit by default, ne stvara snapshot i ne znaci clinical approval.
+
+Preporuceni sljedeci task:
+
+`Program 1 Phase B17 - Snapshot History UI Read-Only Surface`

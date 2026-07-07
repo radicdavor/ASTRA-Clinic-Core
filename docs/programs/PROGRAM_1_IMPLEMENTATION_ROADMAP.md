@@ -244,6 +244,17 @@ Phase B15 update:
 - B15 ne uvodi frontend capture UI, capture button, snapshot history UI, Outcome Evidence, Task engine, override, patient messaging ili appointment status promjenu
 - preporuceni sljedeci task je `Program 1 Phase B16 - Snapshot History Read API Prototype`
 
+Phase B16 update:
+
+- snapshot history response schemas su dodane
+- endpoint `GET /api/appointments/{appointment_id}/clinical-readiness-snapshots` je dodan
+- endpoint zahtijeva `clinical_readiness.snapshots.read`
+- history list je appointment-scoped, newest-first i summary-only
+- history read ne pise audit by default i ne stvara snapshot
+- regression coverage cuva auth, read permission, appointment scope, sorting, warning, response safety i zabranu workflow side effecta
+- B16 ne uvodi frontend history UI, capture button, detail endpoint, edit/delete, supersession UI, Outcome Evidence, Task engine, override ili appointment status promjenu
+- preporuceni sljedeci task je `Program 1 Phase B17 - Snapshot History UI Read-Only Surface`
+
 ## 5. Faza 2 - Findings Lifecycle Foundation
 
 Cilj:
