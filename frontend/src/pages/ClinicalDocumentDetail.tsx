@@ -8,7 +8,7 @@ import { WorkspaceHeader } from "../components/workspace/WorkspaceHeader";
 import { WorkspaceLayout } from "../components/workspace/WorkspaceLayout";
 import { WorkspaceSection } from "../components/workspace/WorkspaceSection";
 import { useApi } from "../hooks/useApi";
-import { AuditLog, ClinicalDocument } from "../types";
+import { AuditLog, ClinicalDocument, ClinicalEvidenceTimelineItem } from "../types";
 import { formatDate, formatDateTime } from "../utils/date";
 import { formatPatientName } from "../utils/patientIdentity";
 import { aiExtractionStatusLabel, documentTypeLabel, reviewStatusLabel, sourceTypeLabel } from "./ClinicalDocuments";
@@ -28,10 +28,27 @@ function documentContributionClass(document: ClinicalDocument) {
   return "readiness-check-warning";
 }
 
+function knowledgeImpactLabel(value: ClinicalEvidenceTimelineItem["knowledge_impact"]) {
+  const labels: Record<string, string> = {
+    no_official_knowledge_impact: "Nema sluzbeni knowledge ucinak",
+    may_enable_official_knowledge: "Moze omoguciti sluzbeno znanje nakon pregleda",
+    removed_from_official_knowledge: "Uklonjeno iz sluzbenog znanja",
+    summary_view_only: "Samo summary view"
+  };
+  return labels[value] ?? value;
+}
+
+function evidenceActorLabel(item: ClinicalEvidenceTimelineItem) {
+  if (item.actor_type === "api_key") return `API kljuc${item.actor_api_key_id ? ` #${item.actor_api_key_id}` : ""}`;
+  if (item.actor_user_id) return `Korisnik #${item.actor_user_id}`;
+  return item.actor_type ?? "Sustav";
+}
+
 export function ClinicalDocumentDetail() {
   const { id } = useParams();
   const document = useApi<ClinicalDocument | null>(`/api/clinical-documents/${id}`, null);
   const audit = useApi<AuditLog[]>(`/api/audit-log?entity_type=ClinicalDocument&entity_id=${id}`, []);
+  const evidenceTimeline = useApi<ClinicalEvidenceTimelineItem[]>(`/api/clinical-documents/${id}/evidence-timeline`, []);
   const [rawText, setRawText] = useState("");
   const [summaryDraft, setSummaryDraft] = useState("");
   const [findingsDraft, setFindingsDraft] = useState("");
@@ -48,6 +65,7 @@ export function ClinicalDocumentDetail() {
   async function refresh(updated: ClinicalDocument) {
     document.setData(updated);
     audit.setData(await api<AuditLog[]>(`/api/audit-log?entity_type=ClinicalDocument&entity_id=${id}`));
+    evidenceTimeline.setData(await api<ClinicalEvidenceTimelineItem[]>(`/api/clinical-documents/${id}/evidence-timeline`));
   }
 
   async function updateText() {
@@ -161,6 +179,21 @@ export function ClinicalDocumentDetail() {
           </div>
         </WorkspaceSection>
       </div>
+
+      <WorkspaceSection title={<>Klinicki evidence timeline <HelpHint title="Klinicki evidence timeline">Ovo je citljiv prikaz audit dogadjaja vezanih uz ovaj dokument. Ne stvara nove klinicke cinjenice.</HelpHint></>}>
+        <div className="timeline">
+          {evidenceTimeline.data.map((item) => (
+            <article key={item.id}>
+              <strong>{item.clinical_event_label}</strong>
+              <span>{formatDateTime(item.created_at)} / {evidenceActorLabel(item)}</span>
+              <p>{item.message ?? "-"}</p>
+              <p><span>Knowledge ucinak</span><strong>{knowledgeImpactLabel(item.knowledge_impact)}</strong></p>
+            </article>
+          ))}
+          {evidenceTimeline.data.length === 0 && <p>Nema audit dogadjaja za ovaj dokument.</p>}
+        </div>
+        <p><Link to="/audit-log">Otvori sirovi Audit Log</Link></p>
+      </WorkspaceSection>
 
       <WorkspaceSection title="Audit">
         <AuditTimeline logs={audit.data} />

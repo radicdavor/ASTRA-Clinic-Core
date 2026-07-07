@@ -174,6 +174,13 @@ assertIncludes("src/pages/ClinicalDocumentDetail.tsx", "Ovaj dokument jos ne dop
 assertIncludes("src/pages/ClinicalDocumentDetail.tsx", "Ovaj dokument je lijecnicki pregledan i moze doprinositi source-linked znanju pacijenta.");
 assertIncludes("src/pages/ClinicalDocumentDetail.tsx", "AI prijedlog je odbijen. Izvorni dokument ostaje dostupan za rucni pregled.");
 assertIncludes("src/pages/ClinicalDocumentDetail.tsx", "Izvor istine su pregledani, source-linked klinicki dokumenti.");
+assertIncludes("src/pages/ClinicalDocumentDetail.tsx", "/evidence-timeline");
+assertIncludes("src/pages/ClinicalDocumentDetail.tsx", "Klinicki evidence timeline");
+assertIncludes("src/pages/ClinicalDocumentDetail.tsx", "Ovo je citljiv prikaz audit dogadjaja vezanih uz ovaj dokument. Ne stvara nove klinicke cinjenice.");
+assertIncludes("src/pages/ClinicalDocumentDetail.tsx", "Nema audit dogadjaja za ovaj dokument.");
+assertIncludes("src/pages/ClinicalDocumentDetail.tsx", "Nema sluzbeni knowledge ucinak");
+assertIncludes("src/pages/ClinicalDocumentDetail.tsx", "Moze omoguciti sluzbeno znanje nakon pregleda");
+assertIncludes("src/pages/ClinicalDocumentDetail.tsx", "Otvori sirovi Audit Log");
 assertIncludes("src/components/ActionButton.tsx", "requiresConfirm");
 assertIncludes("src/components/ActionButton.tsx", "confirmMessage");
 assertIncludes("src/utils/patientIdentity.ts", "formatPatientIdentity");

@@ -218,6 +218,21 @@ export type AuditLog = {
   after_json?: Record<string, unknown> | null;
   created_at: string;
 };
+export type ClinicalEvidenceTimelineItem = {
+  id: number;
+  action: string;
+  object_type: string;
+  object_id?: number;
+  message?: string;
+  actor_type?: string;
+  actor_user_id?: number;
+  actor_api_key_id?: number;
+  created_at: string;
+  clinical_event_category: string;
+  clinical_event_label: string;
+  knowledge_impact: "no_official_knowledge_impact" | "may_enable_official_knowledge" | "removed_from_official_knowledge" | "summary_view_only" | string;
+  is_clinical_evidence_event: boolean;
+};
 export type StockMovement = { id: number; inventory_item_id: number; related_appointment_id?: number; movement_type: string; quantity: string; reason?: string; created_at: string; item?: InventoryItem };
 export type StockLocation = { id: number; name: string; type: string };
 export type PurchaseOrderLine = { id: number; purchase_order_id: number; inventory_item_id: number; quantity_ordered: string; quantity_received: string; unit_price: string; vat_rate: string };
