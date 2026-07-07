@@ -332,6 +332,17 @@ Phase B23 update:
 - B23 ne uvodi supersession endpoint, frontend UI, supersession button, edit/delete, approval, clearance, override, Outcome Evidence, Task engine, appointment status change ili patient messaging
 - preporuceni sljedeci task je `Program 1 Phase B24 - Snapshot Supersession Endpoint Prototype`
 
+Phase B24 update:
+
+- supersession request/response schema su dodane
+- endpoint `POST /api/appointments/{appointment_id}/clinical-readiness-snapshots/{snapshot_id}/supersede` je dodan
+- endpoint zahtijeva `clinical_readiness.snapshots.supersede`
+- API key supersession je odbijen by default
+- admin i physician dobivaju supersede permission u seed modelu; nurse i receptionist ne
+- endpoint regression coverage cuva auth, permission, reason, appointment scope, already-superseded conflict, audit i zabranu workflow side effecta
+- B24 ne uvodi frontend supersession UI, supersession button, edit/delete, approval, clearance, override, Outcome Evidence, Task engine, appointment status change ili patient messaging
+- preporuceni sljedeci task je `Program 1 Phase B25 - Snapshot Supersession UI Reason Modal`
+
 ## 5. Faza 2 - Findings Lifecycle Foundation
 
 Cilj:

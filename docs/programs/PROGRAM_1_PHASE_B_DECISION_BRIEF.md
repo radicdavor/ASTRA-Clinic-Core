@@ -945,3 +945,36 @@ Supersession is additive. The old snapshot keeps its copied payload unchanged. T
 Preporuceni sljedeci task:
 
 `Program 1 Phase B24 - Snapshot Supersession Endpoint Prototype`
+
+## 33. Phase B24 outcome
+
+Phase B24 exposes internal Clinical Readiness Snapshot supersession through a narrow backend endpoint.
+
+Dodano:
+
+- supersession request/response schema
+- `POST /api/appointments/{appointment_id}/clinical-readiness-snapshots/{snapshot_id}/supersede`
+- permission `clinical_readiness.snapshots.supersede`
+- API key denial by default
+- endpoint regression coverage
+
+B24 ostaje:
+
+- bez frontend supersession UI-ja
+- bez supersession buttona u Appointment Workspaceu
+- bez edit/delete akcija
+- bez approvala
+- bez clearancea
+- bez overridea
+- bez Outcome Evidencea
+- bez Task enginea
+- bez appointment status promjene
+- bez patient messaginga
+
+B24 decision:
+
+Supersession can now be invoked through API by a permissioned human user, but it remains preview-only and additive. It does not approve or clear readiness.
+
+Preporuceni sljedeci task:
+
+`Program 1 Phase B25 - Snapshot Supersession UI Reason Modal`
