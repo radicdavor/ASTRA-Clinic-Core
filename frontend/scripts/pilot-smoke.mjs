@@ -136,6 +136,9 @@ assertIncludes("src/pages/PatientDetail.tsx", "Ovo su pregledane, source-linked 
 assertIncludes("src/pages/PatientDetail.tsx", "Nisu zadaci niti odluke; potrebno je pregledati izvore.");
 assertIncludes("src/pages/PatientDetail.tsx", "/clinical-summary/generate-draft");
 assertIncludes("src/pages/PatientDetail.tsx", "/clinical-summary/review");
+assertIncludes("../backend/app/api/routes/patient_clinical_summary.py", '"/patients/{patient_id}/clinical-summary"');
+assertIncludes("../backend/app/api/routes/patient_clinical_summary.py", '"/patients/{patient_id}/clinical-summary/generate-draft"');
+assertIncludes("../backend/app/main.py", "patient_clinical_summary.router");
 assertIncludes("src/pages/PatientDetail.tsx", "AI draft - potreban je lijecnicki pregled.");
 assertIncludes("src/pages/PatientDetail.tsx", "Zadnji termin");
 assertIncludes("src/pages/PatientDetail.tsx", "Otvoreni racuni");

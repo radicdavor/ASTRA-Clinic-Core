@@ -283,3 +283,16 @@ A13 je implementirao ClinicalDocument route split:
 Preporuceni sljedeci zadatak nakon A13:
 
 `Program 1 Phase A14 - Split Patient Clinical Summary Routes`
+
+## 12. A14 implementation update
+
+A14 je implementirao Patient Clinical Summary route split:
+
+- Patient Clinical Summary endpointi su premjesteni u `backend/app/api/routes/patient_clinical_summary.py`.
+- `backend/app/main.py` registrira `patient_clinical_summary.router`.
+- Summary ostaje pomocni view, ne source of truth.
+- URL i API ugovor ostaju isti.
+
+Preporuceni sljedeci zadatak nakon A14:
+
+`Program 1 Phase A15 - Split Patient Routes`
