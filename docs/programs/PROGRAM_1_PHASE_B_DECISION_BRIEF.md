@@ -978,3 +978,34 @@ Supersession can now be invoked through API by a permissioned human user, but it
 Preporuceni sljedeci task:
 
 `Program 1 Phase B25 - Snapshot Supersession UI Reason Modal`
+
+## 34. Phase B25 outcome
+
+Phase B25 adds a conservative frontend supersession modal for Clinical Readiness Snapshots.
+
+Dodano:
+
+- frontend supersession types and API client
+- reason-required supersession modal
+- history refresh after supersession
+- detail refresh when old snapshot detail is open
+- smoke coverage for safe labels and forbidden controls
+
+B25 ostaje:
+
+- bez edit/delete akcija
+- bez approvala
+- bez clearancea
+- bez overridea
+- bez Outcome Evidencea
+- bez Task enginea
+- bez appointment status promjene
+- bez patient messaginga
+
+B25 decision:
+
+Snapshot supersession is now user-visible, but only as a reason-required preview-history action. It does not change appointment workflow state.
+
+Preporuceni sljedeci task:
+
+`Program 1 Phase B26 - Snapshot Governance and Safety Label Stabilization`

@@ -343,6 +343,17 @@ Phase B24 update:
 - B24 ne uvodi frontend supersession UI, supersession button, edit/delete, approval, clearance, override, Outcome Evidence, Task engine, appointment status change ili patient messaging
 - preporuceni sljedeci task je `Program 1 Phase B25 - Snapshot Supersession UI Reason Modal`
 
+Phase B25 update:
+
+- frontend supersession tipovi i API client metoda su dodani
+- Appointment Workspace snapshot detail panel ima reason-required supersession modal
+- UI label koristi safe wording: `Spremi novi snapshot i oznaci ovaj kao zamijenjen`
+- uspjesan supersession osvjezava snapshot history i otvoreni detail panel
+- permission error prikazuje korisniku da nema dozvolu za zamjenu snapshotova
+- smoke coverage cuva safe label, modal, reason field i zabranu edit/delete/approval/clearance/task signala
+- B25 ne uvodi edit/delete, approval, clearance, override, Outcome Evidence, Task engine, appointment status change ili patient messaging
+- preporuceni sljedeci task je `Program 1 Phase B26 - Snapshot Governance and Safety Label Stabilization`
+
 ## 5. Faza 2 - Findings Lifecycle Foundation
 
 Cilj:
