@@ -116,6 +116,9 @@ class ClinicalReadinessPreviewResponse(BaseModel):
     template_version_warning: str | None = None
     template_binding_status: str
     template_binding_warning: str | None = None
+    snapshot_supported: bool
+    snapshot_status: str
+    snapshot_warning: str
     status: str
     is_preview: bool
     generated_at: DateTimeType

@@ -209,6 +209,9 @@ export type ClinicalReadinessPreview = {
   template_version_warning?: string | null;
   template_binding_status: string;
   template_binding_warning?: string | null;
+  snapshot_supported: boolean;
+  snapshot_status: string;
+  snapshot_warning: string;
   status: string;
   is_preview: boolean;
   generated_at: string;

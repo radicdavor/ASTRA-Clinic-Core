@@ -15,6 +15,9 @@ PREVIEW_SUMMARY = "Klinicka spremnost prikazana je kao read-only preview. Ne blo
 TEMPLATE_LIMITATION = "Clinical readiness template je demo/pilot staticna definicija, nije produkcijsko pravilo."
 GENERIC_TEMPLATE_LIMITATION = "Nema specificnog clinical readiness templatea za ovu uslugu; koristi se genericki preview."
 NO_REVIEWED_DOCUMENTS_LIMITATION = "Nema pregledanih klinickih dokumenata za ovog pacijenta."
+SNAPSHOT_SUPPORTED = False
+SNAPSHOT_STATUS = "not_implemented"
+SNAPSHOT_WARNING = "Snapshot nije implementiran. Ovaj prikaz je live read-only preview i ne sprema se kao trajni zapis."
 
 
 def aggregate_status(items: list[ClinicalReadinessPreviewItem]) -> str:
@@ -185,6 +188,9 @@ def build_clinical_readiness_preview(db: Session, appointment: Appointment) -> C
         template_version_warning=template_version_warning,
         template_binding_status=template_binding_status,
         template_binding_warning=template_binding_warning,
+        snapshot_supported=SNAPSHOT_SUPPORTED,
+        snapshot_status=SNAPSHOT_STATUS,
+        snapshot_warning=SNAPSHOT_WARNING,
         status=aggregate_status(items),
         is_preview=True,
         generated_at=datetime.now(UTC),

@@ -129,7 +129,11 @@ export function AppointmentDetail() {
               <p><span>Template</span><strong>{clinicalReadiness.data.template_label ?? "Nije vezan"}</strong></p>
               <p><span>Verzija</span><strong>{clinicalReadiness.data.template_version ?? "-"}</strong></p>
               <p><span>Binding</span><strong>{clinicalReadiness.data.template_binding_status.replace("_", " ")}</strong></p>
+              <p><span>Snapshot</span><strong>{clinicalReadiness.data.snapshot_supported ? clinicalReadiness.data.snapshot_status : "nije implementiran"}</strong></p>
             </div>
+            {clinicalReadiness.data.snapshot_warning && (
+              <p className="helper-text">{clinicalReadiness.data.snapshot_warning}</p>
+            )}
             {clinicalReadiness.data.template_version_warning && (
               <p className="helper-text">{clinicalReadiness.data.template_version_warning}</p>
             )}
