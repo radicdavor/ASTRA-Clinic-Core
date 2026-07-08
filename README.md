@@ -454,6 +454,7 @@ Pilot documents:
 - [Program 1 Phase D59 regression notes](docs/programs/PROGRAM_1_PHASE_D59_REGRESSION_NOTES.md)
 - [Program 1 Phase D60 regression notes](docs/programs/PROGRAM_1_PHASE_D60_REGRESSION_NOTES.md)
 - [Program 1 Phase D61 regression notes](docs/programs/PROGRAM_1_PHASE_D61_REGRESSION_NOTES.md)
+- [Program 1 Phase D62 regression notes](docs/programs/PROGRAM_1_PHASE_D62_REGRESSION_NOTES.md)
 - [Lokalni LAN pristup](docs/LAN_ACCESS.md)
 - [Program 1 audit event naming](docs/programs/PROGRAM_1_AUDIT_EVENT_NAMING.md)
 - [Program 1 Phase A regression notes](docs/programs/PROGRAM_1_PHASE_A_REGRESSION_NOTES.md)

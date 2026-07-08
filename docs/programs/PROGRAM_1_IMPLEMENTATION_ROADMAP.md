@@ -1385,6 +1385,11 @@ Runtime boundary:
 - no UI action button
 - no Task engine, Outcome Evidence or patient messaging
 - no automatic diagnosis or treatment
+
+Phase D62 update:
+
+- frontend smoke coverage expanded for findings workspace safe copy, empty/error/permission states, status labels and source fallback
+- smoke guards that Patient Workspace findings panel does not expose action, diagnosis, treatment, approval, clearance, override, task, outcome or patient messaging wording
 - no appointment status mutation
 - production and real-data use remain no-go
 
