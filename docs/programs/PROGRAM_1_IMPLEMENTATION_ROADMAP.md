@@ -1447,6 +1447,21 @@ Runtime boundary:
 Recommended next task:
 
 `Program 1 Phase D67 - Extraction Candidate Boundary Contract`
+
+Phase D67-D70 update:
+
+- extraction candidate boundary documented
+- source evidence traceability requirements documented
+- confidence and limitations boundary documented
+- human review gate documented
+
+Runtime boundary:
+
+- no runtime extraction
+- no automatic finding persistence
+- no extraction endpoint, service, job or UI
+- no Task engine, Outcome Evidence or patient messaging
+- no automatic diagnosis or treatment
 - no appointment status mutation
 - production and real-data use remain no-go
 
