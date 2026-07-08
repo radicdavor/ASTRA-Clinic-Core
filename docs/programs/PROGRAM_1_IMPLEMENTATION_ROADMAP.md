@@ -1669,9 +1669,22 @@ Phase I15-I20 update:
 - no runtime behavior changed
 - recommended next task: Program 1 Phase J0 - Pilot Demo Release Candidate, documentation/packaging only with demo data
 
+Phase J0-J7 update:
+
+- Pilot Demo Release Candidate opened as demo-only packaging
+- demo scope, synthetic data rules, scenario script, role walkthrough, operator runbook, validation checklist and spoken disclaimers documented
+- no runtime behavior changed
+
+Phase J8-J20 update:
+
+- demo known limitations, risk register, fallback plan, evidence traceability, release notes, environment checklist and smoke/no-write review documented
+- pilot demo go/no-go matrix, inventory, final safety review, closure report and next-step decision brief added
+- demo release candidate remains synthetic-data-only and not production/real-data approved
+- recommended next task: Program 1 Phase K0 - Pilot Demo Tag and Push Preparation
+
 Recommended next task:
 
-`Program 1 Phase J0 - Pilot Demo Release Candidate`
+`Program 1 Phase K0 - Pilot Demo Tag and Push Preparation`
 
 ## 30. Program 1 Phase D44-D54 - Findings Read-Only Workspace Boundary
 
