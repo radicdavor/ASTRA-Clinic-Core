@@ -57,33 +57,66 @@ function summaryStatusLabel(status?: PatientClinicalSummaryRecord["status"]) {
   return status ? labels[status] : "Nema sazetka";
 }
 
+function findingLifecycleStatusLabel(status: ClinicalFindingReadItem["lifecycle_status"]) {
+  const labels: Record<string, string> = {
+    received: "Zaprimljeno",
+    linked_to_patient: "Povezano s pacijentom",
+    awaiting_review: "Ceka pregled",
+    review_in_progress: "Pregled u tijeku",
+    reviewed: "Pregledano",
+    needs_clinician_decision: "Potrebna odluka lijecnika",
+    decision_documented: "Odluka dokumentirana",
+    follow_up_recommended: "Preporuceno pracenje",
+    external_referral_recommended: "Preporucena vanjska obrada",
+    closed_for_now: "Zatvoreno za sada"
+  };
+  return labels[status] ?? status;
+}
+
 function FindingsReadOnlyPanel({ findings, loading, error }: { findings: ClinicalFindingListResponse; loading: boolean; error: string | null }) {
+  const permissionDenied = error?.toLowerCase().includes("dozvola") || error?.includes("403");
+
   return (
     <WorkspaceSection title="Nalazi povezani s izvorom">
-      <section aria-live="polite" className="clinical-plan-card">
-        <p>Read-only prikaz source-linked findings zapisa. Nije dijagnoza. Ne mijenja status termina. Za ljudski pregled.</p>
-        <p>Ne stvara Task, Outcome Evidence ili poruku pacijentu.</p>
-        {loading && <p>Ucitavanje nalaza povezanih s izvorom...</p>}
+      <section aria-label="Nalazi povezani s izvorom" aria-live="polite" className="clinical-plan-card">
+        <p>Ovo su source-linked zapisi za pregled.</p>
+        <p>Nalaz nije dijagnoza bez lijecnicke potvrde.</p>
+        <p>Ovaj prikaz ne stvara zadatak i ne salje poruku pacijentu.</p>
+        <p>Za klinicku interpretaciju odgovoran je lijecnik.</p>
+        {loading && <p role="status">Ucitavanje nalaza povezanih s izvorom...</p>}
         {error && (
-          <p>
-            Nalazi povezani s izvorom trenutno nisu dostupni. To ne znaci da nema otvorenih klinickih pitanja.
+          <p role="status">
+            {permissionDenied
+              ? "Nemate dozvolu za prikaz source-linked nalaza. Ovo ne mijenja status pacijenta ili termina. Ostali podaci ostaju dostupni prema vasim dozvolama."
+              : "Nalazi trenutno nisu dostupni. To ne znaci da nema otvorenih klinickih pitanja. Pokusajte ponovno ili provjerite izvorne dokumente."}
           </p>
         )}
         {!loading && !error && findings.findings.length === 0 && (
-          <p>Nema spremljenih source-linked findings zapisa za ovog pacijenta. To ne znaci da nema otvorenih klinickih pitanja.</p>
+          <p>Nema prikazanih source-linked finding zapisa. To ne znaci da nema klinickih rizika, da su svi dokumenti pregledani, da je pacijent klinicki rijesen ili da je plan skrbi dovrsen.</p>
         )}
         {!loading && !error && findings.findings.length > 0 && (
-          <ul>
-            {findings.findings.map((finding: ClinicalFindingReadItem) => (
-              <li key={finding.id}>
-                <strong>{finding.label}</strong>
-                <small>{finding.category} / {finding.lifecycle_status} / {finding.requires_review ? "Za ljudski pregled" : "Pregled nije oznacen kao obavezan"}</small>
-                <span>{finding.source_label}</span>
-                <small>{finding.source_type}: {finding.source_reference}</small>
-                {finding.limitations.length > 0 && <small>{finding.limitations.join(" ")}</small>}
-                <small>{finding.safe_disclaimer}</small>
-              </li>
-            ))}
+          <ul aria-label="Source-linked findings zapisi">
+            {findings.findings.map((finding: ClinicalFindingReadItem) => {
+              const sourceReference = finding.source_reference.trim() || "Izvor nije dovoljno specificiran - provjeriti originalni dokument.";
+              return (
+                <li key={finding.id}>
+                  <strong>{finding.label}</strong>
+                  <small>{finding.category} / {findingLifecycleStatusLabel(finding.lifecycle_status)} / {finding.requires_review ? "Za ljudski pregled" : "Pregled nije oznacen kao obavezan"}</small>
+                  <small>Status nije automatska dijagnoza, obavijest pacijentu ili zadatak.</small>
+                  <dl>
+                    <dt>Tip izvora</dt>
+                    <dd>{finding.source_type || "Izvor nije dovoljno specificiran - provjeriti originalni dokument."}</dd>
+                    <dt>Oznaka izvora</dt>
+                    <dd>{finding.source_label || "Izvor nije dovoljno specificiran - provjeriti originalni dokument."}</dd>
+                    <dt>Referenca izvora</dt>
+                    <dd>{sourceReference}</dd>
+                    <dt>Ogranicenja</dt>
+                    <dd>{finding.limitations.length > 0 ? finding.limitations.join(" ") : "Ogranicenja nisu navedena - provjeriti originalni dokument."}</dd>
+                  </dl>
+                  <small>{finding.safe_disclaimer}</small>
+                </li>
+              );
+            })}
           </ul>
         )}
       </section>

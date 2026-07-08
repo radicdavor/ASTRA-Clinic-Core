@@ -1413,3 +1413,19 @@ Runtime boundary:
 Recommended next task:
 
 `Program 1 Phase D56 - Findings Workspace Copy Refinement`
+
+Phase D56-D61 update:
+
+- read-only findings panel copy refined
+- empty, error and permission states hardened
+- lifecycle statuses now render as safe UI labels
+- source metadata is displayed with structured source-linked fields and safe fallbacks
+- accessibility pass added list/status semantics without introducing actions
+
+Runtime boundary:
+
+- no findings write/review endpoint
+- no findings write client
+- no UI action button
+- no Task engine, Outcome Evidence or patient messaging
+- no automatic diagnosis or treatment
