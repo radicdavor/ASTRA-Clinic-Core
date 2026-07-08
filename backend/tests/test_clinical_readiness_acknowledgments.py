@@ -321,6 +321,69 @@ def test_acknowledgment_detail_is_appointment_scoped_and_read_only(client, db, a
     assert db.query(AuditLog).count() == audit_count
 
 
+def test_acknowledgment_read_denied_currently_writes_no_audit(client, db, auth_setup):
+    from tests.conftest import login_token
+
+    appt = appointment(db)
+    token = login_token(client, "limited@test.local")
+    api_key = ApiKey(
+        name="Acknowledgment denied read integration",
+        key_hash=hash_api_key("raw-ack-denied-read-key"),
+        scopes=["clinical_readiness.acknowledgments.read"],
+        active=True,
+    )
+    db.add(api_key)
+    db.commit()
+    audit_count = db.query(AuditLog).count()
+
+    permission_response = acknowledgment_list_endpoint(
+        client,
+        appt.id,
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    api_key_response = acknowledgment_list_endpoint(
+        client,
+        appt.id,
+        headers={"X-ASTRA-API-Key": "raw-ack-denied-read-key"},
+    )
+
+    assert permission_response.status_code == 403
+    assert api_key_response.status_code == 403
+    assert db.query(AuditLog).count() == audit_count
+
+
+def test_acknowledgment_failed_or_out_of_scope_read_currently_writes_no_audit(client, db, auth_setup):
+    appt = appointment(db, status="scheduled")
+    other_appt = appointment(
+        db,
+        provider_obj=provider(db, name="dr. Failed Read Other"),
+        room_obj=room(db, name="Failed read room"),
+        service_obj=service(db, name="Failed read service"),
+    )
+    acknowledgment = create_acknowledgment(db, auth_setup, appt)
+    original_status = appt.status
+    audit_count = db.query(AuditLog).count()
+
+    wrong_scope_response = acknowledgment_detail_endpoint(
+        client,
+        other_appt.id,
+        acknowledgment.id,
+        auth_headers(client),
+    )
+    missing_response = acknowledgment_detail_endpoint(
+        client,
+        appt.id,
+        acknowledgment.id + 9999,
+        auth_headers(client),
+    )
+
+    assert wrong_scope_response.status_code == 404
+    assert missing_response.status_code == 404
+    db.expire(appt)
+    assert appt.status == original_status
+    assert db.query(AuditLog).count() == audit_count
+
+
 def test_acknowledgment_detail_rejects_wrong_appointment(client, db, auth_setup):
     appt = appointment(db)
     other_appt = appointment(
