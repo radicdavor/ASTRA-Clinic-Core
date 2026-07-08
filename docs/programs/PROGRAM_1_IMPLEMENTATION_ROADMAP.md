@@ -1353,6 +1353,12 @@ Phase D82 update:
 - safe status vocabulary added
 - source reference and clinician review requirement are enforced in schema shape
 - no open question endpoint, DB model, migration, service, UI or automatic question creation was added
+
+Phase D83 update:
+
+- open question safety regression guard added
+- backend tests cover passive schema safety, route absence, DB model/table absence and service absence
+- frontend smoke guards absence of open question client/UI labels
 - no appointment status mutation
 - production and real-data use remain no-go
 
