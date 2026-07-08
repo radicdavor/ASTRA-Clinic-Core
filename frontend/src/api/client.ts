@@ -1,4 +1,4 @@
-import type { ClinicalReadinessAcknowledgmentDetailResponse, ClinicalReadinessAcknowledgmentListResponse, ClinicalReadinessSnapshotCaptureRequest, ClinicalReadinessSnapshotDetailResponse, ClinicalReadinessSnapshotHistoryResponse, ClinicalReadinessSnapshotResponse, ClinicalReadinessSnapshotSupersedeRequest, ClinicalReadinessSnapshotSupersedeResponse } from "../types";
+import type { ClinicalFindingDetailResponse, ClinicalFindingListResponse, ClinicalReadinessAcknowledgmentDetailResponse, ClinicalReadinessAcknowledgmentListResponse, ClinicalReadinessSnapshotCaptureRequest, ClinicalReadinessSnapshotDetailResponse, ClinicalReadinessSnapshotHistoryResponse, ClinicalReadinessSnapshotResponse, ClinicalReadinessSnapshotSupersedeRequest, ClinicalReadinessSnapshotSupersedeResponse } from "../types";
 
 function defaultApiBaseUrl() {
   if (typeof window === "undefined") return "http://localhost:8000";
@@ -130,4 +130,12 @@ export async function getClinicalReadinessAcknowledgments(appointmentId: number)
 
 export async function getClinicalReadinessAcknowledgmentDetail(appointmentId: number, acknowledgmentId: number) {
   return api<ClinicalReadinessAcknowledgmentDetailResponse>(`/api/appointments/${appointmentId}/clinical-readiness/acknowledgments/${acknowledgmentId}`);
+}
+
+export async function getClinicalFindings(patientId: number) {
+  return api<ClinicalFindingListResponse>(`/api/patients/${patientId}/clinical-findings`);
+}
+
+export async function getClinicalFindingDetail(patientId: number, findingId: number) {
+  return api<ClinicalFindingDetailResponse>(`/api/patients/${patientId}/clinical-findings/${findingId}`);
 }

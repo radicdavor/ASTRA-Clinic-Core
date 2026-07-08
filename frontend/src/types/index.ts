@@ -335,6 +335,39 @@ export type ClinicalReadinessAcknowledgmentDetailResponse = ClinicalReadinessAck
   warning: string;
 };
 
+export type ClinicalFindingReadItem = {
+  id: number;
+  finding_key: string;
+  patient_id: number;
+  source_type: string;
+  source_label: string;
+  source_reference: string;
+  source_document_id?: number | null;
+  label: string;
+  category: string;
+  lifecycle_status: string;
+  requires_review: boolean;
+  reviewed_at?: string | null;
+  reviewed_by_user_id?: number | null;
+  limitations: string[];
+  schema_version: string;
+  created_at: string;
+  updated_at: string;
+  safe_disclaimer: string;
+};
+
+export type ClinicalFindingListResponse = {
+  patient_id: number;
+  findings: ClinicalFindingReadItem[];
+  count: number;
+  is_read_only: boolean;
+  warning: string;
+};
+
+export type ClinicalFindingDetailResponse = ClinicalFindingReadItem & {
+  warning: string;
+};
+
 export type ReceptionSlot = {
   time: string;
   appointment?: Appointment | null;

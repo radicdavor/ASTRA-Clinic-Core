@@ -11,7 +11,7 @@ import { WorkspaceLayout } from "../components/workspace/WorkspaceLayout";
 import { WorkspaceSection } from "../components/workspace/WorkspaceSection";
 import { WorkspaceTabs } from "../components/workspace/WorkspaceTabs";
 import { useApi } from "../hooks/useApi";
-import { Appointment, AuditLog, ClinicalDocument, Invoice, Patient, PatientClinicalSummary, PatientClinicalSummaryRecord, PatientKnowledgeItem } from "../types";
+import { Appointment, AuditLog, ClinicalDocument, ClinicalFindingListResponse, ClinicalFindingReadItem, Invoice, Patient, PatientClinicalSummary, PatientClinicalSummaryRecord, PatientKnowledgeItem } from "../types";
 import { formatDate, formatDateTime } from "../utils/date";
 import { formatPatientIdentity, formatPatientName } from "../utils/patientIdentity";
 import { aiExtractionStatusLabel, documentTypeLabel, reviewStatusLabel, sourceTypeLabel } from "./ClinicalDocuments";
@@ -57,11 +57,46 @@ function summaryStatusLabel(status?: PatientClinicalSummaryRecord["status"]) {
   return status ? labels[status] : "Nema sazetka";
 }
 
+function FindingsReadOnlyPanel({ findings, loading, error }: { findings: ClinicalFindingListResponse; loading: boolean; error: string | null }) {
+  return (
+    <WorkspaceSection title="Nalazi povezani s izvorom">
+      <section aria-live="polite" className="clinical-plan-card">
+        <p>Read-only prikaz source-linked findings zapisa. Nije dijagnoza. Ne mijenja status termina. Za ljudski pregled.</p>
+        <p>Ne stvara Task, Outcome Evidence ili poruku pacijentu.</p>
+        {loading && <p>Ucitavanje nalaza povezanih s izvorom...</p>}
+        {error && (
+          <p>
+            Nalazi povezani s izvorom trenutno nisu dostupni. To ne znaci da nema otvorenih klinickih pitanja.
+          </p>
+        )}
+        {!loading && !error && findings.findings.length === 0 && (
+          <p>Nema spremljenih source-linked findings zapisa za ovog pacijenta. To ne znaci da nema otvorenih klinickih pitanja.</p>
+        )}
+        {!loading && !error && findings.findings.length > 0 && (
+          <ul>
+            {findings.findings.map((finding: ClinicalFindingReadItem) => (
+              <li key={finding.id}>
+                <strong>{finding.label}</strong>
+                <small>{finding.category} / {finding.lifecycle_status} / {finding.requires_review ? "Za ljudski pregled" : "Pregled nije oznacen kao obavezan"}</small>
+                <span>{finding.source_label}</span>
+                <small>{finding.source_type}: {finding.source_reference}</small>
+                {finding.limitations.length > 0 && <small>{finding.limitations.join(" ")}</small>}
+                <small>{finding.safe_disclaimer}</small>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+    </WorkspaceSection>
+  );
+}
+
 export function PatientDetail() {
   const { id } = useParams();
   const patient = useApi<Patient | null>(`/api/patients/${id}`, null);
   const documents = useApi<ClinicalDocument[]>(`/api/patients/${id}/clinical-documents`, []);
   const clinicalSummary = useApi<PatientClinicalSummary | null>(`/api/patients/${id}/clinical-summary`, null);
+  const clinicalFindings = useApi<ClinicalFindingListResponse>(`/api/patients/${id}/clinical-findings`, { patient_id: Number(id), findings: [], count: 0, is_read_only: true, warning: "" });
   const appointments = useApi<Appointment[]>(`/api/patients/${id}/appointments`, []);
   const invoices = useApi<Invoice[]>(`/api/patients/${id}/invoices`, []);
   const audit = useApi<AuditLog[]>(`/api/audit-log?entity_type=Patient&entity_id=${id}`, []);
@@ -237,6 +272,7 @@ export function PatientDetail() {
               </div>
             </div>
           </WorkspaceSection>
+          <FindingsReadOnlyPanel findings={clinicalFindings.data} loading={clinicalFindings.loading} error={clinicalFindings.error} />
           <WorkspaceTabs
             tabs={[
               {

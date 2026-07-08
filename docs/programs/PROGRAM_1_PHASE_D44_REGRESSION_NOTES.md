@@ -1,6 +1,6 @@
 # Program 1 Phase D44 Regression Notes
 
-Status: verification gate blocked
+Status: verification gate passed after retry
 
 ## Attempted
 
@@ -9,7 +9,7 @@ Status: verification gate blocked
 - confirmed working tree was clean before work
 - attempted `docker compose build backend`
 
-## Blocker
+## Initial Blocker
 
 Docker Desktop daemon was not available:
 
@@ -17,15 +17,21 @@ Docker Desktop daemon was not available:
 failed to connect to the docker API at npipe:////./pipe/dockerDesktopLinuxEngine
 ```
 
+## Retry Result
+
+After Docker became available:
+
+- targeted findings tests passed: `31 passed`
+- full backend suite passed: `315 passed, 9 skipped`
+
 ## Decision
 
-No findings UI/client work is allowed until D33-D43 backend targeted tests and full backend suite pass.
+Read-only workspace implementation may proceed. Findings write/review runtime remains no-go.
 
 ## Runtime Behavior
 
-No runtime behavior changed.
+No runtime behavior changed by the verification gate itself.
 
 ## Recommended Next Step
 
-Retry D33-D43 backend verification after Docker Desktop is running.
-
+`Program 1 Phase D45 - Findings Read-Only Workspace Contract`

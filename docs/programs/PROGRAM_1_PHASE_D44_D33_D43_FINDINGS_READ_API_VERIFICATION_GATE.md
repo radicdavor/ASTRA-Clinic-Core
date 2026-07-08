@@ -1,6 +1,6 @@
 # Program 1 Phase D44 - D33-D43 Findings Read API Verification Gate
 
-Status: blocked pending Docker backend test execution
+Status: passed after Docker became available
 
 ## Purpose
 
@@ -18,7 +18,7 @@ docker compose run --rm --entrypoint pytest -e PYTHONPATH=/app backend tests/tes
 docker compose run --rm --entrypoint pytest -e PYTHONPATH=/app backend
 ```
 
-## Current Attempt
+## Initial Attempt
 
 Docker backend verification was attempted and could not start because Docker Desktop was not available:
 
@@ -26,27 +26,30 @@ Docker backend verification was attempted and could not start because Docker Des
 failed to connect to the docker API at npipe:////./pipe/dockerDesktopLinuxEngine
 ```
 
+## Successful Retry
+
+After Docker became available, the required D33-D43 backend gate passed:
+
+- targeted findings lifecycle/persistence/read API tests: `31 passed`
+- full backend suite: `315 passed, 9 skipped`
+
 ## Gate Decision
 
-UI implementation is blocked until the backend gate passes.
+Read-only workspace prototype work may proceed.
 
-Allowed while blocked:
+Allowed after this gate:
 
 - documentation-only workspace contract
-- documentation-only verification notes
-- README and roadmap updates
+- frontend GET-only read client/type
+- read-only UI panel
+- smoke/no-action guard
 
-Not allowed while blocked:
+Still not allowed:
 
-- frontend findings client
-- frontend findings UI panel
-- smoke coverage for a UI that does not exist
 - write/review endpoints
 - UI action buttons
+- frontend write client
 
 ## Safety Boundary
 
-The block does not change runtime behavior.
-
 Findings read API remains GET-only. Findings write/review endpoints, Task engine, Outcome Evidence, patient messaging, automatic diagnosis/treatment, approval, clearance and override remain no-go.
-
