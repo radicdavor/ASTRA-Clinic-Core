@@ -1474,6 +1474,13 @@ Phase D72 update:
 - extraction safety regression guard added
 - backend tests cover passive schema safety, source requirement, no runtime route and no service
 - frontend smoke guards absence of findings extraction client/UI labels
+
+Phase D73-D75 update:
+
+- extraction runtime no-go matrix added
+- extraction CI gate documented
+- extraction contract go/no-go matrix added
+- runtime extraction, AI/OCR runtime, automatic persistence and real-data/production use remain no-go
 - no appointment status mutation
 - production and real-data use remain no-go
 
