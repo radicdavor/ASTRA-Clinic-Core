@@ -304,6 +304,37 @@ export type ClinicalReadinessSnapshotSupersedeResponse = {
   warning: string;
 };
 
+export type ClinicalReadinessAcknowledgmentReadItem = {
+  id: number;
+  acknowledgment_key: string;
+  appointment_id: number;
+  patient_id: number;
+  advisory_signal_key: string;
+  snapshot_id?: number | null;
+  actor_user_id: number;
+  actor_role: string;
+  reason: string;
+  limitations: string[];
+  schema_version: string;
+  created_at: string;
+  safe_disclaimer: string;
+  is_decision: boolean;
+  is_clearance: boolean;
+  is_override: boolean;
+};
+
+export type ClinicalReadinessAcknowledgmentListResponse = {
+  appointment_id: number;
+  acknowledgments: ClinicalReadinessAcknowledgmentReadItem[];
+  count: number;
+  is_read_only: boolean;
+  warning: string;
+};
+
+export type ClinicalReadinessAcknowledgmentDetailResponse = ClinicalReadinessAcknowledgmentReadItem & {
+  warning: string;
+};
+
 export type ReceptionSlot = {
   time: string;
   appointment?: Appointment | null;
