@@ -525,6 +525,8 @@ Pilot documents:
 - [Program 1 Phase D110 regression notes](docs/programs/PROGRAM_1_PHASE_D110_REGRESSION_NOTES.md)
 - [Program 1 Phase D111 Open Question Read Response Schema Contract](docs/programs/PROGRAM_1_PHASE_D111_OPEN_QUESTION_READ_RESPONSE_SCHEMA_CONTRACT.md)
 - [Program 1 Phase D111 regression notes](docs/programs/PROGRAM_1_PHASE_D111_REGRESSION_NOTES.md)
+- [Program 1 Phase D112 Open Question Read Permission Boundary](docs/programs/PROGRAM_1_PHASE_D112_OPEN_QUESTION_READ_PERMISSION_BOUNDARY.md)
+- [Program 1 Phase D112 regression notes](docs/programs/PROGRAM_1_PHASE_D112_REGRESSION_NOTES.md)
 - [Lokalni LAN pristup](docs/LAN_ACCESS.md)
 - [Program 1 audit event naming](docs/programs/PROGRAM_1_AUDIT_EVENT_NAMING.md)
 - [Program 1 Phase A regression notes](docs/programs/PROGRAM_1_PHASE_A_REGRESSION_NOTES.md)

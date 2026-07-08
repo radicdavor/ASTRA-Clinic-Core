@@ -1478,6 +1478,12 @@ Phase D111 update:
 - passive open question read item/detail response schemas added
 - schema tests verify source-linked, no-decision response shape
 - no endpoint, service, frontend client or UI was added
+
+Phase D112 update:
+
+- open question read permission boundary documented
+- proposed `clinical_open_questions.read` remains future-only and is not seeded
+- read permission does not imply review, write, diagnosis, treatment, approval, clearance or override
 - no appointment status mutation
 - production and real-data use remain no-go
 
