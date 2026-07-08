@@ -325,5 +325,8 @@ def test_timeline_write_routes_permissions_models_and_frontend_actions_absent(cl
     frontend_client_path = repo.parent / "frontend" / "src" / "api" / "client.ts"
     if frontend_client_path.exists():
         frontend_client = frontend_client_path.read_text(encoding="utf-8")
-        assert "clinicalEvidenceTimeline" not in frontend_client
-        assert "clinical-evidence-timeline" not in frontend_client
+        assert "getClinicalEvidenceTimeline" in frontend_client
+        assert "postClinicalEvidenceTimeline" not in frontend_client
+        assert "createClinicalEvidenceTimeline" not in frontend_client
+        assert "updateClinicalEvidenceTimeline" not in frontend_client
+        assert "deleteClinicalEvidenceTimeline" not in frontend_client

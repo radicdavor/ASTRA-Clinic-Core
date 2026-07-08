@@ -11,7 +11,7 @@ import { WorkspaceLayout } from "../components/workspace/WorkspaceLayout";
 import { WorkspaceSection } from "../components/workspace/WorkspaceSection";
 import { WorkspaceTabs } from "../components/workspace/WorkspaceTabs";
 import { useApi } from "../hooks/useApi";
-import { Appointment, AuditLog, ClinicalDocument, ClinicalFindingListResponse, ClinicalFindingReadItem, Invoice, Patient, PatientClinicalSummary, PatientClinicalSummaryRecord, PatientKnowledgeItem } from "../types";
+import { Appointment, AuditLog, ClinicalDocument, ClinicalEvidenceTimelineEventPreview, ClinicalEvidenceTimelineListResponse, ClinicalFindingListResponse, ClinicalFindingReadItem, Invoice, Patient, PatientClinicalSummary, PatientClinicalSummaryRecord, PatientKnowledgeItem } from "../types";
 import { formatDate, formatDateTime } from "../utils/date";
 import { formatPatientIdentity, formatPatientName } from "../utils/patientIdentity";
 import { aiExtractionStatusLabel, documentTypeLabel, reviewStatusLabel, sourceTypeLabel } from "./ClinicalDocuments";
@@ -124,12 +124,87 @@ function FindingsReadOnlyPanel({ findings, loading, error }: { findings: Clinica
   );
 }
 
+function timelineEventTypeLabel(eventType: string) {
+  const labels: Record<string, string> = {
+    clinical_document_received: "Dokument zaprimljen",
+    clinical_document_review_pending: "Dokument ceka pregled",
+    finding_recorded: "Nalaz zabiljezen",
+    finding_requires_review: "Nalaz ceka pregled",
+    open_question_suggested: "Otvoreno pitanje predlozeno",
+    open_question_awaiting_review: "Otvoreno pitanje ceka pregled",
+    extraction_candidate_generated: "Extraction candidate generiran",
+    review_pending: "Pregled ceka",
+    review_completed: "Pregled evidentiran",
+    readiness_snapshot_captured: "Snapshot spremnosti spremljen",
+    readiness_snapshot_superseded: "Snapshot spremnosti zamijenjen novijim zapisom",
+    acknowledgment_recorded: "Ljudski pregled signala evidentiran",
+    access_audit_recorded: "Access audit evidentiran"
+  };
+  return labels[eventType] ?? eventType;
+}
+
+function TimelineReadOnlyPanel({ timeline, loading, error }: { timeline: ClinicalEvidenceTimelineListResponse; loading: boolean; error: string | null }) {
+  const permissionDenied = error?.toLowerCase().includes("dozvola") || error?.includes("403");
+
+  return (
+    <WorkspaceSection title="Klinicka vremenska crta">
+      <section aria-label="Klinicka vremenska crta" aria-live="polite" className="clinical-plan-card">
+        <p>Source-linked prikaz klinickih dogadjaja.</p>
+        <p>Nije klinicka odluka, ne stvara zadatak i ne salje poruku pacijentu.</p>
+        <p>Ne mijenja status termina.</p>
+        {loading && <p role="status">Ucitavanje klinicke vremenske crte...</p>}
+        {error && (
+          <p role="status">
+            {permissionDenied
+              ? "Nemate dozvolu za prikaz klinicke vremenske crte. To ne mijenja status pacijenta ili termina."
+              : "Klinicka vremenska crta trenutno nije dostupna. To ne znaci da je klinicka spremnost potvrdjena ili odbijena."}
+          </p>
+        )}
+        {!loading && !error && timeline.events.length === 0 && (
+          <p>Nema prikazanih source-linked timeline dogadjaja. To ne znaci da nema klinickih rizika, da su svi dokumenti pregledani ili da je pacijent klinicki rijesen.</p>
+        )}
+        {!loading && !error && timeline.events.length > 0 && (
+          <ul aria-label="Source-linked timeline dogadjaji">
+            {timeline.events.map((event: ClinicalEvidenceTimelineEventPreview) => {
+              const source = event.source_reference;
+              const sourceReference = source.source_object_reference?.trim() || "Izvor nije dovoljno specificiran - provjeriti originalni zapis.";
+              const sourceLabel = source.source_label?.trim() || "Izvor nije dovoljno specificiran - provjeriti originalni zapis.";
+              const limitations = [...event.limitations, ...source.limitations].filter(Boolean);
+              return (
+                <li key={event.event_key}>
+                  <strong>{event.label}</strong>
+                  <small>{timelineEventTypeLabel(event.event_type)} / {event.requires_review ? "Ceka pregled" : "Read-only zapis"}</small>
+                  <small>{formatDateTime(event.display_timestamp)}</small>
+                  <dl>
+                    <dt>Tip izvora</dt>
+                    <dd>{source.source_object_type || "Izvor nije dovoljno specificiran - provjeriti originalni zapis."}</dd>
+                    <dt>Oznaka izvora</dt>
+                    <dd>{sourceLabel}</dd>
+                    <dt>Referenca izvora</dt>
+                    <dd>{sourceReference}</dd>
+                    <dt>Provenance</dt>
+                    <dd>{source.provenance_label || "Povezano s izvorom"}</dd>
+                    <dt>Ogranicenja</dt>
+                    <dd>{limitations.length > 0 ? limitations.join(" ") : "Ogranicenja nisu navedena - provjeriti originalni zapis."}</dd>
+                  </dl>
+                  <small>{event.no_decision_disclaimer}</small>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </section>
+    </WorkspaceSection>
+  );
+}
+
 export function PatientDetail() {
   const { id } = useParams();
   const patient = useApi<Patient | null>(`/api/patients/${id}`, null);
   const documents = useApi<ClinicalDocument[]>(`/api/patients/${id}/clinical-documents`, []);
   const clinicalSummary = useApi<PatientClinicalSummary | null>(`/api/patients/${id}/clinical-summary`, null);
   const clinicalFindings = useApi<ClinicalFindingListResponse>(`/api/patients/${id}/clinical-findings`, { patient_id: Number(id), findings: [], count: 0, is_read_only: true, warning: "" });
+  const clinicalTimeline = useApi<ClinicalEvidenceTimelineListResponse>(`/api/patients/${id}/clinical-evidence-timeline`, { patient_id: Number(id), events: [], count: 0, is_read_only: true, warning: "" });
   const appointments = useApi<Appointment[]>(`/api/patients/${id}/appointments`, []);
   const invoices = useApi<Invoice[]>(`/api/patients/${id}/invoices`, []);
   const audit = useApi<AuditLog[]>(`/api/audit-log?entity_type=Patient&entity_id=${id}`, []);
@@ -306,6 +381,7 @@ export function PatientDetail() {
             </div>
           </WorkspaceSection>
           <FindingsReadOnlyPanel findings={clinicalFindings.data} loading={clinicalFindings.loading} error={clinicalFindings.error} />
+          <TimelineReadOnlyPanel timeline={clinicalTimeline.data} loading={clinicalTimeline.loading} error={clinicalTimeline.error} />
           <WorkspaceTabs
             tabs={[
               {

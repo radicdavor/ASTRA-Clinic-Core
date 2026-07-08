@@ -368,6 +368,38 @@ export type ClinicalFindingDetailResponse = ClinicalFindingReadItem & {
   warning: string;
 };
 
+export type ClinicalEvidenceTimelineSourceReference = {
+  source_object_type: string;
+  source_object_reference: string;
+  patient_id: number;
+  source_label: string;
+  provenance_label: string;
+  source_document_reference?: string | null;
+  limitations: string[];
+};
+
+export type ClinicalEvidenceTimelineEventPreview = {
+  event_key: string;
+  event_type: string;
+  label: string;
+  source_reference: ClinicalEvidenceTimelineSourceReference;
+  event_timestamp: string;
+  display_timestamp: string;
+  limitations: string[];
+  requires_review: boolean;
+  is_decision: boolean;
+  created_at: string;
+  no_decision_disclaimer: string;
+};
+
+export type ClinicalEvidenceTimelineListResponse = {
+  patient_id: number;
+  events: ClinicalEvidenceTimelineEventPreview[];
+  count: number;
+  is_read_only: boolean;
+  warning: string;
+};
+
 export type ReceptionSlot = {
   time: string;
   appointment?: Appointment | null;
