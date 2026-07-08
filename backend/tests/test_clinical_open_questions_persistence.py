@@ -198,5 +198,5 @@ def test_clinical_open_question_runtime_routes_services_and_permissions_do_not_e
         if "open-question" in path or "open_questions" in path:
             assert not {"GET", "POST", "PATCH", "PUT", "DELETE"}.intersection(methods)
     assert not Path("app/services/clinical_open_questions.py").exists()
-    assert "clinical_open_questions.read" not in PERMISSIONS
+    assert "clinical_open_questions.read" in PERMISSIONS
     assert "clinical_open_questions.write" not in PERMISSIONS

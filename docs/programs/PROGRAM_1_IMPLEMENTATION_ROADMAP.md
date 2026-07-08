@@ -1532,6 +1532,12 @@ Phase D122 update:
 - open question read endpoint response wrappers added for list and detail
 - forbidden fields remain absent and read-only/no-decision warnings remain present
 - no endpoint, service, permission seed or frontend client was added
+
+Phase D123 update:
+
+- read-only permission `clinical_open_questions.read` added for admin/physician read access
+- no write/review/approve/clear/resolve/API-key/AI permission was added
+- permission does not imply diagnosis, treatment, approval, clearance, override or production readiness
 - no appointment status mutation
 - production and real-data use remain no-go
 
