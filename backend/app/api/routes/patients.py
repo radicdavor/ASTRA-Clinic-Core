@@ -9,7 +9,7 @@ from app.audit.service import audit, snapshot
 from app.auth.dependencies import Actor, get_current_actor, require_permission
 from app.core.database import get_db
 from app.models.domain import Appointment, ClinicalEpisode, ClinicalFinding, ClinicalOpenQuestion, Invoice, Patient
-from app.schemas.common import AppointmentOut, ClinicalEpisodeOut, ClinicalFindingDetailResponse, ClinicalFindingListResponse, ClinicalFindingReadItem, ClinicalOpenQuestionDetailResponse, ClinicalOpenQuestionReadItem, ErrorResponse, InvoiceOut, PatientCreate, PatientOut, PatientUpdate
+from app.schemas.common import AppointmentOut, ClinicalEpisodeOut, ClinicalFindingDetailResponse, ClinicalFindingListResponse, ClinicalFindingReadItem, ClinicalOpenQuestionDetailResponse, ClinicalOpenQuestionListResponse, ClinicalOpenQuestionReadItem, ErrorResponse, InvoiceOut, PatientCreate, PatientOut, PatientUpdate
 
 ERROR_RESPONSES = {400: {"model": ErrorResponse}, 401: {"model": ErrorResponse}, 403: {"model": ErrorResponse}, 404: {"model": ErrorResponse}, 409: {"model": ErrorResponse}, 422: {"model": ErrorResponse}}
 
@@ -216,6 +216,56 @@ def patient_clinical_finding_detail(
     if not finding:
         raise HTTPException(404, detail="Finding nije pronaden")
     return ClinicalFindingDetailResponse(**finding_read_item(finding).model_dump())
+
+
+@router.get("/patients/{patient_id}/clinical-open-questions", response_model=ClinicalOpenQuestionListResponse)
+def patient_clinical_open_questions(
+    patient_id: int,
+    finding_id: int | None = None,
+    db: Session = Depends(get_db),
+    actor: Actor = Depends(get_current_actor),
+):
+    """Read-only source-linked open questions; not review, diagnosis, treatment, task, outcome evidence or patient messaging."""
+    require_open_questions_read_user(actor)
+    if not db.get(Patient, patient_id):
+        raise HTTPException(404, detail="Pacijent nije pronaden")
+    stmt = (
+        select(ClinicalOpenQuestion)
+        .options(joinedload(ClinicalOpenQuestion.finding))
+        .where(ClinicalOpenQuestion.patient_id == patient_id)
+        .order_by(ClinicalOpenQuestion.created_at.desc(), ClinicalOpenQuestion.id.desc())
+    )
+    if finding_id is not None:
+        if not db.scalar(select(ClinicalFinding.id).where(ClinicalFinding.id == finding_id, ClinicalFinding.patient_id == patient_id)):
+            raise HTTPException(404, detail="Finding nije pronaden za pacijenta")
+        stmt = stmt.where(ClinicalOpenQuestion.finding_id == finding_id)
+    questions = db.scalars(stmt).all()
+    items = [open_question_read_item(question) for question in questions]
+    return ClinicalOpenQuestionListResponse(patient_id=patient_id, questions=items, count=len(items))
+
+
+@router.get("/patients/{patient_id}/clinical-open-questions/{question_id}", response_model=ClinicalOpenQuestionDetailResponse)
+def patient_clinical_open_question_detail(
+    patient_id: int,
+    question_id: int,
+    db: Session = Depends(get_db),
+    actor: Actor = Depends(get_current_actor),
+):
+    """Read-only source-linked open question detail; not review, diagnosis, treatment, task, outcome evidence or patient messaging."""
+    require_open_questions_read_user(actor)
+    if not db.get(Patient, patient_id):
+        raise HTTPException(404, detail="Pacijent nije pronaden")
+    question = db.scalar(
+        select(ClinicalOpenQuestion)
+        .options(joinedload(ClinicalOpenQuestion.finding))
+        .where(
+            ClinicalOpenQuestion.id == question_id,
+            ClinicalOpenQuestion.patient_id == patient_id,
+        )
+    )
+    if not question:
+        raise HTTPException(404, detail="Open question nije pronaden")
+    return open_question_detail_response(question)
 
 
 @router.get("/patients/{patient_id}/appointments", response_model=list[AppointmentOut])

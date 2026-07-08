@@ -1544,6 +1544,12 @@ Phase D124 update:
 - side-effect-free open question read mapping helpers added
 - helper remains source-linked and read-only
 - no service module, write/review helper, audit write, frontend client or UI was added
+
+Phase D125 update:
+
+- GET-only patient-scoped open question read API prototype added
+- list and detail endpoints require authenticated user with `clinical_open_questions.read`
+- API keys remain denied and no write/review endpoints were added
 - no appointment status mutation
 - production and real-data use remain no-go
 
