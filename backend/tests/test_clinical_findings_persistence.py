@@ -150,10 +150,19 @@ def test_clinical_finding_closed_status_has_no_workflow_side_effects(db):
 
 def test_clinical_finding_runtime_routes_services_and_permissions_do_not_exist():
     route_paths = {getattr(route, "path", "") for route in app.routes}
+    route_methods = {
+        (getattr(route, "path", ""), set(getattr(route, "methods", []) or []))
+        for route in app.routes
+    }
 
     assert "/api/findings" not in route_paths
     assert "/api/patients/{patient_id}/findings" not in route_paths
     assert "/api/appointments/{appointment_id}/findings" not in route_paths
+    for path, methods in route_methods:
+        if path in {
+            "/api/patients/{patient_id}/clinical-findings",
+            "/api/patients/{patient_id}/clinical-findings/{finding_id}",
+        }:
+            assert not {"POST", "PATCH", "PUT", "DELETE"}.intersection(methods)
     assert not Path("app/services/clinical_findings.py").exists()
     assert "clinical_findings.write" not in PERMISSIONS
-    assert "clinical_findings.read" not in PERMISSIONS
