@@ -314,6 +314,74 @@ class ClinicalFindingPreview(BaseModel):
         return value
 
 
+class ClinicalFindingReadItem(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    id: int
+    finding_key: str
+    patient_id: int
+    source_type: str
+    source_label: str
+    source_reference: str
+    source_document_id: int | None = None
+    label: str
+    category: str
+    lifecycle_status: str
+    requires_review: bool
+    reviewed_at: DateTimeType | None = None
+    reviewed_by_user_id: int | None = None
+    limitations: list[str] = Field(default_factory=list)
+    schema_version: str
+    created_at: DateTimeType
+    updated_at: DateTimeType
+    safe_disclaimer: str = "Finding je source-linked zapis za ljudski pregled; nije dijagnoza, treatment plan, Task, Outcome Evidence ili patient message."
+
+    @field_validator("finding_key", "source_type", "source_label", "source_reference", "label", "schema_version")
+    @classmethod
+    def validate_non_empty_read_text(cls, value: str) -> str:
+        cleaned = value.strip()
+        if not cleaned:
+            raise ValueError("Finding read polje ne smije biti prazno")
+        return cleaned
+
+    @field_validator("source_type")
+    @classmethod
+    def validate_read_source_type(cls, value: str) -> str:
+        if value not in CLINICAL_FINDING_SOURCE_TYPES:
+            raise ValueError("Nepoznat source type za finding")
+        return value
+
+    @field_validator("category")
+    @classmethod
+    def validate_read_category(cls, value: str) -> str:
+        if value not in CLINICAL_FINDING_CATEGORIES:
+            raise ValueError("Nepoznata kategorija findinga")
+        return value
+
+    @field_validator("lifecycle_status")
+    @classmethod
+    def validate_read_lifecycle_status(cls, value: str) -> str:
+        if value not in CLINICAL_FINDING_LIFECYCLE_STATUSES:
+            raise ValueError("Nepoznat lifecycle status findinga")
+        return value
+
+
+class ClinicalFindingListResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    patient_id: int
+    findings: list[ClinicalFindingReadItem]
+    count: int
+    is_read_only: bool = True
+    warning: str = "Findings read API prikazuje source-linked zapise za ljudski pregled. Ne predstavlja dijagnozu, treatment plan, Task, Outcome Evidence, patient message, approval, clearance ili override."
+
+
+class ClinicalFindingDetailResponse(ClinicalFindingReadItem):
+    model_config = ConfigDict(extra="forbid")
+
+    warning: str = "Finding detail je read-only source-linked zapis. Ne predstavlja dijagnozu, treatment plan, Task, Outcome Evidence, patient message, approval, clearance ili override."
+
+
 class ClinicalReadinessReviewAcknowledgment(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
