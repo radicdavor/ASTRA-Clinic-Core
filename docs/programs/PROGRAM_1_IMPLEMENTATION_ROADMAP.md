@@ -1391,6 +1391,13 @@ Phase D89-D92 update:
 - lifecycle status persistence contract documented
 - review metadata contract documented without adding review workflow
 - DB model, migration, endpoint, service and UI remain no-go
+
+Phase D93-D94 update:
+
+- open question ORM model and migration explicitly deferred
+- persistence safety regression guards reviewed
+- existing tests confirm no open question model, table, service or route exists
+- frontend smoke confirms no open question client/UI action exists
 - no appointment status mutation
 - production and real-data use remain no-go
 
