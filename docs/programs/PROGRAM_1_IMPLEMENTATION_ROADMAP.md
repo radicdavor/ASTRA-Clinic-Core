@@ -1769,9 +1769,17 @@ Phase T update:
 - no blocking gate was closed and no real-data, production or go-live boundary was lifted
 - recommended next task: Program 1 Phase U0 - Governance and Non-Approval Control Ticket Execution
 
+Phase U update:
+
+- static governance and non-approval control execution documented without runtime production behavior or real-data approval
+- GOV-001 through GOV-008 statically executed as policy artifacts, registries, non-approval matrices, safety escalation model and evidence index
+- Phase U does not implement runtime controls, auth/authz/RBAC, audit logging, monitoring, validation, approval/clearance/override or clinical workflows
+- no production, real-data, PHI/PII, validation or go-live boundary was lifted
+- recommended next task: Program 1 Phase V0 - Access, Audit, and Real-Data Boundary Prototype
+
 Recommended next task:
 
-`Program 1 Phase U0 - Governance and Non-Approval Control Ticket Execution`
+`Program 1 Phase V0 - Access, Audit, and Real-Data Boundary Prototype`
 
 ## 30. Program 1 Phase D44-D54 - Findings Read-Only Workspace Boundary
 
