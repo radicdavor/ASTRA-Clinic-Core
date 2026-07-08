@@ -1422,6 +1422,12 @@ Phase D99 update:
 - `clinical_open_questions` table and `ClinicalOpenQuestion` model intent defined
 - source-linking constraints, safe status vocabulary and review metadata policy documented
 - endpoint, service, UI and automatic question creation remain no-go
+
+Phase D100 update:
+
+- passive `ClinicalOpenQuestion` ORM model added
+- source-linking, safe status and review metadata columns added as DB foundation shape
+- no endpoint, service, UI or automatic question creation was added
 - no appointment status mutation
 - production and real-data use remain no-go
 

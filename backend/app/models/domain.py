@@ -264,6 +264,43 @@ class ClinicalFinding(TimestampMixin, Base):
     reviewer: Mapped[User | None] = relationship()
 
 
+class ClinicalOpenQuestion(TimestampMixin, Base):
+    __tablename__ = "clinical_open_questions"
+    __table_args__ = (
+        CheckConstraint("length(trim(source_type)) > 0", name="ck_clinical_open_questions_source_type_non_empty"),
+        CheckConstraint("length(trim(source_label)) > 0", name="ck_clinical_open_questions_source_label_non_empty"),
+        CheckConstraint("length(trim(source_reference)) > 0", name="ck_clinical_open_questions_source_reference_non_empty"),
+        CheckConstraint("length(trim(question_key)) > 0", name="ck_clinical_open_questions_key_non_empty"),
+        CheckConstraint("length(trim(label)) > 0", name="ck_clinical_open_questions_label_non_empty"),
+        CheckConstraint("length(trim(schema_version)) > 0", name="ck_clinical_open_questions_schema_version_non_empty"),
+        CheckConstraint(
+            "status in ('draft', 'suggested', 'awaiting_review', 'under_review', 'needs_clinician_decision', 'decision_documented', 'deferred', 'closed_for_now')",
+            name="ck_clinical_open_questions_status_safe",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    patient_id: Mapped[int] = mapped_column(ForeignKey("patients.id"), index=True)
+    finding_id: Mapped[int | None] = mapped_column(ForeignKey("clinical_findings.id"), index=True)
+    source_document_id: Mapped[int | None] = mapped_column(ForeignKey("clinical_documents.id"), index=True)
+    source_type: Mapped[str] = mapped_column(String(80), index=True)
+    source_label: Mapped[str] = mapped_column(String(220))
+    source_reference: Mapped[str] = mapped_column(Text)
+    question_key: Mapped[str] = mapped_column(String(160), index=True)
+    label: Mapped[str] = mapped_column(String(240))
+    status: Mapped[str] = mapped_column(String(80), index=True)
+    requires_clinician_review: Mapped[bool] = mapped_column(Boolean, default=True, index=True)
+    reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    reviewed_by_user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), index=True)
+    limitations_json: Mapped[list] = mapped_column(JSON, default=list)
+    schema_version: Mapped[str] = mapped_column(String(80), default="clinical_open_question.v1")
+
+    patient: Mapped[Patient] = relationship()
+    finding: Mapped[ClinicalFinding | None] = relationship()
+    source_document: Mapped[ClinicalDocument | None] = relationship()
+    reviewer: Mapped[User | None] = relationship()
+
+
 class Service(TimestampMixin, Base):
     __tablename__ = "services"
     id: Mapped[int] = mapped_column(primary_key=True)

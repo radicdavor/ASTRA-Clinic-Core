@@ -508,6 +508,7 @@ Pilot documents:
 - [Program 1 Phase D98 regression notes](docs/programs/PROGRAM_1_PHASE_D98_REGRESSION_NOTES.md)
 - [Program 1 Phase D99 Open Question Migration Draft Design](docs/programs/PROGRAM_1_PHASE_D99_OPEN_QUESTION_MIGRATION_DRAFT_DESIGN.md)
 - [Program 1 Phase D99 regression notes](docs/programs/PROGRAM_1_PHASE_D99_REGRESSION_NOTES.md)
+- [Program 1 Phase D100 regression notes](docs/programs/PROGRAM_1_PHASE_D100_REGRESSION_NOTES.md)
 - [Lokalni LAN pristup](docs/LAN_ACCESS.md)
 - [Program 1 audit event naming](docs/programs/PROGRAM_1_AUDIT_EVENT_NAMING.md)
 - [Program 1 Phase A regression notes](docs/programs/PROGRAM_1_PHASE_A_REGRESSION_NOTES.md)
