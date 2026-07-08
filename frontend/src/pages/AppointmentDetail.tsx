@@ -366,6 +366,30 @@ export function AppointmentDetail() {
         ) : null}
       </WorkspaceSection>
 
+      <WorkspaceSection title="Savjetodavni signali">
+        <p className="helper-text">Read-only prikaz za ljudski pregled. Nije klinicko odobrenje, ne mijenja status termina i ne pokrece radnju.</p>
+        {clinicalReadiness.error && <p className="form-error">Savjetodavni signali trenutno nisu dostupni jer preview nije ucitan.</p>}
+        {clinicalReadiness.data ? (
+          clinicalReadiness.data.items.length === 0 ? (
+            <p>Nema savjetodavnih signala u trenutnom previewu. To ne znaci da je pacijent spreman.</p>
+          ) : (
+            <div className="timeline-list">
+              {clinicalReadiness.data.items.map((item) => (
+                <article className="timeline-item" key={`advisory-${item.key}`}>
+                  <strong>Savjetodavni signal: {item.label}</strong>
+                  <small>Za ljudski pregled / {item.category} / {item.severity} / {item.status}</small>
+                  <p>{item.suggested_action ?? "Provjeriti izvor i kontekst prije klinicke odluke."}</p>
+                  <p className="helper-text">Non-blocking signal. Ne mijenja status termina i ne zamjenjuje lijecnicku odluku.</p>
+                  <p className="helper-text">Izvor: {item.source_label ? `${item.source_label} (${item.source_type})` : item.source_type}{item.source_ref ? ` / ${item.source_ref}` : ""}</p>
+                </article>
+              ))}
+            </div>
+          )
+        ) : !clinicalReadiness.error ? (
+          <p>Savjetodavni signali trenutno nisu dostupni jer preview nije ucitan.</p>
+        ) : null}
+      </WorkspaceSection>
+
       <WorkspaceSection
         title="Povijest snapshotova klinicke spremnosti"
         actions={
