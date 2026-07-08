@@ -1689,9 +1689,17 @@ Phase K0 update:
 - no push or tag push performed by the documentation update
 - RC1 remains demo-only and does not imply production or real-data approval
 
+Phase K verification update:
+
+- Program 1 Pilot Demo RC1 remote main/tag verification path documented
+- `program-1-pilot-demo-rc1` verified as an annotated demo release-candidate marker
+- Phase K remains docs-only and does not change runtime behavior
+- production, real-data, clinical automation and write workflow boundaries remain no-go
+- recommended next task: Program 1 Phase L0 - Production Readiness Gap Review
+
 Recommended next task:
 
-`Program 1 Phase K0 - Pilot Demo Tag and Push Preparation`
+`Program 1 Phase L0 - Production Readiness Gap Review`
 
 ## 30. Program 1 Phase D44-D54 - Findings Read-Only Workspace Boundary
 
