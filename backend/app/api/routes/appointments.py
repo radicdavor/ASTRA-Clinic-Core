@@ -7,10 +7,11 @@ from sqlalchemy.orm import Session, joinedload
 from app.audit.service import audit, snapshot
 from app.auth.dependencies import Actor, require_permission
 from app.core.database import get_db
-from app.models.domain import Appointment, ClinicalEpisode, ClinicalReadinessSnapshot, Patient, Service
-from app.schemas.common import AppointmentCreate, AppointmentOut, AppointmentUpdate, ClinicalReadinessPreviewResponse, ClinicalReadinessSnapshotCaptureRequest, ClinicalReadinessSnapshotDetailResponse, ClinicalReadinessSnapshotHistoryItem, ClinicalReadinessSnapshotHistoryResponse, ClinicalReadinessSnapshotResponse, ClinicalReadinessSnapshotSupersedeRequest, ClinicalReadinessSnapshotSupersedeResponse, ErrorResponse
+from app.models.domain import Appointment, ClinicalEpisode, ClinicalReadinessReviewAcknowledgment, ClinicalReadinessSnapshot, Patient, Service
+from app.schemas.common import AppointmentCreate, AppointmentOut, AppointmentUpdate, ClinicalReadinessAcknowledgmentDetailResponse, ClinicalReadinessAcknowledgmentListResponse, ClinicalReadinessAcknowledgmentReadItem, ClinicalReadinessPreviewResponse, ClinicalReadinessSnapshotCaptureRequest, ClinicalReadinessSnapshotDetailResponse, ClinicalReadinessSnapshotHistoryItem, ClinicalReadinessSnapshotHistoryResponse, ClinicalReadinessSnapshotResponse, ClinicalReadinessSnapshotSupersedeRequest, ClinicalReadinessSnapshotSupersedeResponse, ErrorResponse
 from app.services.appointments import validate_appointment_payload
 from app.services.clinical_readiness_preview import build_clinical_readiness_preview
+from app.services.clinical_readiness_acknowledgments import get_clinical_readiness_review_acknowledgment, list_clinical_readiness_review_acknowledgments
 from app.services.clinical_readiness_snapshots import SnapshotIdempotencyConflict, capture_clinical_readiness_snapshot, supersede_clinical_readiness_snapshot
 
 ERROR_RESPONSES = {
@@ -24,6 +25,7 @@ ERROR_RESPONSES = {
 SNAPSHOT_HISTORY_WARNING = "Snapshot history prikazuje spremljene preview zapise. Ne predstavlja clinical approval, readiness clearance, Outcome Evidence ili odluku da se postupak smije provesti."
 SNAPSHOT_DETAIL_WARNING = "Snapshot detail prikazuje spremljeni preview payload. Ne predstavlja clinical approval, readiness clearance, Outcome Evidence ili odluku da se postupak smije provesti."
 SNAPSHOT_SUPERSESSION_WARNING = "Supersession sprema novi preview snapshot i oznacava prethodni kao zamijenjen. Ne predstavlja clinical approval, readiness clearance, Outcome Evidence ili odluku da se postupak smije provesti."
+ACKNOWLEDGMENT_READ_WARNING = "Acknowledgment read prikazuje da je covjek pregledao advisory signal. Ne predstavlja clinical approval, readiness clearance, override, Outcome Evidence ili dozvolu za postupak."
 
 router = APIRouter(prefix="/api", tags=["appointments"], responses=ERROR_RESPONSES)
 
@@ -135,6 +137,31 @@ def snapshot_detail_response(snapshot_obj: ClinicalReadinessSnapshot) -> Clinica
         superseded_at=snapshot_obj.superseded_at,
         superseded_reason=snapshot_obj.superseded_reason,
         warning=SNAPSHOT_DETAIL_WARNING,
+    )
+
+
+def acknowledgment_key(acknowledgment: ClinicalReadinessReviewAcknowledgment) -> str:
+    return f"ack-{acknowledgment.id}"
+
+
+def acknowledgment_read_item(acknowledgment: ClinicalReadinessReviewAcknowledgment) -> ClinicalReadinessAcknowledgmentReadItem:
+    return ClinicalReadinessAcknowledgmentReadItem(
+        id=acknowledgment.id,
+        acknowledgment_key=acknowledgment_key(acknowledgment),
+        appointment_id=acknowledgment.appointment_id,
+        patient_id=acknowledgment.patient_id,
+        advisory_signal_key=acknowledgment.advisory_signal_key,
+        snapshot_id=acknowledgment.snapshot_id,
+        actor_user_id=acknowledgment.actor_user_id,
+        actor_role=acknowledgment.actor_role,
+        reason=acknowledgment.reason,
+        limitations=acknowledgment.limitations_json or [],
+        schema_version=acknowledgment.schema_version,
+        created_at=acknowledgment.created_at,
+        safe_disclaimer=acknowledgment.not_decision_disclaimer,
+        is_decision=acknowledgment.is_decision,
+        is_clearance=acknowledgment.is_clearance,
+        is_override=acknowledgment.is_override,
     )
 
 
@@ -297,6 +324,51 @@ def appointment_clinical_readiness_snapshot_detail(
     if not snapshot_obj:
         raise HTTPException(404, detail="Snapshot nije pronaden")
     return snapshot_detail_response(snapshot_obj)
+
+
+@router.get("/appointments/{appointment_id}/clinical-readiness/acknowledgments", response_model=ClinicalReadinessAcknowledgmentListResponse)
+def appointment_clinical_readiness_acknowledgments(
+    appointment_id: int,
+    db: Session = Depends(get_db),
+    actor: Actor = Depends(require_permission("clinical_readiness.acknowledgments.read")),
+):
+    """Read-only human review acknowledgment list; not clinical approval, override, task or outcome evidence."""
+    if actor.actor_type != "user" or actor.user_id is None:
+        raise HTTPException(403, detail="Acknowledgment read zahtijeva prijavljenog korisnika")
+    get_appointment_or_404(db, appointment_id)
+    acknowledgments = list_clinical_readiness_review_acknowledgments(db, appointment_id=appointment_id)
+    items = [acknowledgment_read_item(acknowledgment) for acknowledgment in acknowledgments]
+    return ClinicalReadinessAcknowledgmentListResponse(
+        appointment_id=appointment_id,
+        acknowledgments=items,
+        count=len(items),
+        is_read_only=True,
+        warning=ACKNOWLEDGMENT_READ_WARNING,
+    )
+
+
+@router.get("/appointments/{appointment_id}/clinical-readiness/acknowledgments/{acknowledgment_id}", response_model=ClinicalReadinessAcknowledgmentDetailResponse)
+def appointment_clinical_readiness_acknowledgment_detail(
+    appointment_id: int,
+    acknowledgment_id: int,
+    db: Session = Depends(get_db),
+    actor: Actor = Depends(require_permission("clinical_readiness.acknowledgments.read")),
+):
+    """Read-only human review acknowledgment detail; not clinical approval, override, task or outcome evidence."""
+    if actor.actor_type != "user" or actor.user_id is None:
+        raise HTTPException(403, detail="Acknowledgment read zahtijeva prijavljenog korisnika")
+    get_appointment_or_404(db, appointment_id)
+    acknowledgment = get_clinical_readiness_review_acknowledgment(
+        db,
+        appointment_id=appointment_id,
+        acknowledgment_id=acknowledgment_id,
+    )
+    if acknowledgment is None:
+        raise HTTPException(404, detail="Acknowledgment nije pronaden")
+    return ClinicalReadinessAcknowledgmentDetailResponse(
+        **acknowledgment_read_item(acknowledgment).model_dump(),
+        warning=ACKNOWLEDGMENT_READ_WARNING,
+    )
 
 
 @router.post("/appointments/{appointment_id}/clinical-readiness-snapshots/{snapshot_id}/supersede", response_model=ClinicalReadinessSnapshotSupersedeResponse)

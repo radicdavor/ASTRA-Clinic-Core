@@ -1,7 +1,9 @@
 import pytest
 
 import app.services.clinical_readiness_acknowledgments as acknowledgment_service
+from app.auth.dependencies import hash_api_key
 from app.models.domain import (
+    ApiKey,
     AuditLog,
     ClinicalEpisode,
     ClinicalPlan,
@@ -31,6 +33,27 @@ def create_acknowledgment(db, auth_setup, appt, **overrides):
     }
     payload.update(overrides)
     return create_clinical_readiness_review_acknowledgment(db, **payload)
+
+
+def acknowledgment_list_endpoint(client, appointment_id, headers):
+    return client.get(
+        f"/api/appointments/{appointment_id}/clinical-readiness/acknowledgments",
+        headers=headers,
+    )
+
+
+def acknowledgment_detail_endpoint(client, appointment_id, acknowledgment_id, headers):
+    return client.get(
+        f"/api/appointments/{appointment_id}/clinical-readiness/acknowledgments/{acknowledgment_id}",
+        headers=headers,
+    )
+
+
+def auth_headers(client):
+    from tests.conftest import login_token
+
+    token = login_token(client, "admin@test.local")
+    return {"Authorization": f"Bearer {token}"}
 
 
 def test_internal_acknowledgment_service_requires_reason(db, auth_setup):
@@ -199,17 +222,21 @@ def test_internal_acknowledgment_has_no_workflow_side_effects(db, auth_setup):
     assert "patient_messages" not in table_names
 
 
-def test_acknowledgment_runtime_surface_still_absent(client):
+def test_acknowledgment_write_runtime_surface_still_absent(client):
     route_paths = {route.path for route in client.app.routes}
 
     assert "/api/clinical-readiness-review-acknowledgments" not in route_paths
     assert "/api/appointments/{appointment_id}/clinical-readiness-review-acknowledgments" not in route_paths
-    assert all("acknowledgment" not in path for path in route_paths)
+    assert "/api/appointments/{appointment_id}/clinical-readiness/acknowledgments" in route_paths
+    assert "/api/appointments/{appointment_id}/clinical-readiness/acknowledgments/{acknowledgment_id}" in route_paths
+    write_methods = {"POST", "PATCH", "PUT", "DELETE"}
+    for route in client.app.routes:
+        if "acknowledgment" in route.path:
+            assert write_methods.isdisjoint(getattr(route, "methods", set()))
 
 
-def test_acknowledgment_runtime_permission_seed_still_absent(db):
+def test_acknowledgment_runtime_write_permission_seed_still_absent(db):
     forbidden_permissions = {
-        "clinical_readiness.acknowledgments.read",
         "clinical_readiness.acknowledgments.write",
         "clinical_readiness.acknowledgments.manage",
     }
@@ -217,3 +244,113 @@ def test_acknowledgment_runtime_permission_seed_still_absent(db):
     seeded_permissions = {name for (name,) in db.query(Permission.name).all()}
 
     assert forbidden_permissions.isdisjoint(seeded_permissions)
+
+
+def test_acknowledgment_read_list_requires_auth(client, db):
+    appt = appointment(db)
+
+    response = acknowledgment_list_endpoint(client, appt.id, headers={})
+
+    assert response.status_code == 401
+
+
+def test_acknowledgment_read_list_requires_read_permission(client, db, auth_setup):
+    appt = appointment(db)
+    from tests.conftest import login_token
+
+    token = login_token(client, "limited@test.local")
+    response = acknowledgment_list_endpoint(client, appt.id, headers={"Authorization": f"Bearer {token}"})
+
+    assert response.status_code == 403
+
+
+def test_acknowledgment_read_list_returns_empty_state(client, db, auth_setup):
+    appt = appointment(db)
+
+    response = acknowledgment_list_endpoint(client, appt.id, auth_headers(client))
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["appointment_id"] == appt.id
+    assert body["acknowledgments"] == []
+    assert body["count"] == 0
+    assert body["is_read_only"] is True
+    assert "ne predstavlja clinical approval" in body["warning"].lower()
+
+
+def test_acknowledgment_read_list_returns_newest_first_and_writes_no_audit(client, db, auth_setup):
+    appt = appointment(db)
+    first = create_acknowledgment(db, auth_setup, appt, reason="First review.")
+    second = create_acknowledgment(db, auth_setup, appt, reason="Second review.")
+    audit_count = db.query(AuditLog).count()
+
+    response = acknowledgment_list_endpoint(client, appt.id, auth_headers(client))
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["count"] == 2
+    assert [item["id"] for item in body["acknowledgments"]] == [second.id, first.id]
+    assert body["acknowledgments"][0]["acknowledgment_key"] == f"ack-{second.id}"
+    assert body["acknowledgments"][0]["is_decision"] is False
+    assert body["acknowledgments"][0]["is_clearance"] is False
+    assert body["acknowledgments"][0]["is_override"] is False
+    assert db.query(AuditLog).count() == audit_count
+
+
+def test_acknowledgment_detail_is_appointment_scoped_and_read_only(client, db, auth_setup):
+    appt = appointment(db, status="scheduled")
+    original_status = appt.status
+    acknowledgment = create_acknowledgment(db, auth_setup, appt)
+    audit_count = db.query(AuditLog).count()
+
+    response = acknowledgment_detail_endpoint(client, appt.id, acknowledgment.id, auth_headers(client))
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["id"] == acknowledgment.id
+    assert body["appointment_id"] == appt.id
+    assert body["patient_id"] == appt.patient_id
+    assert body["reason"] == "Human reviewed advisory signal."
+    assert "ne predstavlja clinical approval" in body["warning"].lower()
+    assert "approval_status" not in body
+    assert "clearance_status" not in body
+    assert "override_status" not in body
+    assert "outcome_evidence_id" not in body
+    db.expire(appt)
+    assert appt.status == original_status
+    assert db.query(AuditLog).count() == audit_count
+
+
+def test_acknowledgment_detail_rejects_wrong_appointment(client, db, auth_setup):
+    appt = appointment(db)
+    other_appt = appointment(
+        db,
+        provider_obj=provider(db, name="dr. Read Other"),
+        room_obj=room(db, name="Read other room"),
+        service_obj=service(db, name="Read other service"),
+    )
+    acknowledgment = create_acknowledgment(db, auth_setup, appt)
+
+    response = acknowledgment_detail_endpoint(client, other_appt.id, acknowledgment.id, auth_headers(client))
+
+    assert response.status_code == 404
+
+
+def test_api_key_acknowledgment_read_denied_even_with_read_scope(client, db):
+    appt = appointment(db)
+    api_key = ApiKey(
+        name="Acknowledgment read integration",
+        key_hash=hash_api_key("raw-ack-read-key"),
+        scopes=["clinical_readiness.acknowledgments.read"],
+        active=True,
+    )
+    db.add(api_key)
+    db.commit()
+
+    response = acknowledgment_list_endpoint(
+        client,
+        appt.id,
+        headers={"X-ASTRA-API-Key": "raw-ack-read-key"},
+    )
+
+    assert response.status_code == 403

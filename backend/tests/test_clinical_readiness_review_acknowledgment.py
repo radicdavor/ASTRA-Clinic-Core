@@ -107,12 +107,17 @@ def test_review_acknowledgment_schema_has_no_side_effect_contract_fields():
     assert "patient_message_id" not in fields
 
 
-def test_review_acknowledgment_endpoint_does_not_exist():
+def test_review_acknowledgment_write_endpoint_does_not_exist():
     route_paths = {getattr(route, "path", "") for route in app.routes}
 
     assert "/api/clinical-readiness-review-acknowledgments" not in route_paths
     assert "/api/appointments/{appointment_id}/clinical-readiness-review-acknowledgments" not in route_paths
-    assert all("acknowledgment" not in path for path in route_paths)
+    assert "/api/appointments/{appointment_id}/clinical-readiness/acknowledgments" in route_paths
+    assert "/api/appointments/{appointment_id}/clinical-readiness/acknowledgments/{acknowledgment_id}" in route_paths
+    write_methods = {"POST", "PATCH", "PUT", "DELETE"}
+    for route in app.routes:
+        if "acknowledgment" in getattr(route, "path", ""):
+            assert write_methods.isdisjoint(getattr(route, "methods", set()))
 
 
 def test_review_acknowledgment_db_model_and_table_do_not_exist():
@@ -123,15 +128,16 @@ def test_review_acknowledgment_db_model_and_table_do_not_exist():
     assert "ClinicalReadinessReviewAcknowledgment" in mapper_class_names
 
 
-def test_review_acknowledgment_permissions_are_not_seeded():
+def test_review_acknowledgment_write_permissions_are_not_seeded():
     forbidden_permissions = {
-        "clinical_readiness.acknowledgments.read",
         "clinical_readiness.acknowledgments.write",
         "clinical_readiness.acknowledgments.manage",
     }
 
+    assert "clinical_readiness.acknowledgments.read" in set(PERMISSIONS)
     assert forbidden_permissions.isdisjoint(set(PERMISSIONS))
     for permission_names in ROLE_PERMISSIONS.values():
+        assert "clinical_readiness.acknowledgments.read" in set(PERMISSIONS)
         assert forbidden_permissions.isdisjoint(set(permission_names))
 
 

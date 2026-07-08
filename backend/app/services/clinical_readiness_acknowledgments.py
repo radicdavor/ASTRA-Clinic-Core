@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.audit.service import audit
@@ -133,3 +134,35 @@ def create_clinical_readiness_review_acknowledgment(
         db.rollback()
         raise
 
+
+def list_clinical_readiness_review_acknowledgments(
+    db: Session,
+    *,
+    appointment_id: int,
+) -> list[ClinicalReadinessReviewAcknowledgment]:
+    """Read acknowledgment rows for one appointment without audit or workflow side effects."""
+    return list(
+        db.scalars(
+            select(ClinicalReadinessReviewAcknowledgment)
+            .where(ClinicalReadinessReviewAcknowledgment.appointment_id == appointment_id)
+            .order_by(
+                ClinicalReadinessReviewAcknowledgment.created_at.desc(),
+                ClinicalReadinessReviewAcknowledgment.id.desc(),
+            )
+        )
+    )
+
+
+def get_clinical_readiness_review_acknowledgment(
+    db: Session,
+    *,
+    appointment_id: int,
+    acknowledgment_id: int,
+) -> ClinicalReadinessReviewAcknowledgment | None:
+    """Read one appointment-scoped acknowledgment without audit or workflow side effects."""
+    return db.scalar(
+        select(ClinicalReadinessReviewAcknowledgment).where(
+            ClinicalReadinessReviewAcknowledgment.id == acknowledgment_id,
+            ClinicalReadinessReviewAcknowledgment.appointment_id == appointment_id,
+        )
+    )
