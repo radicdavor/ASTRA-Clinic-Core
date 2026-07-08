@@ -901,3 +901,33 @@ Runtime granica:
 - frontend write action remains no-go
 - write permission seed remains no-go
 - real patient data and production remain no-go
+
+Phase C71-C81 closure update:
+
+- read response schemas were added
+- read permission boundary was documented
+- read service contract was documented
+- appointment-scoped read-only endpoints were implemented
+- read-only frontend client/types were added
+- runtime write no-go hardening remains active
+- read go/no-go matrix and closure report were added
+
+Current read-only endpoints:
+
+- `GET /api/appointments/{appointment_id}/clinical-readiness/acknowledgments`
+- `GET /api/appointments/{appointment_id}/clinical-readiness/acknowledgments/{acknowledgment_id}`
+
+Still no-go:
+
+- POST/PATCH/PUT/DELETE acknowledgment endpoint
+- frontend action button
+- write permission seed
+- approval, clearance, override
+- Task engine
+- Outcome Evidence
+- appointment status mutation
+- patient messaging
+
+Recommended next task:
+
+`Program 1 Phase C82 - Acknowledgment Read-Only UI Surface Contract`
