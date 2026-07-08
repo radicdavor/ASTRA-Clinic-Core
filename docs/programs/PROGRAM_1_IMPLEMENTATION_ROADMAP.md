@@ -1405,6 +1405,12 @@ Phase D95-D97 update:
 - open question persistence no-go matrix added
 - open question persistence CI gate documented
 - ORM/migration, endpoint, service, automatic question creation and UI remain no-go
+
+Phase D98 update:
+
+- D88-D98 open question persistence design closure report added
+- next-step decision brief recommends Program 1 Phase D99 - Open Question Persistence Migration Draft
+- D99 must remain migration-only with no endpoint, service, UI or automatic question creation
 - no appointment status mutation
 - production and real-data use remain no-go
 
