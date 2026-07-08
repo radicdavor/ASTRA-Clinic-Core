@@ -1184,3 +1184,30 @@ Runtime boundary:
 Recommended next task:
 
 `Program 1 Phase D1 - Finding Definition and Boundary Contract`
+
+Phase D0-D10 closure update:
+
+- finding definition and boundary contract documented
+- lifecycle status taxonomy documented
+- source evidence mapping documented
+- review boundary and human responsibility documented
+- open question relationship documented
+- recommendation/decision boundary documented
+- passive finding schema prototype added
+- findings safety regression guard added
+- no-go matrix and closure report added
+
+Runtime decision:
+
+- no findings endpoint
+- no findings DB model or migration
+- no findings service
+- no Task engine
+- no Outcome Evidence
+- no patient messaging
+- no automatic diagnosis or treatment plan
+- production and real-data use remain no-go
+
+Recommended next task:
+
+`Program 1 Phase D11 - Findings Persistence Design`
