@@ -1514,6 +1514,12 @@ Phase D119 update:
 - open question read API prototype deferral documented
 - prerequisites listed for a later GET-only prototype
 - no endpoint, service, frontend client, permission seed, audit write or automatic question creation was added
+
+Phase D120 update:
+
+- D110-D120 open question read API contract phase closed
+- passive read response schemas and route absence guards remain in place
+- recommended next task: Program 1 Phase D121 - Open Question Read API Prototype, GET-only and no write/review endpoint
 - no appointment status mutation
 - production and real-data use remain no-go
 
