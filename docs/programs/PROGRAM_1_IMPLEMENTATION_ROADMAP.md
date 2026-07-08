@@ -1721,9 +1721,17 @@ Phase N update:
 - no governance control was implemented, validated, approved or wired into runtime behavior
 - recommended next task: Program 1 Phase O0 - Real Patient Data Governance Design
 
+Phase O update:
+
+- future real patient data governance design requirements documented before any real-data readiness claim
+- data classification, consent/legal basis, access, lifecycle, security, incident/vendor and readiness-gate requirements mapped
+- Phase O does not approve real patient data, production use, PHI/PII processing, GDPR compliance or runtime data governance behavior
+- no real-data governance control was implemented, validated, legally approved or operationally approved
+- recommended next task: Program 1 Phase P0 - Access Control and Auditability Design
+
 Recommended next task:
 
-`Program 1 Phase O0 - Real Patient Data Governance Design`
+`Program 1 Phase P0 - Access Control and Auditability Design`
 
 ## 30. Program 1 Phase D44-D54 - Findings Read-Only Workspace Boundary
 
