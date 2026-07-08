@@ -84,6 +84,16 @@ CLINICAL_FINDING_SOURCE_TYPES = {
 }
 CLINICAL_FINDING_EXTRACTION_CONFIDENCE_LABELS = {"unknown", "low", "medium", "high"}
 CLINICAL_FINDING_EXTRACTION_SUGGESTED_STATUSES = {"received", "awaiting_review"}
+CLINICAL_OPEN_QUESTION_STATUSES = {
+    "draft",
+    "suggested",
+    "awaiting_review",
+    "under_review",
+    "needs_clinician_decision",
+    "decision_documented",
+    "deferred",
+    "closed_for_now",
+}
 
 
 class ORMModel(BaseModel):
@@ -490,6 +500,85 @@ class ClinicalFindingExtractionBatchPreview(BaseModel):
     def validate_not_runtime_extraction(cls, value: bool) -> bool:
         if value:
             raise ValueError("Extraction batch preview ne smije biti runtime extraction")
+        return value
+
+
+class ClinicalOpenQuestionSourceReference(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    source_type: str
+    source_label: str
+    source_reference: str
+    source_document_id: int | None = None
+    source_finding_key: str | None = None
+    extraction_candidate_key: str | None = None
+    confidence_label: str = "unknown"
+    limitations: list[str] = Field(default_factory=lambda: ["Open question source requires human interpretation."])
+
+    @field_validator("source_type")
+    @classmethod
+    def validate_open_question_source_type(cls, value: str) -> str:
+        if value not in CLINICAL_FINDING_SOURCE_TYPES:
+            raise ValueError("Nepoznat source type za open question")
+        return value
+
+    @field_validator("source_label", "source_reference")
+    @classmethod
+    def validate_open_question_source_text(cls, value: str) -> str:
+        cleaned = value.strip()
+        if not cleaned:
+            raise ValueError("Open question source polje ne smije biti prazno")
+        return cleaned
+
+    @field_validator("confidence_label")
+    @classmethod
+    def validate_open_question_confidence(cls, value: str) -> str:
+        if value not in CLINICAL_FINDING_EXTRACTION_CONFIDENCE_LABELS:
+            raise ValueError("Nepoznat confidence label za open question")
+        return value
+
+
+class ClinicalOpenQuestionPreview(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    question_key: str
+    label: str
+    status: str = "awaiting_review"
+    source_reference: ClinicalOpenQuestionSourceReference
+    linked_finding_key: str
+    limitations: list[str] = Field(default_factory=lambda: ["Open question je source-linked pitanje za ljudsku interpretaciju, nije klinicka odluka."])
+    requires_clinician_review: bool = True
+    created_at: DateTimeType
+    is_persisted: bool = False
+    not_decision_disclaimer: str = "Open question nije Task, Outcome Evidence, dijagnoza, preporuka, physician decision ili patient message."
+
+    @field_validator("question_key", "label", "linked_finding_key")
+    @classmethod
+    def validate_open_question_text(cls, value: str) -> str:
+        cleaned = value.strip()
+        if not cleaned:
+            raise ValueError("Open question polje ne smije biti prazno")
+        return cleaned
+
+    @field_validator("status")
+    @classmethod
+    def validate_open_question_status(cls, value: str) -> str:
+        if value not in CLINICAL_OPEN_QUESTION_STATUSES:
+            raise ValueError("Nepoznat open question status")
+        return value
+
+    @field_validator("requires_clinician_review")
+    @classmethod
+    def validate_requires_clinician_review(cls, value: bool) -> bool:
+        if not value:
+            raise ValueError("Open question mora zahtijevati clinician review")
+        return value
+
+    @field_validator("is_persisted")
+    @classmethod
+    def validate_open_question_not_persisted(cls, value: bool) -> bool:
+        if value:
+            raise ValueError("Open question preview ne smije implicirati persistence")
         return value
 
 

@@ -1346,6 +1346,13 @@ Runtime boundary:
 - no frontend findings UI
 - no Task engine, Outcome Evidence or patient messaging
 - no automatic diagnosis or treatment
+
+Phase D82 update:
+
+- passive open question source/preview schemas added
+- safe status vocabulary added
+- source reference and clinician review requirement are enforced in schema shape
+- no open question endpoint, DB model, migration, service, UI or automatic question creation was added
 - no appointment status mutation
 - production and real-data use remain no-go
 

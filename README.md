@@ -481,6 +481,7 @@ Pilot documents:
 - [Program 1 Phase D79 Open Question Source-Linking Contract](docs/programs/PROGRAM_1_PHASE_D79_OPEN_QUESTION_SOURCE_LINKING_CONTRACT.md)
 - [Program 1 Phase D80 Open Question Human Review Responsibility Contract](docs/programs/PROGRAM_1_PHASE_D80_OPEN_QUESTION_HUMAN_REVIEW_RESPONSIBILITY_CONTRACT.md)
 - [Program 1 Phase D81 Open Question Lifecycle Status Taxonomy](docs/programs/PROGRAM_1_PHASE_D81_OPEN_QUESTION_LIFECYCLE_STATUS_TAXONOMY.md)
+- [Program 1 Phase D82 regression notes](docs/programs/PROGRAM_1_PHASE_D82_REGRESSION_NOTES.md)
 - [Lokalni LAN pristup](docs/LAN_ACCESS.md)
 - [Program 1 audit event naming](docs/programs/PROGRAM_1_AUDIT_EVENT_NAMING.md)
 - [Program 1 Phase A regression notes](docs/programs/PROGRAM_1_PHASE_A_REGRESSION_NOTES.md)
