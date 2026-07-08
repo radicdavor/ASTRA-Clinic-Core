@@ -571,6 +571,8 @@ Pilot documents:
 - [Program 1 Phase E7 Review Audit Contract](docs/programs/PROGRAM_1_PHASE_E7_REVIEW_AUDIT_CONTRACT.md)
 - [Program 1 Phase E8 Review Permission Contract](docs/programs/PROGRAM_1_PHASE_E8_REVIEW_PERMISSION_CONTRACT.md)
 - [Program 1 Phase E9 Review UI Copy Safety Labels Contract](docs/programs/PROGRAM_1_PHASE_E9_REVIEW_UI_COPY_SAFETY_LABELS_CONTRACT.md)
+- [Program 1 Phase E10 regression notes](docs/programs/PROGRAM_1_PHASE_E10_REGRESSION_NOTES.md)
+- [Program 1 Phase E11 regression notes](docs/programs/PROGRAM_1_PHASE_E11_REGRESSION_NOTES.md)
 - [Lokalni LAN pristup](docs/LAN_ACCESS.md)
 - [Program 1 audit event naming](docs/programs/PROGRAM_1_AUDIT_EVENT_NAMING.md)
 - [Program 1 Phase A regression notes](docs/programs/PROGRAM_1_PHASE_A_REGRESSION_NOTES.md)

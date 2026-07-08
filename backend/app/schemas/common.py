@@ -94,6 +94,23 @@ CLINICAL_OPEN_QUESTION_STATUSES = {
     "deferred",
     "closed_for_now",
 }
+CLINICAL_REVIEW_STATUSES = {
+    "not_started",
+    "awaiting_review",
+    "in_review",
+    "reviewed",
+    "needs_clinician_decision",
+    "decision_documented",
+    "deferred",
+    "closed_for_now",
+}
+CLINICAL_REVIEW_OBJECT_TYPES = {
+    "clinical_document",
+    "finding",
+    "open_question",
+    "extraction_candidate",
+    "source_evidence",
+}
 
 
 class ORMModel(BaseModel):
@@ -653,6 +670,83 @@ class ClinicalOpenQuestionDetailResponse(ClinicalOpenQuestionDetail):
     model_config = ConfigDict(extra="forbid")
 
     warning: str = "Open question detail je read-only source-linked pitanje. Ne predstavlja dijagnozu, treatment plan, Task, Outcome Evidence, patient message, approval, clearance ili override."
+
+
+class ClinicalReviewSourceReference(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    source_type: str
+    source_label: str
+    source_reference: str
+    reviewed_object_type: str
+    reviewed_object_reference: str
+    limitations: list[str] = Field(default_factory=lambda: ["Review source requires human interpretation and is not a clinical decision."])
+
+    @field_validator("source_type", "source_label", "source_reference", "reviewed_object_reference")
+    @classmethod
+    def validate_review_source_text(cls, value: str) -> str:
+        cleaned = value.strip()
+        if not cleaned:
+            raise ValueError("Review source polje ne smije biti prazno")
+        return cleaned
+
+    @field_validator("reviewed_object_type")
+    @classmethod
+    def validate_review_object_type(cls, value: str) -> str:
+        if value not in CLINICAL_REVIEW_OBJECT_TYPES:
+            raise ValueError("Nepoznat review object type")
+        return value
+
+
+class ClinicalReviewPreview(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    review_key: str
+    reviewed_object_type: str
+    reviewed_object_reference: str
+    status: str
+    source_reference: ClinicalReviewSourceReference
+    limitations: list[str] = Field(default_factory=lambda: ["Review je ljudski pregled source-linked konteksta; nije odluka."])
+    requires_clinician_decision: bool = True
+    created_at: DateTimeType
+    is_persisted: bool = False
+    no_decision_disclaimer: str = "Review nije approval, clearance, override, diagnosis, treatment plan, Task, Outcome Evidence ili patient message."
+
+    @field_validator("review_key", "reviewed_object_reference")
+    @classmethod
+    def validate_review_preview_text(cls, value: str) -> str:
+        cleaned = value.strip()
+        if not cleaned:
+            raise ValueError("Review preview polje ne smije biti prazno")
+        return cleaned
+
+    @field_validator("reviewed_object_type")
+    @classmethod
+    def validate_preview_object_type(cls, value: str) -> str:
+        if value not in CLINICAL_REVIEW_OBJECT_TYPES:
+            raise ValueError("Nepoznat review object type")
+        return value
+
+    @field_validator("status")
+    @classmethod
+    def validate_review_status(cls, value: str) -> str:
+        if value not in CLINICAL_REVIEW_STATUSES:
+            raise ValueError("Nepoznat review status")
+        return value
+
+    @field_validator("requires_clinician_decision")
+    @classmethod
+    def validate_review_requires_clinician_decision(cls, value: bool) -> bool:
+        if not value:
+            raise ValueError("Review preview mora zadrzati clinician decision boundary")
+        return value
+
+    @field_validator("is_persisted")
+    @classmethod
+    def validate_review_not_persisted(cls, value: bool) -> bool:
+        if value:
+            raise ValueError("Review preview ne smije implicirati persistence")
+        return value
 
 
 class ClinicalReadinessReviewAcknowledgment(BaseModel):

@@ -1580,6 +1580,12 @@ Phase E0-E9 update:
 - Program 1 Phase E review workflow foundation opened as documentation-first module
 - review definition, source-linking, lifecycle status, human responsibility, decision boundary, recommendation boundary, audit contract, permission contract and UI safety labels documented
 - no review endpoint, DB model, migration, service, UI, permission seed or audit event was added
+
+Phase E10-E11 update:
+
+- passive review schema prototype added
+- review safety regression guard added for forbidden statuses, forbidden fields, no endpoint, no DB model/table, no service and no permission seed
+- runtime review workflow remains no-go
 - no appointment status mutation
 - production and real-data use remain no-go
 
