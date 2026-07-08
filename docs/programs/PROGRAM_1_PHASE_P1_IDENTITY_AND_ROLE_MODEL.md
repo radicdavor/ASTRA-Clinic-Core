@@ -1,0 +1,19 @@
+# Program 1 Phase P1 - Identity and Role Model
+
+All actor types in this document are future design concepts only. None are implemented, validated, or approved for real-data use by Phase P.
+
+| Actor Type | Purpose | Allowed Future Access Concept | Prohibited Access/Actions | Required Identity Assurance | Required Owner Type | Required Evidence Before Implementation Consideration | Required Future Validation | Current Status | Non-Approval Statement |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| clinical owner | accountable clinical governance | governance review and clinical safety decisions | automated diagnosis/treatment, override runtime | strong named identity | Clinical owner | responsibility charter | owner review evidence | design only | no clinical approval granted |
+| clinician | clinical care user | source-linked clinical reads and future controlled writes if approved | system-driven treatment, patient messaging without approval | named user identity and role proof | Clinical/product owner | role definition | role/access tests | design only | no real-data access approval |
+| clinical reviewer | human review support | review-related read/review metadata if future approved | approval/clearance/override | named user identity | Clinical owner | review boundary | negative permission tests | design only | no review workflow approval |
+| operator | demo/technical operations | non-production operations | clinical decision, PHI access | named operator account | Operations owner | operator runbook | access simulation | design only | no live operation approval |
+| administrator | controlled administration | system administration if future approved | unrestricted clinical access by default | strong admin identity and MFA design | Security/operations owner | admin policy | privileged access tests | design only | no admin access approval |
+| support user | limited support | scoped troubleshooting | real-data browsing, exports | named support identity | Operations/security owner | support access policy | support access tests | design only | no support access approval |
+| QA/validation user | validation work | test evidence generation | real-data use unless separately approved | named QA identity | QA/validation owner | validation plan | test-environment validation | design only | no validation role implemented |
+| security/privacy reviewer | review controls | audit/security review | clinical workflow mutation | named reviewer identity | Security/privacy owner | review procedure | audit access tests | design only | no security approval |
+| legal/compliance reviewer | legal/compliance review | policy/evidence review | runtime clinical action | named reviewer identity | Legal/compliance owner | compliance review plan | review records | design only | no compliance approval |
+| data governance reviewer | data lifecycle review | classification/retention review | production data operation | named reviewer identity | Data governance owner | data governance policy | evidence review | design only | no data approval |
+| read-only auditor | audit review | audit record access if future approved | clinical mutation, export without approval | named auditor identity | Compliance/security owner | audit access policy | audit access tests | design only | no auditor role implemented |
+| system/service account | system-to-system operation | narrowly scoped technical actions | clinical interpretation, broad PHI access | managed service identity | Engineering/security owner | service account policy | key/permission tests | design only | no service account approval |
+| external integration actor | future integration boundary | explicitly scoped integration | patient messaging, workflow mutation, uncontrolled export | verified integration identity | Product/security owner | integration contract | integration negative tests | design only | no integration approval |

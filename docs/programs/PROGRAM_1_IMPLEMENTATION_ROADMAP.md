@@ -1729,9 +1729,17 @@ Phase O update:
 - no real-data governance control was implemented, validated, legally approved or operationally approved
 - recommended next task: Program 1 Phase P0 - Access Control and Auditability Design
 
+Phase P update:
+
+- future access-control and auditability design requirements documented before any real-data or production-readiness claim
+- identity/role, least-privilege, audit event, traceability, privileged access, access review and readiness-gate requirements mapped
+- Phase P does not implement authentication, authorization, RBAC, audit logging, runtime enforcement, real-data access or production behavior
+- no access-control or auditability control was implemented, validated, security-reviewed or operationally approved
+- recommended next task: Program 1 Phase Q0 - Validation and Safety Test Plan
+
 Recommended next task:
 
-`Program 1 Phase P0 - Access Control and Auditability Design`
+`Program 1 Phase Q0 - Validation and Safety Test Plan`
 
 ## 30. Program 1 Phase D44-D54 - Findings Read-Only Workspace Boundary
 
