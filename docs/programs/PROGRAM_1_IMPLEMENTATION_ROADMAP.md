@@ -1390,6 +1390,12 @@ Phase D62 update:
 
 - frontend smoke coverage expanded for findings workspace safe copy, empty/error/permission states, status labels and source fallback
 - smoke guards that Patient Workspace findings panel does not expose action, diagnosis, treatment, approval, clearance, override, task, outcome or patient messaging wording
+
+Phase D63 update:
+
+- backend findings read API safety guards reviewed
+- existing tests cover GET-only behavior, write route absence, forbidden response fields and workflow side-effect absence
+- no duplicate backend test was added
 - no appointment status mutation
 - production and real-data use remain no-go
 
