@@ -1281,3 +1281,27 @@ Runtime boundary:
 Recommended next task:
 
 `Program 1 Phase D23 - Passive ClinicalFinding ORM Model`
+
+Phase D22-D32 closure update:
+
+- passive `ClinicalFinding` ORM model added
+- Alembic migration `0018_clinical_findings` added for `clinical_findings`
+- DB shape, source-linking and lifecycle status regression coverage added
+- runtime route/service/permission absence guard added
+- migration rollback notes, CI gate and go/no-go matrix documented
+
+Runtime boundary:
+
+- no findings endpoint
+- no findings service
+- no frontend findings UI
+- no Task engine
+- no Outcome Evidence
+- no patient messaging
+- no automatic diagnosis or treatment
+- no appointment status mutation
+- no production or real-data enablement
+
+Recommended next task:
+
+`Program 1 Phase D33 - Findings Read-Only API Contract`
