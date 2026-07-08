@@ -1428,6 +1428,13 @@ Phase D100 update:
 - passive `ClinicalOpenQuestion` ORM model added
 - source-linking, safe status and review metadata columns added as DB foundation shape
 - no endpoint, service, UI or automatic question creation was added
+
+Phase D101 update:
+
+- Alembic migration `0019_clinical_open_questions.py` added
+- `clinical_open_questions` table foundation adds safe source-linking, status and schema-version constraints
+- migration includes patient/finding/source-document/reviewer FKs and read-supporting indexes
+- no endpoint, service, UI or automatic question creation was added
 - no appointment status mutation
 - production and real-data use remain no-go
 
