@@ -1556,6 +1556,12 @@ Phase D126 update:
 - targeted open question read API regression coverage added
 - tests cover auth, permission, API key denial, empty state, sorting, finding filter, patient-scoped detail and no audit/write side effects
 - persistence route guard now allows only approved GET read paths and keeps write/review routes absent
+
+Phase D127-D128 update:
+
+- open question write/review route absence guard strengthened
+- frontend open question client/action absence verified
+- source-linking response guard strengthened for source type, label, reference and limitations
 - no appointment status mutation
 - production and real-data use remain no-go
 

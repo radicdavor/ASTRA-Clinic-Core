@@ -1,5 +1,8 @@
+from pathlib import Path
+
 from app.auth.dependencies import hash_api_key
 from app.models.domain import ApiKey, AuditLog, ClinicalEpisode, ClinicalFinding, ClinicalOpenQuestion, ClinicalPlan
+from app.services.seed import PERMISSIONS
 from tests.conftest import login_token
 from tests.factories import patient
 
@@ -240,3 +243,45 @@ def test_open_questions_write_review_routes_absent(client, db, auth_setup):
     ]
 
     assert all(response.status_code in {404, 405} for response in responses)
+
+
+def test_open_questions_write_permissions_and_frontend_actions_absent():
+    repo = Path(__file__).resolve().parents[2]
+
+    assert "clinical_open_questions.write" not in PERMISSIONS
+    assert "clinical_open_questions.review" not in PERMISSIONS
+    assert "clinical_open_questions.approve" not in PERMISSIONS
+    assert "clinical_open_questions.clear" not in PERMISSIONS
+    assert "clinical_open_questions.resolve" not in PERMISSIONS
+
+    frontend_client = (repo / "frontend" / "src" / "api" / "client.ts").read_text(encoding="utf-8")
+    patient_detail = (repo / "frontend" / "src" / "pages" / "PatientDetail.tsx").read_text(encoding="utf-8")
+    assert "clinical-open-questions" not in frontend_client
+    assert "clinicalOpenQuestions" not in frontend_client
+    assert "clinical-open-questions" not in patient_detail
+    assert "Potvrdi pitanje" not in patient_detail
+    assert "Rijesi pitanje" not in patient_detail
+
+
+def test_open_question_read_response_keeps_source_linking_and_no_official_truth(client, db, auth_setup):
+    p = patient(db)
+    question = create_question(
+        db,
+        p,
+        source_type="pathology",
+        source_label="Pathology source",
+        source_reference="pathology:report:line-4",
+        limitations_json=["Source must be checked by clinician."],
+    )
+
+    detail = question_detail_endpoint(client, p.id, question.id, headers=auth_headers(client))
+    item = detail.json()
+
+    assert detail.status_code == 200
+    assert item["source_type"] == "pathology"
+    assert item["source_label"] == "Pathology source"
+    assert item["source_reference"] == "pathology:report:line-4"
+    assert item["limitations"] == ["Source must be checked by clinician."]
+    assert "official truth" not in str(item).lower()
+    assert "diagnosis" not in str(item).lower()
+    assert "treatment_plan" not in item
