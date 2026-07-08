@@ -627,3 +627,56 @@ Prvo znamo što je poznato.
 Zatim znamo što je nerazriješeno.
 
 Tek nakon toga organiziramo skrb u epizode i workflowe.
+
+## 14. Program 1 Phase C0-C15 - Clinical Readiness Enforcement Readiness Design
+
+Status: zatvoreno kao design/guardrail pass.
+
+Phase C0-C15 namjerno nije uveo enforcement runtime.
+
+Implementirano:
+
+- enforcement readiness design
+- zabranjeni pojmovi i siguran vokabular
+- human responsibility model
+- enforcement risk register
+- no-go matrix
+- advisory signal contract
+- minimalni `ClinicalReadinessAdvisorySignal` schema prototype
+- advisory signal safety regression tests
+- preview mapping dokument
+- permission model design
+- review acknowledgment design
+- audit contract
+- UI copy and safety labels
+- enforcement readiness CI gate
+- go/no-go matrix
+- closure report i next-step decision brief
+
+Izvan scopea:
+
+- clinical approval
+- readiness clearance
+- automatic clearance
+- override workflow runtime
+- Outcome Evidence
+- Task engine
+- appointment status change
+- patient messaging
+- production approval
+- real patient data
+- real AI/OCR
+- autonomous decision
+- workflow enforcement
+- automatic blocking ili rescheduling
+- certification/compliance claims
+
+Zakljucak:
+
+Clinical Readiness enforcement nije spreman za runtime implementaciju.
+
+ASTRA smije nastaviti samo s dokumentacijskim i guardrail radom oko ljudskog review acknowledgment modela.
+
+Preporuceni sljedeci task:
+
+`Program 1 Phase C16 - Human Review Acknowledgment Contract`
