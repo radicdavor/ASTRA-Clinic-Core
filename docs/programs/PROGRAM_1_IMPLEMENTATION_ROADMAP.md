@@ -1562,6 +1562,12 @@ Phase D127-D128 update:
 - open question write/review route absence guard strengthened
 - frontend open question client/action absence verified
 - source-linking response guard strengthened for source type, label, reference and limitations
+
+Phase D129-D131 update:
+
+- actual open question read API error/permission UX documented
+- open question read API CI gate documented
+- open question read API go/no-go matrix added; GET-only read is allowed, write/review/UI remain no-go
 - no appointment status mutation
 - production and real-data use remain no-go
 
