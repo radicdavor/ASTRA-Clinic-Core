@@ -259,6 +259,55 @@ class ClinicalReadinessReviewAcknowledgment(BaseModel):
         return value
 
 
+class ClinicalReadinessReviewAcknowledgmentCreateRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    advisory_signal_key: str
+    snapshot_id: int | None = None
+    reason: str
+    client_context_key: str | None = None
+    idempotency_key: str | None = None
+
+    @field_validator("reason")
+    @classmethod
+    def validate_reason(cls, value: str) -> str:
+        cleaned = value.strip()
+        if not cleaned:
+            raise ValueError("Razlog pregleda signala je obavezan")
+        return cleaned
+
+
+class ClinicalReadinessReviewAcknowledgmentResponse(BaseModel):
+    acknowledgment_key: str
+    advisory_signal_key: str
+    snapshot_id: int | None = None
+    appointment_id: int
+    patient_id: int
+    actor_role: str
+    reason: str
+    created_at: DateTimeType
+    limitations: list[str] = Field(default_factory=lambda: ["Acknowledgment je zapis ljudskog pregleda signala, nije klinicka odluka."])
+    warning: str = "Acknowledgment ne predstavlja clinical approval, readiness clearance, override, Outcome Evidence ili dozvolu za postupak."
+    is_decision: bool = False
+    is_clearance: bool = False
+    is_override: bool = False
+
+    @field_validator("reason")
+    @classmethod
+    def validate_reason(cls, value: str) -> str:
+        cleaned = value.strip()
+        if not cleaned:
+            raise ValueError("Razlog pregleda signala je obavezan")
+        return cleaned
+
+    @field_validator("is_decision", "is_clearance", "is_override")
+    @classmethod
+    def validate_false_safety_flags(cls, value: bool) -> bool:
+        if value:
+            raise ValueError("Acknowledgment response ne smije biti odluka, clearance ili override")
+        return value
+
+
 class ClinicalReadinessSnapshotHistoryItem(BaseModel):
     id: int
     appointment_id: int

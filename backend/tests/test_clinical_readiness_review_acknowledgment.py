@@ -5,7 +5,11 @@ from pydantic import ValidationError
 
 from app.core.database import Base
 from app.main import app
-from app.schemas.common import ClinicalReadinessReviewAcknowledgment
+from app.schemas.common import (
+    ClinicalReadinessReviewAcknowledgment,
+    ClinicalReadinessReviewAcknowledgmentCreateRequest,
+    ClinicalReadinessReviewAcknowledgmentResponse,
+)
 from app.services.seed import PERMISSIONS, ROLE_PERMISSIONS
 
 
@@ -130,3 +134,76 @@ def test_review_acknowledgment_migration_is_not_present():
     migration_table_names = set(Base.metadata.tables)
 
     assert "clinical_readiness_review_acknowledgments" not in migration_table_names
+
+
+def test_review_acknowledgment_create_request_shape_is_passive_and_safe():
+    request = ClinicalReadinessReviewAcknowledgmentCreateRequest(
+        advisory_signal_key="missing_consent_document",
+        snapshot_id=42,
+        reason="Pregledati signal prije klinicke odluke.",
+        client_context_key="appointment-workspace",
+        idempotency_key="ack-demo-key",
+    )
+    payload = request.model_dump(mode="json")
+
+    assert payload["reason"] == "Pregledati signal prije klinicke odluke."
+    assert FORBIDDEN_FIELDS.isdisjoint(payload.keys())
+    assert set(payload) == {
+        "advisory_signal_key",
+        "snapshot_id",
+        "reason",
+        "client_context_key",
+        "idempotency_key",
+    }
+
+
+def test_review_acknowledgment_create_request_requires_reason_and_forbids_extra_fields():
+    with pytest.raises(ValidationError):
+        ClinicalReadinessReviewAcknowledgmentCreateRequest(
+            advisory_signal_key="missing_consent_document",
+            reason=" ",
+        )
+
+    with pytest.raises(ValidationError):
+        ClinicalReadinessReviewAcknowledgmentCreateRequest(
+            advisory_signal_key="missing_consent_document",
+            reason="Pregledano.",
+            approval_status="approved",
+        )
+
+
+def test_review_acknowledgment_response_shape_is_passive_and_safe():
+    response = ClinicalReadinessReviewAcknowledgmentResponse(
+        acknowledgment_key="ack-missing-consent-review",
+        advisory_signal_key="missing_consent_document",
+        snapshot_id=42,
+        appointment_id=7,
+        patient_id=3,
+        actor_role="physician",
+        reason="Pregledan je savjetodavni signal.",
+        created_at=datetime(2026, 7, 8, 12, 30, tzinfo=UTC),
+    )
+    payload = response.model_dump(mode="json")
+
+    assert payload["is_decision"] is False
+    assert payload["is_clearance"] is False
+    assert payload["is_override"] is False
+    assert "ne predstavlja clinical approval" in payload["warning"]
+    assert FORBIDDEN_FIELDS.isdisjoint(payload.keys())
+
+
+@pytest.mark.parametrize("field_name", ["is_decision", "is_clearance", "is_override"])
+def test_review_acknowledgment_response_rejects_positive_runtime_flags(field_name: str):
+    payload = ClinicalReadinessReviewAcknowledgmentResponse(
+        acknowledgment_key="ack-missing-consent-review",
+        advisory_signal_key="missing_consent_document",
+        appointment_id=7,
+        patient_id=3,
+        actor_role="physician",
+        reason="Pregledan je savjetodavni signal.",
+        created_at=datetime(2026, 7, 8, 12, 30, tzinfo=UTC),
+    ).model_dump()
+    payload[field_name] = True
+
+    with pytest.raises(ValidationError):
+        ClinicalReadinessReviewAcknowledgmentResponse(**payload)
