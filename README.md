@@ -534,6 +534,7 @@ Pilot documents:
 - [Program 1 Phase D116 regression notes](docs/programs/PROGRAM_1_PHASE_D116_REGRESSION_NOTES.md)
 - [Program 1 Phase D117 Open Question Read API CI Gate](docs/programs/PROGRAM_1_PHASE_D117_OPEN_QUESTION_READ_API_CI_GATE.md)
 - [Program 1 Phase D117 regression notes](docs/programs/PROGRAM_1_PHASE_D117_REGRESSION_NOTES.md)
+- [Program 1 Phase D118 Open Question Read API Go/No-Go Matrix](docs/programs/PROGRAM_1_PHASE_D118_OPEN_QUESTION_READ_API_GO_NO_GO_MATRIX.md)
 - [Lokalni LAN pristup](docs/LAN_ACCESS.md)
 - [Program 1 audit event naming](docs/programs/PROGRAM_1_AUDIT_EVENT_NAMING.md)
 - [Program 1 Phase A regression notes](docs/programs/PROGRAM_1_PHASE_A_REGRESSION_NOTES.md)

@@ -1502,6 +1502,12 @@ Phase D117 update:
 - open question read API CI gate documented
 - existing full backend and frontend gates remain the required verification path
 - no new dependency, workflow step, endpoint, service or UI was added
+
+Phase D118 update:
+
+- open question read API go/no-go matrix added
+- contract and passive schemas are allowed; endpoint implementation remains deferred
+- write/review/approve/clear/resolve routes, Task, Outcome Evidence and patient messaging remain no-go
 - no appointment status mutation
 - production and real-data use remain no-go
 
