@@ -445,6 +445,8 @@ Pilot documents:
 - [Program 1 Phase D44-D54 Findings Workspace Closure Report](docs/programs/PROGRAM_1_PHASE_D44_D54_FINDINGS_WORKSPACE_CLOSURE_REPORT.md)
 - [Program 1 Phase D54 Next-Step Decision Brief](docs/programs/PROGRAM_1_PHASE_D54_NEXT_STEP_DECISION_BRIEF.md)
 - [Program 1 Phase D54 regression notes](docs/programs/PROGRAM_1_PHASE_D54_REGRESSION_NOTES.md)
+- [Program 1 Phase D55 Findings Workspace Usability Review Plan](docs/programs/PROGRAM_1_PHASE_D55_FINDINGS_WORKSPACE_USABILITY_REVIEW_PLAN.md)
+- [Program 1 Phase D55 regression notes](docs/programs/PROGRAM_1_PHASE_D55_REGRESSION_NOTES.md)
 - [Lokalni LAN pristup](docs/LAN_ACCESS.md)
 - [Program 1 audit event naming](docs/programs/PROGRAM_1_AUDIT_EVENT_NAMING.md)
 - [Program 1 Phase A regression notes](docs/programs/PROGRAM_1_PHASE_A_REGRESSION_NOTES.md)

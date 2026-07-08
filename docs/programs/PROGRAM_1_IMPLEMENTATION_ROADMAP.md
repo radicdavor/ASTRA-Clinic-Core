@@ -1391,3 +1391,25 @@ Runtime boundary:
 Recommended next task:
 
 `Program 1 Phase D55 - Findings Workspace Usability Review`
+
+## 31. Program 1 Phase D55-D65 - Findings Workspace Usability
+
+Status: in progress as read-only usability/safety hardening.
+
+Phase D55 update:
+
+- findings workspace usability review plan documented
+- review criteria cover source-linked display, lifecycle labels, empty/error/permission states, accessibility and no-action boundaries
+
+Runtime boundary:
+
+- findings workspace remains read-only
+- no findings write/review endpoint
+- no UI action button
+- no Task engine, Outcome Evidence or patient messaging
+- no automatic diagnosis or treatment
+- production and real-data use remain no-go
+
+Recommended next task:
+
+`Program 1 Phase D56 - Findings Workspace Copy Refinement`
