@@ -1352,3 +1352,34 @@ Runtime boundary:
 Recommended next task:
 
 `Program 1 Phase D44 - Findings Read-Only Workspace Contract`
+
+## 30. Program 1 Phase D44-D54 - Findings Read-Only Workspace Boundary
+
+Status: blocked at D44 verification gate.
+
+Phase D44 update:
+
+- D33-D43 backend verification gate documented
+- Docker backend verification was attempted but Docker Desktop daemon was unavailable
+- findings workspace UI work is blocked until targeted findings read API tests and full backend suite pass
+
+Phase D45 update:
+
+- read-only findings workspace contract documented
+- safe labels, forbidden labels, empty/error/permission states and no-action boundary documented
+- no frontend client or UI panel was added while the backend verification gate is blocked
+
+Runtime boundary:
+
+- no findings frontend UI
+- no frontend findings client
+- no findings write/review endpoint
+- no UI action button
+- no Task engine, Outcome Evidence or patient messaging
+- no automatic diagnosis or treatment
+- no appointment status mutation
+- production and real-data use remain no-go
+
+Recommended next task:
+
+Retry D33-D43 backend verification after Docker Desktop is running.
