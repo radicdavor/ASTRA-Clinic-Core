@@ -1574,6 +1574,12 @@ Phase D132-D136 update:
 - Program 1 Phase D module inventory, final safety review, final go/no-go matrix and closure report added
 - D121-D136 open question read API and D closure report added
 - recommended next task: Program 1 Phase E0 - Review Workflow Foundation, documentation-only and no review endpoint
+
+Phase E0-E9 update:
+
+- Program 1 Phase E review workflow foundation opened as documentation-first module
+- review definition, source-linking, lifecycle status, human responsibility, decision boundary, recommendation boundary, audit contract, permission contract and UI safety labels documented
+- no review endpoint, DB model, migration, service, UI, permission seed or audit event was added
 - no appointment status mutation
 - production and real-data use remain no-go
 
