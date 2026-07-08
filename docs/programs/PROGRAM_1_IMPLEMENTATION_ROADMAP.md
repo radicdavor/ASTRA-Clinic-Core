@@ -1359,6 +1359,13 @@ Phase D83 update:
 - open question safety regression guard added
 - backend tests cover passive schema safety, route absence, DB model/table absence and service absence
 - frontend smoke guards absence of open question client/UI labels
+
+Phase D84-D86 update:
+
+- open question runtime no-go matrix added
+- open question CI gate documented
+- open questions from findings go/no-go matrix added
+- runtime endpoints, persistence, automatic question creation, Task, Outcome Evidence and patient messaging remain no-go
 - no appointment status mutation
 - production and real-data use remain no-go
 
