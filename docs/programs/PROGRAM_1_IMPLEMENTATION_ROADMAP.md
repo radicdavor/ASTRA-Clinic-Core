@@ -1613,9 +1613,26 @@ Phase F11-F20 update:
 - no appointment status mutation
 - production and real-data use remain no-go
 
+Phase G0-G8 update:
+
+- GET-only patient-scoped Clinical Evidence Timeline read API prototype added
+- route added: `GET /api/patients/{patient_id}/clinical-evidence-timeline`
+- read-only permission `clinical_evidence_timeline.read` added
+- side-effect-free aggregation helper maps findings, open questions, readiness snapshots and acknowledgments into source-linked timeline events
+- targeted regression coverage guards auth, permission, API key denial, patient scope, sorting, filters, source-linking, no audit noise and no write/workflow routes
+
+Phase G9-G20 update:
+
+- timeline read audit policy deferral documented
+- error/permission UX contract, CI gate, go/no-go matrix, workspace deferral, production no-go review, inventory, final safety review and closure docs added
+- frontend timeline UI/client remains deferred
+- timeline DB model/migration remains no-go
+- write/workflow endpoints, Task engine, Outcome Evidence, patient messaging, automatic diagnosis/treatment and approval/clearance/override remain no-go
+- recommended next task: Program 1 Phase H0 - Clinical Evidence Timeline Workspace Contract, documentation-only first
+
 Recommended next task:
 
-`Program 1 Phase D44 - Findings Read-Only Workspace Contract`
+`Program 1 Phase H0 - Clinical Evidence Timeline Workspace Contract`
 
 ## 30. Program 1 Phase D44-D54 - Findings Read-Only Workspace Boundary
 
