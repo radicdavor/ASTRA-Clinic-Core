@@ -3,6 +3,8 @@ from datetime import UTC, datetime
 import pytest
 from pydantic import ValidationError
 
+from app.core.database import Base
+from app.main import app
 from app.schemas.common import ClinicalReadinessReviewAcknowledgment
 
 
@@ -93,3 +95,19 @@ def test_review_acknowledgment_schema_has_no_side_effect_contract_fields():
     assert FORBIDDEN_FIELDS.isdisjoint(fields)
     assert "appointment_status" not in fields
     assert "patient_message_id" not in fields
+
+
+def test_review_acknowledgment_endpoint_does_not_exist():
+    route_paths = {getattr(route, "path", "") for route in app.routes}
+
+    assert "/api/clinical-readiness-review-acknowledgments" not in route_paths
+    assert "/api/appointments/{appointment_id}/clinical-readiness-review-acknowledgments" not in route_paths
+    assert all("acknowledgment" not in path for path in route_paths)
+
+
+def test_review_acknowledgment_db_model_and_table_do_not_exist():
+    table_names = set(Base.metadata.tables)
+    mapper_class_names = {mapper.class_.__name__ for mapper in Base.registry.mappers}
+
+    assert "clinical_readiness_review_acknowledgments" not in table_names
+    assert "ClinicalReadinessReviewAcknowledgment" not in mapper_class_names
