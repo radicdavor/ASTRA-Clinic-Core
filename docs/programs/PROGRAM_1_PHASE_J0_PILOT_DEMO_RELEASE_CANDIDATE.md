@@ -33,4 +33,3 @@ Pilot Demo Release Candidate means:
 ## Relationship To B-I
 
 B-H built the read-only clinical workflow foundation. I consolidated production governance. J packages that work into a demo-only release candidate and keeps production, real-data and write workflow boundaries closed.
-

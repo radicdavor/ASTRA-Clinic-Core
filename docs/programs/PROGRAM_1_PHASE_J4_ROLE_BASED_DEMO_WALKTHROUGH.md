@@ -19,4 +19,3 @@ May run Docker, reset demo state, validate tests and stop the demo on safety iss
 ## Observer/Stakeholder
 
 May watch the demo and ask questions. Must be told that this is not production, not real-data approved and not certified clinical software.
-

@@ -23,4 +23,3 @@ Recommendation:
 `Program 1 Phase K0 - Pilot Demo Tag and Push Preparation`
 
 Reason: after the demo release candidate is documented, the next healthy step is a clean verification/tag/push preparation process, not new clinical functionality.
-

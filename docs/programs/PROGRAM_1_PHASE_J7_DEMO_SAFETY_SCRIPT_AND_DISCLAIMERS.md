@@ -27,4 +27,3 @@ ASTRA Clinic Core is not a certified EMR and is not a certified medical device.
 ## Closing Disclaimer
 
 Future production or real-data use requires separate legal, security, compliance, access-control, audit, backup/restore and clinician approval.
-

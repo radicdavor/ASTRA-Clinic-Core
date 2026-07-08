@@ -36,4 +36,3 @@ Use the existing demo seed/reset pattern from the main README. Do not use reset 
 - backend fails: stop and report environment issue
 - permissions fail: do not bypass; explain access-control boundary
 - real data appears: stop immediately and purge the demo environment according to operator policy
-

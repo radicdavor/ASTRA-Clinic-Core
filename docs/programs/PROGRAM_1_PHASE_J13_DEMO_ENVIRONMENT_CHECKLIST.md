@@ -12,4 +12,3 @@
 - demo seed/reset process is understood
 - logs are available for backend and frontend
 - stop criteria are understood
-

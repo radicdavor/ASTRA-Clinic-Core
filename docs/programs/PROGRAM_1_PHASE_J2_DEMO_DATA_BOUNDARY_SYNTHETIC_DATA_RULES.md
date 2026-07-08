@@ -24,4 +24,3 @@ Demo data must be fake, synthetic and visibly safe for demonstration.
 ## Red Flags
 
 Stop the demo if a user starts entering real identifiers, real clinical text, real contact data or any unapproved document.
-

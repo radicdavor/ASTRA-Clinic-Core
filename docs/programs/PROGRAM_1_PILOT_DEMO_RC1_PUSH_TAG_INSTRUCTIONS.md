@@ -48,4 +48,3 @@ The tag does not mean production approval.
 The tag does not mean real patient data approval.
 
 The tag does not certify ASTRA Clinic Core as an EMR or medical device.
-

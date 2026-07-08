@@ -68,4 +68,3 @@ At manifest creation:
 - tag `program-1-pilot-demo-rc1` has not been created
 - branch push has not been performed for J0-J20
 - tag push has not been performed
-

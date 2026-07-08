@@ -19,4 +19,3 @@
 - no treatment is recommended automatically
 - no appointment status is changed
 - real patient data is not allowed
-

@@ -30,4 +30,3 @@ Closed demo/pilot package with synthetic demo data only.
 ## Test Status
 
 Release validation requires targeted backend suites, full backend suite, frontend typecheck/build/smoke and migration checks.
-

@@ -33,4 +33,3 @@ The release candidate is demo-only, synthetic-data-only and not production or re
 - no patient messaging
 - no automatic diagnosis/treatment
 - no production/real-data approval
-

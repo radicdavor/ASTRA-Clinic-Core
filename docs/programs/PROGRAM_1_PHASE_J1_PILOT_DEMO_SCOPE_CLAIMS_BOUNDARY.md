@@ -29,4 +29,3 @@
 ## Speaker Rule
 
 Every demo introduction must say that ASTRA is a closed demo/pilot candidate with synthetic data only.
-

@@ -17,4 +17,3 @@ Final safety review confirms:
 - no medical-device certification claim
 
 The pilot demo release candidate may be used only as a synthetic-data demonstration package.
-

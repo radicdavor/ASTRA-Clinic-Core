@@ -11,4 +11,3 @@
 | No-action UI misunderstood | show absence of action buttons | read-only by design | no |
 | Missing source read as truth | use safe fallback | unlinked truth is no-go | no |
 | Demo environment failure | use fallback plan | do not live-debug clinical claims | no |
-

@@ -21,4 +21,3 @@
 | Diagnosis/treatment automation | No-Go |
 
 Conclusion: demo release candidate is allowed with demo data only. Production, real data and write workflows remain no-go.
-

@@ -11,4 +11,3 @@ Existing smoke and backend guard coverage must confirm:
 - no diagnosis/treatment automation wording appears
 
 Decision: no new feature is required in J14. Existing smoke/no-write guards remain the release validation path.
-

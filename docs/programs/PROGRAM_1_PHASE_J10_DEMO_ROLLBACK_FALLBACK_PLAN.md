@@ -19,4 +19,3 @@
 ## Incident Reporting
 
 Record the issue, environment, command/output where safe, and whether safety messaging was affected.
-
