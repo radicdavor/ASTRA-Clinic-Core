@@ -703,6 +703,8 @@ Pilot documents:
 - [Program 1 Phase J19 Next-Step Decision Brief](docs/programs/PROGRAM_1_PHASE_J19_NEXT_STEP_DECISION_BRIEF.md)
 - [Program 1 Phase J0-J20 Pilot Demo Release Candidate Closure Report](docs/programs/PROGRAM_1_PHASE_J0_J20_PILOT_DEMO_RELEASE_CANDIDATE_CLOSURE_REPORT.md)
 - [Program 1 Phase J20 regression notes](docs/programs/PROGRAM_1_PHASE_J20_REGRESSION_NOTES.md)
+- [Program 1 Pilot Demo RC1 Manifest](docs/programs/PROGRAM_1_PILOT_DEMO_RC1_MANIFEST.md)
+- [Program 1 Pilot Demo RC1 Push Tag Instructions](docs/programs/PROGRAM_1_PILOT_DEMO_RC1_PUSH_TAG_INSTRUCTIONS.md)
 - [Lokalni LAN pristup](docs/LAN_ACCESS.md)
 - [Program 1 audit event naming](docs/programs/PROGRAM_1_AUDIT_EVENT_NAMING.md)
 - [Program 1 Phase A regression notes](docs/programs/PROGRAM_1_PHASE_A_REGRESSION_NOTES.md)

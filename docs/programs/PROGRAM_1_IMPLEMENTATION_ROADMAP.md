@@ -1682,6 +1682,13 @@ Phase J8-J20 update:
 - demo release candidate remains synthetic-data-only and not production/real-data approved
 - recommended next task: Program 1 Phase K0 - Pilot Demo Tag and Push Preparation
 
+Phase K0 update:
+
+- Pilot Demo RC1 manifest documented
+- branch push and annotated tag instructions documented
+- no push or tag push performed by the documentation update
+- RC1 remains demo-only and does not imply production or real-data approval
+
 Recommended next task:
 
 `Program 1 Phase K0 - Pilot Demo Tag and Push Preparation`
