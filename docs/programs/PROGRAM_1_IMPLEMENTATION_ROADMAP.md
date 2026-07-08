@@ -717,3 +717,44 @@ Ne znaci clinical approval, readiness clearance, override, Task, Outcome Evidenc
 Preporuceni sljedeci task:
 
 `Program 1 Phase C27 - Human Review Acknowledgment Persistence Design`
+
+## 16. Program 1 Phase C27-C37 - Human Review Acknowledgment Persistence Governance
+
+Status: zatvoreno kao design/governance i no-go hardening pass.
+
+Implementirano:
+
+- acknowledgment persistence design
+- persistence no-go matrix
+- migration review
+- permission governance
+- audit governance
+- retention and rollback rules
+- runtime no-go regression guard
+- permission seed no-go hardening
+- UI action no-go hardening
+- persistence CI gate
+- closure report, go/no-go matrix i next-step decision brief
+
+Runtime granica:
+
+- nema acknowledgment DB modela
+- nema Alembic migracije
+- nema endpointa
+- nema write servicea
+- nema permission seedanja
+- nema UI action buttona
+- nema status promjene termina
+- nema Task enginea
+- nema Outcome Evidencea
+- nema patient messaginga
+
+Zakljucak:
+
+Acknowledgment persistence ostaje no-go za runtime.
+
+ASTRA smije nastaviti s endpoint contract designom prije bilo kakve migracije ili write servicea.
+
+Preporuceni sljedeci task:
+
+`Program 1 Phase C38 - Acknowledgment Endpoint Contract Design`
