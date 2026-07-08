@@ -514,6 +514,7 @@ Pilot documents:
 - [Program 1 Phase D103 regression notes](docs/programs/PROGRAM_1_PHASE_D103_REGRESSION_NOTES.md)
 - [Program 1 Phase D104 regression notes](docs/programs/PROGRAM_1_PHASE_D104_REGRESSION_NOTES.md)
 - [Program 1 Phase D105 regression notes](docs/programs/PROGRAM_1_PHASE_D105_REGRESSION_NOTES.md)
+- [Program 1 Phase D106 Open Question Migration Rollback Notes](docs/programs/PROGRAM_1_PHASE_D106_OPEN_QUESTION_MIGRATION_ROLLBACK_NOTES.md)
 - [Lokalni LAN pristup](docs/LAN_ACCESS.md)
 - [Program 1 audit event naming](docs/programs/PROGRAM_1_AUDIT_EVENT_NAMING.md)
 - [Program 1 Phase A regression notes](docs/programs/PROGRAM_1_PHASE_A_REGRESSION_NOTES.md)

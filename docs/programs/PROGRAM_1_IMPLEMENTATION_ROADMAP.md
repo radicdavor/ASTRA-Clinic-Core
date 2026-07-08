@@ -1443,6 +1443,12 @@ Phase D102-D105 update:
 - lifecycle status DB guard added
 - runtime route/service/permission absence guard added
 - frontend smoke continues to guard absence of open question client/UI labels
+
+Phase D106 update:
+
+- open question migration rollback and upgrade notes documented
+- rollback explicitly removes only `clinical_open_questions`
+- source findings, documents, snapshots and acknowledgments remain unchanged by downgrade expectations
 - no appointment status mutation
 - production and real-data use remain no-go
 
