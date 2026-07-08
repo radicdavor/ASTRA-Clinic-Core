@@ -1484,6 +1484,13 @@ Phase D112 update:
 - open question read permission boundary documented
 - proposed `clinical_open_questions.read` remains future-only and is not seeded
 - read permission does not imply review, write, diagnosis, treatment, approval, clearance or override
+
+Phase D113-D115 update:
+
+- open question read service contract documented without implementation
+- open question read error state contract documented
+- open question read audit policy documented with successful list reads deferred by default
+- no read service, endpoint, audit write or frontend client was added
 - no appointment status mutation
 - production and real-data use remain no-go
 
