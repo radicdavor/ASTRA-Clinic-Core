@@ -240,14 +240,19 @@ def test_open_question_runtime_routes_do_not_exist():
     forbidden_paths = {
         "/api/open-questions",
         "/api/patients/{patient_id}/open-questions",
-        "/api/patients/{patient_id}/clinical-open-questions",
-        "/api/patients/{patient_id}/clinical-open-questions/{question_id}",
         "/api/patients/{patient_id}/clinical-findings/{finding_id}/open-questions",
         "/api/findings/{finding_id}/open-questions",
         "/api/clinical-findings/{finding_id}/open-questions",
     }
+    allowed_read_paths = {
+        "/api/patients/{patient_id}/clinical-open-questions",
+        "/api/patients/{patient_id}/clinical-open-questions/{question_id}",
+    }
 
     for path, methods in route_methods:
+        if path in allowed_read_paths:
+            assert set(methods) == {"GET"}
+            continue
         assert path not in forbidden_paths or not {"GET", "POST", "PATCH", "PUT", "DELETE"}.intersection(methods)
 
 
