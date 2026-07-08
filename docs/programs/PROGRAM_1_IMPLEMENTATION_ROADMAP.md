@@ -837,3 +837,28 @@ Acknowledgment DB foundation ne znaci endpoint approval, production approval ili
 Preporuceni sljedeci task:
 
 `Program 1 Phase C60 - Acknowledgment Write Service Contract Design`
+
+## 19. Program 1 Phase C60-C70 - Human Review Acknowledgment Internal Service Boundary
+
+Status: u tijeku kao service-contract / internal-boundary pass.
+
+Phase C60 update:
+
+- documented internal write service contract for Human Review Acknowledgment
+- defined proposed service function, inputs, outputs and validation responsibilities
+- documented reason-required and actor-required rules
+- documented appointment/patient/snapshot scope checks
+- documented audit write requirement and single-transaction boundary
+- documented rollback expectation
+- confirmed no endpoint, no frontend action, no permission seed and no workflow side effects
+
+Runtime granica:
+
+- nema acknowledgment endpointa
+- nema frontend write clienta
+- nema UI action buttona
+- nema appointment status promjene
+- nema Task enginea
+- nema Outcome Evidencea
+- nema patient messaginga
+- nema approval, clearance ili override semantike

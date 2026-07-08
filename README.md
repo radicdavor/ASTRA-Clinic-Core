@@ -249,6 +249,8 @@ Pilot documents:
 - [Program 1 Phase C59 Acknowledgment DB Foundation Closure Report](docs/programs/PROGRAM_1_PHASE_C59_ACKNOWLEDGMENT_DB_FOUNDATION_CLOSURE_REPORT.md)
 - [Program 1 Phase C59 Next-Step Decision Brief](docs/programs/PROGRAM_1_PHASE_C59_NEXT_STEP_DECISION_BRIEF.md)
 - [Program 1 Phase C59 regression notes](docs/programs/PROGRAM_1_PHASE_C59_REGRESSION_NOTES.md)
+- [Program 1 Phase C60 Acknowledgment Write Service Contract Design](docs/programs/PROGRAM_1_PHASE_C60_ACKNOWLEDGMENT_WRITE_SERVICE_CONTRACT_DESIGN.md)
+- [Program 1 Phase C60 regression notes](docs/programs/PROGRAM_1_PHASE_C60_REGRESSION_NOTES.md)
 - [Lokalni LAN pristup](docs/LAN_ACCESS.md)
 - [Program 1 audit event naming](docs/programs/PROGRAM_1_AUDIT_EVENT_NAMING.md)
 - [Program 1 Phase A regression notes](docs/programs/PROGRAM_1_PHASE_A_REGRESSION_NOTES.md)
