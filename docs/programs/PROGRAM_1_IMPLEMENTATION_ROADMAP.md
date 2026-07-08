@@ -1492,6 +1492,31 @@ Phase D66-D76 closure update:
 Recommended next task:
 
 `Program 1 Phase D77 - Open Questions From Findings Contract`
+
+## 33. Program 1 Phase D77-D87 - Open Questions From Findings Contract
+
+Status: in progress as open-question contract / runtime no-go pass.
+
+Phase D77 update:
+
+- open questions from findings contract documented
+- open question, finding, ClinicalDocument, extraction candidate, recommendation and physician decision boundaries defined
+- runtime open-question creation remains no-go
+
+Runtime boundary:
+
+- no open question endpoint
+- no open question DB model or migration
+- no open question write service
+- no automatic question creation
+- no frontend open question UI
+- no Task engine, Outcome Evidence or patient messaging
+- no automatic diagnosis or treatment
+- production and real-data use remain no-go
+
+Recommended next task:
+
+`Program 1 Phase D78 - Open Question Boundary and Forbidden Semantics`
 - no appointment status mutation
 - production and real-data use remain no-go
 

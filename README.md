@@ -475,6 +475,8 @@ Pilot documents:
 - [Program 1 Phase D66-D76 Extraction Contract Closure Report](docs/programs/PROGRAM_1_PHASE_D66_D76_EXTRACTION_CONTRACT_CLOSURE_REPORT.md)
 - [Program 1 Phase D76 Next-Step Decision Brief](docs/programs/PROGRAM_1_PHASE_D76_NEXT_STEP_DECISION_BRIEF.md)
 - [Program 1 Phase D76 regression notes](docs/programs/PROGRAM_1_PHASE_D76_REGRESSION_NOTES.md)
+- [Program 1 Phase D77 Open Questions From Findings Contract](docs/programs/PROGRAM_1_PHASE_D77_OPEN_QUESTIONS_FROM_FINDINGS_CONTRACT.md)
+- [Program 1 Phase D77 regression notes](docs/programs/PROGRAM_1_PHASE_D77_REGRESSION_NOTES.md)
 - [Lokalni LAN pristup](docs/LAN_ACCESS.md)
 - [Program 1 audit event naming](docs/programs/PROGRAM_1_AUDIT_EVENT_NAMING.md)
 - [Program 1 Phase A regression notes](docs/programs/PROGRAM_1_PHASE_A_REGRESSION_NOTES.md)
