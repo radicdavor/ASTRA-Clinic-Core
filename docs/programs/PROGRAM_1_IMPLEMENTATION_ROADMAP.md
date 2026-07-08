@@ -1305,3 +1305,27 @@ Runtime boundary:
 Recommended next task:
 
 `Program 1 Phase D33 - Findings Read-Only API Contract`
+
+## 29. Program 1 Phase D33-D43 - Findings Read API Boundary
+
+Status: in progress as read-only API contract/prototype pass.
+
+Phase D33 update:
+
+- findings read-only API contract documented
+- proposed patient-scoped list/detail routes documented
+- read permission boundary proposed as `clinical_findings.read`
+- response shape remains source-linked and no-decision
+
+Runtime boundary:
+
+- no findings write endpoint
+- no review endpoint
+- no frontend findings UI
+- no Task engine, Outcome Evidence or patient messaging
+- no automatic diagnosis/treatment
+- no production or real-data enablement
+
+Recommended next task:
+
+`Program 1 Phase D34 - Findings Read Response Schema Contract`

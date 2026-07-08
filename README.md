@@ -409,6 +409,8 @@ Pilot documents:
 - [Program 1 Phase D22-D32 Findings Migration Closure Report](docs/programs/PROGRAM_1_PHASE_D22_D32_FINDINGS_MIGRATION_CLOSURE_REPORT.md)
 - [Program 1 Phase D32 Next-Step Decision Brief](docs/programs/PROGRAM_1_PHASE_D32_NEXT_STEP_DECISION_BRIEF.md)
 - [Program 1 Phase D32 regression notes](docs/programs/PROGRAM_1_PHASE_D32_REGRESSION_NOTES.md)
+- [Program 1 Phase D33 Findings Read-Only API Contract](docs/programs/PROGRAM_1_PHASE_D33_FINDINGS_READ_ONLY_API_CONTRACT.md)
+- [Program 1 Phase D33 regression notes](docs/programs/PROGRAM_1_PHASE_D33_REGRESSION_NOTES.md)
 - [Lokalni LAN pristup](docs/LAN_ACCESS.md)
 - [Program 1 audit event naming](docs/programs/PROGRAM_1_AUDIT_EVENT_NAMING.md)
 - [Program 1 Phase A regression notes](docs/programs/PROGRAM_1_PHASE_A_REGRESSION_NOTES.md)
