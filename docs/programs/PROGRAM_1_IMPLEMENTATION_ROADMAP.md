@@ -1017,3 +1017,23 @@ Still no-go:
 Recommended next task:
 
 `Program 1 Phase C104 - Acknowledgment Read Audit Policy Design`
+
+## 23. Program 1 Phase C104-C114 - Human Review Acknowledgment Read Audit Policy
+
+Status: u tijeku kao audit-policy and governance pass.
+
+Phase C104 update:
+
+- acknowledgment read audit policy documented
+- access audit vs clinical evidence boundary documented
+- list/detail/denied/failed read categories documented
+- audit-noise and privacy risks documented
+- preferred future implementation direction is denied-read audit only
+
+Runtime granica:
+
+- no automatic audit of every read
+- no write endpoint
+- no acknowledgment action button
+- no approval, clearance or override
+- no appointment status mutation, Task, Outcome Evidence or patient messaging

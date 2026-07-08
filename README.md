@@ -319,6 +319,8 @@ Pilot documents:
 - [Program 1 Phase C93-C103 Acknowledgment Read UI Usability Closure Report](docs/programs/PROGRAM_1_PHASE_C93_C103_ACKNOWLEDGMENT_READ_UI_USABILITY_CLOSURE_REPORT.md)
 - [Program 1 Phase C103 Next-Step Decision Brief](docs/programs/PROGRAM_1_PHASE_C103_NEXT_STEP_DECISION_BRIEF.md)
 - [Program 1 Phase C103 regression notes](docs/programs/PROGRAM_1_PHASE_C103_REGRESSION_NOTES.md)
+- [Program 1 Phase C104 Acknowledgment Read Audit Policy Design](docs/programs/PROGRAM_1_PHASE_C104_ACKNOWLEDGMENT_READ_AUDIT_POLICY_DESIGN.md)
+- [Program 1 Phase C104 regression notes](docs/programs/PROGRAM_1_PHASE_C104_REGRESSION_NOTES.md)
 - [Lokalni LAN pristup](docs/LAN_ACCESS.md)
 - [Program 1 audit event naming](docs/programs/PROGRAM_1_AUDIT_EVENT_NAMING.md)
 - [Program 1 Phase A regression notes](docs/programs/PROGRAM_1_PHASE_A_REGRESSION_NOTES.md)
