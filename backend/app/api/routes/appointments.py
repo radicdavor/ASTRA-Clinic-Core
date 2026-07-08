@@ -5,13 +5,13 @@ from sqlalchemy import or_, select
 from sqlalchemy.orm import Session, joinedload
 
 from app.audit.service import audit, snapshot
-from app.auth.dependencies import Actor, require_permission
+from app.auth.dependencies import Actor, get_current_actor, require_permission
 from app.core.database import get_db
 from app.models.domain import Appointment, ClinicalEpisode, ClinicalReadinessReviewAcknowledgment, ClinicalReadinessSnapshot, Patient, Service
 from app.schemas.common import AppointmentCreate, AppointmentOut, AppointmentUpdate, ClinicalReadinessAcknowledgmentDetailResponse, ClinicalReadinessAcknowledgmentListResponse, ClinicalReadinessAcknowledgmentReadItem, ClinicalReadinessPreviewResponse, ClinicalReadinessSnapshotCaptureRequest, ClinicalReadinessSnapshotDetailResponse, ClinicalReadinessSnapshotHistoryItem, ClinicalReadinessSnapshotHistoryResponse, ClinicalReadinessSnapshotResponse, ClinicalReadinessSnapshotSupersedeRequest, ClinicalReadinessSnapshotSupersedeResponse, ErrorResponse
 from app.services.appointments import validate_appointment_payload
 from app.services.clinical_readiness_preview import build_clinical_readiness_preview
-from app.services.clinical_readiness_acknowledgments import get_clinical_readiness_review_acknowledgment, list_clinical_readiness_review_acknowledgments
+from app.services.clinical_readiness_acknowledgments import get_clinical_readiness_review_acknowledgment, list_clinical_readiness_review_acknowledgments, record_acknowledgment_read_denied_audit
 from app.services.clinical_readiness_snapshots import SnapshotIdempotencyConflict, capture_clinical_readiness_snapshot, supersede_clinical_readiness_snapshot
 
 ERROR_RESPONSES = {
@@ -163,6 +163,108 @@ def acknowledgment_read_item(acknowledgment: ClinicalReadinessReviewAcknowledgme
         is_clearance=acknowledgment.is_clearance,
         is_override=acknowledgment.is_override,
     )
+
+
+def _acknowledgment_actor_role(actor: Actor) -> str | None:
+    if actor.user and actor.user.role:
+        return actor.user.role.name
+    return None
+
+
+def _record_acknowledgment_denied_read(
+    db: Session,
+    *,
+    actor: Actor,
+    access_type: str,
+    denial_category: str,
+    route: str,
+    appointment_id: int | None,
+    patient_id: int | None = None,
+    acknowledgment_id: int | None = None,
+    request: Request | None = None,
+) -> None:
+    try:
+        record_acknowledgment_read_denied_audit(
+            db,
+            denial_category=denial_category,
+            access_type=access_type,
+            route=route,
+            actor_type=actor.actor_type,
+            actor_user_id=actor.user_id,
+            actor_api_key_id=actor.api_key_id,
+            actor_role=_acknowledgment_actor_role(actor),
+            appointment_id=appointment_id,
+            patient_id=patient_id,
+            acknowledgment_id=acknowledgment_id,
+            request=request,
+        )
+        db.commit()
+    except Exception:
+        db.rollback()
+
+
+def _require_acknowledgment_read_actor(
+    db: Session,
+    *,
+    actor: Actor,
+    access_type: str,
+    route: str,
+    appointment_id: int,
+    acknowledgment_id: int | None = None,
+    request: Request | None = None,
+) -> Actor:
+    if actor.actor_type != "user" or actor.user_id is None:
+        denial_category = "api_key_denied" if actor.actor_type == "api_key" else "non_human_actor_denied"
+        _record_acknowledgment_denied_read(
+            db,
+            actor=actor,
+            access_type=access_type,
+            denial_category=denial_category,
+            route=route,
+            appointment_id=appointment_id,
+            acknowledgment_id=acknowledgment_id,
+            request=request,
+        )
+        raise HTTPException(403, detail="Acknowledgment read zahtijeva prijavljenog korisnika")
+    if "clinical_readiness.acknowledgments.read" not in actor.permissions:
+        _record_acknowledgment_denied_read(
+            db,
+            actor=actor,
+            access_type=access_type,
+            denial_category="missing_permission",
+            route=route,
+            appointment_id=appointment_id,
+            acknowledgment_id=acknowledgment_id,
+            request=request,
+        )
+        raise HTTPException(403, detail="Nedostaje dozvola: clinical_readiness.acknowledgments.read")
+    return actor
+
+
+def _get_acknowledgment_read_appointment_or_404(
+    db: Session,
+    *,
+    appointment_id: int,
+    actor: Actor,
+    access_type: str,
+    route: str,
+    acknowledgment_id: int | None = None,
+    request: Request | None = None,
+) -> Appointment:
+    appointment = db.get(Appointment, appointment_id)
+    if not appointment:
+        _record_acknowledgment_denied_read(
+            db,
+            actor=actor,
+            access_type=access_type,
+            denial_category="appointment_not_found",
+            route=route,
+            appointment_id=appointment_id,
+            acknowledgment_id=acknowledgment_id,
+            request=request,
+        )
+        raise HTTPException(404, detail="Termin nije pronaden")
+    return appointment
 
 
 def validate_episode_for_patient(db: Session, episode_id: int | None, patient_id: int) -> ClinicalEpisode | None:
@@ -329,13 +431,27 @@ def appointment_clinical_readiness_snapshot_detail(
 @router.get("/appointments/{appointment_id}/clinical-readiness/acknowledgments", response_model=ClinicalReadinessAcknowledgmentListResponse)
 def appointment_clinical_readiness_acknowledgments(
     appointment_id: int,
+    request: Request,
     db: Session = Depends(get_db),
-    actor: Actor = Depends(require_permission("clinical_readiness.acknowledgments.read")),
+    actor: Actor = Depends(get_current_actor),
 ):
     """Read-only human review acknowledgment list; not clinical approval, override, task or outcome evidence."""
-    if actor.actor_type != "user" or actor.user_id is None:
-        raise HTTPException(403, detail="Acknowledgment read zahtijeva prijavljenog korisnika")
-    get_appointment_or_404(db, appointment_id)
+    _require_acknowledgment_read_actor(
+        db,
+        actor=actor,
+        access_type="list",
+        route="/api/appointments/{appointment_id}/clinical-readiness/acknowledgments",
+        appointment_id=appointment_id,
+        request=request,
+    )
+    _get_acknowledgment_read_appointment_or_404(
+        db,
+        appointment_id=appointment_id,
+        actor=actor,
+        access_type="list",
+        route="/api/appointments/{appointment_id}/clinical-readiness/acknowledgments",
+        request=request,
+    )
     acknowledgments = list_clinical_readiness_review_acknowledgments(db, appointment_id=appointment_id)
     items = [acknowledgment_read_item(acknowledgment) for acknowledgment in acknowledgments]
     return ClinicalReadinessAcknowledgmentListResponse(
@@ -351,19 +467,48 @@ def appointment_clinical_readiness_acknowledgments(
 def appointment_clinical_readiness_acknowledgment_detail(
     appointment_id: int,
     acknowledgment_id: int,
+    request: Request,
     db: Session = Depends(get_db),
-    actor: Actor = Depends(require_permission("clinical_readiness.acknowledgments.read")),
+    actor: Actor = Depends(get_current_actor),
 ):
     """Read-only human review acknowledgment detail; not clinical approval, override, task or outcome evidence."""
-    if actor.actor_type != "user" or actor.user_id is None:
-        raise HTTPException(403, detail="Acknowledgment read zahtijeva prijavljenog korisnika")
-    get_appointment_or_404(db, appointment_id)
+    _require_acknowledgment_read_actor(
+        db,
+        actor=actor,
+        access_type="detail",
+        route="/api/appointments/{appointment_id}/clinical-readiness/acknowledgments/{acknowledgment_id}",
+        appointment_id=appointment_id,
+        acknowledgment_id=acknowledgment_id,
+        request=request,
+    )
+    appointment = _get_acknowledgment_read_appointment_or_404(
+        db,
+        appointment_id=appointment_id,
+        actor=actor,
+        access_type="detail",
+        route="/api/appointments/{appointment_id}/clinical-readiness/acknowledgments/{acknowledgment_id}",
+        acknowledgment_id=acknowledgment_id,
+        request=request,
+    )
     acknowledgment = get_clinical_readiness_review_acknowledgment(
         db,
         appointment_id=appointment_id,
         acknowledgment_id=acknowledgment_id,
     )
     if acknowledgment is None:
+        existing_acknowledgment = db.get(ClinicalReadinessReviewAcknowledgment, acknowledgment_id)
+        if existing_acknowledgment is not None and existing_acknowledgment.appointment_id != appointment_id:
+            _record_acknowledgment_denied_read(
+                db,
+                actor=actor,
+                access_type="detail",
+                denial_category="appointment_scope_mismatch",
+                route="/api/appointments/{appointment_id}/clinical-readiness/acknowledgments/{acknowledgment_id}",
+                appointment_id=appointment_id,
+                patient_id=appointment.patient_id,
+                acknowledgment_id=acknowledgment_id,
+                request=request,
+            )
         raise HTTPException(404, detail="Acknowledgment nije pronaden")
     return ClinicalReadinessAcknowledgmentDetailResponse(
         **acknowledgment_read_item(acknowledgment).model_dump(),

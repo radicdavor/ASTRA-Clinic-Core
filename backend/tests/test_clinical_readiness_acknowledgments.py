@@ -4,6 +4,7 @@ import app.services.clinical_readiness_acknowledgments as acknowledgment_service
 from app.auth.dependencies import hash_api_key
 from app.models.domain import (
     ApiKey,
+    Appointment,
     AuditLog,
     ClinicalEpisode,
     ClinicalPlan,
@@ -13,6 +14,7 @@ from app.models.domain import (
 )
 from app.services.clinical_readiness_acknowledgments import (
     CLINICAL_READINESS_ACKNOWLEDGED_EVENT,
+    CLINICAL_READINESS_ACKNOWLEDGMENT_READ_DENIED_EVENT,
     create_clinical_readiness_review_acknowledgment,
 )
 from app.services.clinical_readiness_snapshots import capture_clinical_readiness_snapshot
@@ -54,6 +56,10 @@ def auth_headers(client):
 
     token = login_token(client, "admin@test.local")
     return {"Authorization": f"Bearer {token}"}
+
+
+def denied_read_events(db):
+    return db.query(AuditLog).filter(AuditLog.action == CLINICAL_READINESS_ACKNOWLEDGMENT_READ_DENIED_EVENT).all()
 
 
 def test_internal_acknowledgment_service_requires_reason(db, auth_setup):
@@ -321,38 +327,36 @@ def test_acknowledgment_detail_is_appointment_scoped_and_read_only(client, db, a
     assert db.query(AuditLog).count() == audit_count
 
 
-def test_acknowledgment_read_denied_currently_writes_no_audit(client, db, auth_setup):
+def test_acknowledgment_permission_denied_read_writes_single_audit(client, db, auth_setup):
     from tests.conftest import login_token
 
     appt = appointment(db)
-    token = login_token(client, "limited@test.local")
-    api_key = ApiKey(
-        name="Acknowledgment denied read integration",
-        key_hash=hash_api_key("raw-ack-denied-read-key"),
-        scopes=["clinical_readiness.acknowledgments.read"],
-        active=True,
-    )
-    db.add(api_key)
     db.commit()
-    audit_count = db.query(AuditLog).count()
+    token = login_token(client, "limited@test.local")
+    denied_count = len(denied_read_events(db))
 
     permission_response = acknowledgment_list_endpoint(
         client,
         appt.id,
         headers={"Authorization": f"Bearer {token}"},
     )
-    api_key_response = acknowledgment_list_endpoint(
-        client,
-        appt.id,
-        headers={"X-ASTRA-API-Key": "raw-ack-denied-read-key"},
-    )
 
     assert permission_response.status_code == 403
-    assert api_key_response.status_code == 403
-    assert db.query(AuditLog).count() == audit_count
+    events = denied_read_events(db)
+    assert len(events) == denied_count + 1
+    payload = events[-1].after_json
+    assert payload["denial_category"] == "missing_permission"
+    assert payload["access_type"] == "list"
+    assert payload["appointment_id"] == appt.id
+    assert payload["actor_type"] == "user"
+    assert payload["result"] == "denied"
+    assert "reason" not in payload
+    assert "approval_status" not in payload
+    assert "clearance_status" not in payload
+    assert "override_status" not in payload
 
 
-def test_acknowledgment_failed_or_out_of_scope_read_currently_writes_no_audit(client, db, auth_setup):
+def test_acknowledgment_scope_denied_detail_read_writes_safe_audit(client, db, auth_setup):
     appt = appointment(db, status="scheduled")
     other_appt = appointment(
         db,
@@ -362,7 +366,7 @@ def test_acknowledgment_failed_or_out_of_scope_read_currently_writes_no_audit(cl
     )
     acknowledgment = create_acknowledgment(db, auth_setup, appt)
     original_status = appt.status
-    audit_count = db.query(AuditLog).count()
+    denied_count = len(denied_read_events(db))
 
     wrong_scope_response = acknowledgment_detail_endpoint(
         client,
@@ -370,18 +374,81 @@ def test_acknowledgment_failed_or_out_of_scope_read_currently_writes_no_audit(cl
         acknowledgment.id,
         auth_headers(client),
     )
-    missing_response = acknowledgment_detail_endpoint(
+
+    assert wrong_scope_response.status_code == 404
+    db.expire(appt)
+    assert appt.status == original_status
+    events = denied_read_events(db)
+    assert len(events) == denied_count + 1
+    payload = events[-1].after_json
+    assert payload["denial_category"] == "appointment_scope_mismatch"
+    assert payload["access_type"] == "detail"
+    assert payload["appointment_id"] == other_appt.id
+    assert payload["acknowledgment_id"] == acknowledgment.id
+    assert payload["actor_type"] == "user"
+    assert "reason" not in payload
+    assert "outcome_evidence_id" not in payload
+    assert "task_id" not in payload
+    assert "patient_message_id" not in payload
+
+
+def test_acknowledgment_missing_detail_read_does_not_create_audit_noise(client, db, auth_setup):
+    appt = appointment(db, status="scheduled")
+    denied_count = len(denied_read_events(db))
+    audit_count = db.query(AuditLog).count()
+
+    response = acknowledgment_detail_endpoint(
         client,
         appt.id,
-        acknowledgment.id + 9999,
+        9999,
         auth_headers(client),
     )
 
-    assert wrong_scope_response.status_code == 404
-    assert missing_response.status_code == 404
-    db.expire(appt)
-    assert appt.status == original_status
+    assert response.status_code == 404
+    assert len(denied_read_events(db)) == denied_count
     assert db.query(AuditLog).count() == audit_count
+
+
+def test_acknowledgment_successful_repeated_reads_do_not_create_audit_noise(client, db, auth_setup):
+    appt = appointment(db)
+    acknowledgment = create_acknowledgment(db, auth_setup, appt)
+    denied_count = len(denied_read_events(db))
+    audit_count = db.query(AuditLog).count()
+    headers = auth_headers(client)
+
+    for _ in range(3):
+        list_response = acknowledgment_list_endpoint(client, appt.id, headers)
+        detail_response = acknowledgment_detail_endpoint(client, appt.id, acknowledgment.id, headers)
+        assert list_response.status_code == 200
+        assert detail_response.status_code == 200
+
+    assert len(denied_read_events(db)) == denied_count
+    assert db.query(AuditLog).count() == audit_count
+
+
+def test_acknowledgment_denied_read_audit_failure_preserves_denied_response(client, db, auth_setup, monkeypatch):
+    from tests.conftest import login_token
+    import app.api.routes.appointments as appointment_routes
+
+    appt = appointment(db)
+    db.commit()
+    token = login_token(client, "limited@test.local")
+    original_status = appt.status
+
+    def fail_audit(*args, **kwargs):
+        raise RuntimeError("audit unavailable")
+
+    monkeypatch.setattr(appointment_routes, "record_acknowledgment_read_denied_audit", fail_audit)
+
+    response = acknowledgment_list_endpoint(
+        client,
+        appt.id,
+        headers={"Authorization": f"Bearer {token}"},
+    )
+
+    assert response.status_code == 403
+    refreshed_appt = db.get(Appointment, appt.id)
+    assert refreshed_appt.status == original_status
 
 
 def test_acknowledgment_detail_rejects_wrong_appointment(client, db, auth_setup):
@@ -409,6 +476,7 @@ def test_api_key_acknowledgment_read_denied_even_with_read_scope(client, db):
     )
     db.add(api_key)
     db.commit()
+    denied_count = len(denied_read_events(db))
 
     response = acknowledgment_list_endpoint(
         client,
@@ -417,3 +485,14 @@ def test_api_key_acknowledgment_read_denied_even_with_read_scope(client, db):
     )
 
     assert response.status_code == 403
+    events = denied_read_events(db)
+    assert len(events) == denied_count + 1
+    payload = events[-1].after_json
+    assert payload["denial_category"] == "api_key_denied"
+    assert payload["actor_type"] == "api_key"
+    assert payload["actor_api_key_id"] == api_key.id
+    assert payload["access_type"] == "list"
+    assert "reason" not in payload
+    assert "approval_status" not in payload
+    assert "clearance_status" not in payload
+    assert "override_status" not in payload
