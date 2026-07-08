@@ -540,6 +540,8 @@ Pilot documents:
 - [Program 1 Phase D110-D120 Open Question Read API Closure Report](docs/programs/PROGRAM_1_PHASE_D110_D120_OPEN_QUESTION_READ_API_CLOSURE_REPORT.md)
 - [Program 1 Phase D120 Next-Step Decision Brief](docs/programs/PROGRAM_1_PHASE_D120_NEXT_STEP_DECISION_BRIEF.md)
 - [Program 1 Phase D120 regression notes](docs/programs/PROGRAM_1_PHASE_D120_REGRESSION_NOTES.md)
+- [Program 1 Phase D121 Open Question Read API Prototype Design](docs/programs/PROGRAM_1_PHASE_D121_OPEN_QUESTION_READ_API_PROTOTYPE_DESIGN.md)
+- [Program 1 Phase D121 regression notes](docs/programs/PROGRAM_1_PHASE_D121_REGRESSION_NOTES.md)
 - [Lokalni LAN pristup](docs/LAN_ACCESS.md)
 - [Program 1 audit event naming](docs/programs/PROGRAM_1_AUDIT_EVENT_NAMING.md)
 - [Program 1 Phase A regression notes](docs/programs/PROGRAM_1_PHASE_A_REGRESSION_NOTES.md)
