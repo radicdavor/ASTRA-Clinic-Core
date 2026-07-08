@@ -531,6 +531,7 @@ Pilot documents:
 - [Program 1 Phase D113 regression notes](docs/programs/PROGRAM_1_PHASE_D113_REGRESSION_NOTES.md)
 - [Program 1 Phase D114 Open Question Read Error State Contract](docs/programs/PROGRAM_1_PHASE_D114_OPEN_QUESTION_READ_ERROR_STATE_CONTRACT.md)
 - [Program 1 Phase D115 Open Question Read Audit Policy](docs/programs/PROGRAM_1_PHASE_D115_OPEN_QUESTION_READ_AUDIT_POLICY.md)
+- [Program 1 Phase D116 regression notes](docs/programs/PROGRAM_1_PHASE_D116_REGRESSION_NOTES.md)
 - [Lokalni LAN pristup](docs/LAN_ACCESS.md)
 - [Program 1 audit event naming](docs/programs/PROGRAM_1_AUDIT_EVENT_NAMING.md)
 - [Program 1 Phase A regression notes](docs/programs/PROGRAM_1_PHASE_A_REGRESSION_NOTES.md)

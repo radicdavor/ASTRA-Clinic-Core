@@ -1491,6 +1491,11 @@ Phase D113-D115 update:
 - open question read error state contract documented
 - open question read audit policy documented with successful list reads deferred by default
 - no read service, endpoint, audit write or frontend client was added
+
+Phase D116 update:
+
+- open question read API no-go regression guard expanded to include D110 proposed contract routes
+- passive DB foundation remains present, but runtime read/write API, service, permission seed and frontend client remain absent
 - no appointment status mutation
 - production and real-data use remain no-go
 
