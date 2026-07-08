@@ -40,6 +40,16 @@ CLINICAL_READINESS_STATUSES = {
     "blocked",
 }
 CLINICAL_READINESS_SEVERITIES = {"info", "warning", "blocking", "critical"}
+CLINICAL_READINESS_ADVISORY_SIGNAL_SEVERITIES = {"info", "warning", "review_required", "missing_input"}
+CLINICAL_READINESS_ADVISORY_SIGNAL_CATEGORIES = {
+    "documentation",
+    "medication",
+    "consent",
+    "logistics",
+    "clinical_review",
+    "source_warning",
+    "other",
+}
 
 
 class ORMModel(BaseModel):
@@ -178,6 +188,41 @@ class ClinicalReadinessSnapshotResponse(BaseModel):
     def validate_preview_status(cls, value: str) -> str:
         if value not in CLINICAL_READINESS_STATUSES:
             raise ValueError("Nepoznat status klinicke spremnosti")
+        return value
+
+
+class ClinicalReadinessAdvisorySignal(BaseModel):
+    signal_key: str
+    label: str
+    severity: str
+    category: str
+    source_type: str
+    source_reference: str | None = None
+    explanation: str
+    limitations: list[str] = []
+    created_at: DateTimeType
+    is_decision: bool = False
+    not_decision_disclaimer: str = "Advisory signal je neblokirajuci signal za ljudski pregled, nije klinicka odluka."
+
+    @field_validator("severity")
+    @classmethod
+    def validate_advisory_severity(cls, value: str) -> str:
+        if value not in CLINICAL_READINESS_ADVISORY_SIGNAL_SEVERITIES:
+            raise ValueError("Nepoznata tezina advisory signala")
+        return value
+
+    @field_validator("category")
+    @classmethod
+    def validate_advisory_category(cls, value: str) -> str:
+        if value not in CLINICAL_READINESS_ADVISORY_SIGNAL_CATEGORIES:
+            raise ValueError("Nepoznata kategorija advisory signala")
+        return value
+
+    @field_validator("is_decision")
+    @classmethod
+    def validate_not_decision(cls, value: bool) -> bool:
+        if value:
+            raise ValueError("Advisory signal ne smije biti klinicka odluka")
         return value
 
 
