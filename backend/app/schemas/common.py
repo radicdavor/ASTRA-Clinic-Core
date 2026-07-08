@@ -308,6 +308,52 @@ class ClinicalReadinessReviewAcknowledgmentResponse(BaseModel):
         return value
 
 
+class ClinicalReadinessAcknowledgmentReadItem(BaseModel):
+    id: int
+    acknowledgment_key: str
+    appointment_id: int
+    patient_id: int
+    advisory_signal_key: str
+    snapshot_id: int | None = None
+    actor_user_id: int
+    actor_role: str
+    reason: str
+    limitations: list[str]
+    schema_version: str
+    created_at: DateTimeType
+    safe_disclaimer: str
+    is_decision: bool = False
+    is_clearance: bool = False
+    is_override: bool = False
+
+    @field_validator("reason")
+    @classmethod
+    def validate_reason(cls, value: str) -> str:
+        cleaned = value.strip()
+        if not cleaned:
+            raise ValueError("Razlog pregleda signala je obavezan")
+        return cleaned
+
+    @field_validator("is_decision", "is_clearance", "is_override")
+    @classmethod
+    def validate_false_safety_flags(cls, value: bool) -> bool:
+        if value:
+            raise ValueError("Acknowledgment read response ne smije biti odluka, clearance ili override")
+        return value
+
+
+class ClinicalReadinessAcknowledgmentListResponse(BaseModel):
+    appointment_id: int
+    acknowledgments: list[ClinicalReadinessAcknowledgmentReadItem]
+    count: int
+    is_read_only: bool
+    warning: str
+
+
+class ClinicalReadinessAcknowledgmentDetailResponse(ClinicalReadinessAcknowledgmentReadItem):
+    warning: str
+
+
 class ClinicalReadinessSnapshotHistoryItem(BaseModel):
     id: int
     appointment_id: int

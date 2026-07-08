@@ -8,6 +8,9 @@ from app.core.database import Base
 from app.main import app
 from app.models.domain import ClinicalReadinessReviewAcknowledgment as ClinicalReadinessReviewAcknowledgmentModel
 from app.schemas.common import (
+    ClinicalReadinessAcknowledgmentDetailResponse,
+    ClinicalReadinessAcknowledgmentListResponse,
+    ClinicalReadinessAcknowledgmentReadItem,
     ClinicalReadinessReviewAcknowledgment,
     ClinicalReadinessReviewAcknowledgmentCreateRequest,
     ClinicalReadinessReviewAcknowledgmentResponse,
@@ -263,3 +266,74 @@ def test_review_acknowledgment_response_rejects_positive_runtime_flags(field_nam
 
     with pytest.raises(ValidationError):
         ClinicalReadinessReviewAcknowledgmentResponse(**payload)
+
+
+def read_item_payload() -> dict:
+    return {
+        "id": 1,
+        "acknowledgment_key": "ack-1",
+        "appointment_id": 7,
+        "patient_id": 3,
+        "advisory_signal_key": "no_reviewed_clinical_documents",
+        "snapshot_id": None,
+        "actor_user_id": 11,
+        "actor_role": "physician",
+        "reason": "Pregledan je savjetodavni signal.",
+        "limitations": ["Acknowledgment je read-only prikaz ljudskog pregleda signala."],
+        "schema_version": "acknowledgment.v1",
+        "created_at": datetime(2026, 7, 8, 12, 30, tzinfo=UTC),
+        "safe_disclaimer": "Acknowledgment nije clinical approval, readiness clearance ili override.",
+    }
+
+
+def test_acknowledgment_read_item_shape_is_safe():
+    payload = ClinicalReadinessAcknowledgmentReadItem(**read_item_payload()).model_dump(mode="json")
+
+    assert payload["acknowledgment_key"] == "ack-1"
+    assert payload["is_decision"] is False
+    assert payload["is_clearance"] is False
+    assert payload["is_override"] is False
+    assert FORBIDDEN_FIELDS.isdisjoint(payload.keys())
+    assert "resolved_at" not in payload
+
+
+@pytest.mark.parametrize("field_name", ["is_decision", "is_clearance", "is_override"])
+def test_acknowledgment_read_item_rejects_positive_runtime_flags(field_name: str):
+    payload = read_item_payload()
+    payload[field_name] = True
+
+    with pytest.raises(ValidationError):
+        ClinicalReadinessAcknowledgmentReadItem(**payload)
+
+
+def test_acknowledgment_list_response_shape_is_read_only():
+    item = ClinicalReadinessAcknowledgmentReadItem(**read_item_payload())
+    response = ClinicalReadinessAcknowledgmentListResponse(
+        appointment_id=7,
+        acknowledgments=[item],
+        count=1,
+        is_read_only=True,
+        warning="Read-only prikaz; nije odobrenje ili clearance.",
+    )
+    payload = response.model_dump(mode="json")
+
+    assert payload["is_read_only"] is True
+    assert payload["count"] == 1
+    assert "acknowledgments" in payload
+    assert "approval_status" not in payload
+    assert "appointment_status" not in payload
+
+
+def test_acknowledgment_detail_response_shape_is_safe():
+    response = ClinicalReadinessAcknowledgmentDetailResponse(
+        **read_item_payload(),
+        warning="Acknowledgment ne predstavlja clinical approval, readiness clearance, override, Outcome Evidence ili dozvolu za postupak.",
+    )
+    payload = response.model_dump(mode="json")
+
+    assert payload["warning"]
+    assert payload["is_decision"] is False
+    assert payload["is_clearance"] is False
+    assert payload["is_override"] is False
+    assert FORBIDDEN_FIELDS.isdisjoint(payload.keys())
+    assert "resolved_at" not in payload
