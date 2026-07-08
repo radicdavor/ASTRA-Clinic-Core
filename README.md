@@ -305,6 +305,8 @@ Pilot documents:
 - [Program 1 Phase C92 Next-Step Decision Brief](docs/programs/PROGRAM_1_PHASE_C92_NEXT_STEP_DECISION_BRIEF.md)
 - [Program 1 Phase C82-C92 Acknowledgment Read UI Closure Report](docs/programs/PROGRAM_1_PHASE_C82_C92_ACKNOWLEDGMENT_READ_UI_CLOSURE_REPORT.md)
 - [Program 1 Phase C92 regression notes](docs/programs/PROGRAM_1_PHASE_C92_REGRESSION_NOTES.md)
+- [Program 1 Phase C93 Acknowledgment Read UI Usability Review Plan](docs/programs/PROGRAM_1_PHASE_C93_ACKNOWLEDGMENT_READ_UI_USABILITY_REVIEW_PLAN.md)
+- [Program 1 Phase C93 regression notes](docs/programs/PROGRAM_1_PHASE_C93_REGRESSION_NOTES.md)
 - [Lokalni LAN pristup](docs/LAN_ACCESS.md)
 - [Program 1 audit event naming](docs/programs/PROGRAM_1_AUDIT_EVENT_NAMING.md)
 - [Program 1 Phase A regression notes](docs/programs/PROGRAM_1_PHASE_A_REGRESSION_NOTES.md)
