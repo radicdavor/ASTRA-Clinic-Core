@@ -839,6 +839,16 @@ class ClinicalEvidenceTimelineEventPreview(BaseModel):
         return value
 
 
+class ClinicalEvidenceTimelineListResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    patient_id: int
+    events: list[ClinicalEvidenceTimelineEventPreview]
+    count: int
+    is_read_only: bool = True
+    warning: str = "Clinical Evidence Timeline je read-only source-linked prikaz; nije diagnosis, treatment plan, Task, Outcome Evidence, patient message, approval, clearance ili override."
+
+
 class ClinicalReadinessReviewAcknowledgment(BaseModel):
     model_config = ConfigDict(extra="forbid")
 

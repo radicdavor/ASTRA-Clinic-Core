@@ -126,13 +126,13 @@ def test_timeline_runtime_routes_models_services_permissions_do_not_exist():
         (getattr(route, "path", ""), tuple(sorted(getattr(route, "methods", []) or [])))
         for route in app.routes
     }
-    forbidden_patient_timeline_paths = {
-        "/api/patients/{patient_id}/clinical-evidence-timeline",
-        "/api/patients/{patient_id}/clinical-evidence-timeline/{event_id}",
-    }
+    approved_read_path = "/api/patients/{patient_id}/clinical-evidence-timeline"
     for path, methods in route_methods:
-        if path in forbidden_patient_timeline_paths:
-            assert not {"GET", "POST", "PATCH", "PUT", "DELETE"}.intersection(methods)
+        if path == approved_read_path:
+            assert set(methods) == {"GET"}
+        if path.startswith("/api/patients/{patient_id}/clinical-evidence-timeline"):
+            assert not {"POST", "PATCH", "PUT", "DELETE"}.intersection(methods)
+            assert "/{event_id}" not in path
 
     repo = Path(__file__).resolve().parents[1]
     assert not hasattr(domain, "ClinicalEvidenceTimelineEvent")
@@ -141,4 +141,5 @@ def test_timeline_runtime_routes_models_services_permissions_do_not_exist():
     assert "def create" not in service_text
     assert "def persist" not in service_text
     assert "def write" not in service_text
-    assert "clinical_evidence_timeline.read" not in PERMISSIONS
+    assert "clinical_evidence_timeline.write" not in PERMISSIONS
+    assert "clinical_evidence_timeline.review" not in PERMISSIONS

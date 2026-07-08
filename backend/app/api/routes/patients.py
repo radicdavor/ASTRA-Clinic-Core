@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date, datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy import and_, func, or_, select
@@ -9,7 +9,8 @@ from app.audit.service import audit, snapshot
 from app.auth.dependencies import Actor, get_current_actor, require_permission
 from app.core.database import get_db
 from app.models.domain import Appointment, ClinicalEpisode, ClinicalFinding, ClinicalOpenQuestion, Invoice, Patient
-from app.schemas.common import AppointmentOut, ClinicalEpisodeOut, ClinicalFindingDetailResponse, ClinicalFindingListResponse, ClinicalFindingReadItem, ClinicalOpenQuestionDetailResponse, ClinicalOpenQuestionListResponse, ClinicalOpenQuestionReadItem, ErrorResponse, InvoiceOut, PatientCreate, PatientOut, PatientUpdate
+from app.schemas.common import AppointmentOut, ClinicalEpisodeOut, ClinicalEvidenceTimelineListResponse, ClinicalFindingDetailResponse, ClinicalFindingListResponse, ClinicalFindingReadItem, ClinicalOpenQuestionDetailResponse, ClinicalOpenQuestionListResponse, ClinicalOpenQuestionReadItem, ErrorResponse, InvoiceOut, PatientCreate, PatientOut, PatientUpdate
+from app.services.clinical_evidence_timeline import list_patient_clinical_evidence_timeline
 
 ERROR_RESPONSES = {400: {"model": ErrorResponse}, 401: {"model": ErrorResponse}, 403: {"model": ErrorResponse}, 404: {"model": ErrorResponse}, 409: {"model": ErrorResponse}, 422: {"model": ErrorResponse}}
 
@@ -111,6 +112,14 @@ def require_open_questions_read_user(actor: Actor) -> Actor:
         raise HTTPException(403, detail="Open questions read zahtijeva prijavljenog korisnika")
     if "clinical_open_questions.read" not in actor.permissions:
         raise HTTPException(403, detail="Nedostaje dozvola: clinical_open_questions.read")
+    return actor
+
+
+def require_timeline_read_user(actor: Actor) -> Actor:
+    if actor.actor_type != "user" or actor.user_id is None:
+        raise HTTPException(403, detail="Clinical evidence timeline read zahtijeva prijavljenog korisnika")
+    if "clinical_evidence_timeline.read" not in actor.permissions:
+        raise HTTPException(403, detail="Nedostaje dozvola: clinical_evidence_timeline.read")
     return actor
 
 
@@ -266,6 +275,33 @@ def patient_clinical_open_question_detail(
     if not question:
         raise HTTPException(404, detail="Open question nije pronaden")
     return open_question_detail_response(question)
+
+
+@router.get("/patients/{patient_id}/clinical-evidence-timeline", response_model=ClinicalEvidenceTimelineListResponse)
+def patient_clinical_evidence_timeline(
+    patient_id: int,
+    event_type: str | None = None,
+    source_type: str | None = None,
+    requires_review: bool | None = None,
+    date_from: datetime | None = None,
+    date_to: datetime | None = None,
+    db: Session = Depends(get_db),
+    actor: Actor = Depends(get_current_actor),
+):
+    """GET-only source-linked clinical evidence timeline; not workflow, decision, task, outcome evidence or messaging."""
+    require_timeline_read_user(actor)
+    if not db.get(Patient, patient_id):
+        raise HTTPException(404, detail="Pacijent nije pronaden")
+    events = list_patient_clinical_evidence_timeline(
+        db,
+        patient_id=patient_id,
+        event_type=event_type,
+        source_type=source_type,
+        requires_review=requires_review,
+        date_from=date_from,
+        date_to=date_to,
+    )
+    return ClinicalEvidenceTimelineListResponse(patient_id=patient_id, events=events, count=len(events))
 
 
 @router.get("/patients/{patient_id}/appointments", response_model=list[AppointmentOut])
