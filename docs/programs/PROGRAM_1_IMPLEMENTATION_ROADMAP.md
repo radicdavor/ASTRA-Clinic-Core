@@ -1598,6 +1598,12 @@ Phase F0-F8 update:
 - Program 1 Phase F Clinical Evidence Timeline foundation opened as documentation-first module
 - timeline event definition, source-linking/provenance, event type taxonomy, object mapping, ordering/grouping, UI labels, permission boundary and audit/retention contracts documented
 - no timeline endpoint, DB model, migration, service, frontend UI, permission seed or audit event was added
+
+Phase F9-F10 update:
+
+- passive clinical evidence timeline event schema prototype added
+- timeline safety regression guard added for forbidden event types, decision semantics, source-linking and no endpoint/model/table/service/permission seed
+- runtime timeline remains no-go
 - no appointment status mutation
 - production and real-data use remain no-go
 

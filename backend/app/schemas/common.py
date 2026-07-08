@@ -111,6 +111,31 @@ CLINICAL_REVIEW_OBJECT_TYPES = {
     "extraction_candidate",
     "source_evidence",
 }
+CLINICAL_EVIDENCE_TIMELINE_EVENT_TYPES = {
+    "clinical_document_received",
+    "clinical_document_review_pending",
+    "finding_recorded",
+    "finding_requires_review",
+    "open_question_suggested",
+    "open_question_awaiting_review",
+    "extraction_candidate_generated",
+    "review_pending",
+    "review_completed",
+    "readiness_snapshot_captured",
+    "readiness_snapshot_superseded",
+    "acknowledgment_recorded",
+    "access_audit_recorded",
+}
+CLINICAL_EVIDENCE_TIMELINE_SOURCE_TYPES = {
+    "clinical_document",
+    "clinical_finding",
+    "clinical_open_question",
+    "extraction_candidate",
+    "clinical_review",
+    "readiness_snapshot",
+    "acknowledgment",
+    "access_audit",
+}
 
 
 class ORMModel(BaseModel):
@@ -746,6 +771,71 @@ class ClinicalReviewPreview(BaseModel):
     def validate_review_not_persisted(cls, value: bool) -> bool:
         if value:
             raise ValueError("Review preview ne smije implicirati persistence")
+        return value
+
+
+class ClinicalEvidenceTimelineSourceReference(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    source_object_type: str
+    source_object_reference: str
+    patient_id: int
+    source_label: str
+    provenance_label: str
+    source_document_reference: str | None = None
+    limitations: list[str] = Field(default_factory=lambda: ["Timeline event requires source traceability and human interpretation."])
+
+    @field_validator("source_object_type")
+    @classmethod
+    def validate_timeline_source_type(cls, value: str) -> str:
+        if value not in CLINICAL_EVIDENCE_TIMELINE_SOURCE_TYPES:
+            raise ValueError("Nepoznat timeline source object type")
+        return value
+
+    @field_validator("source_object_reference", "source_label", "provenance_label")
+    @classmethod
+    def validate_timeline_source_text(cls, value: str) -> str:
+        cleaned = value.strip()
+        if not cleaned:
+            raise ValueError("Timeline source polje ne smije biti prazno")
+        return cleaned
+
+
+class ClinicalEvidenceTimelineEventPreview(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    event_key: str
+    event_type: str
+    label: str
+    source_reference: ClinicalEvidenceTimelineSourceReference
+    event_timestamp: DateTimeType
+    display_timestamp: DateTimeType
+    limitations: list[str] = Field(default_factory=lambda: ["Timeline event je source-linked kontekst; nije klinicka odluka."])
+    requires_review: bool = False
+    is_decision: bool = False
+    created_at: DateTimeType
+    no_decision_disclaimer: str = "Timeline event nije diagnosis, treatment plan, Task, Outcome Evidence, patient message, approval, clearance ili override."
+
+    @field_validator("event_key", "label")
+    @classmethod
+    def validate_timeline_event_text(cls, value: str) -> str:
+        cleaned = value.strip()
+        if not cleaned:
+            raise ValueError("Timeline event polje ne smije biti prazno")
+        return cleaned
+
+    @field_validator("event_type")
+    @classmethod
+    def validate_timeline_event_type(cls, value: str) -> str:
+        if value not in CLINICAL_EVIDENCE_TIMELINE_EVENT_TYPES:
+            raise ValueError("Nepoznat timeline event type")
+        return value
+
+    @field_validator("is_decision")
+    @classmethod
+    def validate_timeline_not_decision(cls, value: bool) -> bool:
+        if value:
+            raise ValueError("Timeline event ne smije biti clinical decision")
         return value
 
 

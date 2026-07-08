@@ -594,6 +594,8 @@ Pilot documents:
 - [Program 1 Phase F6 Timeline Display UI Safety Labels Contract](docs/programs/PROGRAM_1_PHASE_F6_TIMELINE_DISPLAY_UI_SAFETY_LABELS_CONTRACT.md)
 - [Program 1 Phase F7 Timeline Permission Access Boundary Contract](docs/programs/PROGRAM_1_PHASE_F7_TIMELINE_PERMISSION_ACCESS_BOUNDARY_CONTRACT.md)
 - [Program 1 Phase F8 Timeline Audit Retention Contract](docs/programs/PROGRAM_1_PHASE_F8_TIMELINE_AUDIT_RETENTION_CONTRACT.md)
+- [Program 1 Phase F9 regression notes](docs/programs/PROGRAM_1_PHASE_F9_REGRESSION_NOTES.md)
+- [Program 1 Phase F10 regression notes](docs/programs/PROGRAM_1_PHASE_F10_REGRESSION_NOTES.md)
 - [Lokalni LAN pristup](docs/LAN_ACCESS.md)
 - [Program 1 audit event naming](docs/programs/PROGRAM_1_AUDIT_EVENT_NAMING.md)
 - [Program 1 Phase A regression notes](docs/programs/PROGRAM_1_PHASE_A_REGRESSION_NOTES.md)
