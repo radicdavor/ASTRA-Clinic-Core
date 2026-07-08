@@ -758,3 +758,40 @@ ASTRA smije nastaviti s endpoint contract designom prije bilo kakve migracije il
 Preporuceni sljedeci task:
 
 `Program 1 Phase C38 - Acknowledgment Endpoint Contract Design`
+
+## 17. Program 1 Phase C38-C48 - Human Review Acknowledgment Endpoint Contract
+
+Status: zatvoreno kao contract/governance pass.
+
+Implementirano:
+
+- future endpoint contract design
+- passive request/response schemas
+- error states contract
+- permission boundary
+- audit expectations
+- idempotency/retry policy
+- runtime no-go boundary
+- endpoint absence regression guard
+- endpoint CI gate
+- endpoint go/no-go matrix
+- closure report i next-step decision brief
+
+Runtime granica:
+
+- nema FastAPI acknowledgment rute
+- nema write servicea
+- nema DB modela ili migracije
+- nema seed permissiona
+- nema frontend API write metode
+- nema UI action buttona
+
+Zakljucak:
+
+Acknowledgment endpoint ostaje no-go za runtime.
+
+Pasivne request/response sheme smiju ostati kao contract prototype, ali nisu vezane na rutu.
+
+Preporuceni sljedeci task:
+
+`Program 1 Phase C49 - Acknowledgment Persistence Migration Draft Design`
