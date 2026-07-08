@@ -1568,6 +1568,12 @@ Phase D129-D131 update:
 - actual open question read API error/permission UX documented
 - open question read API CI gate documented
 - open question read API go/no-go matrix added; GET-only read is allowed, write/review/UI remain no-go
+
+Phase D132-D136 update:
+
+- Program 1 Phase D module inventory, final safety review, final go/no-go matrix and closure report added
+- D121-D136 open question read API and D closure report added
+- recommended next task: Program 1 Phase E0 - Review Workflow Foundation, documentation-only and no review endpoint
 - no appointment status mutation
 - production and real-data use remain no-go
 
