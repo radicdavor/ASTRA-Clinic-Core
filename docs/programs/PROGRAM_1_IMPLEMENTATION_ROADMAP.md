@@ -1508,6 +1508,12 @@ Phase D118 update:
 - open question read API go/no-go matrix added
 - contract and passive schemas are allowed; endpoint implementation remains deferred
 - write/review/approve/clear/resolve routes, Task, Outcome Evidence and patient messaging remain no-go
+
+Phase D119 update:
+
+- open question read API prototype deferral documented
+- prerequisites listed for a later GET-only prototype
+- no endpoint, service, frontend client, permission seed, audit write or automatic question creation was added
 - no appointment status mutation
 - production and real-data use remain no-go
 
