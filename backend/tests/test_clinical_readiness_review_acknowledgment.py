@@ -5,6 +5,7 @@ from pydantic import ValidationError
 
 from app.core.database import Base
 from app.main import app
+from app.models.domain import ClinicalReadinessReviewAcknowledgment as ClinicalReadinessReviewAcknowledgmentModel
 from app.schemas.common import (
     ClinicalReadinessReviewAcknowledgment,
     ClinicalReadinessReviewAcknowledgmentCreateRequest,
@@ -114,8 +115,8 @@ def test_review_acknowledgment_db_model_and_table_do_not_exist():
     table_names = set(Base.metadata.tables)
     mapper_class_names = {mapper.class_.__name__ for mapper in Base.registry.mappers}
 
-    assert "clinical_readiness_review_acknowledgments" not in table_names
-    assert "ClinicalReadinessReviewAcknowledgment" not in mapper_class_names
+    assert "clinical_readiness_review_acknowledgments" in table_names
+    assert "ClinicalReadinessReviewAcknowledgment" in mapper_class_names
 
 
 def test_review_acknowledgment_permissions_are_not_seeded():
@@ -133,7 +134,41 @@ def test_review_acknowledgment_permissions_are_not_seeded():
 def test_review_acknowledgment_migration_is_not_present():
     migration_table_names = set(Base.metadata.tables)
 
-    assert "clinical_readiness_review_acknowledgments" not in migration_table_names
+    assert "clinical_readiness_review_acknowledgments" in migration_table_names
+
+
+def test_review_acknowledgment_model_shape_is_safe_db_foundation():
+    table = ClinicalReadinessReviewAcknowledgmentModel.__table__
+    columns = set(table.columns.keys())
+
+    assert {
+        "id",
+        "appointment_id",
+        "patient_id",
+        "snapshot_id",
+        "advisory_signal_key",
+        "actor_user_id",
+        "actor_role",
+        "reason",
+        "limitations_json",
+        "schema_version",
+        "not_decision_disclaimer",
+        "is_decision",
+        "is_clearance",
+        "is_override",
+        "created_at",
+    } <= columns
+    assert FORBIDDEN_FIELDS.isdisjoint(columns)
+    assert "resolved_at" not in columns
+
+
+def test_review_acknowledgment_model_has_false_only_safety_constraints():
+    constraint_sql = {str(constraint.sqltext) for constraint in ClinicalReadinessReviewAcknowledgmentModel.__table__.constraints if hasattr(constraint, "sqltext")}
+
+    assert "length(trim(reason)) > 0" in constraint_sql
+    assert "is_decision = false" in constraint_sql
+    assert "is_clearance = false" in constraint_sql
+    assert "is_override = false" in constraint_sql
 
 
 def test_review_acknowledgment_create_request_shape_is_passive_and_safe():

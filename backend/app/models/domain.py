@@ -309,6 +309,37 @@ class ClinicalReadinessSnapshot(Base):
     superseded_by_snapshot: Mapped["ClinicalReadinessSnapshot | None"] = relationship(remote_side=[id])
 
 
+class ClinicalReadinessReviewAcknowledgment(Base):
+    __tablename__ = "clinical_readiness_review_acknowledgments"
+    __table_args__ = (
+        CheckConstraint("length(trim(reason)) > 0", name="ck_clinical_readiness_review_acknowledgments_reason_non_empty"),
+        CheckConstraint("is_decision = false", name="ck_clinical_readiness_review_acknowledgments_not_decision"),
+        CheckConstraint("is_clearance = false", name="ck_clinical_readiness_review_acknowledgments_not_clearance"),
+        CheckConstraint("is_override = false", name="ck_clinical_readiness_review_acknowledgments_not_override"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    appointment_id: Mapped[int] = mapped_column(ForeignKey("appointments.id"), index=True)
+    patient_id: Mapped[int] = mapped_column(ForeignKey("patients.id"), index=True)
+    snapshot_id: Mapped[int | None] = mapped_column(ForeignKey("clinical_readiness_snapshots.id"), index=True)
+    advisory_signal_key: Mapped[str] = mapped_column(String(160), index=True)
+    actor_user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    actor_role: Mapped[str] = mapped_column(String(80), index=True)
+    reason: Mapped[str] = mapped_column(Text)
+    limitations_json: Mapped[list] = mapped_column(JSON, default=list)
+    schema_version: Mapped[str] = mapped_column(String(80), default="acknowledgment.v1")
+    not_decision_disclaimer: Mapped[str] = mapped_column(Text, default="Acknowledgment je zapis ljudskog pregleda signala, nije klinicka odluka.")
+    is_decision: Mapped[bool] = mapped_column(Boolean, default=False)
+    is_clearance: Mapped[bool] = mapped_column(Boolean, default=False)
+    is_override: Mapped[bool] = mapped_column(Boolean, default=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), index=True)
+
+    appointment: Mapped[Appointment] = relationship()
+    patient: Mapped[Patient] = relationship()
+    snapshot: Mapped[ClinicalReadinessSnapshot | None] = relationship()
+    actor: Mapped[User] = relationship()
+
+
 _SNAPSHOT_PROTECTED_FIELDS = [
     "id",
     "appointment_id",
