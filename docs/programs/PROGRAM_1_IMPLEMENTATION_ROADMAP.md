@@ -1481,6 +1481,17 @@ Phase D73-D75 update:
 - extraction CI gate documented
 - extraction contract go/no-go matrix added
 - runtime extraction, AI/OCR runtime, automatic persistence and real-data/production use remain no-go
+
+Phase D66-D76 closure update:
+
+- ClinicalDocument finding extraction contract closed
+- passive extraction source/candidate/batch schemas added with regression coverage
+- frontend smoke guards absence of findings extraction client/UI labels
+- runtime extraction, automatic candidate persistence, AI/OCR runtime, write/review endpoints, Task, Outcome Evidence and patient messaging remain no-go
+
+Recommended next task:
+
+`Program 1 Phase D77 - Open Questions From Findings Contract`
 - no appointment status mutation
 - production and real-data use remain no-go
 
