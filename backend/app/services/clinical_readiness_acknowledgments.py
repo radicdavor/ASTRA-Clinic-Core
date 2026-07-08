@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from fastapi import Request
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -14,6 +15,7 @@ from app.services.clinical_readiness_preview import build_clinical_readiness_pre
 
 
 CLINICAL_READINESS_ACKNOWLEDGED_EVENT = "clinical_readiness_acknowledged"
+CLINICAL_READINESS_ACKNOWLEDGMENT_READ_DENIED_EVENT = "clinical_readiness_acknowledgment_read_denied"
 CLINICAL_READINESS_ACKNOWLEDGMENT_SCHEMA_VERSION = "acknowledgment.v1"
 CLINICAL_READINESS_ACKNOWLEDGMENT_LIMITATION = (
     "Acknowledgment je zapis ljudskog pregleda advisory signala; nije clinical approval, "
@@ -57,6 +59,50 @@ def _audit_payload(acknowledgment: ClinicalReadinessReviewAcknowledgment) -> dic
         "is_clearance": acknowledgment.is_clearance,
         "is_override": acknowledgment.is_override,
     }
+
+
+def record_acknowledgment_read_denied_audit(
+    db: Session,
+    *,
+    denial_category: str,
+    access_type: str,
+    route: str,
+    actor_type: str,
+    actor_user_id: int | None = None,
+    actor_api_key_id: int | None = None,
+    actor_role: str | None = None,
+    appointment_id: int | None = None,
+    patient_id: int | None = None,
+    acknowledgment_id: int | None = None,
+    request: Request | None = None,
+) -> None:
+    """Record privacy-minimized denied-read access audit without clinical payload."""
+    payload = {
+        "event_name": CLINICAL_READINESS_ACKNOWLEDGMENT_READ_DENIED_EVENT,
+        "access_type": access_type,
+        "denial_category": denial_category,
+        "route": route,
+        "result": "denied",
+        "actor_type": actor_type,
+        "actor_user_id": actor_user_id,
+        "actor_api_key_id": actor_api_key_id,
+        "actor_role": actor_role,
+        "appointment_id": appointment_id,
+        "patient_id": patient_id,
+        "acknowledgment_id": acknowledgment_id,
+    }
+    audit(
+        db,
+        CLINICAL_READINESS_ACKNOWLEDGMENT_READ_DENIED_EVENT,
+        "ClinicalReadinessReviewAcknowledgment",
+        acknowledgment_id,
+        "Acknowledgment read access denied",
+        actor_user_id=actor_user_id,
+        actor_type=actor_type,
+        actor_api_key_id=actor_api_key_id,
+        after_json=payload,
+        request=request,
+    )
 
 
 def create_clinical_readiness_review_acknowledgment(
