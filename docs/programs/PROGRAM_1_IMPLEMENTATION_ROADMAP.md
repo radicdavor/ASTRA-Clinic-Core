@@ -1372,6 +1372,17 @@ Phase D87 update:
 - D77-D87 open questions from findings closure report added
 - next-step decision brief recommends Program 1 Phase D88 - Open Question Persistence Design
 - D88 remains documentation-only before any persistence or runtime workflow
+
+## 34. Program 1 Phase D88-D98 - Open Question Persistence Design
+
+Status: in progress as persistence-design / runtime no-go pass.
+
+Phase D88 update:
+
+- open question persistence design documented
+- proposed entity/table names documented as `ClinicalOpenQuestion` and `clinical_open_questions`
+- patient, finding, source document and extraction candidate relationships defined as design only
+- DB model and migration remain deferred
 - no appointment status mutation
 - production and real-data use remain no-go
 

@@ -490,6 +490,8 @@ Pilot documents:
 - [Program 1 Phase D77-D87 Open Questions From Findings Closure Report](docs/programs/PROGRAM_1_PHASE_D77_D87_OPEN_QUESTIONS_FROM_FINDINGS_CLOSURE_REPORT.md)
 - [Program 1 Phase D87 Next-Step Decision Brief](docs/programs/PROGRAM_1_PHASE_D87_NEXT_STEP_DECISION_BRIEF.md)
 - [Program 1 Phase D87 regression notes](docs/programs/PROGRAM_1_PHASE_D87_REGRESSION_NOTES.md)
+- [Program 1 Phase D88 Open Question Persistence Design](docs/programs/PROGRAM_1_PHASE_D88_OPEN_QUESTION_PERSISTENCE_DESIGN.md)
+- [Program 1 Phase D88 regression notes](docs/programs/PROGRAM_1_PHASE_D88_REGRESSION_NOTES.md)
 - [Lokalni LAN pristup](docs/LAN_ACCESS.md)
 - [Program 1 audit event naming](docs/programs/PROGRAM_1_AUDIT_EVENT_NAMING.md)
 - [Program 1 Phase A regression notes](docs/programs/PROGRAM_1_PHASE_A_REGRESSION_NOTES.md)
