@@ -1396,6 +1396,12 @@ Phase D63 update:
 - backend findings read API safety guards reviewed
 - existing tests cover GET-only behavior, write route absence, forbidden response fields and workflow side-effect absence
 - no duplicate backend test was added
+
+Phase D64 update:
+
+- findings workspace usability go/no-go matrix added
+- read-only usability refinements are allowed for demo/pilot
+- write/review endpoints, Task, Outcome Evidence, patient messaging, automatic diagnosis/treatment, production and real-data use remain no-go
 - no appointment status mutation
 - production and real-data use remain no-go
 
