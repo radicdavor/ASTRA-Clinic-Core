@@ -1517,6 +1517,21 @@ Runtime boundary:
 Recommended next task:
 
 `Program 1 Phase D78 - Open Question Boundary and Forbidden Semantics`
+
+Phase D78-D81 update:
+
+- open question forbidden semantics documented
+- source-linking contract documented
+- human review responsibility contract documented
+- safe lifecycle status taxonomy documented
+
+Runtime boundary:
+
+- no open question endpoint
+- no open question persistence
+- no automatic creation from findings or extraction candidates
+- no Task engine, Outcome Evidence or patient messaging
+- no automatic diagnosis or treatment
 - no appointment status mutation
 - production and real-data use remain no-go
 
