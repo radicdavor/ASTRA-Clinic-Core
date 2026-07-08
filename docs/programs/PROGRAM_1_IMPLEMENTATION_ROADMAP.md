@@ -1402,6 +1402,26 @@ Phase D64 update:
 - findings workspace usability go/no-go matrix added
 - read-only usability refinements are allowed for demo/pilot
 - write/review endpoints, Task, Outcome Evidence, patient messaging, automatic diagnosis/treatment, production and real-data use remain no-go
+
+Phase D55-D65 closure update:
+
+- findings read-only workspace usability hardening completed
+- safety copy, empty/error/permission states, lifecycle labels, source-linked metadata display and accessibility were refined
+- smoke coverage expanded for safe copy and no-action/no-forbidden wording
+- backend safety guards were reviewed without adding duplicate tests
+
+Runtime boundary:
+
+- no findings write/review endpoint
+- no frontend write client
+- no UI action button
+- no Task engine, Outcome Evidence or patient messaging
+- no automatic diagnosis or treatment
+- no production or real-data enablement
+
+Recommended next task:
+
+`Program 1 Phase D66 - ClinicalDocument Finding Extraction Contract`
 - no appointment status mutation
 - production and real-data use remain no-go
 
