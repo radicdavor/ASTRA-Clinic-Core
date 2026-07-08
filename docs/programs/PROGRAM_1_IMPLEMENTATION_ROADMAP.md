@@ -1449,6 +1449,12 @@ Phase D106 update:
 - open question migration rollback and upgrade notes documented
 - rollback explicitly removes only `clinical_open_questions`
 - source findings, documents, snapshots and acknowledgments remain unchanged by downgrade expectations
+
+Phase D107-D108 update:
+
+- open question persistence CI gate documented
+- open question persistence migration go/no-go matrix added
+- DB foundation may be allowed while runtime endpoint, service, UI and automatic question creation remain no-go
 - no appointment status mutation
 - production and real-data use remain no-go
 
