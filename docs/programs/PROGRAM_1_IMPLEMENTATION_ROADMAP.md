@@ -1383,6 +1383,14 @@ Phase D88 update:
 - proposed entity/table names documented as `ClinicalOpenQuestion` and `clinical_open_questions`
 - patient, finding, source document and extraction candidate relationships defined as design only
 - DB model and migration remain deferred
+
+Phase D89-D92 update:
+
+- proposed open question database shape and forbidden column policy documented
+- source-linking persistence rules documented
+- lifecycle status persistence contract documented
+- review metadata contract documented without adding review workflow
+- DB model, migration, endpoint, service and UI remain no-go
 - no appointment status mutation
 - production and real-data use remain no-go
 
