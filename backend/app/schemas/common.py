@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import date as DateType, datetime as DateTimeType, time as TimeType
 from decimal import Decimal
 
-from pydantic import BaseModel, ConfigDict, EmailStr, field_validator
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 
 
 EPISODE_STATUSES = {"open", "active", "waiting", "completed", "cancelled", "archived"}
@@ -223,6 +223,39 @@ class ClinicalReadinessAdvisorySignal(BaseModel):
     def validate_not_decision(cls, value: bool) -> bool:
         if value:
             raise ValueError("Advisory signal ne smije biti klinicka odluka")
+        return value
+
+
+class ClinicalReadinessReviewAcknowledgment(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    acknowledgment_key: str
+    advisory_signal_key: str
+    snapshot_id: int | None = None
+    appointment_id: int
+    patient_id: int
+    actor_role: str
+    reason: str
+    created_at: DateTimeType
+    limitations: list[str] = Field(default_factory=lambda: ["Human review acknowledgment nije klinicka odluka."])
+    is_decision: bool = False
+    is_clearance: bool = False
+    is_override: bool = False
+    not_decision_disclaimer: str = "Acknowledgment znaci da je covjek pregledao signal; ne znaci odobrenje, clearance ili override."
+
+    @field_validator("reason")
+    @classmethod
+    def validate_reason(cls, value: str) -> str:
+        cleaned = value.strip()
+        if not cleaned:
+            raise ValueError("Razlog pregleda signala je obavezan")
+        return cleaned
+
+    @field_validator("is_decision", "is_clearance", "is_override")
+    @classmethod
+    def validate_false_safety_flags(cls, value: bool) -> bool:
+        if value:
+            raise ValueError("Acknowledgment ne smije biti odluka, clearance ili override")
         return value
 
 
