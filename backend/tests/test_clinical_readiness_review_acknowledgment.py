@@ -1,4 +1,5 @@
 from datetime import UTC, datetime
+from pathlib import Path
 
 import pytest
 from pydantic import ValidationError
@@ -169,6 +170,26 @@ def test_review_acknowledgment_model_has_false_only_safety_constraints():
     assert "is_decision = false" in constraint_sql
     assert "is_clearance = false" in constraint_sql
     assert "is_override = false" in constraint_sql
+
+
+def test_review_acknowledgment_migration_shape_has_no_forbidden_workflow_columns():
+    repo_root = Path(__file__).resolve().parents[1]
+    migration = repo_root / "alembic" / "versions" / "0017_acknowledgment_persistence_foundation.py"
+    content = migration.read_text()
+
+    assert "clinical_readiness_review_acknowledgments" in content
+    assert "ck_clinical_readiness_review_acknowledgments_reason_non_empty" in content
+    assert "ck_clinical_readiness_review_acknowledgments_not_decision" in content
+    assert "ck_clinical_readiness_review_acknowledgments_not_clearance" in content
+    assert "ck_clinical_readiness_review_acknowledgments_not_override" in content
+    assert "approval_status" not in content
+    assert "clearance_status" not in content
+    assert "override_status" not in content
+    assert "outcome_evidence_id" not in content
+    assert "task_id" not in content
+    assert "patient_message_id" not in content
+    assert "appointment_status" not in content
+    assert "resolved_at" not in content
 
 
 def test_review_acknowledgment_create_request_shape_is_passive_and_safe():
