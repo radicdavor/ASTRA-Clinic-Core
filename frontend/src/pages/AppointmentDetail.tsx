@@ -97,8 +97,8 @@ export function AppointmentDetail() {
         setAcknowledgmentHistory(null);
         setAcknowledgmentError(
           permissionError
-            ? "Nemate dozvolu za prikaz zapisa ljudskog pregleda savjetodavnih signala. Ovo ne mijenja status termina."
-            : "Zapisi ljudskog pregleda trenutno nisu dostupni. Ostali dijelovi termina ostaju dostupni."
+            ? "Nemate dozvolu za prikaz zapisa ljudskog pregleda savjetodavnih signala. Ovo ne mijenja status termina. Ostali podaci u radnom prostoru ostaju dostupni prema vasim dozvolama."
+            : "Zapisi pregleda trenutno nisu dostupni. To ne znaci da je klinicka spremnost potvrdjena ili odbijena."
         );
       })
       .finally(() => {
@@ -423,33 +423,34 @@ export function AppointmentDetail() {
       </WorkspaceSection>
 
       <WorkspaceSection title="Pregledani savjetodavni signali">
-        <p className="helper-text">Ovo je zapis ljudskog pregleda savjetodavnog signala. Nije klinicko odobrenje i ne mijenja status termina.</p>
+        <p className="helper-text">Ovo je zapis ljudskog pregleda savjetodavnog signala. Nije klinicko odobrenje. Ne mijenja status termina. Ne salje poruku pacijentu. Za klinicku interpretaciju odgovoran je lijecnik.</p>
         {acknowledgmentHistory?.warning && <p className="helper-text">{acknowledgmentHistory.warning}</p>}
         {acknowledgmentLoading ? (
-          <p>Ucitavanje zapisa ljudskog pregleda savjetodavnih signala...</p>
+          <p aria-live="polite">Ucitavanje zapisa ljudskog pregleda savjetodavnih signala...</p>
         ) : acknowledgmentError ? (
-          <p className="form-error">{acknowledgmentError}</p>
+          <p className="form-error" aria-live="polite">{acknowledgmentError}</p>
         ) : !acknowledgmentHistory || acknowledgmentHistory.acknowledgments.length === 0 ? (
-          <p>Nema zapisa ljudskog pregleda za ovaj termin. To ne znaci da nema klinickih rizika.</p>
+          <p aria-live="polite">Nema spremljenih zapisa ljudskog pregleda savjetodavnih signala za ovaj termin. To ne znaci da nema otvorenih readiness pitanja i nije odluka da se postupak smije provesti.</p>
         ) : (
-          <div className="timeline-list">
+          <div className="timeline-list" aria-label="Zapisi ljudskog pregleda savjetodavnih signala">
             {acknowledgmentHistory.acknowledgments.map((acknowledgment) => (
-              <article className="timeline-item" key={acknowledgment.id}>
+              <article className="timeline-item" key={acknowledgment.id} aria-label={`Zapis ljudskog pregleda ${acknowledgment.id}`}>
                 <strong>Zapis ljudskog pregleda</strong>
-                <small>{formatDateTime(acknowledgment.created_at)} / uloga: {acknowledgment.actor_role} / korisnik {acknowledgment.actor_user_id}</small>
+                <small>Vrijeme pregleda: {formatDateTime(acknowledgment.created_at)} / uloga osobe: {acknowledgment.actor_role} / korisnik {acknowledgment.actor_user_id}</small>
                 <div className="detail-list">
                   <p><span>Savjetodavni signal</span><strong>{acknowledgment.advisory_signal_key}</strong></p>
-                  <p><span>Razlog pregleda</span><strong>{acknowledgment.reason}</strong></p>
-                  <p><span>Snapshot veza</span><strong>{acknowledgment.snapshot_id ? `Povezano sa snapshot zapisom ${acknowledgment.snapshot_id}` : "Nema povezani snapshot zapis"}</strong></p>
+                  <p><span>Razlog kao biljeska pregleda</span><strong>{acknowledgment.reason}</strong></p>
+                  <p><span>Snapshot veza</span><strong>{acknowledgment.snapshot_id ? `Povezano sa snapshot zapisom ${acknowledgment.snapshot_id}. Snapshot ostaje nepromijenjen.` : "Nema povezani snapshot zapis. To ne mijenja znacenje pregleda signala."}</strong></p>
                   <p><span>Schema</span><strong>{acknowledgment.schema_version}</strong></p>
                 </div>
+                <p className="helper-text">Razlog je prikazan kao biljeska pregleda, ne kao klinicki zakljucak. Pregled ne mijenja spremljeni snapshot.</p>
                 {acknowledgment.limitations.length > 0 && (
-                  <ul>
+                  <ul aria-label="Ogranicenja zapisa ljudskog pregleda">
                     {acknowledgment.limitations.map((limitation) => <li key={limitation}>{limitation}</li>)}
                   </ul>
                 )}
                 <p className="helper-text">{acknowledgment.safe_disclaimer}</p>
-                <p className="helper-text">Za ljudsku interpretaciju. Ne rjesava automatski savjetodavni signal i ne pokrece radnju.</p>
+                <p className="helper-text">Za ljudsku interpretaciju. Ne rjesava automatski savjetodavni signal, ne mijenja termin i ne pokrece radnju.</p>
               </article>
             ))}
           </div>
