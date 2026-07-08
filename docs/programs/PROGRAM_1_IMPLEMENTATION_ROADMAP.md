@@ -1654,9 +1654,24 @@ Phase I0 update:
 - I0 adds no endpoints, UI, services, permissions, migrations, write workflows, production approval or real-data approval
 - recommended next task: Program 1 Phase I1 - B-H Clinical Workflow Foundation Inventory
 
+Phase I1-I14 update:
+
+- B-H clinical workflow foundation inventory documented
+- real patient data no-go and production readiness no-go matrix consolidated
+- access-control, audit, backup/restore, legal/compliance, usability, security and API key governance documented
+- source-linking integrity, no-decision wording and runtime write-surface no-go status consolidated
+- production, real data and clinical write workflows remain no-go
+
+Phase I15-I20 update:
+
+- pilot release readiness, known limitations, governance CI gate and B-H final safety review documented
+- Phase I closure report and next-step decision brief added
+- no runtime behavior changed
+- recommended next task: Program 1 Phase J0 - Pilot Demo Release Candidate, documentation/packaging only with demo data
+
 Recommended next task:
 
-`Program 1 Phase I1 - B-H Clinical Workflow Foundation Inventory`
+`Program 1 Phase J0 - Pilot Demo Release Candidate`
 
 ## 30. Program 1 Phase D44-D54 - Findings Read-Only Workspace Boundary
 
