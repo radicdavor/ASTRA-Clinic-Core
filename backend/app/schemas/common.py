@@ -82,6 +82,8 @@ CLINICAL_FINDING_SOURCE_TYPES = {
     "external_report",
     "other",
 }
+CLINICAL_FINDING_EXTRACTION_CONFIDENCE_LABELS = {"unknown", "low", "medium", "high"}
+CLINICAL_FINDING_EXTRACTION_SUGGESTED_STATUSES = {"received", "awaiting_review"}
 
 
 class ORMModel(BaseModel):
@@ -380,6 +382,115 @@ class ClinicalFindingDetailResponse(ClinicalFindingReadItem):
     model_config = ConfigDict(extra="forbid")
 
     warning: str = "Finding detail je read-only source-linked zapis. Ne predstavlja dijagnozu, treatment plan, Task, Outcome Evidence, patient message, approval, clearance ili override."
+
+
+class ClinicalFindingExtractionSource(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    source_document_id: int | None = None
+    source_type: str
+    source_label: str
+    source_reference: str
+    text_span_reference: str | None = None
+    page_reference: str | None = None
+    section_reference: str | None = None
+    source_date: DateType | None = None
+    source_author: str | None = None
+    source_institution: str | None = None
+    extraction_method: str = "contract_only"
+    extracted_at: DateTimeType
+    limitations: list[str] = Field(default_factory=lambda: ["Extraction source is traceability metadata, not clinical truth."])
+
+    @field_validator("source_type")
+    @classmethod
+    def validate_extraction_source_type(cls, value: str) -> str:
+        if value not in CLINICAL_FINDING_SOURCE_TYPES:
+            raise ValueError("Nepoznat source type za extraction candidate")
+        return value
+
+    @field_validator("source_label", "source_reference", "extraction_method")
+    @classmethod
+    def validate_extraction_source_text(cls, value: str) -> str:
+        cleaned = value.strip()
+        if not cleaned:
+            raise ValueError("Extraction source polje ne smije biti prazno")
+        return cleaned
+
+
+class ClinicalFindingExtractionCandidate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    candidate_key: str
+    label: str
+    category: str
+    source: ClinicalFindingExtractionSource
+    confidence_label: str = "unknown"
+    limitations: list[str] = Field(default_factory=lambda: ["Candidate finding requires human review and is not persisted clinical truth."])
+    requires_human_review: bool = True
+    suggested_lifecycle_status: str = "awaiting_review"
+    created_at: DateTimeType
+    is_persisted: bool = False
+    not_decision_disclaimer: str = "Extraction candidate nije dijagnoza, preporuka, physician decision, patient instruction, Task, Outcome Evidence ili patient message."
+
+    @field_validator("candidate_key", "label")
+    @classmethod
+    def validate_candidate_text(cls, value: str) -> str:
+        cleaned = value.strip()
+        if not cleaned:
+            raise ValueError("Extraction candidate polje ne smije biti prazno")
+        return cleaned
+
+    @field_validator("category")
+    @classmethod
+    def validate_candidate_category(cls, value: str) -> str:
+        if value not in CLINICAL_FINDING_CATEGORIES:
+            raise ValueError("Nepoznata kategorija extraction candidatea")
+        return value
+
+    @field_validator("confidence_label")
+    @classmethod
+    def validate_confidence_label(cls, value: str) -> str:
+        if value not in CLINICAL_FINDING_EXTRACTION_CONFIDENCE_LABELS:
+            raise ValueError("Nepoznat confidence label za extraction candidate")
+        return value
+
+    @field_validator("suggested_lifecycle_status")
+    @classmethod
+    def validate_suggested_lifecycle_status(cls, value: str) -> str:
+        if value not in CLINICAL_FINDING_EXTRACTION_SUGGESTED_STATUSES:
+            raise ValueError("Extraction candidate smije predloziti samo review-needed status")
+        return value
+
+    @field_validator("requires_human_review")
+    @classmethod
+    def validate_requires_human_review(cls, value: bool) -> bool:
+        if not value:
+            raise ValueError("Extraction candidate mora zahtijevati human review")
+        return value
+
+    @field_validator("is_persisted")
+    @classmethod
+    def validate_not_persisted(cls, value: bool) -> bool:
+        if value:
+            raise ValueError("Extraction candidate ne smije implicirati persisted finding")
+        return value
+
+
+class ClinicalFindingExtractionBatchPreview(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    clinical_document_id: int
+    patient_id: int
+    candidates: list[ClinicalFindingExtractionCandidate]
+    is_runtime_extraction: bool = False
+    warning: str = "Extraction batch preview je pasivni contract shape; ne pokrece OCR/AI, ne sprema findings i ne stvara klinicke odluke."
+
+    @field_validator("is_runtime_extraction")
+    @classmethod
+    def validate_not_runtime_extraction(cls, value: bool) -> bool:
+        if value:
+            raise ValueError("Extraction batch preview ne smije biti runtime extraction")
+        return value
 
 
 class ClinicalReadinessReviewAcknowledgment(BaseModel):

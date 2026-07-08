@@ -1462,6 +1462,12 @@ Runtime boundary:
 - no extraction endpoint, service, job or UI
 - no Task engine, Outcome Evidence or patient messaging
 - no automatic diagnosis or treatment
+
+Phase D71 update:
+
+- passive extraction candidate schemas added
+- source traceability, limitations, human review requirement and non-persistence boundary are represented in schema shape
+- no extraction endpoint, service, job, UI or automatic finding persistence was added
 - no appointment status mutation
 - production and real-data use remain no-go
 
