@@ -1398,6 +1398,13 @@ Phase D93-D94 update:
 - persistence safety regression guards reviewed
 - existing tests confirm no open question model, table, service or route exists
 - frontend smoke confirms no open question client/UI action exists
+
+Phase D95-D97 update:
+
+- open question migration review gate documented
+- open question persistence no-go matrix added
+- open question persistence CI gate documented
+- ORM/migration, endpoint, service, automatic question creation and UI remain no-go
 - no appointment status mutation
 - production and real-data use remain no-go
 
