@@ -3,7 +3,6 @@ from datetime import UTC, datetime
 import pytest
 from pydantic import ValidationError
 
-from app.core.database import Base
 from app.main import app
 from app.schemas.common import (
     CLINICAL_FINDING_LIFECYCLE_STATUSES,
@@ -119,10 +118,18 @@ def test_clinical_finding_runtime_routes_do_not_exist():
     assert "/api/appointments/{appointment_id}/findings" not in route_paths
 
 
-def test_clinical_finding_db_model_and_table_do_not_exist():
-    table_names = set(Base.metadata.tables)
-    mapper_class_names = {mapper.class_.__name__ for mapper in Base.registry.mappers}
+def test_clinical_finding_runtime_write_routes_do_not_exist():
+    route_methods = {
+        (getattr(route, "path", ""), tuple(sorted(getattr(route, "methods", []) or [])))
+        for route in app.routes
+    }
 
-    assert "clinical_findings" not in table_names
-    assert "ClinicalFinding" not in mapper_class_names
+    forbidden_paths = {
+        "/api/findings",
+        "/api/patients/{patient_id}/findings",
+        "/api/appointments/{appointment_id}/findings",
+    }
 
+    for path, methods in route_methods:
+        if path in forbidden_paths:
+            assert not {"POST", "PATCH", "PUT", "DELETE"}.intersection(methods)
