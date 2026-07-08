@@ -1455,6 +1455,12 @@ Phase D107-D108 update:
 - open question persistence CI gate documented
 - open question persistence migration go/no-go matrix added
 - DB foundation may be allowed while runtime endpoint, service, UI and automatic question creation remain no-go
+
+Phase D109 update:
+
+- D99-D109 open question migration closure report added
+- next-step decision brief recommends Program 1 Phase D110 - Open Question Read API Contract
+- D110 remains documentation-only before any open question endpoint
 - no appointment status mutation
 - production and real-data use remain no-go
 
