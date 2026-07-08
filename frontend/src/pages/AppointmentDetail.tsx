@@ -403,7 +403,7 @@ export function AppointmentDetail() {
         {clinicalReadiness.error && <p className="form-error">Savjetodavni signali trenutno nisu dostupni jer preview nije ucitan.</p>}
         {clinicalReadiness.data ? (
           clinicalReadiness.data.items.length === 0 ? (
-            <p>Nema savjetodavnih signala u trenutnom previewu. To ne znaci da je pacijent spreman.</p>
+            <p>Nema savjetodavnih signala u trenutnom previewu. To nije klinicka odluka i ne mijenja status termina.</p>
           ) : (
             <div className="timeline-list">
               {clinicalReadiness.data.items.map((item) => (
