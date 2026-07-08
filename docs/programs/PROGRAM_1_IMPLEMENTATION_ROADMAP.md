@@ -795,3 +795,45 @@ Pasivne request/response sheme smiju ostati kao contract prototype, ali nisu vez
 Preporuceni sljedeci task:
 
 `Program 1 Phase C49 - Acknowledgment Persistence Migration Draft Design`
+
+## 18. Program 1 Phase C49-C59 - Human Review Acknowledgment DB Foundation
+
+Status: zatvoreno kao migration-draft / DB-foundation pass.
+
+Implementirano:
+
+- acknowledgment migration draft design
+- pasivni ORM model `ClinicalReadinessReviewAcknowledgment`
+- Alembic migracija `0017_acknowledgment_persistence_foundation`
+- DB-level non-empty reason constraint
+- DB-level false-only decision, clearance i override constraints
+- model/migration shape regression tests
+- runtime endpoint no-go hardening
+- frontend action no-go hardening
+- permission seed no-go hardening
+- audit/retention boundary
+- rollback/restore boundary
+- DB foundation CI gate
+- go/no-go matrix i closure report
+
+Runtime granica:
+
+- nema POST/PATCH/PUT/DELETE endpointa za acknowledgment
+- nema runtime write servicea
+- nema frontend write clienta
+- nema UI action buttona
+- nema permission seeda
+- nema appointment status promjene
+- nema Task enginea
+- nema Outcome Evidencea
+- nema patient messaginga
+
+Zakljucak:
+
+DB row, ako se kreira u buducnosti, nije clinical decision record.
+
+Acknowledgment DB foundation ne znaci endpoint approval, production approval ili real patient data approval.
+
+Preporuceni sljedeci task:
+
+`Program 1 Phase C60 - Acknowledgment Write Service Contract Design`
