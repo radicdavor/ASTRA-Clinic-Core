@@ -50,6 +50,38 @@ CLINICAL_READINESS_ADVISORY_SIGNAL_CATEGORIES = {
     "source_warning",
     "other",
 }
+CLINICAL_FINDING_LIFECYCLE_STATUSES = {
+    "received",
+    "linked_to_patient",
+    "awaiting_review",
+    "review_in_progress",
+    "reviewed",
+    "needs_clinician_decision",
+    "decision_documented",
+    "follow_up_recommended",
+    "external_referral_recommended",
+    "closed_for_now",
+}
+CLINICAL_FINDING_CATEGORIES = {
+    "documentation",
+    "laboratory",
+    "pathology",
+    "endoscopy",
+    "radiology",
+    "medication",
+    "clinical_history",
+    "open_question",
+    "readiness_context",
+    "other",
+}
+CLINICAL_FINDING_SOURCE_TYPES = {
+    "clinical_document",
+    "patient_clinical_summary",
+    "manual_review",
+    "clinical_readiness_preview",
+    "external_report",
+    "other",
+}
 
 
 class ORMModel(BaseModel):
@@ -223,6 +255,62 @@ class ClinicalReadinessAdvisorySignal(BaseModel):
     def validate_not_decision(cls, value: bool) -> bool:
         if value:
             raise ValueError("Advisory signal ne smije biti klinicka odluka")
+        return value
+
+
+class ClinicalFindingSourceReference(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    source_type: str
+    source_id: int | None = None
+    source_label: str
+    source_reference: str | None = None
+    source_date: DateType | None = None
+    reviewed: bool = False
+    extraction_method: str | None = None
+    limitations: list[str] = Field(default_factory=list)
+
+    @field_validator("source_type")
+    @classmethod
+    def validate_source_type(cls, value: str) -> str:
+        if value not in CLINICAL_FINDING_SOURCE_TYPES:
+            raise ValueError("Nepoznat source type za finding")
+        return value
+
+
+class ClinicalFindingPreview(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    finding_key: str
+    label: str
+    category: str
+    status: str
+    source_reference: ClinicalFindingSourceReference
+    limitations: list[str] = Field(default_factory=lambda: ["Finding je source-linked context za review, nije klinicka odluka."])
+    requires_review: bool = True
+    created_at: DateTimeType
+    not_decision_disclaimer: str = "Finding nije automatska dijagnoza, treatment plan, Task, Outcome Evidence ili patient message."
+
+    @field_validator("finding_key", "label")
+    @classmethod
+    def validate_non_empty_text(cls, value: str) -> str:
+        cleaned = value.strip()
+        if not cleaned:
+            raise ValueError("Finding polje ne smije biti prazno")
+        return cleaned
+
+    @field_validator("category")
+    @classmethod
+    def validate_finding_category(cls, value: str) -> str:
+        if value not in CLINICAL_FINDING_CATEGORIES:
+            raise ValueError("Nepoznata kategorija findinga")
+        return value
+
+    @field_validator("status")
+    @classmethod
+    def validate_finding_status(cls, value: str) -> str:
+        if value not in CLINICAL_FINDING_LIFECYCLE_STATUSES:
+            raise ValueError("Nepoznat lifecycle status findinga")
         return value
 
 
