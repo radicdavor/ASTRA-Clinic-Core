@@ -1256,3 +1256,28 @@ Runtime decision:
 Recommended next task:
 
 `Program 1 Phase D22 - Findings Persistence Migration Draft`
+
+## 28. Program 1 Phase D22-D32 - Findings Persistence Migration Draft
+
+Status: in progress as DB-foundation / migration-draft pass.
+
+Phase D22 update:
+
+- findings migration draft design documented
+- proposed table remains `clinical_findings`
+- proposed model remains `ClinicalFinding`
+- migration intent is DB foundation only, not endpoint/service/UI approval
+
+Runtime boundary:
+
+- no findings endpoint
+- no findings service
+- no frontend UI
+- no Task engine
+- no Outcome Evidence
+- no patient messaging
+- no automatic diagnosis/treatment
+
+Recommended next task:
+
+`Program 1 Phase D23 - Passive ClinicalFinding ORM Model`

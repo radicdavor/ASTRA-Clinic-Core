@@ -394,6 +394,8 @@ Pilot documents:
 - [Program 1 Phase D11-D21 Findings Persistence Closure Report](docs/programs/PROGRAM_1_PHASE_D11_D21_FINDINGS_PERSISTENCE_CLOSURE_REPORT.md)
 - [Program 1 Phase D21 Next-Step Decision Brief](docs/programs/PROGRAM_1_PHASE_D21_NEXT_STEP_DECISION_BRIEF.md)
 - [Program 1 Phase D21 regression notes](docs/programs/PROGRAM_1_PHASE_D21_REGRESSION_NOTES.md)
+- [Program 1 Phase D22 Findings Migration Draft Design](docs/programs/PROGRAM_1_PHASE_D22_FINDINGS_MIGRATION_DRAFT_DESIGN.md)
+- [Program 1 Phase D22 regression notes](docs/programs/PROGRAM_1_PHASE_D22_REGRESSION_NOTES.md)
 - [Lokalni LAN pristup](docs/LAN_ACCESS.md)
 - [Program 1 audit event naming](docs/programs/PROGRAM_1_AUDIT_EVENT_NAMING.md)
 - [Program 1 Phase A regression notes](docs/programs/PROGRAM_1_PHASE_A_REGRESSION_NOTES.md)
