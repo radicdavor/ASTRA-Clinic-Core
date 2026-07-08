@@ -1713,9 +1713,17 @@ Phase M update:
 - Phase M does not close gaps, approve production, approve real data, validate deployment or add runtime behavior
 - recommended next task: Program 1 Phase N0 - Governance Control Design
 
+Phase N update:
+
+- future governance control designs documented
+- clinical responsibility, real-data governance, access/audit/accountability, safety gates and evidence/signoff requirements mapped
+- Program 1 Phase N documents future governance control designs required before any production-readiness claim
+- no governance control was implemented, validated, approved or wired into runtime behavior
+- recommended next task: Program 1 Phase O0 - Real Patient Data Governance Design
+
 Recommended next task:
 
-`Program 1 Phase N0 - Governance Control Design`
+`Program 1 Phase O0 - Real Patient Data Governance Design`
 
 ## 30. Program 1 Phase D44-D54 - Findings Read-Only Workspace Boundary
 
