@@ -657,6 +657,8 @@ Pilot documents:
 - [Program 1 Phase H Closure Report](docs/programs/PROGRAM_1_PHASE_H_CLOSURE_REPORT.md)
 - [Program 1 Phase H20 Next-Step Decision Brief](docs/programs/PROGRAM_1_PHASE_H20_NEXT_STEP_DECISION_BRIEF.md)
 - [Program 1 Phase H20 regression notes](docs/programs/PROGRAM_1_PHASE_H20_REGRESSION_NOTES.md)
+- [Program 1 Phase I0 Production Governance Consolidation](docs/programs/PROGRAM_1_PHASE_I0_PRODUCTION_GOVERNANCE_CONSOLIDATION.md)
+- [Program 1 Phase I0 regression notes](docs/programs/PROGRAM_1_PHASE_I0_REGRESSION_NOTES.md)
 - [Lokalni LAN pristup](docs/LAN_ACCESS.md)
 - [Program 1 audit event naming](docs/programs/PROGRAM_1_AUDIT_EVENT_NAMING.md)
 - [Program 1 Phase A regression notes](docs/programs/PROGRAM_1_PHASE_A_REGRESSION_NOTES.md)

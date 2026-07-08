@@ -1647,9 +1647,16 @@ Phase H9-H20 update:
 - production and real-data use remain no-go
 - recommended next task: Program 1 Phase I0 - Production Governance Consolidation, documentation-only
 
+Phase I0 update:
+
+- production governance consolidation opened as a docs-only module
+- B-H read-only clinical workflow foundation remains demo/pilot-only with demo data
+- I0 adds no endpoints, UI, services, permissions, migrations, write workflows, production approval or real-data approval
+- recommended next task: Program 1 Phase I1 - B-H Clinical Workflow Foundation Inventory
+
 Recommended next task:
 
-`Program 1 Phase I0 - Production Governance Consolidation`
+`Program 1 Phase I1 - B-H Clinical Workflow Foundation Inventory`
 
 ## 30. Program 1 Phase D44-D54 - Findings Read-Only Workspace Boundary
 
