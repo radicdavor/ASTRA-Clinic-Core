@@ -267,6 +267,8 @@ Pilot documents:
 - [Program 1 Phase C70 Acknowledgment Internal Service Closure Report](docs/programs/PROGRAM_1_PHASE_C70_ACKNOWLEDGMENT_INTERNAL_SERVICE_CLOSURE_REPORT.md)
 - [Program 1 Phase C70 Next-Step Decision Brief](docs/programs/PROGRAM_1_PHASE_C70_NEXT_STEP_DECISION_BRIEF.md)
 - [Program 1 Phase C70 regression notes](docs/programs/PROGRAM_1_PHASE_C70_REGRESSION_NOTES.md)
+- [Program 1 Phase C71 Acknowledgment Read API Contract Design](docs/programs/PROGRAM_1_PHASE_C71_ACKNOWLEDGMENT_READ_API_CONTRACT_DESIGN.md)
+- [Program 1 Phase C71 regression notes](docs/programs/PROGRAM_1_PHASE_C71_REGRESSION_NOTES.md)
 - [Lokalni LAN pristup](docs/LAN_ACCESS.md)
 - [Program 1 audit event naming](docs/programs/PROGRAM_1_AUDIT_EVENT_NAMING.md)
 - [Program 1 Phase A regression notes](docs/programs/PROGRAM_1_PHASE_A_REGRESSION_NOTES.md)

@@ -882,3 +882,22 @@ Closure documents:
 Recommended next task:
 
 `Program 1 Phase C71 - Acknowledgment Read API Contract Design`
+
+## 20. Program 1 Phase C71-C81 - Human Review Acknowledgment Read Boundary
+
+Status: u tijeku kao read-only API contract / read-boundary pass.
+
+Phase C71 update:
+
+- documented appointment-scoped read API contract
+- proposed list/detail routes for read-only acknowledgment access
+- documented auth and read permission requirement
+- documented sorting, empty state and error states
+- confirmed read API must not create, update, delete, approve, clear, override or mutate workflow state
+
+Runtime granica:
+
+- write endpoint remains no-go
+- frontend write action remains no-go
+- write permission seed remains no-go
+- real patient data and production remain no-go
