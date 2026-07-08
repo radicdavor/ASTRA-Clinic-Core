@@ -1411,6 +1411,17 @@ Phase D98 update:
 - D88-D98 open question persistence design closure report added
 - next-step decision brief recommends Program 1 Phase D99 - Open Question Persistence Migration Draft
 - D99 must remain migration-only with no endpoint, service, UI or automatic question creation
+
+## 35. Program 1 Phase D99-D109 - Open Question Persistence Migration Draft
+
+Status: in progress as DB-foundation / runtime no-go pass.
+
+Phase D99 update:
+
+- open question migration draft design documented
+- `clinical_open_questions` table and `ClinicalOpenQuestion` model intent defined
+- source-linking constraints, safe status vocabulary and review metadata policy documented
+- endpoint, service, UI and automatic question creation remain no-go
 - no appointment status mutation
 - production and real-data use remain no-go
 

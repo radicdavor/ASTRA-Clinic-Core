@@ -506,6 +506,8 @@ Pilot documents:
 - [Program 1 Phase D88-D98 Open Question Persistence Closure Report](docs/programs/PROGRAM_1_PHASE_D88_D98_OPEN_QUESTION_PERSISTENCE_CLOSURE_REPORT.md)
 - [Program 1 Phase D98 Next-Step Decision Brief](docs/programs/PROGRAM_1_PHASE_D98_NEXT_STEP_DECISION_BRIEF.md)
 - [Program 1 Phase D98 regression notes](docs/programs/PROGRAM_1_PHASE_D98_REGRESSION_NOTES.md)
+- [Program 1 Phase D99 Open Question Migration Draft Design](docs/programs/PROGRAM_1_PHASE_D99_OPEN_QUESTION_MIGRATION_DRAFT_DESIGN.md)
+- [Program 1 Phase D99 regression notes](docs/programs/PROGRAM_1_PHASE_D99_REGRESSION_NOTES.md)
 - [Lokalni LAN pristup](docs/LAN_ACCESS.md)
 - [Program 1 audit event naming](docs/programs/PROGRAM_1_AUDIT_EVENT_NAMING.md)
 - [Program 1 Phase A regression notes](docs/programs/PROGRAM_1_PHASE_A_REGRESSION_NOTES.md)
