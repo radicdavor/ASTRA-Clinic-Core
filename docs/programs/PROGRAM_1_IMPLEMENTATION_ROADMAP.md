@@ -1630,9 +1630,26 @@ Phase G9-G20 update:
 - write/workflow endpoints, Task engine, Outcome Evidence, patient messaging, automatic diagnosis/treatment and approval/clearance/override remain no-go
 - recommended next task: Program 1 Phase H0 - Clinical Evidence Timeline Workspace Contract, documentation-only first
 
+Phase H0-H8 update:
+
+- timeline workspace contract and UI safety copy matrix documented
+- GET-only frontend timeline types/client added
+- Patient Workspace read-only timeline panel added
+- empty/error/permission states, event type labels, source-linking display, ordering and accessibility hardened
+- no action buttons, write client, review controls or workflow semantics were added
+
+Phase H9-H20 update:
+
+- frontend smoke coverage expanded for timeline safe wording and no-action boundary
+- backend runtime no-go reviewed through existing timeline read API tests
+- timeline workspace CI gate, go/no-go matrix, usability review plan, production blocker matrix, inventory, final safety review and closure docs added
+- timeline UI remains read-only
+- production and real-data use remain no-go
+- recommended next task: Program 1 Phase I0 - Production Governance Consolidation, documentation-only
+
 Recommended next task:
 
-`Program 1 Phase H0 - Clinical Evidence Timeline Workspace Contract`
+`Program 1 Phase I0 - Production Governance Consolidation`
 
 ## 30. Program 1 Phase D44-D54 - Findings Read-Only Workspace Boundary
 
