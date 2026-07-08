@@ -6,10 +6,10 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, joinedload
 
 from app.audit.service import audit, snapshot
-from app.auth.dependencies import Actor, require_permission
+from app.auth.dependencies import Actor, get_current_actor, require_permission
 from app.core.database import get_db
-from app.models.domain import Appointment, ClinicalEpisode, Invoice, Patient
-from app.schemas.common import AppointmentOut, ClinicalEpisodeOut, ErrorResponse, InvoiceOut, PatientCreate, PatientOut, PatientUpdate
+from app.models.domain import Appointment, ClinicalEpisode, ClinicalFinding, Invoice, Patient
+from app.schemas.common import AppointmentOut, ClinicalEpisodeOut, ClinicalFindingDetailResponse, ClinicalFindingListResponse, ClinicalFindingReadItem, ErrorResponse, InvoiceOut, PatientCreate, PatientOut, PatientUpdate
 
 ERROR_RESPONSES = {400: {"model": ErrorResponse}, 401: {"model": ErrorResponse}, 403: {"model": ErrorResponse}, 404: {"model": ErrorResponse}, 409: {"model": ErrorResponse}, 422: {"model": ErrorResponse}}
 
@@ -45,6 +45,36 @@ def episode_with_count(db: Session, episode: ClinicalEpisode) -> ClinicalEpisode
     data = ClinicalEpisodeOut.model_validate(episode)
     data.appointment_count = scalar_count(db, select(func.count(Appointment.id)).where(Appointment.episode_id == episode.id))
     return data
+
+
+def finding_read_item(finding: ClinicalFinding) -> ClinicalFindingReadItem:
+    return ClinicalFindingReadItem(
+        id=finding.id,
+        finding_key=finding.finding_key,
+        patient_id=finding.patient_id,
+        source_type=finding.source_type,
+        source_label=finding.source_label,
+        source_reference=finding.source_reference,
+        source_document_id=finding.source_document_id,
+        label=finding.label,
+        category=finding.category,
+        lifecycle_status=finding.lifecycle_status,
+        requires_review=finding.requires_review,
+        reviewed_at=finding.reviewed_at,
+        reviewed_by_user_id=finding.reviewed_by_user_id,
+        limitations=finding.limitations_json or [],
+        schema_version=finding.schema_version,
+        created_at=finding.created_at,
+        updated_at=finding.updated_at,
+    )
+
+
+def require_findings_read_user(actor: Actor) -> Actor:
+    if actor.actor_type != "user" or actor.user_id is None:
+        raise HTTPException(403, detail="Findings read zahtijeva prijavljenog korisnika")
+    if "clinical_findings.read" not in actor.permissions:
+        raise HTTPException(403, detail="Nedostaje dozvola: clinical_findings.read")
+    return actor
 
 
 @router.post("/patients", response_model=PatientOut)
@@ -108,6 +138,47 @@ def get_patient(patient_id: int, db: Session = Depends(get_db), actor: Actor = D
     if not patient:
         raise HTTPException(404, detail="Pacijent nije pronaÄ‘en")
     return patient
+
+
+@router.get("/patients/{patient_id}/clinical-findings", response_model=ClinicalFindingListResponse)
+def patient_clinical_findings(
+    patient_id: int,
+    db: Session = Depends(get_db),
+    actor: Actor = Depends(get_current_actor),
+):
+    """Read-only source-linked findings; not diagnosis, treatment, task, outcome evidence or patient messaging."""
+    require_findings_read_user(actor)
+    if not db.get(Patient, patient_id):
+        raise HTTPException(404, detail="Pacijent nije pronaden")
+    findings = db.scalars(
+        select(ClinicalFinding)
+        .where(ClinicalFinding.patient_id == patient_id)
+        .order_by(ClinicalFinding.created_at.desc(), ClinicalFinding.id.desc())
+    ).all()
+    items = [finding_read_item(finding) for finding in findings]
+    return ClinicalFindingListResponse(patient_id=patient_id, findings=items, count=len(items))
+
+
+@router.get("/patients/{patient_id}/clinical-findings/{finding_id}", response_model=ClinicalFindingDetailResponse)
+def patient_clinical_finding_detail(
+    patient_id: int,
+    finding_id: int,
+    db: Session = Depends(get_db),
+    actor: Actor = Depends(get_current_actor),
+):
+    """Read-only source-linked finding detail; not diagnosis, treatment, task, outcome evidence or patient messaging."""
+    require_findings_read_user(actor)
+    if not db.get(Patient, patient_id):
+        raise HTTPException(404, detail="Pacijent nije pronaden")
+    finding = db.scalar(
+        select(ClinicalFinding).where(
+            ClinicalFinding.id == finding_id,
+            ClinicalFinding.patient_id == patient_id,
+        )
+    )
+    if not finding:
+        raise HTTPException(404, detail="Finding nije pronaden")
+    return ClinicalFindingDetailResponse(**finding_read_item(finding).model_dump())
 
 
 @router.get("/patients/{patient_id}/appointments", response_model=list[AppointmentOut])
