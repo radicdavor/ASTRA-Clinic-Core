@@ -1468,6 +1468,12 @@ Phase D71 update:
 - passive extraction candidate schemas added
 - source traceability, limitations, human review requirement and non-persistence boundary are represented in schema shape
 - no extraction endpoint, service, job, UI or automatic finding persistence was added
+
+Phase D72 update:
+
+- extraction safety regression guard added
+- backend tests cover passive schema safety, source requirement, no runtime route and no service
+- frontend smoke guards absence of findings extraction client/UI labels
 - no appointment status mutation
 - production and real-data use remain no-go
 
