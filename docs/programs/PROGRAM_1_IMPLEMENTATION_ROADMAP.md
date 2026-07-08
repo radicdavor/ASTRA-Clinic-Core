@@ -1422,6 +1422,31 @@ Runtime boundary:
 Recommended next task:
 
 `Program 1 Phase D66 - ClinicalDocument Finding Extraction Contract`
+
+## 32. Program 1 Phase D66-D76 - ClinicalDocument Finding Extraction Contract
+
+Status: in progress as extraction-contract / runtime no-go pass.
+
+Phase D66 update:
+
+- ClinicalDocument finding extraction contract documented
+- extraction, raw extracted text, candidate finding, persisted finding and physician-reviewed finding boundaries defined
+- extraction remains source-linked and non-runtime
+
+Runtime boundary:
+
+- no OCR engine or real AI provider
+- no extraction endpoint or background job
+- no automatic finding creation
+- no findings write/review endpoint
+- no frontend extraction UI
+- no Task engine, Outcome Evidence or patient messaging
+- no automatic diagnosis or treatment
+- production and real-data use remain no-go
+
+Recommended next task:
+
+`Program 1 Phase D67 - Extraction Candidate Boundary Contract`
 - no appointment status mutation
 - production and real-data use remain no-go
 
