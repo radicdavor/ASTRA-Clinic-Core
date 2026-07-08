@@ -1366,6 +1366,12 @@ Phase D84-D86 update:
 - open question CI gate documented
 - open questions from findings go/no-go matrix added
 - runtime endpoints, persistence, automatic question creation, Task, Outcome Evidence and patient messaging remain no-go
+
+Phase D87 update:
+
+- D77-D87 open questions from findings closure report added
+- next-step decision brief recommends Program 1 Phase D88 - Open Question Persistence Design
+- D88 remains documentation-only before any persistence or runtime workflow
 - no appointment status mutation
 - production and real-data use remain no-go
 
