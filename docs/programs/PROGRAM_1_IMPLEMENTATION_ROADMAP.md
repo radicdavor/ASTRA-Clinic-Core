@@ -680,3 +680,40 @@ ASTRA smije nastaviti samo s dokumentacijskim i guardrail radom oko ljudskog rev
 Preporuceni sljedeci task:
 
 `Program 1 Phase C16 - Human Review Acknowledgment Contract`
+
+## 15. Program 1 Phase C16-C26 - Human Review Acknowledgment And Advisory Read-Only Surface
+
+Status: zatvoreno kao guarded prototype/design pass.
+
+Implementirano:
+
+- Human Review Acknowledgment contract
+- forbidden semantics matrix
+- acknowledgment audit payload contract
+- pasivni `ClinicalReadinessReviewAcknowledgment` schema prototype
+- acknowledgment safety regression guard
+- advisory read-only UI design
+- advisory read-only UI prototype u Appointment Workspaceu
+- advisory UI smoke hardening
+- human review acknowledgment go/no-go matrix
+- acknowledgment/advisory CI gate
+- closure report i next-step decision brief
+
+Runtime granica:
+
+- nema acknowledgment endpointa
+- nema acknowledgment DB modela ili migracije
+- nema persistence
+- nema acknowledgment action buttona
+- nema workflow enforcementa
+- nema status promjene termina
+
+Safety zakljucak:
+
+Acknowledgment znaci samo da je covjek pregledao signal.
+
+Ne znaci clinical approval, readiness clearance, override, Task, Outcome Evidence ili dozvolu da se postupak provede.
+
+Preporuceni sljedeci task:
+
+`Program 1 Phase C27 - Human Review Acknowledgment Persistence Design`
