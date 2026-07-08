@@ -43,7 +43,7 @@ jobs:
         run: python -m pytest tests/test_clinical_readiness_snapshots.py
       - name: Run advisory and acknowledgment safety gate
         working-directory: backend
-        run: python -m pytest tests/test_clinical_readiness_advisory_signal.py tests/test_clinical_readiness_review_acknowledgment.py
+        run: python -m pytest tests/test_clinical_readiness_advisory_signal.py tests/test_clinical_readiness_review_acknowledgment.py tests/test_clinical_readiness_acknowledgments.py
       - name: Run backend tests
         working-directory: backend
         run: python -m pytest
