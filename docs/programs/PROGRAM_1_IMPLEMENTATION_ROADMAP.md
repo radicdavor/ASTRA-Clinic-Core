@@ -1158,3 +1158,29 @@ Final Phase C decision:
 Recommended next task:
 
 `Program 1 Phase D0 - Findings Lifecycle Foundation`
+
+## 26. Program 1 Phase D0-D10 - Findings Lifecycle Foundation
+
+Status: in progress as foundation/design pass.
+
+Phase D0 update:
+
+- Findings Lifecycle foundation is opened as documentation-first work
+- a finding is defined as a source-linked clinical knowledge unit that may require review and lifecycle governance
+- D0 confirms finding is not automatic diagnosis, Task, Outcome Evidence, patient message, clearance, override or appointment status
+- D0 connects findings to Patient Clinical Knowledge, ClinicalDocument, Patient Clinical Summary, Open Questions, physician decisions and the acknowledgment/readiness stack
+
+Runtime boundary:
+
+- no findings endpoint
+- no findings DB model or migration
+- no Task engine
+- no Outcome Evidence
+- no patient messaging
+- no automatic diagnosis or treatment plan
+- no appointment status mutation
+- no production or real-data enablement
+
+Recommended next task:
+
+`Program 1 Phase D1 - Finding Definition and Boundary Contract`

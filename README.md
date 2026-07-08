@@ -364,6 +364,8 @@ Pilot documents:
 - [Program 1 Phase C126-C136 Acknowledgment Final No-Go Closure Report](docs/programs/PROGRAM_1_PHASE_C126_C136_ACKNOWLEDGMENT_FINAL_NO_GO_CLOSURE_REPORT.md)
 - [Program 1 Phase C136 Next-Step Decision Brief](docs/programs/PROGRAM_1_PHASE_C136_NEXT_STEP_DECISION_BRIEF.md)
 - [Program 1 Phase C136 regression notes](docs/programs/PROGRAM_1_PHASE_C136_REGRESSION_NOTES.md)
+- [Program 1 Phase D0 Findings Lifecycle Foundation](docs/programs/PROGRAM_1_PHASE_D0_FINDINGS_LIFECYCLE_FOUNDATION.md)
+- [Program 1 Phase D0 regression notes](docs/programs/PROGRAM_1_PHASE_D0_REGRESSION_NOTES.md)
 - [Lokalni LAN pristup](docs/LAN_ACCESS.md)
 - [Program 1 audit event naming](docs/programs/PROGRAM_1_AUDIT_EVENT_NAMING.md)
 - [Program 1 Phase A regression notes](docs/programs/PROGRAM_1_PHASE_A_REGRESSION_NOTES.md)
