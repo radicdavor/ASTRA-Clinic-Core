@@ -1777,9 +1777,17 @@ Phase U update:
 - no production, real-data, PHI/PII, validation or go-live boundary was lifted
 - recommended next task: Program 1 Phase V0 - Access, Audit, and Real-Data Boundary Prototype
 
+Phase V update:
+
+- non-production access, audit and real-data boundary prototype documentation added
+- prototype access statuses, audit event categories, real-data boundary decisions, negative test notes and limitations documented
+- Phase V remains documentation-only and does not implement production auth/authz/RBAC, production audit logging, real-data ingestion, PHI/PII processing or runtime clinical workflows
+- no production, real-data, PHI/PII, validation or go-live boundary was lifted
+- recommended next task: Program 1 Phase W0 - Validation Harness and Negative Test Implementation
+
 Recommended next task:
 
-`Program 1 Phase V0 - Access, Audit, and Real-Data Boundary Prototype`
+`Program 1 Phase W0 - Validation Harness and Negative Test Implementation`
 
 ## 30. Program 1 Phase D44-D54 - Findings Read-Only Workspace Boundary
 
