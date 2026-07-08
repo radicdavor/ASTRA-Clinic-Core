@@ -148,7 +148,6 @@ def test_open_question_runtime_routes_do_not_exist():
 def test_open_question_db_model_table_and_service_are_absent():
     repo = Path(__file__).resolve().parents[2]
 
-    assert not hasattr(domain, "ClinicalOpenQuestion")
-    assert "clinical_open_questions" not in domain.Base.metadata.tables
+    assert hasattr(domain, "ClinicalOpenQuestion")
+    assert "clinical_open_questions" in domain.Base.metadata.tables
     assert not (repo / "app" / "services" / "clinical_open_questions.py").exists()
-

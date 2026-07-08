@@ -1435,6 +1435,14 @@ Phase D101 update:
 - `clinical_open_questions` table foundation adds safe source-linking, status and schema-version constraints
 - migration includes patient/finding/source-document/reviewer FKs and read-supporting indexes
 - no endpoint, service, UI or automatic question creation was added
+
+Phase D102-D105 update:
+
+- open question DB shape regression coverage added
+- source-linking DB guard added
+- lifecycle status DB guard added
+- runtime route/service/permission absence guard added
+- frontend smoke continues to guard absence of open question client/UI labels
 - no appointment status mutation
 - production and real-data use remain no-go
 
