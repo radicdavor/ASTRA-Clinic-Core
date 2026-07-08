@@ -1,6 +1,6 @@
 import { type FormEvent, useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { api, captureClinicalReadinessSnapshot, getClinicalReadinessSnapshotDetail, getClinicalReadinessSnapshotHistory, notifyUser, supersedeClinicalReadinessSnapshot } from "../api/client";
+import { api, captureClinicalReadinessSnapshot, getClinicalReadinessAcknowledgments, getClinicalReadinessSnapshotDetail, getClinicalReadinessSnapshotHistory, notifyUser, supersedeClinicalReadinessSnapshot } from "../api/client";
 import { ActionButton } from "../components/ActionButton";
 import { AuditTimeline } from "../components/AuditTimeline";
 import { DataTable } from "../components/DataTable";
@@ -9,7 +9,7 @@ import { WorkspaceHeader } from "../components/workspace/WorkspaceHeader";
 import { WorkspaceLayout } from "../components/workspace/WorkspaceLayout";
 import { WorkspaceSection } from "../components/workspace/WorkspaceSection";
 import { useApi } from "../hooks/useApi";
-import { Appointment, AuditLog, ClinicalReadinessPreview, ClinicalReadinessSnapshotDetailResponse, ClinicalReadinessSnapshotHistoryResponse, Invoice, StockMovement } from "../types";
+import { Appointment, AuditLog, ClinicalReadinessAcknowledgmentListResponse, ClinicalReadinessPreview, ClinicalReadinessSnapshotDetailResponse, ClinicalReadinessSnapshotHistoryResponse, Invoice, StockMovement } from "../types";
 import { formatDate, formatDateTime } from "../utils/date";
 import { formatPatientIdentity, formatPatientName } from "../utils/patientIdentity";
 
@@ -44,6 +44,9 @@ export function AppointmentDetail() {
   const [snapshotSupersedeValidationError, setSnapshotSupersedeValidationError] = useState("");
   const [snapshotSupersedeError, setSnapshotSupersedeError] = useState("");
   const [snapshotSupersedeSaving, setSnapshotSupersedeSaving] = useState(false);
+  const [acknowledgmentHistory, setAcknowledgmentHistory] = useState<ClinicalReadinessAcknowledgmentListResponse | null>(null);
+  const [acknowledgmentLoading, setAcknowledgmentLoading] = useState(true);
+  const [acknowledgmentError, setAcknowledgmentError] = useState("");
 
   const relatedInvoice = useMemo(() => invoices.data.find((invoice) => invoice.appointment_id === Number(id)), [invoices.data, id]);
   const relatedMovements = useMemo(() => movements.data.filter((movement) => movement.related_appointment_id === Number(id)), [movements.data, id]);
@@ -71,6 +74,35 @@ export function AppointmentDetail() {
       })
       .finally(() => {
         if (active) setSnapshotHistoryLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [id]);
+
+  useEffect(() => {
+    const appointmentId = Number(id);
+    if (!appointmentId) return;
+    let active = true;
+    setAcknowledgmentLoading(true);
+    setAcknowledgmentError("");
+    getClinicalReadinessAcknowledgments(appointmentId)
+      .then((response) => {
+        if (active) setAcknowledgmentHistory(response);
+      })
+      .catch((err) => {
+        if (!active) return;
+        const detail = err instanceof Error ? err.message : "";
+        const permissionError = ["403", "forbidden", "permission", "dozvol", "prava"].some((fragment) => detail.toLowerCase().includes(fragment));
+        setAcknowledgmentHistory(null);
+        setAcknowledgmentError(
+          permissionError
+            ? "Nemate dozvolu za prikaz zapisa ljudskog pregleda savjetodavnih signala. Ovo ne mijenja status termina."
+            : "Zapisi ljudskog pregleda trenutno nisu dostupni. Ostali dijelovi termina ostaju dostupni."
+        );
+      })
+      .finally(() => {
+        if (active) setAcknowledgmentLoading(false);
       });
     return () => {
       active = false;
@@ -388,6 +420,40 @@ export function AppointmentDetail() {
         ) : !clinicalReadiness.error ? (
           <p>Savjetodavni signali trenutno nisu dostupni jer preview nije ucitan.</p>
         ) : null}
+      </WorkspaceSection>
+
+      <WorkspaceSection title="Pregledani savjetodavni signali">
+        <p className="helper-text">Ovo je zapis ljudskog pregleda savjetodavnog signala. Nije klinicko odobrenje i ne mijenja status termina.</p>
+        {acknowledgmentHistory?.warning && <p className="helper-text">{acknowledgmentHistory.warning}</p>}
+        {acknowledgmentLoading ? (
+          <p>Ucitavanje zapisa ljudskog pregleda savjetodavnih signala...</p>
+        ) : acknowledgmentError ? (
+          <p className="form-error">{acknowledgmentError}</p>
+        ) : !acknowledgmentHistory || acknowledgmentHistory.acknowledgments.length === 0 ? (
+          <p>Nema zapisa ljudskog pregleda za ovaj termin. To ne znaci da nema klinickih rizika.</p>
+        ) : (
+          <div className="timeline-list">
+            {acknowledgmentHistory.acknowledgments.map((acknowledgment) => (
+              <article className="timeline-item" key={acknowledgment.id}>
+                <strong>Zapis ljudskog pregleda</strong>
+                <small>{formatDateTime(acknowledgment.created_at)} / uloga: {acknowledgment.actor_role} / korisnik {acknowledgment.actor_user_id}</small>
+                <div className="detail-list">
+                  <p><span>Savjetodavni signal</span><strong>{acknowledgment.advisory_signal_key}</strong></p>
+                  <p><span>Razlog pregleda</span><strong>{acknowledgment.reason}</strong></p>
+                  <p><span>Snapshot veza</span><strong>{acknowledgment.snapshot_id ? `Povezano sa snapshot zapisom ${acknowledgment.snapshot_id}` : "Nema povezani snapshot zapis"}</strong></p>
+                  <p><span>Schema</span><strong>{acknowledgment.schema_version}</strong></p>
+                </div>
+                {acknowledgment.limitations.length > 0 && (
+                  <ul>
+                    {acknowledgment.limitations.map((limitation) => <li key={limitation}>{limitation}</li>)}
+                  </ul>
+                )}
+                <p className="helper-text">{acknowledgment.safe_disclaimer}</p>
+                <p className="helper-text">Za ljudsku interpretaciju. Ne rjesava automatski savjetodavni signal i ne pokrece radnju.</p>
+              </article>
+            ))}
+          </div>
+        )}
       </WorkspaceSection>
 
       <WorkspaceSection
