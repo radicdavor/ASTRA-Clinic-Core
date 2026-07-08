@@ -6,6 +6,7 @@ from pydantic import ValidationError
 from app.core.database import Base
 from app.main import app
 from app.schemas.common import ClinicalReadinessReviewAcknowledgment
+from app.services.seed import PERMISSIONS, ROLE_PERMISSIONS
 
 
 FORBIDDEN_FIELDS = {
@@ -111,3 +112,21 @@ def test_review_acknowledgment_db_model_and_table_do_not_exist():
 
     assert "clinical_readiness_review_acknowledgments" not in table_names
     assert "ClinicalReadinessReviewAcknowledgment" not in mapper_class_names
+
+
+def test_review_acknowledgment_permissions_are_not_seeded():
+    forbidden_permissions = {
+        "clinical_readiness.acknowledgments.read",
+        "clinical_readiness.acknowledgments.write",
+        "clinical_readiness.acknowledgments.manage",
+    }
+
+    assert forbidden_permissions.isdisjoint(set(PERMISSIONS))
+    for permission_names in ROLE_PERMISSIONS.values():
+        assert forbidden_permissions.isdisjoint(set(permission_names))
+
+
+def test_review_acknowledgment_migration_is_not_present():
+    migration_table_names = set(Base.metadata.tables)
+
+    assert "clinical_readiness_review_acknowledgments" not in migration_table_names
