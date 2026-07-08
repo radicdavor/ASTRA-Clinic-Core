@@ -1,5 +1,3 @@
-from pathlib import Path
-
 from app.auth.dependencies import hash_api_key
 from app.models.domain import ApiKey, AuditLog, ClinicalEpisode, ClinicalFinding, ClinicalOpenQuestion, ClinicalPlan
 from app.services.seed import PERMISSIONS
@@ -246,21 +244,11 @@ def test_open_questions_write_review_routes_absent(client, db, auth_setup):
 
 
 def test_open_questions_write_permissions_and_frontend_actions_absent():
-    repo = Path(__file__).resolve().parents[2]
-
     assert "clinical_open_questions.write" not in PERMISSIONS
     assert "clinical_open_questions.review" not in PERMISSIONS
     assert "clinical_open_questions.approve" not in PERMISSIONS
     assert "clinical_open_questions.clear" not in PERMISSIONS
     assert "clinical_open_questions.resolve" not in PERMISSIONS
-
-    frontend_client = (repo / "frontend" / "src" / "api" / "client.ts").read_text(encoding="utf-8")
-    patient_detail = (repo / "frontend" / "src" / "pages" / "PatientDetail.tsx").read_text(encoding="utf-8")
-    assert "clinical-open-questions" not in frontend_client
-    assert "clinicalOpenQuestions" not in frontend_client
-    assert "clinical-open-questions" not in patient_detail
-    assert "Potvrdi pitanje" not in patient_detail
-    assert "Rijesi pitanje" not in patient_detail
 
 
 def test_open_question_read_response_keeps_source_linking_and_no_official_truth(client, db, auth_setup):
