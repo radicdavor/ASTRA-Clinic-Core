@@ -1329,3 +1329,26 @@ Runtime boundary:
 Recommended next task:
 
 `Program 1 Phase D34 - Findings Read Response Schema Contract`
+
+Phase D33-D43 closure update:
+
+- findings read response schemas added
+- read permission boundary documented and `clinical_findings.read` seeded
+- GET-only patient-scoped findings read API added
+- read API regression coverage added
+- write route absence and source-linking guards added
+- CI gate and read API go/no-go matrix documented
+
+Runtime boundary:
+
+- no findings POST/PATCH/PUT/DELETE endpoint
+- no review/approve/clear/resolve endpoint
+- no frontend findings UI
+- no Task engine, Outcome Evidence or patient messaging
+- no automatic diagnosis or treatment
+- no appointment status mutation
+- production and real-data use remain no-go
+
+Recommended next task:
+
+`Program 1 Phase D44 - Findings Read-Only Workspace Contract`
