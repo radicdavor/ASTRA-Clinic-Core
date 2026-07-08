@@ -8,8 +8,8 @@ from sqlalchemy.orm import Session, joinedload
 from app.audit.service import audit, snapshot
 from app.auth.dependencies import Actor, get_current_actor, require_permission
 from app.core.database import get_db
-from app.models.domain import Appointment, ClinicalEpisode, ClinicalFinding, Invoice, Patient
-from app.schemas.common import AppointmentOut, ClinicalEpisodeOut, ClinicalFindingDetailResponse, ClinicalFindingListResponse, ClinicalFindingReadItem, ErrorResponse, InvoiceOut, PatientCreate, PatientOut, PatientUpdate
+from app.models.domain import Appointment, ClinicalEpisode, ClinicalFinding, ClinicalOpenQuestion, Invoice, Patient
+from app.schemas.common import AppointmentOut, ClinicalEpisodeOut, ClinicalFindingDetailResponse, ClinicalFindingListResponse, ClinicalFindingReadItem, ClinicalOpenQuestionDetailResponse, ClinicalOpenQuestionReadItem, ErrorResponse, InvoiceOut, PatientCreate, PatientOut, PatientUpdate
 
 ERROR_RESPONSES = {400: {"model": ErrorResponse}, 401: {"model": ErrorResponse}, 403: {"model": ErrorResponse}, 404: {"model": ErrorResponse}, 409: {"model": ErrorResponse}, 422: {"model": ErrorResponse}}
 
@@ -74,6 +74,43 @@ def require_findings_read_user(actor: Actor) -> Actor:
         raise HTTPException(403, detail="Findings read zahtijeva prijavljenog korisnika")
     if "clinical_findings.read" not in actor.permissions:
         raise HTTPException(403, detail="Nedostaje dozvola: clinical_findings.read")
+    return actor
+
+
+def open_question_read_item(question: ClinicalOpenQuestion) -> ClinicalOpenQuestionReadItem:
+    return ClinicalOpenQuestionReadItem(
+        id=question.id,
+        question_key=question.question_key,
+        patient_id=question.patient_id,
+        finding_id=question.finding_id,
+        source_type=question.source_type,
+        source_label=question.source_label,
+        source_reference_summary=question.source_reference,
+        label=question.label,
+        status=question.status,
+        requires_clinician_review=question.requires_clinician_review,
+        reviewed_at=question.reviewed_at,
+        reviewed_by_user_id=question.reviewed_by_user_id,
+        limitations=question.limitations_json or [],
+        created_at=question.created_at,
+        updated_at=question.updated_at,
+    )
+
+
+def open_question_detail_response(question: ClinicalOpenQuestion) -> ClinicalOpenQuestionDetailResponse:
+    return ClinicalOpenQuestionDetailResponse(
+        **open_question_read_item(question).model_dump(),
+        source_reference=question.source_reference,
+        linked_finding_key=question.finding.finding_key if question.finding else None,
+        review_note=None,
+    )
+
+
+def require_open_questions_read_user(actor: Actor) -> Actor:
+    if actor.actor_type != "user" or actor.user_id is None:
+        raise HTTPException(403, detail="Open questions read zahtijeva prijavljenog korisnika")
+    if "clinical_open_questions.read" not in actor.permissions:
+        raise HTTPException(403, detail="Nedostaje dozvola: clinical_open_questions.read")
     return actor
 
 

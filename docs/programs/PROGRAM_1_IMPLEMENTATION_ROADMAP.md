@@ -1538,6 +1538,12 @@ Phase D123 update:
 - read-only permission `clinical_open_questions.read` added for admin/physician read access
 - no write/review/approve/clear/resolve/API-key/AI permission was added
 - permission does not imply diagnosis, treatment, approval, clearance, override or production readiness
+
+Phase D124 update:
+
+- side-effect-free open question read mapping helpers added
+- helper remains source-linked and read-only
+- no service module, write/review helper, audit write, frontend client or UI was added
 - no appointment status mutation
 - production and real-data use remain no-go
 
