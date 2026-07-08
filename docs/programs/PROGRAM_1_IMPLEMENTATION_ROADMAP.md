@@ -931,3 +931,20 @@ Still no-go:
 Recommended next task:
 
 `Program 1 Phase C82 - Acknowledgment Read-Only UI Surface Contract`
+
+## 21. Program 1 Phase C82-C92 - Human Review Acknowledgment Read-Only UI Boundary
+
+Status: u tijeku kao read-only UI surface pass.
+
+Phase C82-C83 update:
+
+- read-only UI surface contract documented
+- UI copy/state matrix documented
+- safe labels, helper text and no-action rules locked before runtime UI changes
+
+Runtime granica:
+
+- no acknowledgment action button
+- no write client
+- no write endpoint
+- no approval, clearance, override or resolution semantics
