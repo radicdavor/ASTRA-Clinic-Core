@@ -1461,6 +1461,17 @@ Phase D109 update:
 - D99-D109 open question migration closure report added
 - next-step decision brief recommends Program 1 Phase D110 - Open Question Read API Contract
 - D110 remains documentation-only before any open question endpoint
+
+## 36. Program 1 Phase D110-D120 - Open Question Read API Contract
+
+Status: in progress as read-api-contract / runtime endpoint no-go pass.
+
+Phase D110 update:
+
+- open question read-only API contract documented
+- proposed patient-scoped, detail and future finding-scoped GET routes documented as contract only
+- read permission, response shape, sorting/filtering and safe empty/error state boundaries documented
+- endpoint, service, frontend client/UI and automatic question creation remain no-go
 - no appointment status mutation
 - production and real-data use remain no-go
 
