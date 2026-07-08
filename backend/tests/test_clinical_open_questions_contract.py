@@ -8,7 +8,9 @@ from app.main import app
 from app.models import domain
 from app.schemas.common import (
     CLINICAL_OPEN_QUESTION_STATUSES,
+    ClinicalOpenQuestionDetail,
     ClinicalOpenQuestionPreview,
+    ClinicalOpenQuestionReadItem,
     ClinicalOpenQuestionSourceReference,
 )
 
@@ -63,6 +65,33 @@ def open_question() -> ClinicalOpenQuestionPreview:
     )
 
 
+def open_question_read_item() -> ClinicalOpenQuestionReadItem:
+    return ClinicalOpenQuestionReadItem(
+        id=1,
+        question_key="open-question-pathology-follow-up",
+        patient_id=7,
+        finding_id=3,
+        source_type="clinical_document",
+        source_label="External pathology report",
+        source_reference_summary="clinical_document:42",
+        label="Does pathology require follow-up decision?",
+        status="awaiting_review",
+        requires_clinician_review=True,
+        limitations=["Open question read response is not a clinical decision."],
+        created_at=datetime(2026, 7, 8, 12, 0, tzinfo=UTC),
+        updated_at=datetime(2026, 7, 8, 12, 5, tzinfo=UTC),
+    )
+
+
+def open_question_detail() -> ClinicalOpenQuestionDetail:
+    return ClinicalOpenQuestionDetail(
+        **open_question_read_item().model_dump(),
+        source_reference="clinical_document:42:key_findings:0",
+        linked_finding_key="pathology-dysplasia-question",
+        review_note=None,
+    )
+
+
 def test_open_question_preview_serialization_shape_is_safe():
     payload = open_question().model_dump(mode="json")
 
@@ -82,6 +111,41 @@ def test_open_question_preview_serialization_shape_is_safe():
         "is_persisted",
         "not_decision_disclaimer",
     }
+
+
+def test_open_question_read_item_serialization_shape_is_safe():
+    payload = open_question_read_item().model_dump(mode="json")
+
+    assert FORBIDDEN_OPEN_QUESTION_FIELDS.isdisjoint(payload.keys())
+    assert payload["requires_clinician_review"] is True
+    assert "nije klinicka odluka" in payload["no_decision_disclaimer"]
+    assert set(payload) == {
+        "id",
+        "question_key",
+        "patient_id",
+        "finding_id",
+        "source_type",
+        "source_label",
+        "source_reference_summary",
+        "label",
+        "status",
+        "requires_clinician_review",
+        "reviewed_at",
+        "reviewed_by_user_id",
+        "limitations",
+        "created_at",
+        "updated_at",
+        "no_decision_disclaimer",
+    }
+
+
+def test_open_question_detail_serialization_shape_is_source_linked_and_safe():
+    payload = open_question_detail().model_dump(mode="json")
+
+    assert FORBIDDEN_OPEN_QUESTION_FIELDS.isdisjoint(payload.keys())
+    assert payload["source_reference"] == "clinical_document:42:key_findings:0"
+    assert payload["linked_finding_key"] == "pathology-dysplasia-question"
+    assert payload["review_note"] is None
 
 
 def test_open_question_status_vocabulary_is_safe():
@@ -111,6 +175,22 @@ def test_open_question_rejects_unsafe_flags(field: str, value: bool):
 
     with pytest.raises(ValidationError):
         ClinicalOpenQuestionPreview(**payload)
+
+
+def test_open_question_read_response_rejects_unsafe_review_flag():
+    payload = open_question_read_item().model_dump()
+    payload["requires_clinician_review"] = False
+
+    with pytest.raises(ValidationError):
+        ClinicalOpenQuestionReadItem(**payload)
+
+
+def test_open_question_read_response_rejects_forbidden_status():
+    payload = open_question_read_item().model_dump()
+    payload["status"] = "resolved_by_ai"
+
+    with pytest.raises(ValidationError):
+        ClinicalOpenQuestionReadItem(**payload)
 
 
 def test_open_question_source_reference_is_required():

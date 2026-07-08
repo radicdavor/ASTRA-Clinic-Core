@@ -582,6 +582,63 @@ class ClinicalOpenQuestionPreview(BaseModel):
         return value
 
 
+class ClinicalOpenQuestionReadItem(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    id: int
+    question_key: str
+    patient_id: int
+    finding_id: int | None = None
+    source_type: str
+    source_label: str
+    source_reference_summary: str
+    label: str
+    status: str
+    requires_clinician_review: bool
+    reviewed_at: DateTimeType | None = None
+    reviewed_by_user_id: int | None = None
+    limitations: list[str] = Field(default_factory=list)
+    created_at: DateTimeType
+    updated_at: DateTimeType
+    no_decision_disclaimer: str = "Open question je source-linked pitanje za ljudsku interpretaciju, nije klinicka odluka."
+
+    @field_validator("question_key", "source_type", "source_label", "source_reference_summary", "label")
+    @classmethod
+    def validate_open_question_read_text(cls, value: str) -> str:
+        cleaned = value.strip()
+        if not cleaned:
+            raise ValueError("Open question read polje ne smije biti prazno")
+        return cleaned
+
+    @field_validator("status")
+    @classmethod
+    def validate_open_question_read_status(cls, value: str) -> str:
+        if value not in CLINICAL_OPEN_QUESTION_STATUSES:
+            raise ValueError("Nepoznat open question read status")
+        return value
+
+    @field_validator("requires_clinician_review")
+    @classmethod
+    def validate_open_question_read_review_requirement(cls, value: bool) -> bool:
+        if not value:
+            raise ValueError("Open question read response mora zahtijevati clinician review")
+        return value
+
+
+class ClinicalOpenQuestionDetail(ClinicalOpenQuestionReadItem):
+    source_reference: str
+    linked_finding_key: str | None = None
+    review_note: str | None = None
+
+    @field_validator("source_reference")
+    @classmethod
+    def validate_open_question_detail_source_reference(cls, value: str) -> str:
+        cleaned = value.strip()
+        if not cleaned:
+            raise ValueError("Open question detail source reference ne smije biti prazan")
+        return cleaned
+
+
 class ClinicalReadinessReviewAcknowledgment(BaseModel):
     model_config = ConfigDict(extra="forbid")
 

@@ -1472,6 +1472,12 @@ Phase D110 update:
 - proposed patient-scoped, detail and future finding-scoped GET routes documented as contract only
 - read permission, response shape, sorting/filtering and safe empty/error state boundaries documented
 - endpoint, service, frontend client/UI and automatic question creation remain no-go
+
+Phase D111 update:
+
+- passive open question read item/detail response schemas added
+- schema tests verify source-linked, no-decision response shape
+- no endpoint, service, frontend client or UI was added
 - no appointment status mutation
 - production and real-data use remain no-go
 
