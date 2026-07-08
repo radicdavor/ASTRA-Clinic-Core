@@ -1233,3 +1233,26 @@ Runtime boundary:
 Recommended next task:
 
 `Program 1 Phase D12 - Findings Database Shape Review`
+
+Phase D11-D21 closure update:
+
+- findings persistence design documented
+- database shape and column policy documented
+- source-linking persistence rules documented
+- lifecycle status persistence contract documented
+- review metadata contract documented
+- ORM shape deferred to avoid model-without-migration drift
+- migration review gate documented
+- persistence no-go matrix and CI gate documented
+
+Runtime decision:
+
+- no findings DB model or migration
+- no findings endpoint or service
+- no frontend UI
+- no Task engine, Outcome Evidence or patient messaging
+- production and real-data use remain no-go
+
+Recommended next task:
+
+`Program 1 Phase D22 - Findings Persistence Migration Draft`
