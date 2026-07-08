@@ -1496,6 +1496,12 @@ Phase D116 update:
 
 - open question read API no-go regression guard expanded to include D110 proposed contract routes
 - passive DB foundation remains present, but runtime read/write API, service, permission seed and frontend client remain absent
+
+Phase D117 update:
+
+- open question read API CI gate documented
+- existing full backend and frontend gates remain the required verification path
+- no new dependency, workflow step, endpoint, service or UI was added
 - no appointment status mutation
 - production and real-data use remain no-go
 
