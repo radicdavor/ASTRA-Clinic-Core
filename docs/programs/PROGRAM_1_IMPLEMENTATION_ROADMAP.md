@@ -862,3 +862,23 @@ Runtime granica:
 - nema Outcome Evidencea
 - nema patient messaginga
 - nema approval, clearance ili override semantike
+
+Phase C60-C70 closure update:
+
+- write service contract, validation contract, transaction/audit coupling and idempotency contract are documented
+- internal-only acknowledgment service prototype exists
+- targeted backend tests cover validation, audit, rollback and no workflow side effects
+- CI advisory/acknowledgment safety gate includes internal service tests
+- runtime endpoint remains no-go
+- frontend action remains no-go
+- permission seed remains no-go
+- real patient data and production remain no-go
+
+Closure documents:
+
+- `PROGRAM_1_PHASE_C70_ACKNOWLEDGMENT_INTERNAL_SERVICE_CLOSURE_REPORT.md`
+- `PROGRAM_1_PHASE_C70_NEXT_STEP_DECISION_BRIEF.md`
+
+Recommended next task:
+
+`Program 1 Phase C71 - Acknowledgment Read API Contract Design`
