@@ -1550,6 +1550,12 @@ Phase D125 update:
 - GET-only patient-scoped open question read API prototype added
 - list and detail endpoints require authenticated user with `clinical_open_questions.read`
 - API keys remain denied and no write/review endpoints were added
+
+Phase D126 update:
+
+- targeted open question read API regression coverage added
+- tests cover auth, permission, API key denial, empty state, sorting, finding filter, patient-scoped detail and no audit/write side effects
+- persistence route guard now allows only approved GET read paths and keeps write/review routes absent
 - no appointment status mutation
 - production and real-data use remain no-go
 

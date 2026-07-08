@@ -194,9 +194,16 @@ def test_clinical_open_question_runtime_routes_services_and_permissions_do_not_e
     assert "/api/open-questions" not in route_paths
     assert "/api/patients/{patient_id}/open-questions" not in route_paths
     assert "/api/findings/{finding_id}/open-questions" not in route_paths
+    allowed_read_paths = {
+        "/api/patients/{patient_id}/clinical-open-questions",
+        "/api/patients/{patient_id}/clinical-open-questions/{question_id}",
+    }
     for path, methods in route_methods:
         if "open-question" in path or "open_questions" in path:
-            assert not {"GET", "POST", "PATCH", "PUT", "DELETE"}.intersection(methods)
+            if path in allowed_read_paths:
+                assert set(methods) == {"GET"}
+            else:
+                assert not {"GET", "POST", "PATCH", "PUT", "DELETE"}.intersection(methods)
     assert not Path("app/services/clinical_open_questions.py").exists()
     assert "clinical_open_questions.read" in PERMISSIONS
     assert "clinical_open_questions.write" not in PERMISSIONS
