@@ -4,8 +4,8 @@ import { login } from "../api/client";
 
 export function Login() {
   const navigate = useNavigate();
-  const [email, setEmail] = useState("admin@astra.local");
-  const [password, setPassword] = useState("astra123");
+  const [email, setEmail] = useState("demo.admin@astra.local");
+  const [password, setPassword] = useState("demo123");
   const [error, setError] = useState("");
 
   async function submit(event: FormEvent) {

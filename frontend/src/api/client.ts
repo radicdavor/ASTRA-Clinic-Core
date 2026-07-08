@@ -94,10 +94,16 @@ export async function api<T>(path: string, options: RequestInit = {}): Promise<T
 }
 
 export async function login(email: string, password: string) {
-  const result = await api<{ access_token: string; user: unknown }>("/auth/login", {
+  const response = await fetch(`${API_BASE_URL}/auth/login`, {
     method: "POST",
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ email, password })
   });
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ detail: "Prijava nije uspjela" }));
+    throw new Error(error.detail ?? "Prijava nije uspjela");
+  }
+  const result = await response.json() as { access_token: string; user: unknown };
   setToken(result.access_token);
   return result;
 }
