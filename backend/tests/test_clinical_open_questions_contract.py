@@ -9,6 +9,8 @@ from app.models import domain
 from app.schemas.common import (
     CLINICAL_OPEN_QUESTION_STATUSES,
     ClinicalOpenQuestionDetail,
+    ClinicalOpenQuestionDetailResponse,
+    ClinicalOpenQuestionListResponse,
     ClinicalOpenQuestionPreview,
     ClinicalOpenQuestionReadItem,
     ClinicalOpenQuestionSourceReference,
@@ -146,6 +148,27 @@ def test_open_question_detail_serialization_shape_is_source_linked_and_safe():
     assert payload["source_reference"] == "clinical_document:42:key_findings:0"
     assert payload["linked_finding_key"] == "pathology-dysplasia-question"
     assert payload["review_note"] is None
+
+
+def test_open_question_list_response_shape_is_read_only_and_safe():
+    response = ClinicalOpenQuestionListResponse(patient_id=7, questions=[open_question_read_item()], count=1)
+    payload = response.model_dump(mode="json")
+
+    assert payload["is_read_only"] is True
+    assert payload["count"] == 1
+    assert "dijagnozu" in payload["warning"]
+    assert_forbidden_keys = FORBIDDEN_OPEN_QUESTION_FIELDS.isdisjoint(payload.keys())
+    assert assert_forbidden_keys
+    assert FORBIDDEN_OPEN_QUESTION_FIELDS.isdisjoint(payload["questions"][0].keys())
+
+
+def test_open_question_detail_response_shape_is_read_only_and_safe():
+    response = ClinicalOpenQuestionDetailResponse(**open_question_detail().model_dump())
+    payload = response.model_dump(mode="json")
+
+    assert payload["source_reference"] == "clinical_document:42:key_findings:0"
+    assert "dijagnozu" in payload["warning"]
+    assert FORBIDDEN_OPEN_QUESTION_FIELDS.isdisjoint(payload.keys())
 
 
 def test_open_question_status_vocabulary_is_safe():

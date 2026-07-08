@@ -639,6 +639,22 @@ class ClinicalOpenQuestionDetail(ClinicalOpenQuestionReadItem):
         return cleaned
 
 
+class ClinicalOpenQuestionListResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    patient_id: int
+    questions: list[ClinicalOpenQuestionReadItem]
+    count: int
+    is_read_only: bool = True
+    warning: str = "Open questions read API prikazuje source-linked pitanja za ljudsku interpretaciju. Ne predstavlja dijagnozu, treatment plan, Task, Outcome Evidence, patient message, approval, clearance ili override."
+
+
+class ClinicalOpenQuestionDetailResponse(ClinicalOpenQuestionDetail):
+    model_config = ConfigDict(extra="forbid")
+
+    warning: str = "Open question detail je read-only source-linked pitanje. Ne predstavlja dijagnozu, treatment plan, Task, Outcome Evidence, patient message, approval, clearance ili override."
+
+
 class ClinicalReadinessReviewAcknowledgment(BaseModel):
     model_config = ConfigDict(extra="forbid")
 

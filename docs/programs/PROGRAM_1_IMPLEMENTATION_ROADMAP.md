@@ -1526,6 +1526,12 @@ Phase D121 update:
 - open question read API prototype design documented
 - allowed runtime scope limited to patient-scoped GET list/detail and optional finding filter
 - write/review/approve/clear/resolve routes remain no-go
+
+Phase D122 update:
+
+- open question read endpoint response wrappers added for list and detail
+- forbidden fields remain absent and read-only/no-decision warnings remain present
+- no endpoint, service, permission seed or frontend client was added
 - no appointment status mutation
 - production and real-data use remain no-go
 
