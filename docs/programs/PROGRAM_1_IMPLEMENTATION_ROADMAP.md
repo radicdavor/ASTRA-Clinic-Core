@@ -1737,9 +1737,17 @@ Phase P update:
 - no access-control or auditability control was implemented, validated, security-reviewed or operationally approved
 - recommended next task: Program 1 Phase Q0 - Validation and Safety Test Plan
 
+Phase Q update:
+
+- future validation and safety test planning requirements documented before any real-data or production-readiness claim
+- validation evidence, safety matrix, negative tests, regression/release evidence, access/audit/real-data validation and operational validation plans mapped
+- Phase Q does not validate the system, certify safety, implement tests, add runtime controls or create production-readiness evidence
+- no validation gate was closed and no real-data or production boundary was lifted
+- recommended next task: Program 1 Phase R0 - Operational Readiness and Incident Response Plan
+
 Recommended next task:
 
-`Program 1 Phase Q0 - Validation and Safety Test Plan`
+`Program 1 Phase R0 - Operational Readiness and Incident Response Plan`
 
 ## 30. Program 1 Phase D44-D54 - Findings Read-Only Workspace Boundary
 
