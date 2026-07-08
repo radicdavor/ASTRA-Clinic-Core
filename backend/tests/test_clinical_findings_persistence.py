@@ -151,7 +151,7 @@ def test_clinical_finding_closed_status_has_no_workflow_side_effects(db):
 def test_clinical_finding_runtime_routes_services_and_permissions_do_not_exist():
     route_paths = {getattr(route, "path", "") for route in app.routes}
     route_methods = {
-        (getattr(route, "path", ""), set(getattr(route, "methods", []) or []))
+        (getattr(route, "path", ""), tuple(sorted(getattr(route, "methods", []) or [])))
         for route in app.routes
     }
 
