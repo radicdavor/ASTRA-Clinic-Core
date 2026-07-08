@@ -1211,3 +1211,25 @@ Runtime decision:
 Recommended next task:
 
 `Program 1 Phase D11 - Findings Persistence Design`
+
+## 27. Program 1 Phase D11-D21 - Findings Persistence Design
+
+Status: in progress as persistence-design pass.
+
+Phase D11 update:
+
+- proposed `ClinicalFinding` entity and `clinical_findings` table are documented
+- persistence remains source-linked and patient-scoped
+- finding row is explicitly not diagnosis, treatment plan, Task, Outcome Evidence, patient message, approval, clearance or override
+
+Runtime boundary:
+
+- no findings DB model or migration
+- no findings endpoint
+- no findings service
+- no frontend UI
+- no Task engine, Outcome Evidence or patient messaging
+
+Recommended next task:
+
+`Program 1 Phase D12 - Findings Database Shape Review`

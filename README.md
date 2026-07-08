@@ -378,6 +378,8 @@ Pilot documents:
 - [Program 1 Phase D0-D10 Findings Foundation Closure Report](docs/programs/PROGRAM_1_PHASE_D0_D10_FINDINGS_FOUNDATION_CLOSURE_REPORT.md)
 - [Program 1 Phase D10 Next-Step Decision Brief](docs/programs/PROGRAM_1_PHASE_D10_NEXT_STEP_DECISION_BRIEF.md)
 - [Program 1 Phase D10 regression notes](docs/programs/PROGRAM_1_PHASE_D10_REGRESSION_NOTES.md)
+- [Program 1 Phase D11 Findings Persistence Design](docs/programs/PROGRAM_1_PHASE_D11_FINDINGS_PERSISTENCE_DESIGN.md)
+- [Program 1 Phase D11 regression notes](docs/programs/PROGRAM_1_PHASE_D11_REGRESSION_NOTES.md)
 - [Lokalni LAN pristup](docs/LAN_ACCESS.md)
 - [Program 1 audit event naming](docs/programs/PROGRAM_1_AUDIT_EVENT_NAMING.md)
 - [Program 1 Phase A regression notes](docs/programs/PROGRAM_1_PHASE_A_REGRESSION_NOTES.md)
