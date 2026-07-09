@@ -32,6 +32,24 @@ This local sandbox lets a user experience a minimal Program 1 workflow with synt
 
 This module is intentionally isolated from backend and frontend runtime paths. It can be imported in local tests or interactive Python sessions only.
 
+Run the local synthetic summary:
+
+```powershell
+python -m sandbox.program1.cli
+```
+
+Run the alternate synthetic scenario:
+
+```powershell
+python -m sandbox.program1.cli --scenario beta
+```
+
+Print JSON for local inspection:
+
+```powershell
+python -m sandbox.program1.cli --scenario beta --json
+```
+
 Example:
 
 ```python

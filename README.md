@@ -1041,6 +1041,8 @@ Pilot documents:
 - [Program 1 Evidence Index Track Phase F Closure Report](docs/programs/PROGRAM_1_EVIDENCE_INDEX_TRACK_PHASE_F_CLOSURE_REPORT.md)
 - [Program 1 Synthetic Sandbox Implementation Track Phase A Local Synthetic Patient Workflow Prototype](docs/programs/PROGRAM_1_SYNTHETIC_SANDBOX_IMPLEMENTATION_TRACK_PHASE_A_LOCAL_SYNTHETIC_PATIENT_WORKFLOW_PROTOTYPE.md)
 - [Program 1 Synthetic Sandbox Implementation Track Phase A local sandbox README](sandbox/program1/README.md)
+- [Program 1 Synthetic Sandbox Implementation Track Phase B Local Sandbox Usability Loop](docs/programs/PROGRAM_1_SYNTHETIC_SANDBOX_IMPLEMENTATION_TRACK_PHASE_B_LOCAL_SANDBOX_USABILITY_LOOP.md)
+- [Program 1 Synthetic Sandbox Implementation Track Phase B Closure Report](docs/programs/PROGRAM_1_SYNTHETIC_SANDBOX_IMPLEMENTATION_TRACK_PHASE_B_CLOSURE_REPORT.md)
 - [Lokalni LAN pristup](docs/LAN_ACCESS.md)
 - [Program 1 audit event naming](docs/programs/PROGRAM_1_AUDIT_EVENT_NAMING.md)
 - [Program 1 Phase A regression notes](docs/programs/PROGRAM_1_PHASE_A_REGRESSION_NOTES.md)
