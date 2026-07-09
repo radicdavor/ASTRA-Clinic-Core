@@ -1823,11 +1823,19 @@ Architecture Review Track Phase A update:
 - Phase A documents a synthetic-only pre-implementation architecture boundary
 - Program 1 remains in pre-implementation hold and the governance/prototype sequence remains closed through Phase Z
 - no runtime implementation, production use, real-data use, PHI/PII processing, clinical deployment, go-live or runtime approval/clearance/override is authorized by this transition
-- recommended next task: Program 1 Architecture Review Track Phase B - Synthetic Architecture Component Inventory
+- Phase A is complete as docs-only and synthetic-only
+
+Architecture Review Track Phase B update:
+
+- Phase B documents conceptual module separation and a prohibited coupling map
+- Phase B is docs-only, synthetic-only, non-production, non-runtime and pre-implementation
+- Program 1 remains in pre-implementation hold and the governance/prototype sequence remains closed through Phase Z
+- no runtime implementation, production use, real-data use, PHI/PII processing, clinical deployment, go-live, runtime auth/authz/RBAC, runtime audit logging, patient messaging, appointment mutation, workflow enforcement, clinical write workflows or runtime approval/clearance/override is authorized by this transition
+- recommended next task: Program 1 Architecture Review Track Phase C - Conceptual Data Flow and Synthetic Boundary Trace
 
 Recommended next task:
 
-`Program 1 Architecture Review Track Phase B - Synthetic Architecture Component Inventory`
+`Program 1 Architecture Review Track Phase C - Conceptual Data Flow and Synthetic Boundary Trace`
 
 ## 30. Program 1 Phase D44-D54 - Findings Read-Only Workspace Boundary
 
