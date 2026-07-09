@@ -74,6 +74,18 @@ Print the local feedback review as JSON:
 python -m sandbox.program1.cli review-feedback --json
 ```
 
+Run the complete local clinician walkthrough pack:
+
+```powershell
+python -m sandbox.program1.cli walkthrough
+```
+
+Print the walkthrough pack as JSON:
+
+```powershell
+python -m sandbox.program1.cli walkthrough --json
+```
+
 Example:
 
 ```python
@@ -102,3 +114,7 @@ The template is local-only and is not persisted by the sandbox command. Do not e
 ## Local Feedback Review
 
 Phase D adds safe synthetic feedback examples and an iteration queue preview. The queue is local-only and does not imply implementation approval beyond the synthetic sandbox, production readiness, clinical deployment, real-data readiness, or cloud readiness.
+
+## Local Clinician Walkthrough
+
+Phase E adds a combined local walkthrough. It lists available synthetic scenarios, command sequence, clinician checklist items, and explicit non-clinical/non-production boundaries. It does not run cloud services, databases, networks, integrations, patient messaging, appointment mutation, clinical writeback, approval/override behavior, or go-live behavior.

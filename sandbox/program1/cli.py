@@ -9,6 +9,7 @@ from .feedback_review import render_feedback_review, review_feedback
 from .models import SAFETY_BANNER
 from .scenarios import SCENARIOS, build_scenario
 from .trial import build_trial_packet, render_trial_packet
+from .walkthrough import build_walkthrough_packet, render_walkthrough
 from .workflow import build_workflow_summary
 
 
@@ -90,9 +91,24 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="Print the local synthetic feedback review as JSON.",
     )
+    walkthrough_parser = subparsers.add_parser(
+        "walkthrough",
+        help="Print the local synthetic clinician walkthrough pack.",
+    )
+    walkthrough_parser.add_argument(
+        "--json",
+        action="store_true",
+        help="Print the local synthetic walkthrough as JSON.",
+    )
     args = parser.parse_args(argv)
     command = args.command or "summary"
-    if command == "review-feedback":
+    if command == "walkthrough":
+        packet = build_walkthrough_packet()
+        if args.json:
+            print(json.dumps(packet, indent=2, sort_keys=True))
+        else:
+            print(render_walkthrough(packet))
+    elif command == "review-feedback":
         review = review_feedback()
         if args.json:
             print(json.dumps(review, indent=2, sort_keys=True))
