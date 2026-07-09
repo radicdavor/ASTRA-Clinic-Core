@@ -1863,11 +1863,19 @@ Architecture Review Track Phase F update:
 - Phase F is docs-only, synthetic-only, non-production, non-runtime, pre-implementation and conceptual only
 - Program 1 remains in pre-implementation hold and the governance/prototype sequence remains closed through Phase Z
 - no runtime implementation, security enforcement, runtime authorization, RBAC, audit capture, policy enforcement, approval/clearance/override capability, production access, real-data ingestion, PHI/PII processing, production use, clinical deployment, go-live, patient messaging, appointment mutation, workflow enforcement or clinical write workflows is authorized by this transition
-- recommended next task: Program 1 Architecture Review Track Phase G - Privacy, PHI/PII, and Real-Data Governance Conceptual Boundary
+- Phase F is complete as docs-only and synthetic-only
+
+Architecture Review Track Phase G update:
+
+- Phase G documents privacy, PHI/PII and real-data governance conceptual boundaries
+- Phase G is docs-only, synthetic-only, non-production, non-runtime, pre-implementation and conceptual only
+- Program 1 remains in pre-implementation hold and the governance/prototype sequence remains closed through Phase Z
+- no runtime implementation, real-data processing, PHI/PII processing, privacy tooling, de-identification tooling, production access, clinical deployment, go-live readiness, runtime enforcement, patient messaging, appointment mutation, workflow enforcement or clinical write workflows is authorized by this transition
+- recommended next task: Program 1 Architecture Review Track Phase H - Deployment, Environment, and Release Governance Conceptual Boundary
 
 Recommended next task:
 
-`Program 1 Architecture Review Track Phase G - Privacy, PHI/PII, and Real-Data Governance Conceptual Boundary`
+`Program 1 Architecture Review Track Phase H - Deployment, Environment, and Release Governance Conceptual Boundary`
 
 ## 30. Program 1 Phase D44-D54 - Findings Read-Only Workspace Boundary
 
