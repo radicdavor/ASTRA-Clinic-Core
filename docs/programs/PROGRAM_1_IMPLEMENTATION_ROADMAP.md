@@ -1884,11 +1884,25 @@ Architecture Review Track Phase H update:
 - Phase H is not Phase Z+1 and does not reopen the Phase V-Z governance/prototype sequence
 - Program 1 remains in pre-implementation hold
 - no implementation, deployment, staging use, production use, real-data use, PHI/PII processing, CI/CD, infrastructure, production configuration, secrets, monitoring, alerting, rollback automation, incident automation, release approval, go-live, runtime security, runtime authorization, runtime audit logging, clinical deployment, approval/clearance/override capability or production-readiness claim is authorized by this transition
-- recommended next task: Program 1 Architecture Review Track Phase I - Operational Readiness, Ownership, and Support Governance Conceptual Boundary
+- recommended next task: Program 1 Architecture Review Track Phase I - Integration, Connector, and External System Boundary
 
 Recommended next task:
 
-`Program 1 Architecture Review Track Phase I - Operational Readiness, Ownership, and Support Governance Conceptual Boundary`
+`Program 1 Architecture Review Track Phase I - Integration, Connector, and External System Boundary`
+
+Architecture Review Track Phase I update:
+
+- governance/prototype sequence remains closed through Phase Z
+- Program 1 remains in pre-implementation hold
+- Architecture Review Track Phase A through Phase H are completed as docs-only and synthetic-only
+- Phase I opens integration, connector, API, database, EHR/EMR, patient portal, appointment system, messaging system and external system boundaries as docs-only and synthetic-only
+- Phase I is not Phase Z+1 and does not reopen the Phase V-Z governance/prototype sequence
+- no runtime implementation, connectors, integrations, APIs, database access, EHR/EMR access, patient portal access, appointment system access, messaging system access, external system access, real-data access, PHI/PII processing, clinical deployment, production use, deployment, release approval, go-live readiness, patient messaging, appointment mutation, workflow enforcement, clinical write workflows, audit capture, RBAC enforcement or approval/clearance/override capability is authorized by this transition
+- recommended next task: Program 1 Architecture Review Track Phase J - Non-Production Architecture Review Closure and Implementation Hold Renewal
+
+Recommended next task:
+
+`Program 1 Architecture Review Track Phase J - Non-Production Architecture Review Closure and Implementation Hold Renewal`
 
 ## 30. Program 1 Phase D44-D54 - Findings Read-Only Workspace Boundary
 
