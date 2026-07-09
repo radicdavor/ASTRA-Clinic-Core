@@ -21,10 +21,10 @@ class FeedbackReviewIterationQueueTests(unittest.TestCase):
 
         self.assertIn(SAFETY_BANNER, rendered)
         self.assertIn("Local sandbox only. Not for clinical use.", rendered)
-        self.assertIn("network_or_database_used: False", rendered)
-        self.assertIn("external_integrations_enabled: False", rendered)
-        self.assertIn("real_patient_data_allowed: False", rendered)
-        self.assertIn("phi_pii_allowed: False", rendered)
+        self.assertIn("Network/database behavior: disabled", rendered)
+        self.assertIn("External integrations: disabled", rendered)
+        self.assertIn("Real patient data: not allowed", rendered)
+        self.assertIn("PHI/PII: not allowed", rendered)
 
     def test_synthetic_feedback_examples_validate(self):
         review = review_feedback(build_synthetic_feedback_examples())
@@ -53,8 +53,17 @@ class FeedbackReviewIterationQueueTests(unittest.TestCase):
         self.assertEqual(exit_code, 0)
         text = output.getvalue()
         self.assertIn(SAFETY_BANNER, text)
-        self.assertIn("Iteration queue:", text)
-        self.assertIn("clinical_use_authorized: False", text)
+        self.assertIn("Design iteration queue:", text)
+        self.assertIn("Clinical use: not authorized", text)
+
+    def test_feedback_review_output_uses_readable_queue_text(self):
+        rendered = render_feedback_review(review_feedback())
+
+        self.assertIn("Design iteration queue item 1", rendered)
+        self.assertIn("Workflow clarity", rendered)
+        self.assertIn("does not create a clinical task", rendered)
+        self.assertNotIn("SYNTHETIC_QUEUE_ITEM_1", rendered)
+        self.assertNotIn("DEMO_THEME_WORKFLOW_CLARITY", rendered)
 
 
 if __name__ == "__main__":

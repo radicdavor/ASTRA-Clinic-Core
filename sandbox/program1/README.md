@@ -118,3 +118,7 @@ Phase D adds safe synthetic feedback examples and an iteration queue preview. Th
 ## Local Clinician Walkthrough
 
 Phase E adds a combined local walkthrough. It lists available synthetic scenarios, command sequence, clinician checklist items, and explicit non-clinical/non-production boundaries. It does not run cloud services, databases, networks, integrations, patient messaging, appointment mutation, clinical writeback, approval/override behavior, or go-live behavior.
+
+Phase F improves the default terminal output so the walkthrough is easier for a clinician to read. The default `summary`, `trial`, `review-feedback`, and `walkthrough` commands now use plain-language scenario labels, non-clinical review note wording, readable feedback framing, and design iteration queue wording. JSON output remains available for structured local inspection.
+
+Phase F remains local-only, terminal-only, synthetic-only, non-production, and not for clinical use. It does not add web UI, server/API behavior, network/database behavior, external integrations, EHR/EMR access, real patient data, PHI/PII, patient messaging, appointment mutation, clinical writeback, approval/override capability, production-readiness, or go-live authorization.

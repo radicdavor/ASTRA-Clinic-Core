@@ -5,6 +5,14 @@ from __future__ import annotations
 import argparse
 import json
 
+from .display import (
+    HUMAN_REVIEW_NOTE,
+    humanize_label,
+    render_allowed_state,
+    render_authorized_state,
+    render_enabled_state,
+    render_safety_banner,
+)
 from .feedback_review import render_feedback_review, review_feedback
 from .models import SAFETY_BANNER
 from .scenarios import SCENARIOS, build_scenario
@@ -17,26 +25,33 @@ def render_summary(summary: dict[str, object]) -> str:
     """Render a local-only synthetic workflow summary for console display."""
 
     lines = [
-        SAFETY_BANNER,
+        render_safety_banner(),
         "",
-        f"Patient: {summary['patient']}",
-        f"Encounter: {summary['encounter']}",
+        f"Scenario: {str(summary.get('scenario', 'alpha')).title()}",
+        "",
+        "Patient:",
+        humanize_label(summary["patient"]),
+        "",
+        "Encounter:",
+        humanize_label(summary["encounter"]),
+        "",
         "Findings:",
     ]
-    lines.extend(f"- {finding}" for finding in summary["findings"])
+    lines.extend(f"- {humanize_label(finding)}" for finding in summary["findings"])
     lines.extend(
         [
-            f"Review note: {summary['review_note']}",
             "",
-            "Safety flags:",
-            f"- sandbox_only: {summary['sandbox_only']}",
-            f"- clinical_use_authorized: {summary['clinical_use_authorized']}",
-            f"- real_patient_data_allowed: {summary['real_patient_data_allowed']}",
-            f"- phi_pii_allowed: {summary['phi_pii_allowed']}",
-            f"- external_integrations_enabled: {summary['external_integrations_enabled']}",
-            f"- appointment_mutation_enabled: {summary['appointment_mutation_enabled']}",
-            f"- patient_messaging_enabled: {summary['patient_messaging_enabled']}",
-            f"- approval_override_enabled: {summary['approval_override_enabled']}",
+            "Clinician review note:",
+            HUMAN_REVIEW_NOTE,
+            "",
+            "Safety confirmations:",
+            f"- Real patient data: {render_allowed_state(summary['real_patient_data_allowed'])}",
+            f"- PHI/PII: {render_allowed_state(summary['phi_pii_allowed'])}",
+            f"- Clinical use: {render_authorized_state(summary['clinical_use_authorized'])}",
+            f"- Patient messaging: {render_enabled_state(summary['patient_messaging_enabled'])}",
+            f"- Appointment mutation: {render_enabled_state(summary['appointment_mutation_enabled'])}",
+            "- Clinical writeback: disabled",
+            f"- Approval/override capability: {render_enabled_state(summary['approval_override_enabled'])}",
         ]
     )
     return "\n".join(lines)
@@ -46,7 +61,9 @@ def run_scenario(name: str = "alpha") -> dict[str, object]:
     """Run a local synthetic scenario and return the summary dictionary."""
 
     _patient, _encounter, _findings, review = build_scenario(name)
-    return build_workflow_summary(review)
+    summary = build_workflow_summary(review)
+    summary["scenario"] = name
+    return summary
 
 
 def main(argv: list[str] | None = None) -> int:

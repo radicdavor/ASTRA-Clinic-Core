@@ -44,7 +44,33 @@ class WalkthroughTests(unittest.TestCase):
         text = output.getvalue()
         self.assertIn(SAFETY_BANNER, text)
         self.assertIn("Available synthetic scenarios:", text)
+        self.assertIn("Clinician-readable scenario examples:", text)
+        self.assertIn("Synthetic patient A", text)
+        self.assertIn("Synthetic patient B", text)
+        self.assertIn("Feedback demonstration:", text)
+        self.assertIn("Design iteration queue:", text)
         self.assertIn("Safety confirmations:", text)
+
+    def test_walkthrough_avoids_internal_placeholder_labels(self):
+        rendered = render_walkthrough(build_walkthrough_packet())
+
+        for placeholder in (
+            "DEMO_ONLY_PATIENT_ALPHA",
+            "DEMO_FINDING_CONTEXT_REVIEW",
+            "DEMO_CHECKLIST_CONFIRM_SYNTHETIC_ONLY",
+            "DEMO_REVIEW_NOTE_SYNTHETIC_ONLY",
+        ):
+            self.assertNotIn(placeholder, rendered)
+
+    def test_walkthrough_keeps_terminal_only_boundary(self):
+        rendered = render_walkthrough(build_walkthrough_packet())
+
+        self.assertIn("Local sandbox only", rendered)
+        self.assertIn("Network/database behavior: disabled", rendered)
+        self.assertIn("External integrations: disabled", rendered)
+        self.assertIn("Patient messaging: disabled", rendered)
+        self.assertIn("Appointment mutation: disabled", rendered)
+        self.assertIn("Go-live: not authorized", rendered)
 
 
 if __name__ == "__main__":

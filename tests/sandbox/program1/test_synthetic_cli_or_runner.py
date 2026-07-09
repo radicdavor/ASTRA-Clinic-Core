@@ -25,13 +25,12 @@ class SyntheticCliOrRunnerTests(unittest.TestCase):
 
         self.assertIn(SAFETY_BANNER, rendered)
         self.assertIn("Synthetic-only", rendered)
-        self.assertIn("clinical_use_authorized: False", rendered)
-        self.assertIn("real_patient_data_allowed: False", rendered)
-        self.assertIn("phi_pii_allowed: False", rendered)
-        self.assertIn("external_integrations_enabled: False", rendered)
-        self.assertIn("appointment_mutation_enabled: False", rendered)
-        self.assertIn("patient_messaging_enabled: False", rendered)
-        self.assertIn("approval_override_enabled: False", rendered)
+        self.assertIn("Clinical use: not authorized", rendered)
+        self.assertIn("Real patient data: not allowed", rendered)
+        self.assertIn("PHI/PII: not allowed", rendered)
+        self.assertIn("Appointment mutation: disabled", rendered)
+        self.assertIn("Patient messaging: disabled", rendered)
+        self.assertIn("Approval/override capability: disabled", rendered)
 
     def test_cli_prints_local_sandbox_summary(self):
         output = io.StringIO()
@@ -41,8 +40,20 @@ class SyntheticCliOrRunnerTests(unittest.TestCase):
         self.assertEqual(exit_code, 0)
         text = output.getvalue()
         self.assertIn(SAFETY_BANNER, text)
-        self.assertIn("Patient: DEMO_ONLY_PATIENT_ALPHA", text)
+        self.assertIn("Synthetic patient A", text)
+        self.assertIn("Missing context in uploaded record", text)
         self.assertIn("Not for clinical use", text)
+
+    def test_default_summary_avoids_internal_placeholder_labels(self):
+        text = render_summary(run_scenario("alpha"))
+
+        for placeholder in (
+            "DEMO_FINDING_CONTEXT_REVIEW",
+            "DEMO_ONLY_PATIENT_ALPHA",
+            "EXAMPLE_FINDING_SUMMARY_FOR_SYNTHETIC_WORKFLOW_ONLY",
+            "DEMO_REVIEW_NOTE_SYNTHETIC_ONLY",
+        ):
+            self.assertNotIn(placeholder, text)
 
 
 if __name__ == "__main__":

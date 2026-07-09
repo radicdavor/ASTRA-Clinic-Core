@@ -4,6 +4,13 @@ from __future__ import annotations
 
 from dataclasses import asdict
 
+from .display import (
+    humanize_label,
+    render_allowed_state,
+    render_authorized_state,
+    render_enabled_state,
+    render_safety_banner,
+)
 from .feedback import build_feedback_template, validate_feedback
 from .iteration_queue import SyntheticIterationQueueItem, build_iteration_queue
 from .models import SAFETY_BANNER
@@ -64,35 +71,45 @@ def render_feedback_review(review: dict[str, object]) -> str:
     """Render a local-only feedback review summary."""
 
     lines = [
-        review["safety_banner"],
+        render_safety_banner(),
         "Local sandbox only. Not for clinical use.",
+        (
+            "Example feedback is shown only to demonstrate how a clinician might "
+            "comment on the sandbox design. It is not stored in a production system, "
+            "not sent to anyone, and not used for patient care."
+        ),
         "",
         f"Feedback examples reviewed: {review['feedback_count']}",
         "Recurring themes:",
     ]
-    lines.extend(f"- {theme}" for theme in review["themes"])
+    lines.extend(f"- {humanize_label(theme)}" for theme in review["themes"])
     lines.append("")
-    lines.append("Iteration queue:")
+    lines.append("Design iteration queue:")
     for item in review["iteration_queue"]:
         lines.extend(
             [
-                f"- {item['item_id']}: {item['theme']}",
-                f"  proposed_change: {item['proposed_change']}",
-                f"  safety_boundary: {item['safety_boundary']}",
-                f"  prohibited_escalation: {item['prohibited_escalation']}",
-                f"  status: {item['status']}",
+                f"- {humanize_label(item['item_id'])}: {humanize_label(item['theme'])}",
+                (
+                    "  This item demonstrates a possible future design discussion item. "
+                    "It does not create a clinical task, appointment action, patient "
+                    "message, or workflow obligation."
+                ),
+                f"  Proposed change: {humanize_label(item['proposed_change'])}",
+                f"  Safety boundary: {humanize_label(item['safety_boundary'])}",
+                f"  Prohibited escalation: {humanize_label(item['prohibited_escalation'])}",
+                f"  Status: {humanize_label(item['status'])}",
             ]
         )
     lines.extend(
         [
             "",
             "Safety confirmations:",
-            f"- local_only: {review['local_only']}",
-            f"- network_or_database_used: {review['network_or_database_used']}",
-            f"- external_integrations_enabled: {review['external_integrations_enabled']}",
-            f"- clinical_use_authorized: {review['clinical_use_authorized']}",
-            f"- real_patient_data_allowed: {review['real_patient_data_allowed']}",
-            f"- phi_pii_allowed: {review['phi_pii_allowed']}",
+            "- Local-only sandbox: enabled",
+            f"- Network/database behavior: {render_enabled_state(review['network_or_database_used'])}",
+            f"- External integrations: {render_enabled_state(review['external_integrations_enabled'])}",
+            f"- Clinical use: {render_authorized_state(review['clinical_use_authorized'])}",
+            f"- Real patient data: {render_allowed_state(review['real_patient_data_allowed'])}",
+            f"- PHI/PII: {render_allowed_state(review['phi_pii_allowed'])}",
         ]
     )
     return "\n".join(lines)

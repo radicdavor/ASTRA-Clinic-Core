@@ -2073,6 +2073,18 @@ Recommended next decision:
 
 `Stop after Synthetic Sandbox Implementation Track Phase E unless Phase F is explicitly authorized.`
 
+Synthetic Sandbox Implementation Track Phase F update:
+
+- Phase F improves local terminal output so the synthetic sandbox walkthrough is clinician-readable instead of technical placeholder-heavy output
+- default `summary`, `trial`, `review-feedback` and `walkthrough` output now use human-readable scenario labels, non-clinical review note wording, readable feedback framing and design iteration queue language
+- JSON output remains available for structured local inspection with safety flags
+- Phase F adds unittest coverage for readable output and safety boundaries
+- Phase F does not add web UI, browser UI, server/API behavior, network access, database access, external integrations, EHR/EMR access, real patient data, PHI/PII, patient messaging, appointment mutation, clinical writeback, clinical decision execution, autonomous diagnosis/treatment, approval/clearance/override capability, production-readiness claim or go-live authorization
+
+Recommended next decision:
+
+`Stop after Synthetic Sandbox Implementation Track Phase F unless Phase G is explicitly authorized.`
+
 ## 30. Program 1 Phase D44-D54 - Findings Read-Only Workspace Boundary
 
 Status: implemented as read-only workspace boundary after backend verification passed.

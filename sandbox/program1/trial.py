@@ -2,6 +2,14 @@
 
 from __future__ import annotations
 
+from .display import (
+    HUMAN_REVIEW_NOTE,
+    humanize_label,
+    render_allowed_state,
+    render_authorized_state,
+    render_enabled_state,
+    render_safety_banner,
+)
 from .feedback import build_feedback_template
 from .models import SAFETY_BANNER
 from .scenarios import build_scenario
@@ -17,15 +25,29 @@ TRIAL_CHECKLIST = (
     "DEMO_CHECKLIST_CONFIRM_NO_CLINICAL_USE_AUTHORIZED",
 )
 
+FEEDBACK_FIELD_LABELS = {
+    "scenario_id": "Scenario being reviewed",
+    "reviewer_role": "Reviewer role",
+    "workflow_clarity_score": "Workflow clarity score",
+    "missing_information": "Missing information",
+    "confusing_output": "Confusing output",
+    "usefulness_notes": "Usefulness notes",
+    "safety_concerns": "Safety concerns",
+    "next_iteration_suggestions": "Next iteration suggestions",
+    "synthetic_only_confirmation": "Synthetic-only confirmation",
+}
+
 
 def build_trial_packet(scenario: str = "alpha") -> dict[str, object]:
     """Build a local-only synthetic clinician trial packet."""
 
     _patient, _encounter, _findings, review = build_scenario(scenario)
+    summary = build_workflow_summary(review)
+    summary["scenario"] = scenario
     return {
         "safety_banner": SAFETY_BANNER,
         "scenario": scenario,
-        "summary": build_workflow_summary(review),
+        "summary": summary,
         "trial_checklist": list(TRIAL_CHECKLIST),
         "feedback_template": build_feedback_template(
             f"SYNTHETIC_SCENARIO_{scenario.upper()}"
@@ -43,39 +65,49 @@ def render_trial_packet(packet: dict[str, object]) -> str:
 
     summary = packet["summary"]
     lines = [
-        packet["safety_banner"],
+        render_safety_banner(),
         "No clinical use is authorized.",
         "",
-        f"Scenario: {packet['scenario']}",
-        f"Patient: {summary['patient']}",
-        f"Encounter: {summary['encounter']}",
+        f"Scenario: {str(packet['scenario']).title()}",
+        "",
+        "Patient:",
+        humanize_label(summary["patient"]),
+        "",
+        "Encounter:",
+        humanize_label(summary["encounter"]),
+        "",
         "Findings:",
     ]
-    lines.extend(f"- {finding}" for finding in summary["findings"])
+    lines.extend(f"- {humanize_label(finding)}" for finding in summary["findings"])
     lines.extend(
         [
-            f"Review note: {summary['review_note']}",
+            "",
+            "Clinician review note:",
+            HUMAN_REVIEW_NOTE,
             "",
             "Clinician trial checklist:",
         ]
     )
-    lines.extend(f"- {item}" for item in packet["trial_checklist"])
+    lines.extend(f"- {humanize_label(item)}" for item in packet["trial_checklist"])
     lines.extend(
         [
             "",
             "Feedback template fields:",
         ]
     )
-    lines.extend(f"- {key}" for key in packet["feedback_template"])
+    lines.extend(
+        f"- {FEEDBACK_FIELD_LABELS.get(key, humanize_label(key))}"
+        for key in packet["feedback_template"]
+    )
     lines.extend(
         [
             "",
             "Safety confirmations:",
-            f"- clinical_use_authorized: {packet['clinical_use_authorized']}",
-            f"- real_patient_data_allowed: {packet['real_patient_data_allowed']}",
-            f"- phi_pii_allowed: {packet['phi_pii_allowed']}",
-            f"- network_or_database_used: {packet['network_or_database_used']}",
-            f"- external_integrations_enabled: {packet['external_integrations_enabled']}",
+            f"- Clinical use: {render_authorized_state(packet['clinical_use_authorized'])}",
+            f"- Real patient data: {render_allowed_state(packet['real_patient_data_allowed'])}",
+            f"- PHI/PII: {render_allowed_state(packet['phi_pii_allowed'])}",
+            f"- Network/database behavior: {render_enabled_state(packet['network_or_database_used'])}",
+            f"- External integrations: {render_enabled_state(packet['external_integrations_enabled'])}",
         ]
     )
     return "\n".join(lines)
