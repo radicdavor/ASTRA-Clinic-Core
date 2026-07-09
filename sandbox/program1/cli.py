@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import json
 
+from .feedback_review import render_feedback_review, review_feedback
 from .models import SAFETY_BANNER
 from .scenarios import SCENARIOS, build_scenario
 from .trial import build_trial_packet, render_trial_packet
@@ -80,9 +81,24 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="Print the synthetic trial packet as JSON.",
     )
+    review_parser = subparsers.add_parser(
+        "review-feedback",
+        help="Print local synthetic feedback themes and iteration queue.",
+    )
+    review_parser.add_argument(
+        "--json",
+        action="store_true",
+        help="Print the local synthetic feedback review as JSON.",
+    )
     args = parser.parse_args(argv)
     command = args.command or "summary"
-    if command == "trial":
+    if command == "review-feedback":
+        review = review_feedback()
+        if args.json:
+            print(json.dumps(review, indent=2, sort_keys=True))
+        else:
+            print(render_feedback_review(review))
+    elif command == "trial":
         packet = build_trial_packet(args.scenario)
         if args.json:
             print(json.dumps(packet, indent=2, sort_keys=True))

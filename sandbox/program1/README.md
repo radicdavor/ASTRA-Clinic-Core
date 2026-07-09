@@ -62,6 +62,18 @@ Print the local synthetic clinician trial packet as JSON:
 python -m sandbox.program1.cli trial --scenario beta --json
 ```
 
+Review safe synthetic feedback examples and a local sandbox iteration queue:
+
+```powershell
+python -m sandbox.program1.cli review-feedback
+```
+
+Print the local feedback review as JSON:
+
+```powershell
+python -m sandbox.program1.cli review-feedback --json
+```
+
 Example:
 
 ```python
@@ -86,3 +98,7 @@ Phase C adds a local feedback template for synthetic usability notes. It validat
 - `synthetic_only_confirmation`
 
 The template is local-only and is not persisted by the sandbox command. Do not enter real patient data, PHI/PII, real identifiers, clinical notes, appointment data, messages, or production information.
+
+## Local Feedback Review
+
+Phase D adds safe synthetic feedback examples and an iteration queue preview. The queue is local-only and does not imply implementation approval beyond the synthetic sandbox, production readiness, clinical deployment, real-data readiness, or cloud readiness.
