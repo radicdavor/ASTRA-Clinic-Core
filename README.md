@@ -1043,6 +1043,8 @@ Pilot documents:
 - [Program 1 Synthetic Sandbox Implementation Track Phase A local sandbox README](sandbox/program1/README.md)
 - [Program 1 Synthetic Sandbox Implementation Track Phase B Local Sandbox Usability Loop](docs/programs/PROGRAM_1_SYNTHETIC_SANDBOX_IMPLEMENTATION_TRACK_PHASE_B_LOCAL_SANDBOX_USABILITY_LOOP.md)
 - [Program 1 Synthetic Sandbox Implementation Track Phase B Closure Report](docs/programs/PROGRAM_1_SYNTHETIC_SANDBOX_IMPLEMENTATION_TRACK_PHASE_B_CLOSURE_REPORT.md)
+- [Program 1 Synthetic Sandbox Implementation Track Phase C Local Clinician Trial Script and Feedback Capture](docs/programs/PROGRAM_1_SYNTHETIC_SANDBOX_IMPLEMENTATION_TRACK_PHASE_C_LOCAL_CLINICIAN_TRIAL_SCRIPT_AND_FEEDBACK_CAPTURE.md)
+- [Program 1 Synthetic Sandbox Implementation Track Phase C Closure Report](docs/programs/PROGRAM_1_SYNTHETIC_SANDBOX_IMPLEMENTATION_TRACK_PHASE_C_CLOSURE_REPORT.md)
 - [Lokalni LAN pristup](docs/LAN_ACCESS.md)
 - [Program 1 audit event naming](docs/programs/PROGRAM_1_AUDIT_EVENT_NAMING.md)
 - [Program 1 Phase A regression notes](docs/programs/PROGRAM_1_PHASE_A_REGRESSION_NOTES.md)

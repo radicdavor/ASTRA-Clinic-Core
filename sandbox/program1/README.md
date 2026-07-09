@@ -47,7 +47,19 @@ python -m sandbox.program1.cli --scenario beta
 Print JSON for local inspection:
 
 ```powershell
-python -m sandbox.program1.cli --scenario beta --json
+python -m sandbox.program1.cli summary --scenario beta --json
+```
+
+Run a local synthetic clinician trial packet:
+
+```powershell
+python -m sandbox.program1.cli trial --scenario alpha
+```
+
+Print the local synthetic clinician trial packet as JSON:
+
+```powershell
+python -m sandbox.program1.cli trial --scenario beta --json
 ```
 
 Example:
@@ -58,3 +70,19 @@ from sandbox.program1 import build_sample_workflow, build_workflow_summary
 patient, encounter, findings, review = build_sample_workflow()
 summary = build_workflow_summary(review)
 ```
+
+## Synthetic Feedback Template
+
+Phase C adds a local feedback template for synthetic usability notes. It validates:
+
+- `scenario_id`
+- `reviewer_role`
+- `workflow_clarity_score`
+- `missing_information`
+- `confusing_output`
+- `usefulness_notes`
+- `safety_concerns`
+- `next_iteration_suggestions`
+- `synthetic_only_confirmation`
+
+The template is local-only and is not persisted by the sandbox command. Do not enter real patient data, PHI/PII, real identifiers, clinical notes, appointment data, messages, or production information.

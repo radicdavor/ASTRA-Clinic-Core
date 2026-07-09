@@ -7,6 +7,7 @@ import json
 
 from .models import SAFETY_BANNER
 from .scenarios import SCENARIOS, build_scenario
+from .trial import build_trial_packet, render_trial_packet
 from .workflow import build_workflow_summary
 
 
@@ -49,26 +50,50 @@ def run_scenario(name: str = "alpha") -> dict[str, object]:
 def main(argv: list[str] | None = None) -> int:
     """Local-only CLI entry point for the synthetic sandbox."""
 
+    if argv and argv[0] in {"--scenario", "--json"}:
+        argv = ["summary", *argv]
     parser = argparse.ArgumentParser(
         description="Run a Program 1 synthetic-only local sandbox scenario."
     )
-    parser.add_argument(
+    subparsers = parser.add_subparsers(dest="command")
+    summary_parser = subparsers.add_parser("summary", help="Print a synthetic summary.")
+    summary_parser.add_argument(
         "--scenario",
         default="alpha",
         choices=sorted(SCENARIOS),
         help="Synthetic-only scenario to render.",
     )
-    parser.add_argument(
+    summary_parser.add_argument(
         "--json",
         action="store_true",
         help="Print the synthetic summary as JSON.",
     )
+    trial_parser = subparsers.add_parser("trial", help="Print a local clinician trial packet.")
+    trial_parser.add_argument(
+        "--scenario",
+        default="alpha",
+        choices=sorted(SCENARIOS),
+        help="Synthetic-only scenario to use for the trial packet.",
+    )
+    trial_parser.add_argument(
+        "--json",
+        action="store_true",
+        help="Print the synthetic trial packet as JSON.",
+    )
     args = parser.parse_args(argv)
-    summary = run_scenario(args.scenario)
-    if args.json:
-        print(json.dumps(summary, indent=2, sort_keys=True))
+    command = args.command or "summary"
+    if command == "trial":
+        packet = build_trial_packet(args.scenario)
+        if args.json:
+            print(json.dumps(packet, indent=2, sort_keys=True))
+        else:
+            print(render_trial_packet(packet))
     else:
-        print(render_summary(summary))
+        summary = run_scenario(args.scenario)
+        if args.json:
+            print(json.dumps(summary, indent=2, sort_keys=True))
+        else:
+            print(render_summary(summary))
     return 0
 
 
