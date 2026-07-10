@@ -217,3 +217,28 @@ python -m sandbox.program1.cli compare-scenarios --json
 No-UI Hold means no web UI, browser UI, server/API, local web app, hosted preview, deployment, production mode, EHR/EMR integration, database persistence, export behavior, patient-facing surface, or staff workflow surface is authorized.
 
 The sandbox remains synthetic-only, non-production, local terminal-only, no real patient data, no PHI/PII, and not for clinical use. Phase J does not add a new CLI command or runtime behavior.
+
+## Maintenance Quickstart
+
+Maintenance Track Phase A adds documentation-only quickstart and command audit notes after Phase J. It is not Phase K, not a UI track, and not a new implementation track.
+
+Recommended local quickstart from the repository root:
+
+```powershell
+git status -sb
+python -m unittest discover tests/sandbox/program1
+python -m sandbox.program1.cli walkthrough
+python -m sandbox.program1.cli session-recap --scenario alpha --feedback "The review note is easier to understand now."
+python -m sandbox.program1.cli compare-scenarios
+git status -sb
+```
+
+All sandbox commands remain local terminal-only, synthetic-only, non-production, no real patient data, no PHI/PII, and not for clinical use. JSON modes are for structured local inspection only; they are not export, persistence, transmission, integration, production behavior, or clinical content.
+
+If Python reports `ModuleNotFoundError: No module named 'sandbox'`, run the command from the repository root:
+
+```powershell
+cd "C:\Users\Davor\Documents\ASTRA Academy\ASTRA Clinic Core"
+```
+
+Running sandbox commands should not modify files. Use `git status -sb` before and after a demo sequence to confirm the working tree remains clean.

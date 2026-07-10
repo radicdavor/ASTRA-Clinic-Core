@@ -2136,6 +2136,20 @@ Recommended next decision:
 
 `Stop and hold after Synthetic Sandbox Implementation Track Phase J unless a separate future track is explicitly authorized.`
 
+Synthetic Sandbox Maintenance Track Phase A update:
+
+- Maintenance Track Phase A starts after Synthetic Sandbox Implementation Track Phase J
+- Phase A is documentation-only and is not Phase K, not a UI track and not a new implementation track
+- Phase A adds quickstart, command audit, recommended demo sequence, troubleshooting notes and No-UI Hold continuity documentation
+- current sandbox commands remain local terminal-only, synthetic-only, non-production, no real patient data, no PHI/PII and not for clinical use
+- JSON modes are clarified as structured local inspection only, not persistence, export, transmission, integration, production behavior or clinical content
+- running commands is documented as no-file-modification behavior that should be checked with `git status -sb`
+- Phase A does not add Python runtime code, tests, new CLI commands, UI, server/API, network/database behavior, integrations, persistence/export, real-data handling, PHI/PII handling, clinical workflow behavior, production-readiness or go-live authorization
+
+Recommended next decision:
+
+`Stop after Synthetic Sandbox Maintenance Track Phase A unless another maintenance action is explicitly authorized.`
+
 ## 30. Program 1 Phase D44-D54 - Findings Read-Only Workspace Boundary
 
 Status: implemented as read-only workspace boundary after backend verification passed.
