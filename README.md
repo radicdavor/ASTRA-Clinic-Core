@@ -1051,6 +1051,8 @@ Pilot documents:
 - [Program 1 Synthetic Sandbox Implementation Track Phase E Closure Report](docs/programs/PROGRAM_1_SYNTHETIC_SANDBOX_IMPLEMENTATION_TRACK_PHASE_E_CLOSURE_REPORT.md)
 - [Program 1 Synthetic Sandbox Implementation Track Phase F Human-Readable Clinician Walkthrough Output](docs/programs/PROGRAM_1_SYNTHETIC_SANDBOX_IMPLEMENTATION_TRACK_PHASE_F_HUMAN_READABLE_CLINICIAN_WALKTHROUGH_OUTPUT.md)
 - [Program 1 Synthetic Sandbox Implementation Track Phase F Closure Report](docs/programs/PROGRAM_1_SYNTHETIC_SANDBOX_IMPLEMENTATION_TRACK_PHASE_F_CLOSURE_REPORT.md)
+- [Program 1 Synthetic Sandbox Implementation Track Phase G Local Interactive Synthetic Feedback Input](docs/programs/PROGRAM_1_SYNTHETIC_SANDBOX_IMPLEMENTATION_TRACK_PHASE_G_LOCAL_INTERACTIVE_SYNTHETIC_FEEDBACK_INPUT.md)
+- [Program 1 Synthetic Sandbox Implementation Track Phase G Closure Report](docs/programs/PROGRAM_1_SYNTHETIC_SANDBOX_IMPLEMENTATION_TRACK_PHASE_G_CLOSURE_REPORT.md)
 - [Lokalni LAN pristup](docs/LAN_ACCESS.md)
 - [Program 1 audit event naming](docs/programs/PROGRAM_1_AUDIT_EVENT_NAMING.md)
 - [Program 1 Phase A regression notes](docs/programs/PROGRAM_1_PHASE_A_REGRESSION_NOTES.md)

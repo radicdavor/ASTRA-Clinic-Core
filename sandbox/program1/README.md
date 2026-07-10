@@ -122,3 +122,27 @@ Phase E adds a combined local walkthrough. It lists available synthetic scenario
 Phase F improves the default terminal output so the walkthrough is easier for a clinician to read. The default `summary`, `trial`, `review-feedback`, and `walkthrough` commands now use plain-language scenario labels, non-clinical review note wording, readable feedback framing, and design iteration queue wording. JSON output remains available for structured local inspection.
 
 Phase F remains local-only, terminal-only, synthetic-only, non-production, and not for clinical use. It does not add web UI, server/API behavior, network/database behavior, external integrations, EHR/EMR access, real patient data, PHI/PII, patient messaging, appointment mutation, clinical writeback, approval/override capability, production-readiness, or go-live authorization.
+
+## Local Synthetic Feedback Input
+
+Phase G adds a local terminal-only feedback preview. It echoes synthetic design feedback back to the terminal and does not store, export, transmit, or convert feedback into any clinical task.
+
+Run a local synthetic feedback preview:
+
+```powershell
+python -m sandbox.program1.cli feedback-input --text "The review note is easier to understand now."
+```
+
+Print the same local preview as JSON:
+
+```powershell
+python -m sandbox.program1.cli feedback-input --text "The review note is easier to understand now." --json
+```
+
+Optional interactive input is available only when explicitly requested:
+
+```powershell
+python -m sandbox.program1.cli feedback-input --interactive
+```
+
+Do not enter real patient data, PHI, PII, clinical instructions, patient-identifying information, appointment details, messages, or production information. Phase G does not add file persistence, exports, network/database behavior, integrations, patient messaging, appointment mutation, clinical writeback, workflow enforcement, clinical task creation, approval/override capability, production-readiness, or go-live authorization.

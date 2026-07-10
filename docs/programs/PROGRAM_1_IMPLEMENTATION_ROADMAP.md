@@ -2085,6 +2085,18 @@ Recommended next decision:
 
 `Stop after Synthetic Sandbox Implementation Track Phase F unless Phase G is explicitly authorized.`
 
+Synthetic Sandbox Implementation Track Phase G update:
+
+- Phase G adds local terminal-only synthetic feedback input through `feedback-input`
+- feedback input echoes a short synthetic design-feedback comment back as a local preview only
+- optional interactive input is available only when explicitly requested with `--interactive`
+- JSON output is available for the local preview and retains safety flags for no persistence, no transmission, no clinical task, no patient messaging, no appointment mutation, no workflow enforcement, no writeback, no approval/override and no go-live
+- Phase G does not add web UI, browser UI, server/API behavior, network access, database access, file persistence, export files, external integrations, EHR/EMR access, real patient data, PHI/PII, patient messaging, appointment mutation, clinical writeback, workflow enforcement, Task engine behavior, Outcome Evidence behavior, clinical task creation, autonomous diagnosis/treatment, approval/clearance/override capability, production-readiness claim or go-live authorization
+
+Recommended next decision:
+
+`Stop after Synthetic Sandbox Implementation Track Phase G unless Phase H is explicitly authorized.`
+
 ## 30. Program 1 Phase D44-D54 - Findings Read-Only Workspace Boundary
 
 Status: implemented as read-only workspace boundary after backend verification passed.

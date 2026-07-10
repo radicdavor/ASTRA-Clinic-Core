@@ -13,6 +13,7 @@ from .display import (
     render_enabled_state,
     render_safety_banner,
 )
+from .feedback_input import build_feedback_input_preview, render_feedback_input_preview
 from .feedback_review import render_feedback_review, review_feedback
 from .models import SAFETY_BANNER
 from .scenarios import SCENARIOS, build_scenario
@@ -117,6 +118,27 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="Print the local synthetic walkthrough as JSON.",
     )
+    feedback_input_parser = subparsers.add_parser(
+        "feedback-input",
+        help="Preview local synthetic design feedback without storing or sending it.",
+    )
+    feedback_input_parser.add_argument(
+        "--text",
+        nargs="?",
+        const="",
+        default=None,
+        help="Synthetic design-feedback text to preview locally.",
+    )
+    feedback_input_parser.add_argument(
+        "--interactive",
+        action="store_true",
+        help="Prompt for synthetic design-feedback text locally.",
+    )
+    feedback_input_parser.add_argument(
+        "--json",
+        action="store_true",
+        help="Print the local synthetic feedback preview as JSON.",
+    )
     args = parser.parse_args(argv)
     command = args.command or "summary"
     if command == "walkthrough":
@@ -131,6 +153,16 @@ def main(argv: list[str] | None = None) -> int:
             print(json.dumps(review, indent=2, sort_keys=True))
         else:
             print(render_feedback_review(review))
+    elif command == "feedback-input":
+        text = args.text
+        if args.interactive:
+            print("Synthetic-only local feedback input. Do not enter real patient data or PHI/PII.")
+            text = input("Enter synthetic design feedback: ")
+        preview = build_feedback_input_preview(text)
+        if args.json:
+            print(json.dumps(preview, indent=2, sort_keys=True))
+        else:
+            print(render_feedback_input_preview(preview))
     elif command == "trial":
         packet = build_trial_packet(args.scenario)
         if args.json:
