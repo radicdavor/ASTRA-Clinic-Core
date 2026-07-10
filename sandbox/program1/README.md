@@ -188,3 +188,32 @@ python -m sandbox.program1.cli compare-scenarios --json
 ```
 
 The comparison is not persisted, exported, transmitted, stored, written to a database, or integrated with external systems. Phase I does not add web UI, server/API behavior, network/database behavior, EHR/EMR access, real patient data, PHI/PII, patient messaging, appointment mutation, clinical writeback, workflow enforcement, clinical task creation, approval/override capability, production-readiness, or go-live authorization.
+
+## Local Synthetic Demo Closure and No-UI Hold
+
+Phase J closes the current local terminal-only synthetic sandbox demo after Phases A through I. The sandbox is complete enough to pause and is placed into No-UI Hold.
+
+Current local terminal-only synthetic demo commands:
+
+```powershell
+python -m sandbox.program1.cli summary --scenario alpha
+python -m sandbox.program1.cli summary --scenario beta
+python -m sandbox.program1.cli trial --scenario alpha
+python -m sandbox.program1.cli trial --scenario beta
+python -m sandbox.program1.cli review-feedback
+python -m sandbox.program1.cli walkthrough
+python -m sandbox.program1.cli walkthrough --json
+python -m sandbox.program1.cli feedback-input --text "..."
+python -m sandbox.program1.cli feedback-input --text ""
+python -m sandbox.program1.cli feedback-input --text "..." --json
+python -m sandbox.program1.cli session-recap --scenario alpha
+python -m sandbox.program1.cli session-recap --scenario beta
+python -m sandbox.program1.cli session-recap --scenario alpha --feedback "..."
+python -m sandbox.program1.cli session-recap --scenario alpha --feedback "..." --json
+python -m sandbox.program1.cli compare-scenarios
+python -m sandbox.program1.cli compare-scenarios --json
+```
+
+No-UI Hold means no web UI, browser UI, server/API, local web app, hosted preview, deployment, production mode, EHR/EMR integration, database persistence, export behavior, patient-facing surface, or staff workflow surface is authorized.
+
+The sandbox remains synthetic-only, non-production, local terminal-only, no real patient data, no PHI/PII, and not for clinical use. Phase J does not add a new CLI command or runtime behavior.

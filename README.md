@@ -1057,6 +1057,8 @@ Pilot documents:
 - [Program 1 Synthetic Sandbox Implementation Track Phase H Closure Report](docs/programs/PROGRAM_1_SYNTHETIC_SANDBOX_IMPLEMENTATION_TRACK_PHASE_H_CLOSURE_REPORT.md)
 - [Program 1 Synthetic Sandbox Implementation Track Phase I Local Synthetic Scenario Comparison View](docs/programs/PROGRAM_1_SYNTHETIC_SANDBOX_IMPLEMENTATION_TRACK_PHASE_I_LOCAL_SYNTHETIC_SCENARIO_COMPARISON_VIEW.md)
 - [Program 1 Synthetic Sandbox Implementation Track Phase I Closure Report](docs/programs/PROGRAM_1_SYNTHETIC_SANDBOX_IMPLEMENTATION_TRACK_PHASE_I_CLOSURE_REPORT.md)
+- [Program 1 Synthetic Sandbox Implementation Track Phase J Local Synthetic Demo Closure and No-UI Hold](docs/programs/PROGRAM_1_SYNTHETIC_SANDBOX_IMPLEMENTATION_TRACK_PHASE_J_LOCAL_SYNTHETIC_DEMO_CLOSURE_AND_NO_UI_HOLD.md)
+- [Program 1 Synthetic Sandbox Implementation Track Phase J Closure Report](docs/programs/PROGRAM_1_SYNTHETIC_SANDBOX_IMPLEMENTATION_TRACK_PHASE_J_CLOSURE_REPORT.md)
 - [Lokalni LAN pristup](docs/LAN_ACCESS.md)
 - [Program 1 audit event naming](docs/programs/PROGRAM_1_AUDIT_EVENT_NAMING.md)
 - [Program 1 Phase A regression notes](docs/programs/PROGRAM_1_PHASE_A_REGRESSION_NOTES.md)
