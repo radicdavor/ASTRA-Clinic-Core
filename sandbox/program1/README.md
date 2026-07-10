@@ -146,3 +146,27 @@ python -m sandbox.program1.cli feedback-input --interactive
 ```
 
 Do not enter real patient data, PHI, PII, clinical instructions, patient-identifying information, appointment details, messages, or production information. Phase G does not add file persistence, exports, network/database behavior, integrations, patient messaging, appointment mutation, clinical writeback, workflow enforcement, clinical task creation, approval/override capability, production-readiness, or go-live authorization.
+
+## Local Synthetic Session Recap
+
+Phase H adds a local terminal-only session recap. It combines a synthetic scenario, patient, encounter, findings, non-clinical review note, optional synthetic feedback preview, design iteration note, and safety confirmations in one readable terminal view.
+
+Run a local synthetic session recap:
+
+```powershell
+python -m sandbox.program1.cli session-recap --scenario alpha
+```
+
+Include local synthetic feedback preview:
+
+```powershell
+python -m sandbox.program1.cli session-recap --scenario alpha --feedback "The review note is easier to understand now."
+```
+
+Print the recap as JSON:
+
+```powershell
+python -m sandbox.program1.cli session-recap --scenario alpha --feedback "The review note is easier to understand now." --json
+```
+
+The recap is not persisted, exported, transmitted, stored, converted into a clinical task, sent to patients, used for workflow enforcement, or treated as clinical content. Phase H does not add web UI, server/API behavior, network/database behavior, integrations, EHR/EMR access, real patient data, PHI/PII, patient messaging, appointment mutation, clinical writeback, approval/override capability, production-readiness, or go-live authorization.

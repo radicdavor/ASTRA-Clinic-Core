@@ -2097,6 +2097,18 @@ Recommended next decision:
 
 `Stop after Synthetic Sandbox Implementation Track Phase G unless Phase H is explicitly authorized.`
 
+Synthetic Sandbox Implementation Track Phase H update:
+
+- Phase H adds a local terminal-only synthetic session recap through `session-recap`
+- the recap combines scenario, patient, encounter, findings, non-clinical review note, optional synthetic feedback preview, design iteration note and safety confirmations in one clinician-readable view
+- JSON output is available for structured local inspection and retains no-side-effect safety flags
+- Phase H does not persist, export, transmit, store, create tasks, message patients, mutate appointments, enforce workflows, write clinical records or imply production/clinical readiness
+- Phase H does not add web UI, browser UI, server/API behavior, network access, database access, file persistence, export files, external integrations, EHR/EMR access, real patient data, PHI/PII, patient messaging, appointment mutation, clinical writeback, workflow enforcement, Task engine behavior, Outcome Evidence behavior, clinical task creation, autonomous diagnosis/treatment, approval/clearance/override capability, production-readiness claim or go-live authorization
+
+Recommended next decision:
+
+`Stop after Synthetic Sandbox Implementation Track Phase H unless Phase I is explicitly authorized.`
+
 ## 30. Program 1 Phase D44-D54 - Findings Read-Only Workspace Boundary
 
 Status: implemented as read-only workspace boundary after backend verification passed.

@@ -17,6 +17,7 @@ from .feedback_input import build_feedback_input_preview, render_feedback_input_
 from .feedback_review import render_feedback_review, review_feedback
 from .models import SAFETY_BANNER
 from .scenarios import SCENARIOS, build_scenario
+from .session_recap import build_session_recap, render_session_recap
 from .trial import build_trial_packet, render_trial_packet
 from .walkthrough import build_walkthrough_packet, render_walkthrough
 from .workflow import build_workflow_summary
@@ -139,6 +140,26 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="Print the local synthetic feedback preview as JSON.",
     )
+    recap_parser = subparsers.add_parser(
+        "session-recap",
+        help="Print a local synthetic sandbox session recap.",
+    )
+    recap_parser.add_argument(
+        "--scenario",
+        default="alpha",
+        choices=sorted(SCENARIOS),
+        help="Synthetic-only scenario to recap.",
+    )
+    recap_parser.add_argument(
+        "--feedback",
+        default=None,
+        help="Optional synthetic design-feedback text to include as a local preview.",
+    )
+    recap_parser.add_argument(
+        "--json",
+        action="store_true",
+        help="Print the local synthetic session recap as JSON.",
+    )
     args = parser.parse_args(argv)
     command = args.command or "summary"
     if command == "walkthrough":
@@ -163,6 +184,12 @@ def main(argv: list[str] | None = None) -> int:
             print(json.dumps(preview, indent=2, sort_keys=True))
         else:
             print(render_feedback_input_preview(preview))
+    elif command == "session-recap":
+        recap = build_session_recap(args.scenario, args.feedback)
+        if args.json:
+            print(json.dumps(recap, indent=2, sort_keys=True))
+        else:
+            print(render_session_recap(recap))
     elif command == "trial":
         packet = build_trial_packet(args.scenario)
         if args.json:
