@@ -2109,6 +2109,19 @@ Recommended next decision:
 
 `Stop after Synthetic Sandbox Implementation Track Phase H unless Phase I is explicitly authorized.`
 
+Synthetic Sandbox Implementation Track Phase I update:
+
+- Phase I adds a local terminal-only synthetic scenario comparison view through `compare-scenarios`
+- the comparison displays alpha and beta in a clinician-readable view with scenario purpose, patient, encounter, findings, non-clinical review note, comparison summary and safety confirmations
+- JSON output is available for structured local inspection and retains no-side-effect safety flags
+- Phase I does not compare real patients and does not support clinical decision-making
+- Phase I does not persist, export, transmit, store, create tasks, message patients, mutate appointments, enforce workflows, write clinical records or imply production/clinical readiness
+- Phase I does not add web UI, browser UI, server/API behavior, network access, database access, file persistence, export files, external integrations, EHR/EMR access, real patient data, PHI/PII, patient messaging, appointment mutation, clinical writeback, workflow enforcement, Task engine behavior, Outcome Evidence behavior, clinical task creation, autonomous diagnosis/treatment, approval/clearance/override capability, production-readiness claim or go-live authorization
+
+Recommended next decision:
+
+`Stop after Synthetic Sandbox Implementation Track Phase I unless Phase J is explicitly authorized.`
+
 ## 30. Program 1 Phase D44-D54 - Findings Read-Only Workspace Boundary
 
 Status: implemented as read-only workspace boundary after backend verification passed.

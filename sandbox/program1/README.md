@@ -170,3 +170,21 @@ python -m sandbox.program1.cli session-recap --scenario alpha --feedback "The re
 ```
 
 The recap is not persisted, exported, transmitted, stored, converted into a clinical task, sent to patients, used for workflow enforcement, or treated as clinical content. Phase H does not add web UI, server/API behavior, network/database behavior, integrations, EHR/EMR access, real patient data, PHI/PII, patient messaging, appointment mutation, clinical writeback, approval/override capability, production-readiness, or go-live authorization.
+
+## Local Synthetic Scenario Comparison
+
+Phase I adds a local terminal-only scenario comparison view for the alpha and beta synthetic scenarios. It helps reviewers compare sandbox design differences without comparing real patients or supporting clinical decision-making.
+
+Run the comparison:
+
+```powershell
+python -m sandbox.program1.cli compare-scenarios
+```
+
+Print the comparison as JSON:
+
+```powershell
+python -m sandbox.program1.cli compare-scenarios --json
+```
+
+The comparison is not persisted, exported, transmitted, stored, written to a database, or integrated with external systems. Phase I does not add web UI, server/API behavior, network/database behavior, EHR/EMR access, real patient data, PHI/PII, patient messaging, appointment mutation, clinical writeback, workflow enforcement, clinical task creation, approval/override capability, production-readiness, or go-live authorization.

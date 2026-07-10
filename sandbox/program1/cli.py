@@ -16,6 +16,7 @@ from .display import (
 from .feedback_input import build_feedback_input_preview, render_feedback_input_preview
 from .feedback_review import render_feedback_review, review_feedback
 from .models import SAFETY_BANNER
+from .scenario_comparison import build_scenario_comparison, render_scenario_comparison
 from .scenarios import SCENARIOS, build_scenario
 from .session_recap import build_session_recap, render_session_recap
 from .trial import build_trial_packet, render_trial_packet
@@ -160,6 +161,15 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="Print the local synthetic session recap as JSON.",
     )
+    compare_parser = subparsers.add_parser(
+        "compare-scenarios",
+        help="Print a local synthetic alpha/beta scenario comparison.",
+    )
+    compare_parser.add_argument(
+        "--json",
+        action="store_true",
+        help="Print the local synthetic scenario comparison as JSON.",
+    )
     args = parser.parse_args(argv)
     command = args.command or "summary"
     if command == "walkthrough":
@@ -190,6 +200,12 @@ def main(argv: list[str] | None = None) -> int:
             print(json.dumps(recap, indent=2, sort_keys=True))
         else:
             print(render_session_recap(recap))
+    elif command == "compare-scenarios":
+        comparison = build_scenario_comparison()
+        if args.json:
+            print(json.dumps(comparison, indent=2, sort_keys=True))
+        else:
+            print(render_scenario_comparison(comparison))
     elif command == "trial":
         packet = build_trial_packet(args.scenario)
         if args.json:
