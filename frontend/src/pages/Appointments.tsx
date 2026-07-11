@@ -1,4 +1,4 @@
-import { Link } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 import { DataTable } from "../components/DataTable";
 import { HelpHint } from "../components/HelpHint";
 import { StatusBadge } from "../components/StatusBadge";
@@ -7,13 +7,14 @@ import { Appointment } from "../types";
 import { formatDate } from "../utils/date";
 
 export function Appointments() {
+  const location = useLocation();
   const { data } = useApi<Appointment[]>("/api/appointments", []);
   return (
     <section className="page">
       <div className="page-header">
         <h1>Termini</h1>
         <span className="action-with-help">
-          <Link className="primary link-button" to="/appointments/new">Novi termin</Link>
+          <Link className="primary link-button" to="/appointments/new" state={{ backgroundLocation: location }}>Novi termin</Link>
           <HelpHint title="Novi termin">Termin povezuje pacijenta, uslugu, lijecnika, sobu i vrijeme.</HelpHint>
         </span>
       </div>
@@ -23,7 +24,7 @@ export function Appointments() {
         { header: "Pacijent", render: (row) => `${row.patient?.first_name ?? ""} ${row.patient?.last_name ?? ""}` },
         { header: "Usluga", render: (row) => row.service?.name ?? row.service_id },
         { header: "Status", render: (row) => <StatusBadge status={row.status} /> },
-        { header: "Detalj", render: (row) => <Link to={`/appointments/${row.id}`}>Otvori</Link> }
+        { header: "Detalj", render: (row) => <Link to={`/appointments/${row.id}`} state={{ backgroundLocation: location }}>Otvori</Link> }
       ]} />
     </section>
   );

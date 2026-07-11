@@ -1,5 +1,7 @@
-import { Navigate, Route, Routes } from "react-router-dom";
+import { Fragment } from "react";
+import { Location, Navigate, Route, Routes, useLocation } from "react-router-dom";
 import { AppShell } from "../components/AppShell";
+import { RouteModal } from "../components/RouteModal";
 import { getToken } from "../api/client";
 import { AppointmentForm } from "../pages/AppointmentForm";
 import { AppointmentDetail } from "../pages/AppointmentDetail";
@@ -32,35 +34,47 @@ function Protected() {
 }
 
 export function AppRoutes() {
+  const location = useLocation();
+  const state = location.state as { backgroundLocation?: Location } | null;
+  const backgroundLocation = state?.backgroundLocation;
+
   return (
-    <Routes>
-      <Route path="/login" element={<Login />} />
-      <Route element={<Protected />}>
-        <Route path="/" element={<Dashboard />} />
-        <Route path="/patients" element={<Patients />} />
-        <Route path="/patients/new" element={<PatientForm />} />
-        <Route path="/patients/:id" element={<PatientDetail />} />
-        <Route path="/reception" element={<Reception />} />
-        <Route path="/episodes" element={<Episodes />} />
-        <Route path="/episodes/new" element={<EpisodeForm />} />
-        <Route path="/episodes/:id" element={<EpisodeDetail />} />
-        <Route path="/clinical-documents" element={<ClinicalDocuments />} />
-        <Route path="/clinical-documents/:id" element={<ClinicalDocumentDetail />} />
-        <Route path="/appointments" element={<Appointments />} />
-        <Route path="/appointments/new" element={<AppointmentForm />} />
-        <Route path="/appointments/:id" element={<AppointmentDetail />} />
-        <Route path="/services" element={<Services />} />
-        <Route path="/modules" element={<Modules />} />
-        <Route path="/inventory" element={<Inventory />} />
-        <Route path="/suppliers" element={<Suppliers />} />
-        <Route path="/purchase-orders" element={<PurchaseOrders />} />
-        <Route path="/invoices" element={<Invoices />} />
-        <Route path="/audit-log" element={<AuditLog />} />
-        <Route path="/api-keys" element={<ApiKeys />} />
-        <Route path="/readiness" element={<Readiness />} />
-        <Route path="/program1/synthetic-review" element={<SyntheticReviewWorkspace />} />
-        <Route path="/program1/synthetic-evaluation" element={<SyntheticEvaluationRunner />} />
-      </Route>
-    </Routes>
+    <Fragment>
+      <Routes location={backgroundLocation ?? location}>
+        <Route path="/login" element={<Login />} />
+        <Route element={<Protected />}>
+          <Route path="/" element={<Dashboard />} />
+          <Route path="/patients" element={<Patients />} />
+          <Route path="/patients/new" element={<PatientForm />} />
+          <Route path="/patients/:id" element={<PatientDetail />} />
+          <Route path="/reception" element={<Reception />} />
+          <Route path="/episodes" element={<Episodes />} />
+          <Route path="/episodes/new" element={<EpisodeForm />} />
+          <Route path="/episodes/:id" element={<EpisodeDetail />} />
+          <Route path="/clinical-documents" element={<ClinicalDocuments />} />
+          <Route path="/clinical-documents/:id" element={<ClinicalDocumentDetail />} />
+          <Route path="/appointments" element={<Appointments />} />
+          <Route path="/appointments/new" element={<AppointmentForm />} />
+          <Route path="/appointments/:id" element={<AppointmentDetail />} />
+          <Route path="/services" element={<Services />} />
+          <Route path="/modules" element={<Modules />} />
+          <Route path="/inventory" element={<Inventory />} />
+          <Route path="/suppliers" element={<Suppliers />} />
+          <Route path="/purchase-orders" element={<PurchaseOrders />} />
+          <Route path="/invoices" element={<Invoices />} />
+          <Route path="/audit-log" element={<AuditLog />} />
+          <Route path="/api-keys" element={<ApiKeys />} />
+          <Route path="/readiness" element={<Readiness />} />
+          <Route path="/program1/synthetic-review" element={<SyntheticReviewWorkspace />} />
+          <Route path="/program1/synthetic-evaluation" element={<SyntheticEvaluationRunner />} />
+        </Route>
+      </Routes>
+      {backgroundLocation && getToken() && (
+        <Routes>
+          <Route path="/appointments/new" element={<RouteModal title="Novi termin"><AppointmentForm /></RouteModal>} />
+          <Route path="/appointments/:id" element={<RouteModal title="Detalj termina"><AppointmentDetail /></RouteModal>} />
+        </Routes>
+      )}
+    </Fragment>
   );
 }

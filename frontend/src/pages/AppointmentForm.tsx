@@ -1,5 +1,5 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
-import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import { Link, Location, useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { api } from "../api/client";
 import { ActionButton } from "../components/ActionButton";
 import { DateInput } from "../components/DateInput";
@@ -16,6 +16,7 @@ function endTimeFrom(startTime: string, duration: number) {
 
 export function AppointmentForm() {
   const navigate = useNavigate();
+  const location = useLocation();
   const [params] = useSearchParams();
   const initialPatientId = params.get("patient_id");
   const initialEpisodeId = params.get("episode_id");
@@ -67,7 +68,8 @@ export function AppointmentForm() {
       method: "POST",
       body: JSON.stringify({ ...form, patient_id: selectedPatient.id, episode_id: form.episode_id ? Number(form.episode_id) : null, service_id: Number(form.service_id), provider_id: Number(form.provider_id), room_id: Number(form.room_id) })
     });
-    navigate(`/appointments/${appointment.id}`);
+    const routeState = location.state as { backgroundLocation?: Location } | null;
+    navigate(`/appointments/${appointment.id}`, routeState?.backgroundLocation ? { state: { backgroundLocation: routeState.backgroundLocation } } : undefined);
   }
 
   return (

@@ -166,6 +166,15 @@ th { color: #667085; font-size: 0.78rem; text-transform: uppercase; letter-spaci
 }
 .modal-backdrop { position: fixed; inset: 0; background: rgba(15, 23, 42, 0.35); display: grid; place-items: center; padding: 20px; z-index: 10; }
 .modal-panel { width: min(720px, 100%); max-height: 90vh; overflow: auto; background: white; border-radius: 8px; border: 1px solid #d9e2ec; padding: 20px; box-shadow: 0 24px 80px rgba(15, 23, 42, 0.22); }
+.route-modal-backdrop { position: fixed; inset: 0; z-index: 200; display: grid; place-items: center; padding: 24px; background: rgba(15, 23, 42, 0.5); backdrop-filter: blur(3px); }
+.route-modal-panel { width: min(1040px, 100%); max-height: calc(100vh - 48px); display: grid; grid-template-rows: auto minmax(0, 1fr); overflow: hidden; border: 1px solid #b7c8d9; border-radius: 12px; background: #f6f8fb; box-shadow: 0 28px 90px rgba(15, 23, 42, 0.3); }
+.route-modal-header { min-height: 66px; display: flex; align-items: center; justify-content: space-between; gap: 18px; padding: 12px 18px; border-bottom: 1px solid #d9e2ec; background: #ffffff; }
+.route-modal-header div { display: grid; gap: 2px; }
+.route-modal-header span { color: #667085; font-size: 0.75rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.04em; }
+.route-modal-header strong { color: #172033; font-size: 1.05rem; }
+.route-modal-content { min-height: 0; overflow: auto; overscroll-behavior: contain; }
+.route-modal-content > .page { min-height: 100%; }
+.route-modal-content > .page.narrow { max-width: none; }
 .material-list { display: grid; gap: 10px; margin: 14px 0; }
 .material-list label { display: grid; grid-template-columns: minmax(0, 1fr) 160px; gap: 12px; align-items: center; color: #405069; font-weight: 650; }
 .material-row { display: grid; grid-template-columns: minmax(0, 1fr) 160px; gap: 12px; align-items: center; margin-bottom: 10px; color: #405069; font-weight: 650; }
@@ -299,6 +308,9 @@ th { color: #667085; font-size: 0.78rem; text-transform: uppercase; letter-spaci
   .program1-evaluation-task { grid-template-columns: 1fr; }
   .reception-date-controls { justify-content: stretch; }
   .reception-date-controls .action-button, .reception-date-controls .date-input { flex: 1 1 140px; }
+  .route-modal-backdrop { padding: 8px; }
+  .route-modal-panel { width: 100%; max-height: calc(100vh - 16px); border-radius: 10px; }
+  .route-modal-content .page { padding: 16px; }
   .program1-scenario-list, .program1-card-grid, .program1-two-column, .program1-comparison-grid { grid-template-columns: 1fr; }
   .program1-safety ul { display: grid; }
 }

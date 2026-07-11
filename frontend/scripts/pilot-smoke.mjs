@@ -63,6 +63,7 @@ function unique(values) {
   "src/components/ToastHost.tsx",
   "src/components/HelpHint.tsx",
   "src/components/ActionButton.tsx",
+  "src/components/RouteModal.tsx",
   "src/components/DateInput.tsx",
   "src/components/SourceBadge.tsx",
   "src/components/workspace/WorkspaceLayout.tsx",
@@ -583,6 +584,15 @@ assertIncludes("src/pages/Reception.tsx", "Sljedeći dan");
 assertIncludes("src/pages/Reception.tsx", "/appointments/new?date=${date}&start_time=${slot.time}");
 assertIncludes("src/pages/AppointmentForm.tsx", 'params.get("date")');
 assertIncludes("src/pages/AppointmentForm.tsx", 'params.get("start_time")');
+assertIncludes("src/pages/AppointmentForm.tsx", "backgroundLocation");
+assertIncludes("src/pages/Appointments.tsx", "backgroundLocation: location");
+assertIncludes("src/pages/Reception.tsx", "backgroundLocation: location");
+assertIncludes("src/routes/AppRoutes.tsx", "<RouteModal title=\"Novi termin\"");
+assertIncludes("src/routes/AppRoutes.tsx", "<RouteModal title=\"Detalj termina\"");
+assertIncludes("src/components/RouteModal.tsx", 'role="dialog"');
+assertIncludes("src/components/RouteModal.tsx", 'aria-modal="true"');
+assertIncludes("src/components/RouteModal.tsx", 'event.key === "Escape"');
+assertIncludes("src/components/RouteModal.tsx", 'event.key !== "Tab"');
 assertIncludes("../backend/app/api/routes/reception.py", '"/appointments/{appointment_id}/start-service"');
 assertIncludes("../backend/app/api/routes/reception.py", "Usluga se moze zapoceti tek nakon evidentiranog dolaska");
 assertIncludes("src/pages/Reception.tsx", "/patients/${selected.patient_id}");

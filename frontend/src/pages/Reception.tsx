@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 import { api } from "../api/client";
 import { ActionButton } from "../components/ActionButton";
 import { DateInput } from "../components/DateInput";
@@ -20,6 +20,7 @@ function moveDate(value: string, days: number) {
 }
 
 export function Reception() {
+  const location = useLocation();
   const [date, setDate] = useState(today);
   const [view, setView] = useState<"day" | "week" | "month">("day");
   const [filters, setFilters] = useState({ clinic_id: "", room_id: "", provider_id: "", service_id: "", status: "" });
@@ -134,7 +135,7 @@ export function Reception() {
                 <small>{slot.appointment.arrived_at ? "Dolazak evidentiran" : "Ceka dolazak"}</small>
               </button>
             ) : slot.empty ? (
-              <Link className="empty-slot empty-slot-action" to={`/appointments/new?date=${date}&start_time=${slot.time}`}>
+              <Link className="empty-slot empty-slot-action" to={`/appointments/new?date=${date}&start_time=${slot.time}`} state={{ backgroundLocation: location }}>
                 <span>Slobodno</span>
                 <strong>Novi termin</strong>
               </Link>
@@ -170,7 +171,7 @@ export function Reception() {
               <ActionButton variant="workflow" disabled={!canStartService} onClick={startService} helpTitle="Zapocni uslugu" help="Postavlja termin u status u tijeku tek nakon evidentiranog dolaska i provjere identiteta.">
                 Zapocni uslugu
               </ActionButton>
-              <Link to={`/appointments/${selected.id}`}>Otvori termin</Link>
+              <Link to={`/appointments/${selected.id}`} state={{ backgroundLocation: location }} onClick={() => setSelected(null)}>Otvori termin</Link>
               <Link to={`/patients/${selected.patient_id}`}>Otvori pacijenta</Link>
               <button onClick={() => setSelected(null)}>Zatvori</button>
             </div>
