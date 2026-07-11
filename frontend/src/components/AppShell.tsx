@@ -21,7 +21,10 @@ const nav = [
   { to: "/readiness", label: "Spremnost", icon: ClipboardCheck }
 ];
 
-const program1DemoNav = { to: "/program1/synthetic-review", label: "Program 1 Demo", icon: TestTube };
+const program1DemoNav = [
+  { to: "/program1/synthetic-review", label: "Program 1 Demo", icon: TestTube },
+  { to: "/program1/synthetic-evaluation", label: "Program 1 Evaluacija", icon: ClipboardCheck }
+];
 
 export function AppShell() {
   const navigate = useNavigate();
@@ -41,7 +44,7 @@ export function AppShell() {
           </div>
         </div>
         <nav>
-          {[...nav, ...(showDemoBanner ? [program1DemoNav] : [])].map((item) => {
+          {[...nav, ...(showDemoBanner ? program1DemoNav : [])].map((item) => {
             const Icon = item.icon;
             return (
               <NavLink key={item.to} to={item.to} className={({ isActive }) => (isActive ? "nav-link active" : "nav-link")}>

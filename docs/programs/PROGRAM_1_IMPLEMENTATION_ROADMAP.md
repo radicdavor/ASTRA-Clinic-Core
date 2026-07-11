@@ -2585,3 +2585,35 @@ Decision:
 No participant recruitment, scheduling, recording, runtime change, real-data use, clinical workflow, deployment, clinical use, or go-live is authorized.
 
 Default posture: `STOP AND HOLD BEFORE EXTERNAL SESSION`.
+
+## Program 1 Synthetic Read-Only UI Evaluation Track Phase D
+
+Status: closed.
+
+Implemented route:
+
+`/program1/synthetic-evaluation`
+
+Completed:
+
+- persistent local synthetic evaluation boundary
+- six-item preflight gate
+- eight ordered Phase C tasks
+- transient task statuses without free text
+- stop alert and complete control lock
+- full transient reset
+- native checkbox/radio/fieldset semantics
+- mobile reflow without page overflow
+- static no-network/no-storage/no-export guards
+- browser, typecheck, smoke, build, and sandbox validation
+- scope, transient-state, UI/accessibility, validation, and closure documents
+
+Decision:
+
+`GO` for closing the Phase D runner inside the local synthetic-only transient-state boundary.
+
+`NO-GO` for treating runner state as session evidence or claiming an external session, participant consent, clinician validation, real-data readiness, production readiness, clinical use, or go-live.
+
+No Phase E or external participant session is started.
+
+Default posture: `STOP AND HOLD BEFORE EXTERNAL SESSION`.

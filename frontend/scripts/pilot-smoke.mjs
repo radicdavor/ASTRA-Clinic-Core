@@ -37,6 +37,12 @@ function unique(values) {
   "src/pages/ApiKeys.tsx",
   "src/pages/Readiness.tsx",
   "src/program1/pages/SyntheticReviewWorkspace.tsx",
+  "src/program1/pages/SyntheticEvaluationRunner.tsx",
+  "src/program1/data/syntheticEvaluation.ts",
+  "src/program1/types/syntheticEvaluation.ts",
+  "src/program1/components/SyntheticEvaluationBoundary.tsx",
+  "src/program1/components/SyntheticEvaluationPreflight.tsx",
+  "src/program1/components/SyntheticEvaluationTaskList.tsx",
   "src/program1/data/syntheticScenarios.ts",
   "src/program1/types/syntheticReview.ts",
   "src/program1/utils/syntheticReviewSelectors.ts",
@@ -75,11 +81,13 @@ assertIncludes("src/routes/AppRoutes.tsx", "/clinical-documents/:id");
 assertIncludes("src/routes/AppRoutes.tsx", "/api-keys");
 assertIncludes("src/routes/AppRoutes.tsx", "/readiness");
 assertIncludes("src/routes/AppRoutes.tsx", "/program1/synthetic-review");
+assertIncludes("src/routes/AppRoutes.tsx", "/program1/synthetic-evaluation");
 assertIncludes("src/routes/AppRoutes.tsx", "/reception");
 assertIncludes("src/components/AppShell.tsx", "/api/public-config");
 assertIncludes("src/components/AppShell.tsx", "Demo/development okruzenje");
 assertIncludes("src/components/AppShell.tsx", "Spremnost");
 assertIncludes("src/components/AppShell.tsx", "Program 1 Demo");
+assertIncludes("src/components/AppShell.tsx", "Program 1 Evaluacija");
 assertIncludes("src/components/AppShell.tsx", "Dokumenti");
 assertIncludes("src/components/AppShell.tsx", "Prijem");
 assertNotIncludes("src/components/AppShell.tsx", "Epizode");
@@ -501,6 +509,13 @@ assertIncludes("src/program1/components/SyntheticFindingsList.tsx", "Nema sintet
 assertIncludes("src/program1/components/SyntheticTimeline.tsx", "Nema sinteticnih dogadaja");
 assertIncludes("src/program1/components/SyntheticComparison.tsx", "<caption>");
 assertIncludes("src/styles.css", "prefers-reduced-motion: reduce");
+assertIncludes("src/program1/pages/SyntheticEvaluationRunner.tsx", "Program 1 - Moderator Evaluation Runner");
+assertIncludes("src/program1/pages/SyntheticEvaluationRunner.tsx", "Bez spremanja, izvoza i session evidence tvrdnje");
+assertIncludes("src/program1/components/SyntheticEvaluationBoundary.tsx", "LOKALNA SINTETIČKA EVALUACIJA");
+assertIncludes("src/program1/components/SyntheticEvaluationBoundary.tsx", "Ne unosite ni ne izgovarajte podatke stvarnih pacijenata");
+assertIncludes("src/program1/data/syntheticEvaluation.ts", "Evaluira se sučelje, a ne znanje ili rad sudionika");
+assertIncludes("src/program1/data/syntheticEvaluation.ts", "keyboard");
+assertIncludes("src/program1/pages/SyntheticEvaluationRunner.tsx", "Zaustavi lokalni prolaz");
 [
   "src/program1/pages/SyntheticReviewWorkspace.tsx",
   "src/program1/data/syntheticScenarios.ts",
@@ -515,6 +530,12 @@ assertIncludes("src/styles.css", "prefers-reduced-motion: reduce");
   "src/program1/components/SyntheticReadinessPanel.tsx",
   "src/program1/components/SyntheticLimitations.tsx",
   "src/program1/components/SyntheticComparison.tsx",
+  "src/program1/pages/SyntheticEvaluationRunner.tsx",
+  "src/program1/data/syntheticEvaluation.ts",
+  "src/program1/types/syntheticEvaluation.ts",
+  "src/program1/components/SyntheticEvaluationBoundary.tsx",
+  "src/program1/components/SyntheticEvaluationPreflight.tsx",
+  "src/program1/components/SyntheticEvaluationTaskList.tsx",
 ].forEach((file) => {
   [
     "useApi",

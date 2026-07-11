@@ -25,6 +25,7 @@ import { Reception } from "../pages/Reception";
 import { Services } from "../pages/Services";
 import { Suppliers } from "../pages/Suppliers";
 import { SyntheticReviewWorkspace } from "../program1/pages/SyntheticReviewWorkspace";
+import { SyntheticEvaluationRunner } from "../program1/pages/SyntheticEvaluationRunner";
 
 function Protected() {
   return getToken() ? <AppShell /> : <Navigate to="/login" replace />;
@@ -58,6 +59,7 @@ export function AppRoutes() {
         <Route path="/api-keys" element={<ApiKeys />} />
         <Route path="/readiness" element={<Readiness />} />
         <Route path="/program1/synthetic-review" element={<SyntheticReviewWorkspace />} />
+        <Route path="/program1/synthetic-evaluation" element={<SyntheticEvaluationRunner />} />
       </Route>
     </Routes>
   );
