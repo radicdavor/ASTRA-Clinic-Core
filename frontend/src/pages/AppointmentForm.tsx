@@ -69,7 +69,12 @@ export function AppointmentForm() {
       body: JSON.stringify({ ...form, patient_id: selectedPatient.id, episode_id: form.episode_id ? Number(form.episode_id) : null, service_id: Number(form.service_id), provider_id: Number(form.provider_id), room_id: Number(form.room_id) })
     });
     const routeState = location.state as { backgroundLocation?: Location } | null;
-    navigate(`/appointments/${appointment.id}`, routeState?.backgroundLocation ? { state: { backgroundLocation: routeState.backgroundLocation } } : undefined);
+    if (routeState?.backgroundLocation) {
+      window.dispatchEvent(new Event("astra:appointments-changed"));
+      navigate(-1);
+      return;
+    }
+    navigate(`/appointments/${appointment.id}`);
   }
 
   return (

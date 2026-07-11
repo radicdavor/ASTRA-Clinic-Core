@@ -16,6 +16,8 @@ This module shortens the core reception workflow while preserving patient identi
 - every empty ten-minute slot links to New Appointment
 - selected reception date and start time prefill the appointment form
 - appointment time remains editable before creation
+- saving from the reception work window closes the form and returns staff directly to the schedule instead of opening a second detail window
+- the selected reception day refreshes immediately after saving so the new appointment appears without a manual page reload
 - arrival action is available only for scheduled or confirmed appointments
 - arrival requires explicit identity verification
 - UI requires first name, last name, and at least one additional identifier

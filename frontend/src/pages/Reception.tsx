@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { api } from "../api/client";
 import { ActionButton } from "../components/ActionButton";
@@ -63,6 +63,14 @@ export function Reception() {
   async function refresh() {
     slots.setData(await api<ReceptionSlot[]>(query));
   }
+
+  useEffect(() => {
+    function refreshAfterAppointmentChange() {
+      void refresh();
+    }
+    window.addEventListener("astra:appointments-changed", refreshAfterAppointmentChange);
+    return () => window.removeEventListener("astra:appointments-changed", refreshAfterAppointmentChange);
+  }, [query]);
 
   async function markArrived() {
     if (!selected) return;
