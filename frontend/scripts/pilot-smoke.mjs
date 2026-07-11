@@ -107,6 +107,7 @@ assertIncludes("src/utils/date.ts", "`${match[3]}/${match[2]}/${match[1]}`");
   "src/pages/PurchaseOrders.tsx",
 ].forEach((file) => assertNotIncludes(file, "type=\"date\""));
 assertIncludes("src/api/client.ts", "Pacijent je spremljen.");
+assertIncludes("src/styles.css", ".route-modal-content .help-hint-popover { left: 0; right: auto; }");
 assertIncludes("src/api/client.ts", "Klinicki dokument je spremljen.");
 assertIncludes("src/api/client.ts", "Epizoda je spremljena.");
 assertIncludes("src/api/client.ts", "Uplata je evidentirana.");
@@ -581,6 +582,9 @@ assertIncludes("src/pages/Reception.tsx", "Oznaci kao pristigao");
 assertIncludes("src/pages/Reception.tsx", "/start-service");
 assertIncludes("src/pages/Reception.tsx", "Prethodni dan");
 assertIncludes("src/pages/Reception.tsx", "Sljedeći dan");
+assertIncludes("src/pages/Reception.tsx", "isHalfHour");
+assertIncludes("src/pages/Reception.tsx", "Prazni slotovi prikazani su svakih pola sata");
+assertIncludes("src/pages/Reception.tsx", "Math.ceil(slot.span / 3)");
 assertIncludes("src/pages/Reception.tsx", "/appointments/new?date=${date}&start_time=${slot.time}");
 assertIncludes("src/pages/AppointmentForm.tsx", 'params.get("date")');
 assertIncludes("src/pages/AppointmentForm.tsx", 'params.get("start_time")');

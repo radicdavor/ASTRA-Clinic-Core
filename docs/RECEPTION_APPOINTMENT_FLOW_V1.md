@@ -11,6 +11,8 @@ This module shortens the core reception workflow while preserving patient identi
 ## Implemented
 
 - previous day, today, and next day controls in Reception
+- compact half-hour empty-slot display instead of every ten-minute row
+- existing appointments retain their exact start time, including 10- and 20-minute offsets
 - every empty ten-minute slot links to New Appointment
 - selected reception date and start time prefill the appointment form
 - appointment time remains editable before creation
@@ -43,4 +45,3 @@ This module shortens the core reception workflow while preserving patient identi
 - frontend production build
 - 12 targeted backend appointment/reception tests
 - Program 1 regression suite remains unchanged
-

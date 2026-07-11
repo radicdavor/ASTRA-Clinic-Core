@@ -175,6 +175,7 @@ th { color: #667085; font-size: 0.78rem; text-transform: uppercase; letter-spaci
 .route-modal-content { min-height: 0; overflow: auto; overscroll-behavior: contain; }
 .route-modal-content > .page { min-height: 100%; }
 .route-modal-content > .page.narrow { max-width: none; }
+.route-modal-content .help-hint-popover { left: 0; right: auto; }
 .material-list { display: grid; gap: 10px; margin: 14px 0; }
 .material-list label { display: grid; grid-template-columns: minmax(0, 1fr) 160px; gap: 12px; align-items: center; color: #405069; font-weight: 650; }
 .material-row { display: grid; grid-template-columns: minmax(0, 1fr) 160px; gap: 12px; align-items: center; margin-bottom: 10px; color: #405069; font-weight: 650; }

@@ -19,6 +19,11 @@ function moveDate(value: string, days: number) {
   return next.toISOString().slice(0, 10);
 }
 
+function isHalfHour(time: string) {
+  const minutes = Number(time.slice(3, 5));
+  return minutes === 0 || minutes === 30;
+}
+
 export function Reception() {
   const location = useLocation();
   const [date, setDate] = useState(today);
@@ -38,6 +43,10 @@ export function Reception() {
     return `/api/reception/day?${params.toString()}`;
   }, [date, filters]);
   const slots = useApi<ReceptionSlot[]>(query, []);
+  const visibleSlots = useMemo(
+    () => slots.data.filter((slot) => Boolean(slot.appointment) || (slot.empty && isHalfHour(slot.time))),
+    [slots.data]
+  );
 
   function openAppointment(appointment: Appointment) {
     setSelected(appointment);
@@ -96,7 +105,7 @@ export function Reception() {
           <h1>
             Prijem <HelpHint title="Prijem">Recepcija prikazuje resursni raspored i omogucuje provjeru identiteta prije oznake dolaska.</HelpHint>
           </h1>
-          <p>Odabrani dan: {formatDate(date)}. Prazni slotovi su vidljivi u desetominutnom gridu.</p>
+          <p>Odabrani dan: {formatDate(date)}. Prazni slotovi prikazani su svakih pola sata; postojeći termini zadržavaju točno vrijeme početka.</p>
         </div>
         <div className="reception-date-controls">
           <button type="button" className="action-button" onClick={() => setDate(moveDate(date, -1))}>Prethodni dan</button>
@@ -122,11 +131,11 @@ export function Reception() {
       </div>
 
       <div className="reception-grid">
-        {slots.data.map((slot) => (
+        {visibleSlots.map((slot) => (
           <div key={slot.time} className={`reception-slot ${slot.empty ? "empty" : "occupied"}`}>
             <time>{slot.time}</time>
             {slot.appointment ? (
-              <button className="reception-card" style={{ minHeight: `${Math.max(slot.span, 1) * 28}px` }} onClick={() => openAppointment(slot.appointment!)}>
+              <button className="reception-card" style={{ minHeight: `${Math.max(Math.ceil(slot.span / 3), 1) * 50}px` }} onClick={() => openAppointment(slot.appointment!)}>
                 <strong>{slot.appointment.start_time.slice(0, 5)} - {slot.appointment.end_time.slice(0, 5)}</strong>
                 <span>{slot.appointment.patient ? formatPatientName(slot.appointment.patient) : `Pacijent #${slot.appointment.patient_id}`}</span>
                 <span>{slot.appointment.service?.name ?? slot.appointment.service_id}</span>
