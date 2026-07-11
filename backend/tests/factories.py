@@ -49,7 +49,7 @@ def appointment(db, patient_obj=None, provider_obj=None, room_obj=None, service_
         provider_id=provider_obj.id,
         room_id=room_obj.id,
         service_id=service_obj.id,
-        date=date(2026, 7, 5),
+        date=date(2026, 7, 6),
         start_time=time(9, 0),
         end_time=time(9, 30),
         duration_minutes=30,

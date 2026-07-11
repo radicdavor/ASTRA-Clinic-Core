@@ -47,6 +47,8 @@ def validate_appointment_payload(
     allow_override: bool = False,
 ) -> int:
     validate_status_and_source(status_value, source_value)
+    if appointment_date.weekday() == 6:
+        raise HTTPException(status_code=422, detail="Nedjelja je neradni dan; unos termina nije dopušten")
     duration_minutes = calculate_duration_minutes(appointment_date, start_time, end_time)
     if service_id is not None:
         service = db.get(Service, service_id)

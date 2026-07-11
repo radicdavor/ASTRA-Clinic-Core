@@ -41,6 +41,10 @@ function mondayOfWeek(value: string) {
   return moveDate(value, -daysSinceMonday);
 }
 
+function isSunday(value: string) {
+  return new Date(`${value}T12:00:00`).getDay() === 0;
+}
+
 export function Reception() {
   const location = useLocation();
   const [date, setDate] = useState(today);
@@ -205,12 +209,12 @@ export function Reception() {
                   <Trash2 size={18} aria-hidden="true" />
                 </button>
               </div>
-            ) : slot.empty ? (
+            ) : slot.empty && !isSunday(date) ? (
               <Link className="empty-slot empty-slot-action" to={`/appointments/new?date=${date}&start_time=${slot.time}`} state={{ backgroundLocation: location }}>
                 <span>Slobodno</span>
                 <strong>Novi termin</strong>
               </Link>
-            ) : <span className="empty-slot">Zauzeto</span>}
+            ) : <span className="empty-slot">{isSunday(date) ? "Neradni dan" : "Zauzeto"}</span>}
           </div>
         ))}
       </div> : (
@@ -219,7 +223,7 @@ export function Reception() {
             {weekDates.map((weekDate) => {
               const dayAppointments = weekAppointments.filter((appointment) => appointment.date === weekDate);
               return (
-                <section className={`reception-week-day ${weekDate === today ? "today" : ""}`} key={weekDate}>
+                <section className={`reception-week-day ${weekDate === today ? "today" : ""} ${isSunday(weekDate) ? "closed" : ""}`} key={weekDate}>
                   <header>
                     <button type="button" onClick={() => { setDate(weekDate); setView("day"); }}>{shortDate(weekDate)}</button>
                     <span>{dayAppointments.length}</span>
@@ -241,7 +245,9 @@ export function Reception() {
                     ))}
                     {dayAppointments.length === 0 && <p className="week-empty">Nema termina</p>}
                   </div>
-                  <Link className="week-new-appointment" to={`/appointments/new?date=${weekDate}&start_time=09:00`} state={{ backgroundLocation: location }}>+ Novi</Link>
+                  {isSunday(weekDate) ? <span className="week-closed-label">Neradni dan</span> : (
+                    <Link className="week-new-appointment" to={`/appointments/new?date=${weekDate}&start_time=09:00`} state={{ backgroundLocation: location }}>+ Novi</Link>
+                  )}
                 </section>
               );
             })}

@@ -150,6 +150,9 @@ th { color: #667085; font-size: 0.78rem; text-transform: uppercase; letter-spaci
 .reception-week-grid { display: grid; grid-template-columns: repeat(7, minmax(132px, 1fr)); gap: 6px; min-width: 960px; }
 .reception-week-day { min-width: 0; border: 1px solid #d9e2ec; border-radius: 8px; background: #f8fafc; overflow: hidden; }
 .reception-week-day.today { border-color: #0f766e; box-shadow: inset 0 3px 0 #0f766e; }
+.reception-week-day.closed { border-color: #cbd5e1; background: #e5e7eb; filter: grayscale(.75); }
+.reception-week-day.closed > header { background: #e2e8f0; }
+.reception-week-day.closed .reception-week-card { opacity: .68; }
 .reception-week-day > header { display: flex; align-items: center; justify-content: space-between; gap: 6px; min-height: 34px; padding: 5px 7px; background: #ffffff; border-bottom: 1px solid #e3e8ef; }
 .reception-week-day > header button { border: 0; background: transparent; color: #172033; padding: 0; font-weight: 800; cursor: pointer; }
 .reception-week-day > header span { min-width: 20px; border-radius: 999px; background: #e9f7f5; color: #0f766e; padding: 1px 6px; font-size: .72rem; font-weight: 800; text-align: center; }
@@ -165,6 +168,7 @@ th { color: #667085; font-size: 0.78rem; text-transform: uppercase; letter-spaci
 .week-delete-button:hover { background: #fee2e2; }
 .week-empty { padding: 8px 3px; font-size: .73rem; text-align: center; }
 .week-new-appointment { display: block; margin: 0 5px 6px; border: 1px dashed #b7c8d9; border-radius: 6px; padding: 5px; color: #0f766e; font-size: .72rem; font-weight: 800; text-align: center; }
+.week-closed-label { display: block; margin: 0 5px 6px; border-radius: 6px; padding: 5px; background: #d1d5db; color: #475569; font-size: .72rem; font-weight: 800; text-align: center; }
 .reception-panel { width: min(760px, calc(100vw - 32px)); }
 .readiness-pill, .readiness-badge { display: inline-flex; align-items: center; min-height: 30px; border-radius: 8px; padding: 0 10px; font-weight: 800; white-space: nowrap; }
 .readiness-pill { min-height: 38px; }

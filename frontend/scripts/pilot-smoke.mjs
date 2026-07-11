@@ -588,6 +588,8 @@ assertIncludes("src/pages/Reception.tsx", "reception-week-grid");
 assertIncludes("src/pages/Reception.tsx", "Array.from({ length: 7 }");
 assertIncludes("src/pages/Reception.tsx", "mondayOfWeek");
 assertIncludes("src/pages/Reception.tsx", "daysSinceMonday");
+assertIncludes("src/pages/Reception.tsx", "isSunday");
+assertIncludes("src/pages/Reception.tsx", "Neradni dan");
 assertIncludes("src/pages/Reception.tsx", "Sedmodnevni pregled");
 assertIncludes("src/pages/Reception.tsx", "localDateValue");
 assertIncludes("src/pages/Reception.tsx", "/appointments/new?date=${date}&start_time=${slot.time}");

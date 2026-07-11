@@ -14,7 +14,7 @@ def test_reject_end_time_before_start_time(db):
     r = room(db)
 
     with pytest.raises(HTTPException) as exc:
-        validate_appointment_payload(db, date(2026, 7, 5), time(10, 0), time(9, 0), p.id, r.id, "scheduled", "manual")
+        validate_appointment_payload(db, date(2026, 7, 6), time(10, 0), time(9, 0), p.id, r.id, "scheduled", "manual")
 
     assert exc.value.status_code == 422
 
@@ -51,8 +51,8 @@ def test_create_appointment_succeeds(db):
     pr = provider(db)
     rm = room(db)
     sv = service(db)
-    duration = validate_appointment_payload(db, date(2026, 7, 5), time(11, 0), time(11, 30), pr.id, rm.id, "scheduled", "manual")
-    obj = Appointment(patient_id=p.id, provider_id=pr.id, room_id=rm.id, service_id=sv.id, date=date(2026, 7, 5), start_time=time(11, 0), end_time=time(11, 30), duration_minutes=duration)
+    duration = validate_appointment_payload(db, date(2026, 7, 6), time(11, 0), time(11, 30), pr.id, rm.id, "scheduled", "manual")
+    obj = Appointment(patient_id=p.id, provider_id=pr.id, room_id=rm.id, service_id=sv.id, date=date(2026, 7, 6), start_time=time(11, 0), end_time=time(11, 30), duration_minutes=duration)
     db.add(obj)
     db.flush()
 
@@ -111,9 +111,20 @@ def test_reject_service_in_incompatible_room(db):
     db.flush()
 
     with pytest.raises(HTTPException) as exc:
-        validate_appointment_payload(db, date(2026, 7, 5), time(11, 0), time(11, 30), pr.id, rm.id, "scheduled", "manual", service_id=blocked_service.id)
+        validate_appointment_payload(db, date(2026, 7, 6), time(11, 0), time(11, 30), pr.id, rm.id, "scheduled", "manual", service_id=blocked_service.id)
 
     assert exc.value.status_code == 409
+
+
+def test_reject_appointment_on_sunday(db):
+    pr = provider(db)
+    rm = room(db)
+
+    with pytest.raises(HTTPException) as exc:
+        validate_appointment_payload(db, date(2026, 7, 5), time(11, 0), time(11, 30), pr.id, rm.id, "scheduled", "manual")
+
+    assert exc.value.status_code == 422
+    assert "Nedjelja je neradni dan" in exc.value.detail
 
 
 def test_reception_list_and_arrival_action(client, db, auth_setup):

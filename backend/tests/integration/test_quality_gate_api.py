@@ -121,19 +121,19 @@ def test_appointment_api_conflict_schedule_order_and_audit(pg_client, pg_db):
     first = pg_client.post(
         "/api/appointments",
         headers=headers,
-        json={"patient_id": patient.id, "provider_id": provider.id, "room_id": room.id, "service_id": service.id, "date": "2026-07-05", "start_time": "09:00", "end_time": "09:30", "duration_minutes": 30, "status": "scheduled", "source": "manual"},
+        json={"patient_id": patient.id, "provider_id": provider.id, "room_id": room.id, "service_id": service.id, "date": "2026-07-06", "start_time": "09:00", "end_time": "09:30", "duration_minutes": 30, "status": "scheduled", "source": "manual"},
     )
     later = pg_client.post(
         "/api/appointments",
         headers=headers,
-        json={"patient_id": patient.id, "provider_id": provider.id, "room_id": room.id, "service_id": service.id, "date": "2026-07-05", "start_time": "10:00", "end_time": "10:30", "duration_minutes": 30, "status": "scheduled", "source": "manual"},
+        json={"patient_id": patient.id, "provider_id": provider.id, "room_id": room.id, "service_id": service.id, "date": "2026-07-06", "start_time": "10:00", "end_time": "10:30", "duration_minutes": 30, "status": "scheduled", "source": "manual"},
     )
     overlap = pg_client.post(
         "/api/appointments",
         headers=headers,
-        json={"patient_id": patient.id, "provider_id": provider.id, "room_id": room.id, "service_id": service.id, "date": "2026-07-05", "start_time": "09:15", "end_time": "09:45", "duration_minutes": 30, "status": "scheduled", "source": "manual"},
+        json={"patient_id": patient.id, "provider_id": provider.id, "room_id": room.id, "service_id": service.id, "date": "2026-07-06", "start_time": "09:15", "end_time": "09:45", "duration_minutes": 30, "status": "scheduled", "source": "manual"},
     )
-    schedule = pg_client.get("/api/schedule/day?date=2026-07-05", headers=headers)
+    schedule = pg_client.get("/api/schedule/day?date=2026-07-06", headers=headers)
     updated = pg_client.patch(f"/api/appointments/{first.json()['id']}", headers=headers, json={"status": "arrived"})
     deleted = pg_client.delete(f"/api/appointments/{later.json()['id']}", headers=headers)
 
