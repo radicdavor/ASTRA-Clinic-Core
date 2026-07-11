@@ -242,3 +242,30 @@ cd "C:\Users\Davor\Documents\ASTRA Academy\ASTRA Clinic Core"
 ```
 
 Running sandbox commands should not modify files. Use `git status -sb` before and after a demo sequence to confirm the working tree remains clean.
+
+## Maintenance Demo Review Checklist
+
+Maintenance Track Phase B adds documentation-only evaluation guidance after Maintenance Track Phase A. It is not Phase K, not a UI track, not a new implementation track, and not production-readiness.
+
+Recommended review sequence:
+
+```powershell
+git status -sb
+python -m unittest discover tests/sandbox/program1
+python -m sandbox.program1.cli walkthrough
+python -m sandbox.program1.cli session-recap --scenario alpha --feedback "The review note is easier to understand now."
+python -m sandbox.program1.cli compare-scenarios
+git status -sb
+```
+
+Reviewer focus:
+
+- Is the walkthrough understandable?
+- Is the output too long, confusing, or missing key context?
+- Are alpha and beta easy to distinguish?
+- Does the session recap make the synthetic workflow clearer?
+- Does the comparison help evaluate sandbox usefulness?
+- Would future UI discussion be useful, without authorizing UI work now?
+- Are additional synthetic scenarios worth considering, without adding scenarios now?
+
+Evaluation notes are guidance only. The sandbox does not store, transmit, export, persist, convert, or use them as clinical content. No-UI Hold remains active.

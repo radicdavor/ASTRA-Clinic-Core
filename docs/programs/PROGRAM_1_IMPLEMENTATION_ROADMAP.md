@@ -2150,6 +2150,19 @@ Recommended next decision:
 
 `Stop after Synthetic Sandbox Maintenance Track Phase A unless another maintenance action is explicitly authorized.`
 
+Synthetic Sandbox Maintenance Track Phase B update:
+
+- Maintenance Track Phase B follows Phase A and remains documentation-only
+- Phase B adds demo review checklist, clinician/evaluator questions, usability scoring rubric, UI decision criteria without UI authorization, scenario expansion decision criteria and No-UI Hold continuity documentation
+- Phase B is evaluation guidance only and local sandbox review support only
+- evaluation notes are documentation guidance only and are not stored by the sandbox
+- Phase B does not add Python runtime code, tests, new CLI commands, UI, server/API, network/database behavior, integrations, persistence/export, real-data handling, PHI/PII handling, clinical workflow behavior, production-readiness or go-live authorization
+- Phase B does not open Synthetic Sandbox Implementation Track Phase K and does not start a UI track
+
+Recommended next decision:
+
+`Stop after Synthetic Sandbox Maintenance Track Phase B unless another maintenance action is explicitly authorized.`
+
 ## 30. Program 1 Phase D44-D54 - Findings Read-Only Workspace Boundary
 
 Status: implemented as read-only workspace boundary after backend verification passed.
