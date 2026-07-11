@@ -20,7 +20,7 @@ export type Service = {
 };
 
 export type Clinic = { id: number; name: string; active: boolean };
-export type Provider = { id: number; full_name: string; specialty?: string; staff_role?: string; clinic_id?: number | null; clinic?: Clinic | null };
+export type Provider = { id: number; full_name: string; specialty?: string; email?: string; work_start: string; work_end: string; staff_role?: string; clinic_id?: number | null; clinic?: Clinic | null };
 export type Room = { id: number; name: string; type?: string; clinic_id?: number | null; clinic?: Clinic | null };
 export type Module = { id: number; key: string; name: string; description?: string; enabled: boolean };
 

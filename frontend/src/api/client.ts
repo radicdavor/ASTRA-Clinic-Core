@@ -41,6 +41,9 @@ function mutationSuccessMessage(path: string, method: string) {
   if (normalizedMethod === "POST" && path.includes("/lines")) return "Stavka racuna je dodana.";
   if (normalizedMethod === "POST" && path.includes("/receive")) return "Roba je zaprimljena na zalihu.";
   if (normalizedMethod === "POST" && path === "/api/services") return "Usluga je dodana.";
+  if (normalizedMethod === "POST" && path === "/api/clinics") return "Klinika je dodana.";
+  if (normalizedMethod === "POST" && path === "/api/rooms") return "Prostorija je dodana.";
+  if (normalizedMethod === "POST" && path === "/api/providers") return "Liječnik je dodan.";
   if (normalizedMethod === "POST" && path === "/auth/api-keys") return "API kljuc je kreiran.";
   if (normalizedMethod === "PATCH" && path.includes("/deactivate")) return "API kljuc je deaktiviran.";
   if (normalizedMethod === "DELETE") return "Zapis je obrisan.";

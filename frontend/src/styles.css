@@ -174,6 +174,30 @@ th { color: #667085; font-size: 0.78rem; text-transform: uppercase; letter-spaci
 .week-free-slots a:hover { border-color: #0f766e; background: #e9f7f5; }
 .week-new-appointment { display: block; margin: 0 5px 6px; border: 1px dashed #b7c8d9; border-radius: 6px; padding: 5px; color: #0f766e; font-size: .72rem; font-weight: 800; text-align: center; }
 .week-closed-label { display: block; margin: 0 5px 6px; border-radius: 6px; padding: 5px; background: #d1d5db; color: #475569; font-size: .72rem; font-weight: 800; text-align: center; }
+.clinic-admin-page { display: grid; gap: 18px; }
+.clinic-admin-forms { display: grid; grid-template-columns: minmax(220px, .7fr) minmax(260px, .9fr) minmax(360px, 1.35fr); gap: 12px; align-items: start; }
+.clinic-admin-form { display: grid; gap: 10px; border: 1px solid #d9e2ec; border-radius: 9px; background: #ffffff; padding: 15px; }
+.clinic-admin-form label { display: grid; gap: 5px; color: #405069; font-size: .8rem; font-weight: 750; }
+.clinic-admin-form select { width: 100%; min-width: 0; }
+.clinic-form-title { display: flex; align-items: center; gap: 9px; min-height: 36px; color: #0f766e; }
+.clinic-form-title div { display: grid; }
+.clinic-form-title strong { color: #172033; }
+.clinic-form-title span { color: #667085; font-size: .73rem; }
+.working-hours-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.clinic-resource-grid { display: grid; gap: 12px; }
+.clinic-resource-card { border: 1px solid #d9e2ec; border-radius: 9px; background: #ffffff; overflow: hidden; }
+.clinic-resource-card > header { display: flex; align-items: center; justify-content: space-between; gap: 12px; border-bottom: 1px solid #e3e8ef; background: #f8fafc; padding: 11px 14px; }
+.clinic-resource-card > header div { display: flex; align-items: center; gap: 8px; color: #0f766e; }
+.clinic-resource-card > header strong { color: #172033; }
+.clinic-resource-card > header span { color: #667085; font-size: .78rem; }
+.clinic-resource-columns { display: grid; grid-template-columns: .75fr 1.25fr; }
+.clinic-resource-columns > section { min-width: 0; padding: 13px 14px; }
+.clinic-resource-columns > section + section { border-left: 1px solid #e3e8ef; }
+.clinic-resource-columns h2 { display: flex; align-items: center; gap: 6px; margin-bottom: 8px; color: #405069; font-size: .78rem; text-transform: uppercase; letter-spacing: .03em; }
+.resource-line { display: grid; grid-template-columns: minmax(120px, 1fr) minmax(90px, .8fr); gap: 8px; border-top: 1px solid #eef2f6; padding: 7px 0; }
+.resource-line span, .resource-line small { color: #667085; }
+.provider-line { grid-template-columns: minmax(130px, 1fr) minmax(100px, .8fr) minmax(160px, 1.1fr) minmax(90px, auto); align-items: center; }
+.provider-line small { display: inline-flex; align-items: center; gap: 5px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .reception-panel { width: min(760px, calc(100vw - 32px)); }
 .readiness-pill, .readiness-badge { display: inline-flex; align-items: center; min-height: 30px; border-radius: 8px; padding: 0 10px; font-weight: 800; white-space: nowrap; }
 .readiness-pill { min-height: 38px; }
@@ -350,6 +374,9 @@ th { color: #667085; font-size: 0.78rem; text-transform: uppercase; letter-spaci
   .route-modal-backdrop { padding: 8px; }
   .route-modal-panel { width: 100%; max-height: calc(100vh - 16px); border-radius: 10px; }
   .route-modal-content .page { padding: 16px; }
+  .clinic-admin-forms, .clinic-resource-columns { grid-template-columns: 1fr; }
+  .clinic-resource-columns > section + section { border-left: 0; border-top: 1px solid #e3e8ef; }
+  .provider-line { grid-template-columns: 1fr 1fr; }
   .program1-scenario-list, .program1-card-grid, .program1-two-column, .program1-comparison-grid { grid-template-columns: 1fr; }
   .program1-safety ul { display: grid; }
 }

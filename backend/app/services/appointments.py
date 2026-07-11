@@ -50,16 +50,18 @@ def validate_appointment_payload(
     if appointment_date.weekday() == 6:
         raise HTTPException(status_code=422, detail="Nedjelja je neradni dan; unos termina nije dopušten")
     duration_minutes = calculate_duration_minutes(appointment_date, start_time, end_time)
+    provider = db.get(Provider, provider_id)
+    if not provider:
+        raise HTTPException(status_code=404, detail="Liječnik nije pronađen")
+    if start_time < provider.work_start or end_time > provider.work_end:
+        raise HTTPException(status_code=409, detail=f"Termin je izvan radnog vremena liječnika ({provider.work_start.strftime('%H:%M')}–{provider.work_end.strftime('%H:%M')})")
     if service_id is not None:
         service = db.get(Service, service_id)
         room = db.get(Room, room_id)
-        provider = db.get(Provider, provider_id)
         if not service:
             raise HTTPException(status_code=404, detail="Usluga nije pronadena")
         if not room:
             raise HTTPException(status_code=404, detail="Soba nije pronadena")
-        if not provider:
-            raise HTTPException(status_code=404, detail="Lijecnik nije pronaden")
         allowed = db.scalar(select(room_services.c.room_id).where(room_services.c.room_id == room_id, room_services.c.service_id == service_id).limit(1))
         room_has_service_rules = db.scalar(select(room_services.c.service_id).where(room_services.c.room_id == room_id).limit(1))
         if room_has_service_rules and not allowed:

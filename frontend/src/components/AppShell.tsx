@@ -1,5 +1,5 @@
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
-import { Boxes, CalendarCheck, CalendarDays, ClipboardCheck, ClipboardList, FileSearch, FileText, KeyRound, LayoutDashboard, LogOut, PackageSearch, Search, Settings, ShieldCheck, Stethoscope, TestTube, Users } from "lucide-react";
+import { Boxes, Building2, CalendarCheck, CalendarDays, ClipboardCheck, ClipboardList, FileSearch, FileText, KeyRound, LayoutDashboard, LogOut, PackageSearch, Search, Settings, ShieldCheck, Stethoscope, TestTube, Users } from "lucide-react";
 import { clearToken } from "../api/client";
 import { useApi } from "../hooks/useApi";
 import { ToastHost } from "./ToastHost";
@@ -11,6 +11,7 @@ const nav = [
   { to: "/clinical-documents", label: "Dokumenti", icon: FileSearch },
   { to: "/appointments", label: "Termini", icon: CalendarDays },
   { to: "/services", label: "Usluge", icon: Stethoscope },
+  { to: "/clinics", label: "Klinike i resursi", icon: Building2 },
   { to: "/modules", label: "Moduli", icon: Settings },
   { to: "/inventory", label: "Inventar", icon: Boxes },
   { to: "/suppliers", label: "Dobavljaci", icon: PackageSearch },

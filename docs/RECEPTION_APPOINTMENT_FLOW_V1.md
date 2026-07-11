@@ -10,6 +10,8 @@ This module shortens the core reception workflow while preserving patient identi
 
 ## Implemented
 
+- dedicated Clinics and resources administration for clinics, rooms, physicians, specialty, e-mail, and working hours
+- appointment validation rejects physician or room overlap and appointments outside the selected physician's working hours
 - previous day, today, and next day controls in Reception
 - compact half-hour empty-slot display instead of every ten-minute row
 - existing appointments retain their exact start time, including 10- and 20-minute offsets

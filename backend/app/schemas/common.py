@@ -1184,16 +1184,40 @@ class ClinicOut(ORMModel):
     updated_at: DateTimeType
 
 
+class ClinicCreate(BaseModel):
+    name: str = Field(min_length=2, max_length=120)
+
+
 class ProviderOut(ORMModel):
     id: int
     full_name: str
     specialty: str | None = None
+    email: EmailStr | None = None
+    work_start: TimeType
+    work_end: TimeType
     staff_role: str = "physician"
     clinic_id: int | None = None
     active: bool
     created_at: DateTimeType
     updated_at: DateTimeType
     clinic: ClinicOut | None = None
+
+
+class ProviderCreate(BaseModel):
+    full_name: str = Field(min_length=2, max_length=160)
+    specialty: str = Field(min_length=2, max_length=120)
+    email: EmailStr
+    clinic_id: int
+    work_start: TimeType
+    work_end: TimeType
+
+    @field_validator("work_end")
+    @classmethod
+    def validate_work_end(cls, value: TimeType, info) -> TimeType:
+        work_start = info.data.get("work_start")
+        if work_start and value <= work_start:
+            raise ValueError("Kraj radnog vremena mora biti nakon početka")
+        return value
 
 
 class RoomOut(ORMModel):
@@ -1205,6 +1229,12 @@ class RoomOut(ORMModel):
     created_at: DateTimeType
     updated_at: DateTimeType
     clinic: ClinicOut | None = None
+
+
+class RoomCreate(BaseModel):
+    name: str = Field(min_length=2, max_length=120)
+    type: str | None = Field(default=None, max_length=80)
+    clinic_id: int
 
 
 class ClinicalEpisodeCreate(BaseModel):

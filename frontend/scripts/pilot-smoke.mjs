@@ -107,6 +107,12 @@ assertIncludes("src/utils/date.ts", "`${match[3]}/${match[2]}/${match[1]}`");
   "src/pages/PurchaseOrders.tsx",
 ].forEach((file) => assertNotIncludes(file, "type=\"date\""));
 assertIncludes("src/api/client.ts", "Pacijent je spremljen.");
+assertIncludes("src/pages/Clinics.tsx", "Klinike i resursi");
+assertIncludes("src/pages/Clinics.tsx", 'api<Clinic>("/api/clinics"');
+assertIncludes("src/pages/Clinics.tsx", 'api<Room>("/api/rooms"');
+assertIncludes("src/pages/Clinics.tsx", 'api<Provider>("/api/providers"');
+assertIncludes("src/pages/Clinics.tsx", "work_start");
+assertIncludes("src/pages/Clinics.tsx", "work_end");
 assertIncludes("src/styles.css", ".route-modal-content .help-hint-popover { left: 0; right: auto; }");
 assertIncludes("src/api/client.ts", "Klinicki dokument je spremljen.");
 assertIncludes("src/api/client.ts", "Epizoda je spremljena.");

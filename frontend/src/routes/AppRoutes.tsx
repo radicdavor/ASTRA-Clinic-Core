@@ -11,6 +11,7 @@ import { ApiKeys } from "../pages/ApiKeys";
 import { Dashboard } from "../pages/Dashboard";
 import { ClinicalDocumentDetail } from "../pages/ClinicalDocumentDetail";
 import { ClinicalDocuments } from "../pages/ClinicalDocuments";
+import { Clinics } from "../pages/Clinics";
 import { EpisodeDetail } from "../pages/EpisodeDetail";
 import { EpisodeForm } from "../pages/EpisodeForm";
 import { Episodes } from "../pages/Episodes";
@@ -57,6 +58,7 @@ export function AppRoutes() {
           <Route path="/appointments/new" element={<AppointmentForm />} />
           <Route path="/appointments/:id" element={<AppointmentDetail />} />
           <Route path="/services" element={<Services />} />
+          <Route path="/clinics" element={<Clinics />} />
           <Route path="/modules" element={<Modules />} />
           <Route path="/inventory" element={<Inventory />} />
           <Route path="/suppliers" element={<Suppliers />} />
