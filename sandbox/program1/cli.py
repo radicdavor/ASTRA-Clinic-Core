@@ -203,7 +203,7 @@ def main(argv: list[str] | None = None) -> int:
     elif command == "compare-scenarios":
         comparison = build_scenario_comparison()
         if args.json:
-            print(json.dumps(comparison, indent=2, sort_keys=True))
+            print(json.dumps(comparison, indent=2))
         else:
             print(render_scenario_comparison(comparison))
     elif command == "trial":

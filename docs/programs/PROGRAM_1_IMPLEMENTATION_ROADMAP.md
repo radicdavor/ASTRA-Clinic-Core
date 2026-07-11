@@ -2178,6 +2178,21 @@ Recommended next decision:
 
 `Stop after Synthetic Scenario Expansion Track Phase A unless Phase B is explicitly authorized.`
 
+Synthetic Scenario Expansion Track Phase B update:
+
+- Phase B is a small readability polish for `compare-scenarios`
+- scenario display order is now Alpha, Beta, Gamma, Delta, Epsilon
+- comparison summary order remains Alpha, Beta, Gamma, Delta, Epsilon
+- JSON scenario order follows the same intended order
+- Phase B changes ordering only and does not add scenarios or a new CLI command
+- Phase B remains local-only, terminal-only, synthetic-only, non-production and not for clinical use
+- Phase B does not add UI, server/API/network/database/integration behavior, persistence/export, real patient data, PHI/PII, patient messaging, appointment mutation, clinical writeback, workflow enforcement, clinical task creation, approval/clearance/override capability, production-readiness or go-live authorization
+- No-UI Hold remains active, Scenario Expansion Track Phase C was not started and no UI track was started
+
+Recommended next decision:
+
+`Stop after Synthetic Scenario Expansion Track Phase B unless Phase C is explicitly authorized.`
+
 ## 30. Program 1 Phase D44-D54 - Findings Read-Only Workspace Boundary
 
 Status: implemented as read-only workspace boundary after backend verification passed.

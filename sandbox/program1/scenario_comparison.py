@@ -29,6 +29,7 @@ COMPARISON_SUMMARY = (
         "advice, triage, patient instruction, or clinical recommendation."
     ),
 )
+COMPARISON_SCENARIO_ORDER = ("alpha", "beta", "gamma", "delta", "epsilon")
 
 
 def _scenario_summary(name: str) -> dict[str, object]:
@@ -49,7 +50,11 @@ def build_scenario_comparison() -> dict[str, object]:
     return {
         "comparison_title": COMPARISON_TITLE,
         "comparison_purpose": COMPARISON_PURPOSE,
-        "scenarios": {name: _scenario_summary(name) for name in sorted(SCENARIOS)},
+        "scenarios": {
+            name: _scenario_summary(name)
+            for name in COMPARISON_SCENARIO_ORDER
+            if name in SCENARIOS
+        },
         "comparison_summary": list(COMPARISON_SUMMARY),
         "synthetic_only": True,
         "non_production": True,

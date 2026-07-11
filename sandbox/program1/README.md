@@ -292,3 +292,13 @@ python -m sandbox.program1.cli compare-scenarios
 ```
 
 All scenarios remain local-only, terminal-only, synthetic-only, non-production, no real patient data, no PHI/PII, and not for clinical use. The expansion does not add UI, server/API/network/database/integration behavior, persistence/export, diagnosis, treatment, triage, patient instruction, patient messaging, appointment mutation, clinical writeback, workflow enforcement, clinical task creation, approval/override capability, production-readiness, or go-live authorization.
+
+## Scenario Comparison Ordering
+
+Scenario Expansion Track Phase B applies a small readability polish to `compare-scenarios`. The comparison now displays scenarios in this order:
+
+```text
+Alpha, Beta, Gamma, Delta, Epsilon
+```
+
+This is ordering only. It does not add scenarios, does not add a CLI command, does not add UI, and does not create ranking, scoring, sequencing, recommendation, protocol, clinical workflow, persistence, export, or production behavior.

@@ -66,6 +66,53 @@ class ScenarioComparisonTests(unittest.TestCase):
         self.assertIn("Scenario Beta:", text)
         self.assertIn("does not support clinical decision-making", text)
 
+    def test_compare_scenarios_uses_intended_demo_order(self):
+        rendered = render_scenario_comparison(build_scenario_comparison())
+
+        scenario_markers = (
+            "Scenario Alpha:",
+            "Scenario Beta:",
+            "Scenario Gamma:",
+            "Scenario Delta:",
+            "Scenario Epsilon:",
+        )
+        positions = [rendered.index(marker) for marker in scenario_markers]
+        self.assertEqual(positions, sorted(positions))
+
+    def test_compare_scenarios_summary_uses_intended_demo_order(self):
+        rendered = render_scenario_comparison(build_scenario_comparison())
+
+        summary_markers = (
+            "Alpha demonstrates",
+            "Beta demonstrates",
+            "Gamma demonstrates",
+            "Delta demonstrates",
+            "Epsilon demonstrates",
+        )
+        positions = [rendered.index(marker) for marker in summary_markers]
+        self.assertEqual(positions, sorted(positions))
+
+    def test_compare_scenarios_json_uses_intended_demo_order(self):
+        payload = build_scenario_comparison()
+
+        self.assertEqual(
+            list(payload["scenarios"]),
+            ["alpha", "beta", "gamma", "delta", "epsilon"],
+        )
+
+    def test_compare_scenarios_cli_json_uses_intended_demo_order(self):
+        output = io.StringIO()
+        with redirect_stdout(output):
+            exit_code = main(["compare-scenarios", "--json"])
+
+        self.assertEqual(exit_code, 0)
+        text = output.getvalue()
+        positions = [
+            text.index(f'"{scenario}":')
+            for scenario in ("alpha", "beta", "gamma", "delta", "epsilon")
+        ]
+        self.assertEqual(positions, sorted(positions))
+
     def test_compare_scenarios_json_retains_safety_flags(self):
         output = io.StringIO()
         with redirect_stdout(output):
