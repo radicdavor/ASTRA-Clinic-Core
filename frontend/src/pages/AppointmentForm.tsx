@@ -8,11 +8,21 @@ import { useApi } from "../hooks/useApi";
 import { ClinicalEpisode, Patient, Provider, Room, Service } from "../types";
 import { formatPatientIdentity, formatPatientName, hasStrongPatientIdentifier } from "../utils/patientIdentity";
 
+function endTimeFrom(startTime: string, duration: number) {
+  const [hours, minutes] = startTime.split(":").map(Number);
+  const total = hours * 60 + minutes + duration;
+  return `${String(Math.floor(total / 60)).padStart(2, "0")}:${String(total % 60).padStart(2, "0")}`;
+}
+
 export function AppointmentForm() {
   const navigate = useNavigate();
   const [params] = useSearchParams();
   const initialPatientId = params.get("patient_id");
   const initialEpisodeId = params.get("episode_id");
+  const requestedDate = params.get("date");
+  const requestedStartTime = params.get("start_time");
+  const initialDate = requestedDate && /^\d{4}-\d{2}-\d{2}$/.test(requestedDate) ? requestedDate : new Date().toISOString().slice(0, 10);
+  const initialStartTime = requestedStartTime && /^([01]\d|2[0-3]):[0-5]\d$/.test(requestedStartTime) ? requestedStartTime : "09:00";
   const [patientQuery, setPatientQuery] = useState("");
   const patientSearchPath = patientQuery.trim().length >= 2 ? `/api/patients?q=${encodeURIComponent(patientQuery.trim())}` : "/api/patients?q=__no_initial_results__";
   const patients = useApi<Patient[]>(patientSearchPath, []);
@@ -20,7 +30,7 @@ export function AppointmentForm() {
   const providers = useApi<Provider[]>("/api/providers", []);
   const rooms = useApi<Room[]>("/api/rooms", []);
   const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null);
-  const [form, setForm] = useState({ patient_id: "", episode_id: initialEpisodeId ?? "", service_id: "", provider_id: "", room_id: "", date: new Date().toISOString().slice(0, 10), start_time: "09:00", end_time: "09:30", duration_minutes: 30, status: "scheduled", source: "manual", notes: "" });
+  const [form, setForm] = useState({ patient_id: "", episode_id: initialEpisodeId ?? "", service_id: "", provider_id: "", room_id: "", date: initialDate, start_time: initialStartTime, end_time: endTimeFrom(initialStartTime, 30), duration_minutes: 30, status: "scheduled", source: "manual", notes: "" });
   const patientEpisodesPath = selectedPatient ? `/api/patients/${selectedPatient.id}/episodes` : "/api/episodes?status=__no_patient__";
   const episodes = useApi<ClinicalEpisode[]>(patientEpisodesPath, []);
   const activeEpisodes = episodes.data.filter((episode) => ["open", "active", "waiting"].includes(episode.status));
@@ -31,12 +41,6 @@ export function AppointmentForm() {
     if (patientQuery.trim()) next.set("name", patientQuery.trim());
     return `/patients/new?${next.toString()}`;
   }, [patientQuery]);
-
-  function endTimeFrom(startTime: string, duration: number) {
-    const [hours, minutes] = startTime.split(":").map(Number);
-    const total = hours * 60 + minutes + duration;
-    return `${String(Math.floor(total / 60)).padStart(2, "0")}:${String(total % 60).padStart(2, "0")}`;
-  }
 
   useEffect(() => {
     if (!initialPatientId || selectedPatient) return;
@@ -75,6 +79,11 @@ export function AppointmentForm() {
           </h1>
         </div>
       </div>
+      {(requestedDate || requestedStartTime) && (
+        <p className="program1-note appointment-slot-context">
+          Termin je otvoren iz slobodnog recepcijskog slota: {form.date} u {form.start_time}. Vrijeme se može promijeniti prije spremanja.
+        </p>
+      )}
       <form className="form-grid" onSubmit={submit}>
         <label className="wide-field">
           <span className="label-with-help">

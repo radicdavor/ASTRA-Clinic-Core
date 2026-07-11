@@ -135,3 +135,54 @@ def test_reception_list_and_arrival_action(client, db, auth_setup):
     audit = client.get(f"/api/audit-log?entity_type=Appointment&entity_id={obj.id}", headers=headers)
     assert audit.status_code == 200
     assert any(item["action"] == "mark_arrived" for item in audit.json())
+
+
+def test_reception_rejects_arrival_without_identity_verification(client, db, auth_setup):
+    obj = appointment(db)
+    token = login_token(client, "admin@test.local")
+
+    response = client.post(
+        f"/api/appointments/{obj.id}/mark-arrived",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"identity_verified": False},
+    )
+
+    assert response.status_code == 422
+    assert obj.status == "scheduled"
+
+
+def test_reception_rejects_arrival_from_terminal_status(client, db, auth_setup):
+    obj = appointment(db, status="cancelled")
+    token = login_token(client, "admin@test.local")
+
+    response = client.post(
+        f"/api/appointments/{obj.id}/mark-arrived",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"identity_verified": True},
+    )
+
+    assert response.status_code == 409
+
+
+def test_reception_start_service_requires_arrival_and_verified_identity(client, db, auth_setup):
+    obj = appointment(db)
+    token = login_token(client, "admin@test.local")
+    headers = {"Authorization": f"Bearer {token}"}
+
+    blocked = client.post(f"/api/appointments/{obj.id}/start-service", headers=headers)
+    assert blocked.status_code == 409
+
+    arrived = client.post(
+        f"/api/appointments/{obj.id}/mark-arrived",
+        headers=headers,
+        json={"identity_verified": True},
+    )
+    assert arrived.status_code == 200
+
+    started = client.post(f"/api/appointments/{obj.id}/start-service", headers=headers)
+    assert started.status_code == 200
+    assert started.json()["status"] == "in_progress"
+
+    audit_response = client.get(f"/api/audit-log?entity_type=Appointment&entity_id={obj.id}", headers=headers)
+    assert audit_response.status_code == 200
+    assert any(item["action"] == "start_service" for item in audit_response.json())

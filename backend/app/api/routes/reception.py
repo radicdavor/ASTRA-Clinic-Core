@@ -119,6 +119,10 @@ def mark_appointment_arrived(
     )
     if not appointment:
         raise HTTPException(404, detail="Termin nije pronaden")
+    if appointment.status not in {"scheduled", "confirmed"}:
+        raise HTTPException(409, detail="Dolazak se moze evidentirati samo za zakazan ili potvrden termin")
+    if not payload.identity_verified:
+        raise HTTPException(422, detail="Prije evidencije dolaska potrebno je potvrditi identitet pacijenta")
     before = snapshot(appointment)
     if payload.patient:
         patient_before = snapshot(appointment.patient)
@@ -140,3 +144,43 @@ def mark_appointment_arrived(
         .options(*appointment_load_options())
         .where(Appointment.id == appointment.id)
     )
+
+
+@router.post("/appointments/{appointment_id}/start-service", response_model=AppointmentOut)
+def start_appointment_service(
+    appointment_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+    actor: Actor = Depends(require_permission("appointments.write")),
+):
+    appointment = db.scalar(
+        select(Appointment)
+        .options(*appointment_load_options())
+        .where(Appointment.id == appointment_id)
+    )
+    if not appointment:
+        raise HTTPException(404, detail="Termin nije pronaden")
+    if appointment.status != "arrived":
+        raise HTTPException(409, detail="Usluga se moze zapoceti tek nakon evidentiranog dolaska")
+    if appointment.identity_verified_at is None:
+        raise HTTPException(409, detail="Usluga se ne moze zapoceti bez provjere identiteta pacijenta")
+
+    before = snapshot(appointment)
+    appointment.status = "in_progress"
+    db.flush()
+    audit(
+        db,
+        "start_service",
+        "Appointment",
+        appointment.id,
+        "Usluga je zapoceta nakon dolaska i provjere identiteta",
+        actor.user_id,
+        actor.actor_type,
+        actor.api_key_id,
+        before,
+        snapshot(appointment),
+        request,
+    )
+    db.commit()
+    db.refresh(appointment)
+    return appointment

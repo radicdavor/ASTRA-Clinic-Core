@@ -125,10 +125,14 @@ th { color: #667085; font-size: 0.78rem; text-transform: uppercase; letter-spaci
 .segmented-control button { border: 0; border-radius: 6px; background: transparent; padding: 8px 12px; cursor: pointer; }
 .segmented-control button.active { background: #0f766e; color: #ffffff; }
 .reception-grid { display: grid; gap: 6px; margin-top: 16px; }
+.reception-date-controls { display: flex; align-items: center; justify-content: flex-end; gap: 8px; flex-wrap: wrap; }
 .reception-slot { display: grid; grid-template-columns: 64px minmax(0, 1fr); gap: 10px; min-height: 34px; align-items: stretch; border: 1px solid #e7edf3; border-radius: 8px; background: #ffffff; padding: 6px; }
 .reception-slot time { color: #667085; font-weight: 800; padding-top: 6px; }
 .reception-slot.empty { background: #fbfcfe; }
 .empty-slot { color: #98a2b3; padding-top: 6px; }
+.empty-slot-action { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 34px; padding: 6px 10px; border: 1px dashed #b7c8d9; border-radius: 8px; background: #fbfcfe; color: #667085; }
+.empty-slot-action strong { color: #0f766e; font-size: 0.82rem; }
+.empty-slot-action:hover, .empty-slot-action:focus-visible { border-color: #0f766e; background: #f1fbf9; }
 .reception-card { display: grid; gap: 4px; width: 100%; border: 1px solid #b7d8c2; border-radius: 8px; background: #f1fbf4; color: #172033; padding: 10px; text-align: left; cursor: pointer; }
 .reception-card:hover { border-color: #0f766e; }
 .reception-card small { color: #667085; }
@@ -293,6 +297,8 @@ th { color: #667085; font-size: 0.78rem; text-transform: uppercase; letter-spaci
   .program1-workspace label input, .program1-workspace label select { width: 100%; min-width: 0; }
   .program1-evaluation-summary { grid-template-columns: 1fr; }
   .program1-evaluation-task { grid-template-columns: 1fr; }
+  .reception-date-controls { justify-content: stretch; }
+  .reception-date-controls .action-button, .reception-date-controls .date-input { flex: 1 1 140px; }
   .program1-scenario-list, .program1-card-grid, .program1-two-column, .program1-comparison-grid { grid-template-columns: 1fr; }
   .program1-safety ul { display: grid; }
 }

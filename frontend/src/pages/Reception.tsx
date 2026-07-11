@@ -13,6 +13,12 @@ import { formatPatientName } from "../utils/patientIdentity";
 const today = new Date().toISOString().slice(0, 10);
 const receptionStatuses = ["scheduled", "confirmed", "arrived", "in_progress", "completed", "cancelled", "no_show"];
 
+function moveDate(value: string, days: number) {
+  const next = new Date(`${value}T12:00:00`);
+  next.setDate(next.getDate() + days);
+  return next.toISOString().slice(0, 10);
+}
+
 export function Reception() {
   const [date, setDate] = useState(today);
   const [view, setView] = useState<"day" | "week" | "month">("day");
@@ -69,10 +75,18 @@ export function Reception() {
 
   async function startService() {
     if (!selected) return;
-    await api<Appointment>(`/api/appointments/${selected.id}`, { method: "PATCH", body: JSON.stringify({ status: "in_progress" }) });
+    await api<Appointment>(`/api/appointments/${selected.id}/start-service`, { method: "POST" });
     setSelected(null);
     await refresh();
   }
+
+  const hasIdentityDetails = Boolean(
+    patientDraft.first_name.trim()
+    && patientDraft.last_name.trim()
+    && (patientDraft.date_of_birth || patientDraft.oib || patientDraft.phone || patientDraft.email)
+  );
+  const canMarkArrived = Boolean(selected && ["scheduled", "confirmed"].includes(selected.status) && hasIdentityDetails);
+  const canStartService = Boolean(selected && selected.status === "arrived" && selected.identity_verified_at);
 
   return (
     <section className="page">
@@ -83,7 +97,12 @@ export function Reception() {
           </h1>
           <p>Odabrani dan: {formatDate(date)}. Prazni slotovi su vidljivi u desetominutnom gridu.</p>
         </div>
-        <DateInput required value={date} onChange={setDate} />
+        <div className="reception-date-controls">
+          <button type="button" className="action-button" onClick={() => setDate(moveDate(date, -1))}>Prethodni dan</button>
+          <button type="button" className="action-button" onClick={() => setDate(today)}>Danas</button>
+          <DateInput required value={date} onChange={setDate} />
+          <button type="button" className="action-button" onClick={() => setDate(moveDate(date, 1))}>Sljedeći dan</button>
+        </div>
       </div>
 
       <div className="segmented-control">
@@ -114,7 +133,12 @@ export function Reception() {
                 <StatusBadge status={slot.appointment.status} />
                 <small>{slot.appointment.arrived_at ? "Dolazak evidentiran" : "Ceka dolazak"}</small>
               </button>
-            ) : slot.empty ? <span className="empty-slot">Slobodno</span> : <span className="empty-slot">Zauzeto</span>}
+            ) : slot.empty ? (
+              <Link className="empty-slot empty-slot-action" to={`/appointments/new?date=${date}&start_time=${slot.time}`}>
+                <span>Slobodno</span>
+                <strong>Novi termin</strong>
+              </Link>
+            ) : <span className="empty-slot">Zauzeto</span>}
           </div>
         ))}
       </div>
@@ -137,12 +161,13 @@ export function Reception() {
               <label>Telefon<input value={patientDraft.phone} onChange={(event) => setPatientDraft({ ...patientDraft, phone: event.target.value })} /></label>
               <label>E-posta<input value={patientDraft.email} onChange={(event) => setPatientDraft({ ...patientDraft, email: event.target.value })} /></label>
             </div>
-            {(!patientDraft.date_of_birth || !patientDraft.phone) && <p className="form-error">Nedostaju podaci za sigurnu identifikaciju pacijenta.</p>}
+            {!hasIdentityDetails && <p className="form-error">Za provjeru identiteta trebaju ime, prezime i najmanje jedan dodatni podatak: datum rođenja, OIB, telefon ili e-pošta.</p>}
+            {selected.status === "arrived" && !selected.identity_verified_at && <p className="form-error">Dolazak postoji, ali provjera identiteta nije evidentirana. Usluga se ne može započeti.</p>}
             <div className="quick-actions">
-              <ActionButton variant="workflow" className="primary" onClick={markArrived} helpTitle="Oznaci kao pristigao" help="Dopunjava podatke pacijenta, biljezi provjeru identiteta i postavlja termin u status stigao/la.">
+              <ActionButton variant="workflow" className="primary" disabled={!canMarkArrived} onClick={markArrived} helpTitle="Oznaci kao pristigao" help="Dopunjava podatke pacijenta, biljezi provjeru identiteta i postavlja termin u status stigao/la. Dostupno je samo za zakazan ili potvrden termin.">
                 Oznaci kao pristigao
               </ActionButton>
-              <ActionButton variant="workflow" onClick={startService} helpTitle="Zapocni uslugu" help="Postavlja termin u status u tijeku.">
+              <ActionButton variant="workflow" disabled={!canStartService} onClick={startService} helpTitle="Zapocni uslugu" help="Postavlja termin u status u tijeku tek nakon evidentiranog dolaska i provjere identiteta.">
                 Zapocni uslugu
               </ActionButton>
               <Link to={`/appointments/${selected.id}`}>Otvori termin</Link>
