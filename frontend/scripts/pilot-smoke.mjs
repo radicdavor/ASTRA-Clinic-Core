@@ -487,6 +487,9 @@ assertIncludes("src/program1/utils/syntheticReviewValidation.ts", "validateSynth
 assertIncludes("src/program1/components/SyntheticComparison.tsx", "Usporedba je deskriptivna");
 assertIncludes("src/program1/components/SyntheticComparison.tsx", "Ne predstavlja rangiranje ili preporuku");
 assertIncludes("src/program1/components/SyntheticComparison.tsx", "Ne odreduje klinicki prioritet");
+assertIncludes("src/styles.css", ".program1-workspace, .program1-workspace > * { min-width: 0; }");
+assertIncludes("src/styles.css", ".program1-workspace .page-header { flex-direction: column; align-items: stretch; }");
+assertIncludes("src/styles.css", ".program1-workspace label input, .program1-workspace label select { width: 100%; min-width: 0; }");
 [
   "src/program1/pages/SyntheticReviewWorkspace.tsx",
   "src/program1/data/syntheticScenarios.ts",

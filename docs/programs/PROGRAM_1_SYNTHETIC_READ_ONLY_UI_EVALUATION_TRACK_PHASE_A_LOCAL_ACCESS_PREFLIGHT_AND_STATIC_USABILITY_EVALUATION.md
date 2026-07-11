@@ -2,7 +2,7 @@
 
 ## Local Access Preflight and Static Usability Evaluation
 
-Status: complete with an interactive-render limitation.
+Status: complete.
 
 ## Scope
 
@@ -29,16 +29,18 @@ Not authorized:
 
 The local frontend returned HTTP 200 for `/program1/synthetic-review`.
 
-A real browser navigation rendered the application and redirected the route to `/login` through the existing protected application shell. The repository-displayed local demo credentials did not establish a session in this evaluation environment. No authentication bypass, token injection, backend repair, or route protection change was attempted.
+A real browser navigation rendered the application and redirected the route to `/login` through the existing protected application shell. After the local Docker database and backend were started, the repository-controlled demo credentials established a valid local session and the authenticated Program 1 workspace rendered at `/program1/synthetic-review`.
+
+Port `5173` was already occupied by an unrelated local NURA development process. The evaluation therefore used the existing ASTRA Vite server on port `4174` and the ASTRA backend on port `8000`. The unrelated process was not stopped or changed.
 
 Decision:
 
 - browser rendering infrastructure: `PASS`
 - route-level HTTP serving: `PASS`
-- authenticated Program 1 workspace rendering: `BLOCKED BY EXISTING LOCAL AUTHENTICATION DEPENDENCY`
-- visual sign-off of the authenticated workspace: `NOT COMPLETED`
-
-This is an evaluation limitation, not evidence that the Program 1 workspace itself is defective.
+- authenticated Program 1 workspace rendering: `PASS`
+- desktop DOM and interaction evaluation: `PASS`
+- narrow-viewport layout evaluation: `PASS AFTER RESPONSIVE FIX`
+- browser console errors on the Program 1 route: `NONE OBSERVED`
 
 ## Completed Verification
 
@@ -48,6 +50,12 @@ This is an evaluation limitation, not evidence that the Program 1 workspace itse
 - `python -m unittest discover tests/sandbox/program1`: 53 tests passed
 - static Program 1 UI search for network, storage, export, file, and streaming primitives: no matches
 - responsive rules reviewed for single-column collapse below 980 px
+- authenticated browser render confirmed with all five synthetic scenarios
+- filter no-match empty state confirmed
+- scenario selection confirmed with `SYN-GAMMA`
+- findings tab activation and content confirmed
+- 390 px viewport confirmed without page-level horizontal overflow after responsive correction
+- comparison table remains intentionally scrollable inside its bounded container at narrow width
 - controls reviewed as native inputs, selects, buttons, and tab controls
 - safety banner, limitations, prohibited interpretations, empty-state handling, and synthetic labeling remain present in source
 
@@ -64,18 +72,23 @@ Confirmed strengths:
 - mobile-width CSS collapses scenario, card, two-column, and comparison layouts to one column
 - no action, writeback, export, upload, diagnosis, treatment, triage, or patient-messaging control exists in the Program 1 module
 
-Evaluation limitations:
+Responsive correction completed during evaluation:
 
-- authenticated desktop and narrow-viewport visual inspection remains incomplete
-- keyboard traversal and focus-order observation remains incomplete
-- contrast and overflow were not visually certified
-- no clinician usability claim can be made from static review
+- Program 1 grid children now allow shrinking inside the mobile shell
+- Program 1 page headers stack vertically below 980 px
+- Program 1 labeled inputs and selects fit the available width
+- page-level horizontal overflow at 390 px was reduced from 778 px document width to the 375 px client width
+- smoke guards preserve the responsive rules
+
+Remaining limitations:
+
+- screenshot capture in the browser inspection tool timed out, so verification used rendered DOM, computed layout metrics, interaction state, and console logs
+- formal keyboard traversal and contrast certification were not performed
+- no clinician usability or clinical validation claim is made
 
 ## Phase A Decision
 
-`GO` for preservation of the current synthetic-only, read-only source boundary.
-
-`NO-GO` for claiming completed visual usability validation.
+`GO` for completion of local synthetic-only browser/usability evaluation within the read-only boundary.
 
 `NO-GO` for runtime expansion, real data, backend Program 1 integration, persistence, export, clinical workflow, production use, clinical use, or go-live.
 
@@ -84,8 +97,7 @@ Evaluation limitations:
 Phase A is closed with the following hold:
 
 - no authentication changes authorized
-- no Program 1 runtime changes authorized
+- no Program 1 functional runtime expansion authorized
 - no further evaluation phase started
 - no real-data or clinical-use authorization
 - default posture: `STOP AND HOLD`
-

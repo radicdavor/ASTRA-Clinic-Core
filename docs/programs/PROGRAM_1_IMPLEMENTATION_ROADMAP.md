@@ -2501,7 +2501,7 @@ Final decision:
 
 ## Program 1 Synthetic Read-Only UI Evaluation Track Phase A
 
-Status: closed with an interactive-render limitation.
+Status: closed.
 
 Completed:
 
@@ -2509,19 +2509,24 @@ Completed:
 - frontend typecheck, smoke, and production build
 - 53 synthetic sandbox regression tests
 - static network, storage, export, file, responsive, safety, and usability review
+- authenticated browser render and interaction checks
+- no-match empty state, scenario selection, findings tab, and console review
+- 390 px responsive verification and page-overflow correction
 
 Result:
 
-- existing protected shell redirected the Program 1 route to `/login`
-- local demo authentication did not establish a session in the evaluation environment
-- no authentication bypass or runtime change was attempted
-- authenticated desktop, narrow-viewport, and keyboard visual sign-off remains incomplete
+- existing protected shell correctly redirected unauthenticated access to `/login`
+- local demo authentication succeeded after the database and backend were started
+- Program 1 workspace rendered with all five synthetic scenarios and no observed console errors
+- responsive evaluation found and corrected page-level horizontal overflow at 390 px
+- comparison tables remain bounded and internally scrollable at narrow width
+- formal keyboard/focus and clinical usability certification remain outside Phase A
 
 Decision:
 
-`GO` for preserving the existing synthetic-only/read-only source boundary.
+`GO` for closing local synthetic-only browser/usability evaluation within the read-only boundary.
 
-`NO-GO` for claiming completed visual usability validation or extending runtime scope.
+`NO-GO` for formal accessibility, clinical usability, runtime expansion, or production claims.
 
 No further evaluation phase, authentication work, backend Program 1 integration, real-data use, persistence, export, clinical workflow, deployment, clinical use, or go-live is authorized.
 

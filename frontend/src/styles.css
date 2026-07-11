@@ -255,6 +255,10 @@ th { color: #667085; font-size: 0.78rem; text-transform: uppercase; letter-spaci
   .form-grid { grid-template-columns: 1fr; }
   .selected-patient { grid-template-columns: 1fr; }
   .help-hint-popover { left: 0; right: auto; }
+  .program1-workspace, .program1-workspace > * { min-width: 0; }
+  .program1-workspace .page-header { flex-direction: column; align-items: stretch; }
+  .program1-workspace .page-header > *, .program1-workspace label { min-width: 0; max-width: 100%; }
+  .program1-workspace label input, .program1-workspace label select { width: 100%; min-width: 0; }
   .program1-scenario-list, .program1-card-grid, .program1-two-column, .program1-comparison-grid { grid-template-columns: 1fr; }
   .program1-safety ul { display: grid; }
 }
