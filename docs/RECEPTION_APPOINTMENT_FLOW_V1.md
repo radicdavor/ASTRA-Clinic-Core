@@ -13,6 +13,8 @@ This module shortens the core reception workflow while preserving patient identi
 - previous day, today, and next day controls in Reception
 - compact half-hour empty-slot display instead of every ten-minute row
 - existing appointments retain their exact start time, including 10- and 20-minute offsets
+- dense daily list keeps patient, service, provider, room, status, time, and delete action visible in one row
+- seven-day reception view fits compact patient cards into seven columns and supports direct day opening
 - every empty ten-minute slot links to New Appointment
 - selected reception date and start time prefill the appointment form
 - appointment time remains editable before creation

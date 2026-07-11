@@ -11,8 +11,13 @@ import { Appointment, Clinic, Provider, ReceptionSlot, Room, Service } from "../
 import { formatDate } from "../utils/date";
 import { formatPatientName } from "../utils/patientIdentity";
 
-const today = new Date().toISOString().slice(0, 10);
+function localDateValue(value = new Date()) {
+  return `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, "0")}-${String(value.getDate()).padStart(2, "0")}`;
+}
+
+const today = localDateValue();
 const receptionStatuses = ["scheduled", "confirmed", "arrived", "in_progress", "completed", "cancelled", "no_show"];
+const weekdayLabels = ["Ned", "Pon", "Uto", "Sri", "Čet", "Pet", "Sub"];
 
 function moveDate(value: string, days: number) {
   const next = new Date(`${value}T12:00:00`);
@@ -25,10 +30,15 @@ function isHalfHour(time: string) {
   return minutes === 0 || minutes === 30;
 }
 
+function shortDate(value: string) {
+  const parsed = new Date(`${value}T12:00:00`);
+  return `${weekdayLabels[parsed.getDay()]} ${String(parsed.getDate()).padStart(2, "0")}.${String(parsed.getMonth() + 1).padStart(2, "0")}.`;
+}
+
 export function Reception() {
   const location = useLocation();
   const [date, setDate] = useState(today);
-  const [view, setView] = useState<"day" | "week" | "month">("day");
+  const [view, setView] = useState<"day" | "week">("day");
   const [filters, setFilters] = useState({ clinic_id: "", room_id: "", provider_id: "", service_id: "", status: "" });
   const [selected, setSelected] = useState<Appointment | null>(null);
   const [patientDraft, setPatientDraft] = useState({ first_name: "", last_name: "", date_of_birth: "", oib: "", phone: "", email: "" });
@@ -44,6 +54,23 @@ export function Reception() {
     return `/api/reception/day?${params.toString()}`;
   }, [date, filters]);
   const slots = useApi<ReceptionSlot[]>(query, []);
+  const weekDates = useMemo(() => Array.from({ length: 7 }, (_, index) => moveDate(date, index)), [date]);
+  const weekQuery = useMemo(() => {
+    const params = new URLSearchParams({ date_from: weekDates[0], date_to: weekDates[6] });
+    if (filters.room_id) params.set("room_id", filters.room_id);
+    if (filters.provider_id) params.set("provider_id", filters.provider_id);
+    if (filters.status) params.set("status", filters.status);
+    return `/api/appointments?${params.toString()}`;
+  }, [weekDates, filters.room_id, filters.provider_id, filters.status]);
+  const weekData = useApi<Appointment[]>(weekQuery, []);
+  const weekAppointments = useMemo(() => weekData.data.filter((appointment) => {
+    if (filters.service_id && String(appointment.service_id) !== filters.service_id) return false;
+    if (filters.clinic_id) {
+      const clinicId = appointment.room?.clinic_id ?? appointment.provider?.clinic_id;
+      if (String(clinicId ?? "") !== filters.clinic_id) return false;
+    }
+    return true;
+  }), [weekData.data, filters.service_id, filters.clinic_id]);
   const visibleSlots = useMemo(
     () => slots.data.filter((slot) => Boolean(slot.appointment) || (slot.empty && isHalfHour(slot.time))),
     [slots.data]
@@ -62,7 +89,12 @@ export function Reception() {
   }
 
   async function refresh() {
-    slots.setData(await api<ReceptionSlot[]>(query));
+    const [nextSlots, nextWeek] = await Promise.all([
+      api<ReceptionSlot[]>(query),
+      api<Appointment[]>(weekQuery)
+    ]);
+    slots.setData(nextSlots);
+    weekData.setData(nextWeek);
   }
 
   useEffect(() => {
@@ -71,7 +103,7 @@ export function Reception() {
     }
     window.addEventListener("astra:appointments-changed", refreshAfterAppointmentChange);
     return () => window.removeEventListener("astra:appointments-changed", refreshAfterAppointmentChange);
-  }, [query]);
+  }, [query, weekQuery]);
 
   async function markArrived() {
     if (!selected) return;
@@ -123,22 +155,20 @@ export function Reception() {
           <h1>
             Prijem <HelpHint title="Prijem">Recepcija prikazuje resursni raspored i omogucuje provjeru identiteta prije oznake dolaska.</HelpHint>
           </h1>
-          <p>Odabrani dan: {formatDate(date)}. Prazni slotovi prikazani su svakih pola sata; postojeći termini zadržavaju točno vrijeme početka.</p>
+          <p>{view === "day" ? `Dnevni popis za ${formatDate(date)}.` : `Sedmodnevni pregled od ${formatDate(weekDates[0])} do ${formatDate(weekDates[6])}.`}</p>
         </div>
         <div className="reception-date-controls">
-          <button type="button" className="action-button" onClick={() => setDate(moveDate(date, -1))}>Prethodni dan</button>
+          <button type="button" className="action-button" onClick={() => setDate(moveDate(date, view === "week" ? -7 : -1))}>Prethodni {view === "week" ? "tjedan" : "dan"}</button>
           <button type="button" className="action-button" onClick={() => setDate(today)}>Danas</button>
           <DateInput required value={date} onChange={setDate} />
-          <button type="button" className="action-button" onClick={() => setDate(moveDate(date, 1))}>Sljedeći dan</button>
+          <button type="button" className="action-button" onClick={() => setDate(moveDate(date, view === "week" ? 7 : 1))}>Sljedeći {view === "week" ? "tjedan" : "dan"}</button>
         </div>
       </div>
 
       <div className="segmented-control">
         <button className={view === "day" ? "active" : ""} onClick={() => setView("day")}>Dan</button>
         <button className={view === "week" ? "active" : ""} onClick={() => setView("week")}>Tjedan</button>
-        <button className={view === "month" ? "active" : ""} onClick={() => setView("month")}>Mjesec</button>
       </div>
-      {view !== "day" && <p className="form-error">Tjedni i mjesecni prikaz su deferred; dnevni resursni grid je aktivan.</p>}
 
       <div className="filters">
         <select value={filters.clinic_id} onChange={(event) => setFilters({ ...filters, clinic_id: event.target.value })}><option value="">Sve klinike</option>{clinics.data.map((clinic) => <option key={clinic.id} value={clinic.id}>{clinic.name}</option>)}</select>
@@ -148,19 +178,19 @@ export function Reception() {
         <select value={filters.status} onChange={(event) => setFilters({ ...filters, status: event.target.value })}><option value="">Svi statusi</option>{receptionStatuses.map((status) => <option key={status} value={status}>{statusLabel(status)}</option>)}</select>
       </div>
 
-      <div className="reception-grid">
+      {view === "day" ? <div className="reception-grid reception-day-list">
         {visibleSlots.map((slot) => (
           <div key={slot.time} className={`reception-slot ${slot.empty ? "empty" : "occupied"}`}>
             <time>{slot.time}</time>
             {slot.appointment ? (
               <div className="reception-entry">
-                <button className="reception-card" style={{ minHeight: `${Math.max(Math.ceil(slot.span / 3), 1) * 50}px` }} onClick={() => openAppointment(slot.appointment!)}>
-                  <strong>{slot.appointment.start_time.slice(0, 5)} - {slot.appointment.end_time.slice(0, 5)}</strong>
-                  <span>{slot.appointment.patient ? formatPatientName(slot.appointment.patient) : `Pacijent #${slot.appointment.patient_id}`}</span>
+                <button className="reception-card reception-list-card" onClick={() => openAppointment(slot.appointment!)}>
+                  <strong>{slot.appointment.patient ? formatPatientName(slot.appointment.patient) : `Pacijent #${slot.appointment.patient_id}`}</strong>
                   <span>{slot.appointment.service?.name ?? slot.appointment.service_id}</span>
-                  <small>{slot.appointment.provider?.full_name ?? slot.appointment.provider_id} / {slot.appointment.room?.name ?? slot.appointment.room_id}</small>
+                  <small>{slot.appointment.provider?.full_name ?? slot.appointment.provider_id}</small>
+                  <small>{slot.appointment.room?.name ?? slot.appointment.room_id}</small>
                   <StatusBadge status={slot.appointment.status} />
-                  <small>{slot.appointment.arrived_at ? "Dolazak evidentiran" : "Ceka dolazak"}</small>
+                  <small>{slot.appointment.arrived_at ? "Dolazak evidentiran" : `${slot.appointment.start_time.slice(0, 5)}–${slot.appointment.end_time.slice(0, 5)}`}</small>
                 </button>
                 <button type="button" className="icon-button delete-icon-button" aria-label={`Obrisi termin u ${slot.appointment.start_time.slice(0, 5)}`} title="Obrisi termin" onClick={() => deleteAppointment(slot.appointment!)}>
                   <Trash2 size={18} aria-hidden="true" />
@@ -174,7 +204,41 @@ export function Reception() {
             ) : <span className="empty-slot">Zauzeto</span>}
           </div>
         ))}
-      </div>
+      </div> : (
+        <div className="reception-week-wrap">
+          <div className="reception-week-grid">
+            {weekDates.map((weekDate) => {
+              const dayAppointments = weekAppointments.filter((appointment) => appointment.date === weekDate);
+              return (
+                <section className={`reception-week-day ${weekDate === today ? "today" : ""}`} key={weekDate}>
+                  <header>
+                    <button type="button" onClick={() => { setDate(weekDate); setView("day"); }}>{shortDate(weekDate)}</button>
+                    <span>{dayAppointments.length}</span>
+                  </header>
+                  <div className="reception-week-items">
+                    {dayAppointments.map((appointment) => (
+                      <article className="reception-week-card" key={appointment.id}>
+                        <button type="button" className="reception-week-main" onClick={() => openAppointment(appointment)}>
+                          <time>{appointment.start_time.slice(0, 5)}</time>
+                          <strong title={appointment.patient ? formatPatientName(appointment.patient) : undefined}>{appointment.patient ? formatPatientName(appointment.patient) : `Pacijent #${appointment.patient_id}`}</strong>
+                          <span title={appointment.service?.name}>{appointment.service?.name ?? appointment.service_id}</span>
+                          <small>{appointment.provider?.full_name ?? appointment.provider_id}</small>
+                          <StatusBadge status={appointment.status} />
+                        </button>
+                        <button type="button" className="week-delete-button" aria-label={`Obrisi termin ${weekDate} u ${appointment.start_time.slice(0, 5)}`} title="Obrisi termin" onClick={() => deleteAppointment(appointment)}>
+                          <Trash2 size={15} aria-hidden="true" />
+                        </button>
+                      </article>
+                    ))}
+                    {dayAppointments.length === 0 && <p className="week-empty">Nema termina</p>}
+                  </div>
+                  <Link className="week-new-appointment" to={`/appointments/new?date=${weekDate}&start_time=09:00`} state={{ backgroundLocation: location }}>+ Novi</Link>
+                </section>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {selected && (
         <div className="modal-backdrop">
