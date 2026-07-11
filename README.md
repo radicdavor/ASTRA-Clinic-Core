@@ -29,6 +29,8 @@ Pilot documents:
 - [Patient Clinical Summary MVP](docs/PATIENT_CLINICAL_SUMMARY_MVP.md)
 - [Reception and Resource Scheduling](docs/RECEPTION_AND_RESOURCE_SCHEDULING.md)
 - [Program 1 - ASTRA Clinical Workflow](docs/programs/PROGRAM_1_ASTRA_CLINICAL_WORKFLOW.md)
+- [Program 1 Synthetic Read-Only UI Evaluation Track Phase A](docs/programs/PROGRAM_1_SYNTHETIC_READ_ONLY_UI_EVALUATION_TRACK_PHASE_A_LOCAL_ACCESS_PREFLIGHT_AND_STATIC_USABILITY_EVALUATION.md)
+- [Program 1 Synthetic Read-Only UI Evaluation Track Phase A Status Matrix](docs/programs/PROGRAM_1_SYNTHETIC_READ_ONLY_UI_EVALUATION_TRACK_PHASE_A_STATUS_MATRIX.md)
 - [Program 1 Glossary](docs/programs/PROGRAM_1_GLOSSARY.md)
 - [Program 1 Domain Object Mapping](docs/programs/PROGRAM_1_DOMAIN_OBJECT_MAPPING.md)
 - [Program 1 Phase A - Patient Knowledge Stabilization Plan](docs/programs/PROGRAM_1_PHASE_A_PATIENT_KNOWLEDGE_STABILIZATION_PLAN.md)
