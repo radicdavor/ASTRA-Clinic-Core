@@ -310,3 +310,9 @@ Local Production Readiness Track Phase A is documentation-only. It defines a loc
 The first candidate remains synthetic-only, local-machine-only, clinician-facing, and terminal-first unless a separate future UI track is explicitly authorized. It has no network/database dependency, external integration, patient messaging, appointment mutation, clinical writeback, workflow enforcement, clinical task creation, autonomous diagnosis/treatment, or go-live claim.
 
 No-UI Hold remains active.
+
+## Local Synthetic Evaluation Authorization Packet
+
+Local Production Readiness Track Phase H is complete as documentation-only authorization-packet work. It defines the packet structure, candidate identity requirements, roles, machine and custody declaration, synthetic-only declaration, no-network/no-persistence/no-export declarations, safety labels, stop conditions, deviation handling, expiration, revocation, and decision record requirements.
+
+Phase H does not authorize execution, local evaluation, runtime verification, machine approval, UI, real-data access, deployment, clinical use, or go-live. Phase I is not started. No-UI Hold and the no-real-data boundary remain active.
