@@ -9,6 +9,7 @@
 * { box-sizing: border-box; }
 body { margin: 0; background: #f6f8fb; }
 button, input, select, textarea { font: inherit; }
+button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible, a:focus-visible, [tabindex="0"]:focus-visible { outline: 3px solid #2563eb; outline-offset: 3px; }
 a { color: #0f766e; text-decoration: none; }
 
 .shell { display: grid; grid-template-columns: 248px 1fr; min-height: 100vh; }
@@ -86,6 +87,7 @@ select { min-width: 170px; }
 
 .table-wrap { background: white; border: 1px solid #e3e8ef; border-radius: 8px; overflow: auto; }
 table { width: 100%; border-collapse: collapse; min-width: 720px; }
+caption { padding: 10px 14px; color: #405069; font-weight: 750; text-align: left; background: #fbfcfe; border-bottom: 1px solid #eef2f6; }
 th, td { text-align: left; padding: 12px 14px; border-bottom: 1px solid #eef2f6; vertical-align: middle; }
 th { color: #667085; font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0; background: #fbfcfe; }
 .empty { color: #667085; text-align: center; padding: 26px; }
@@ -261,4 +263,7 @@ th { color: #667085; font-size: 0.78rem; text-transform: uppercase; letter-spaci
   .program1-workspace label input, .program1-workspace label select { width: 100%; min-width: 0; }
   .program1-scenario-list, .program1-card-grid, .program1-two-column, .program1-comparison-grid { grid-template-columns: 1fr; }
   .program1-safety ul { display: grid; }
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { scroll-behavior: auto !important; animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }
 }

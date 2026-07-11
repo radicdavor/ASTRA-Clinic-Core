@@ -490,6 +490,17 @@ assertIncludes("src/program1/components/SyntheticComparison.tsx", "Ne odreduje k
 assertIncludes("src/styles.css", ".program1-workspace, .program1-workspace > * { min-width: 0; }");
 assertIncludes("src/styles.css", ".program1-workspace .page-header { flex-direction: column; align-items: stretch; }");
 assertIncludes("src/styles.css", ".program1-workspace label input, .program1-workspace label select { width: 100%; min-width: 0; }");
+assertIncludes("src/components/workspace/WorkspaceTabs.tsx", 'role="tablist"');
+assertIncludes("src/components/workspace/WorkspaceTabs.tsx", 'role="tab"');
+assertIncludes("src/components/workspace/WorkspaceTabs.tsx", 'role="tabpanel"');
+assertIncludes("src/components/workspace/WorkspaceTabs.tsx", 'aria-selected=');
+assertIncludes("src/components/workspace/WorkspaceTabs.tsx", '"ArrowLeft", "ArrowRight", "Home", "End"');
+assertIncludes("src/program1/components/SyntheticScenarioSelector.tsx", "aria-pressed=");
+assertIncludes("src/program1/components/SyntheticEvidenceList.tsx", "Nema sinteticnih dokaza");
+assertIncludes("src/program1/components/SyntheticFindingsList.tsx", "Nema sinteticnih nalaza");
+assertIncludes("src/program1/components/SyntheticTimeline.tsx", "Nema sinteticnih dogadaja");
+assertIncludes("src/program1/components/SyntheticComparison.tsx", "<caption>");
+assertIncludes("src/styles.css", "prefers-reduced-motion: reduce");
 [
   "src/program1/pages/SyntheticReviewWorkspace.tsx",
   "src/program1/data/syntheticScenarios.ts",

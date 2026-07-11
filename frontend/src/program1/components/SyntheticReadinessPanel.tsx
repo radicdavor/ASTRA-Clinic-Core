@@ -11,11 +11,11 @@ export function SyntheticReadinessPanel({ scenario }: { scenario: SyntheticScena
   return (
     <div className="program1-readiness">
       <p className="program1-note">Ovo je prikaz potpunosti sinteticnog scenarija, a ne klinicke spremnosti pacijenta.</p>
-      <div className="program1-card-grid">
+      <div className="program1-card-grid" role="list" aria-label="Potpunost sinteticnog scenarija">
         {scenario.readiness.map((item) => (
-          <article key={item.id} className="knowledge-card">
+          <article key={item.id} className="knowledge-card" role="listitem">
             <h3>{item.label}</h3>
-            <span className={`program1-pill program1-${item.state}`}>{stateLabels[item.state]}</span>
+            <span className={`program1-pill program1-${item.state}`} role="status">{stateLabels[item.state]}</span>
             <p>{item.rationale}</p>
           </article>
         ))}

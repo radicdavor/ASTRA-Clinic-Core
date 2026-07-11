@@ -80,6 +80,7 @@ export function SyntheticComparison({
           </div>
           <div className="table-wrap">
             <table>
+              <caption>Deskriptivna usporedba sinteticnih scenarija {comparison.left.id} i {comparison.right.id}</caption>
               <thead>
                 <tr>
                   <th>Podrucje</th>

@@ -33,6 +33,8 @@ export function SyntheticScenarioSelector({
             key={scenario.id}
             type="button"
             className={scenario.id === selectedId ? "active" : ""}
+            aria-pressed={scenario.id === selectedId}
+            aria-label={`${scenario.id}: ${scenario.title}`}
             onClick={() => onSelect(scenario.id)}
           >
             <strong>{scenario.id}</strong>

@@ -2531,3 +2531,32 @@ Decision:
 No further evaluation phase, authentication work, backend Program 1 integration, real-data use, persistence, export, clinical workflow, deployment, clinical use, or go-live is authorized.
 
 Default posture: `STOP AND HOLD`.
+
+## Program 1 Synthetic Read-Only UI Evaluation Track Phase B
+
+Status: closed.
+
+Completed:
+
+- accessibility and usability scope
+- standard tab semantics and Arrow/Home/End keyboard navigation
+- roving tab index and visible focus treatment
+- selected scenario, list, listitem, status, and table-caption semantics
+- explicit filtered empty states
+- reduced-motion guard
+- all five synthetic scenario browser walkthrough
+- representative contrast checks
+- 640 px 200%-equivalent reflow proxy
+- 390 px mobile reflow and bounded comparison-table scroll
+- evaluator protocol, engineering rubric, final matrix, and closure report
+- frontend typecheck, smoke, build, and 53 sandbox tests
+
+Decision:
+
+`GO` for closing Phase B inside the local synthetic-only read-only accessibility/usability boundary.
+
+`NO-GO` for claiming formal WCAG certification, external clinician validation, clinical usability, real-data readiness, production readiness, clinical use, or go-live.
+
+No Phase C or external clinician session is started.
+
+Default posture: `STOP AND HOLD`.
