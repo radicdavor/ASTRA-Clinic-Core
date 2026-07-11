@@ -1090,6 +1090,30 @@ Pilot documents:
 - [v0.1 pilot release checklist](docs/V0_1_PILOT_RELEASE_CHECKLIST.md)
 - [Known limitations](docs/KNOWN_LIMITATIONS.md)
 
+## Program 1 Synthetic Read-Only UI
+
+Program 1 Synthetic Read-Only UI Track is closed within the local, demo-only, synthetic-only, read-only boundary.
+
+The workspace route is `/program1/synthetic-review` and the navigation label is `Program 1 Demo` when the demo/development shell exposes it. The workspace uses repository-controlled synthetic fixtures only, does not call a Program 1 backend data API, does not use a database, does not persist state, does not export data, and is not for clinical use.
+
+Safety boundary:
+
+- no real patient data
+- no PHI/PII
+- no backend Program 1 API
+- no database change
+- no persistence
+- no export
+- no patient messaging
+- no appointment mutation
+- no clinical writeback
+- no diagnosis, treatment recommendation, or triage
+- no production deployment
+- no clinical-use authorization
+- no go-live authorization
+
+Final posture: `STOP AND HOLD`.
+
 ## Tehnologije
 
 - Backend: Python FastAPI

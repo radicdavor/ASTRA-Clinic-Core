@@ -178,6 +178,35 @@ th { color: #667085; font-size: 0.78rem; text-transform: uppercase; letter-spaci
 .scope-grid input { width: 18px; height: 18px; }
 .danger-scope { border: 1px solid #f1b7b7; background: #fff7f7; border-radius: 8px; padding: 10px; margin-top: 10px; }
 
+.program1-workspace { display: grid; gap: 18px; }
+.program1-safety { display: grid; gap: 14px; border: 1px solid #f1d27a; border-radius: 8px; background: #fff9e8; color: #172033; padding: 18px; }
+.program1-safety-title { display: flex; gap: 12px; align-items: flex-start; }
+.program1-safety-title strong, .program1-safety-title span { display: block; }
+.program1-safety-title strong { color: #8a5700; font-size: 1rem; letter-spacing: 0; }
+.program1-safety ul { display: flex; flex-wrap: wrap; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.program1-safety li { display: inline-flex; align-items: center; gap: 6px; border: 1px solid #f1d27a; border-radius: 8px; background: #ffffff; padding: 7px 9px; font-weight: 800; color: #8a5700; }
+.program1-selector label, .program1-workspace label, .program1-comparison label { display: grid; gap: 6px; color: #405069; font-weight: 750; }
+.program1-scenario-list { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; }
+.program1-scenario-list button { display: grid; gap: 5px; text-align: left; min-height: 116px; border: 1px solid #d9e2ec; border-radius: 8px; background: #ffffff; padding: 12px; cursor: pointer; }
+.program1-scenario-list button.active, .program1-scenario-list button:hover { border-color: #0f766e; background: #f1fbf9; }
+.program1-scenario-list strong { color: #0f766e; }
+.program1-scenario-list small { color: #667085; }
+.program1-card-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.program1-two-column { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.program1-pill { display: inline-flex; align-items: center; width: fit-content; min-height: 26px; border-radius: 8px; padding: 0 9px; font-size: 0.8rem; font-weight: 800; background: #eef2f6; color: #405069; }
+.program1-available, .program1-documented, .program1-resolved-in-scenario { background: #e7f8ed; color: #15803d; }
+.program1-missing, .program1-incomplete, .program1-blocked { background: #fff7db; color: #a16207; }
+.program1-ambiguous, .program1-uncertain, .program1-not-applicable, .program1-open { background: #eef2f6; color: #405069; }
+.program1-note { border: 1px solid #bfdbfe; border-radius: 8px; background: #eff6ff; color: #1d4ed8; padding: 10px; margin-bottom: 12px; font-weight: 750; }
+.program1-comparison-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-bottom: 14px; }
+.program1-comparison-column { border: 1px solid #e3e8ef; border-radius: 8px; background: #ffffff; padding: 14px; }
+.program1-comparison-column h3 { margin-top: 0; color: #0f766e; }
+.program1-comparison-column dl { display: grid; gap: 8px; margin: 12px 0 0; }
+.program1-comparison-column dt { color: #667085; font-weight: 800; }
+.program1-comparison-column dd { margin: 0; color: #172033; overflow-wrap: anywhere; }
+.program1-empty { border: 1px dashed #b7c8d9; border-radius: 8px; background: #ffffff; padding: 18px; color: #405069; }
+.program1-empty strong { display: block; color: #172033; margin-bottom: 4px; }
+
 .login-page { min-height: 100vh; display: grid; place-items: center; padding: 20px; background: #eef6f5; }
 .login-panel { width: min(420px, 100%); background: white; border: 1px solid #d8e6e4; border-radius: 8px; padding: 28px; box-shadow: 0 18px 60px rgba(15, 23, 42, 0.08); }
 .login-panel label, .form-grid label { display: grid; gap: 7px; color: #405069; font-weight: 650; }
@@ -226,4 +255,6 @@ th { color: #667085; font-size: 0.78rem; text-transform: uppercase; letter-spaci
   .form-grid { grid-template-columns: 1fr; }
   .selected-patient { grid-template-columns: 1fr; }
   .help-hint-popover { left: 0; right: auto; }
+  .program1-scenario-list, .program1-card-grid, .program1-two-column, .program1-comparison-grid { grid-template-columns: 1fr; }
+  .program1-safety ul { display: grid; }
 }

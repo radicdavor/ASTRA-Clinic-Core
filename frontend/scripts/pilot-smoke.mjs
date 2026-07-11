@@ -36,6 +36,20 @@ function unique(values) {
   "src/pages/Invoices.tsx",
   "src/pages/ApiKeys.tsx",
   "src/pages/Readiness.tsx",
+  "src/program1/pages/SyntheticReviewWorkspace.tsx",
+  "src/program1/data/syntheticScenarios.ts",
+  "src/program1/types/syntheticReview.ts",
+  "src/program1/utils/syntheticReviewSelectors.ts",
+  "src/program1/utils/syntheticReviewValidation.ts",
+  "src/program1/components/SyntheticSafetyBanner.tsx",
+  "src/program1/components/SyntheticScenarioSelector.tsx",
+  "src/program1/components/SyntheticScenarioOverview.tsx",
+  "src/program1/components/SyntheticTimeline.tsx",
+  "src/program1/components/SyntheticEvidenceList.tsx",
+  "src/program1/components/SyntheticFindingsList.tsx",
+  "src/program1/components/SyntheticReadinessPanel.tsx",
+  "src/program1/components/SyntheticLimitations.tsx",
+  "src/program1/components/SyntheticComparison.tsx",
   "src/pages/Reception.tsx",
   "src/components/AppShell.tsx",
   "src/components/AuditTimeline.tsx",
@@ -60,10 +74,12 @@ assertIncludes("src/routes/AppRoutes.tsx", "/clinical-documents");
 assertIncludes("src/routes/AppRoutes.tsx", "/clinical-documents/:id");
 assertIncludes("src/routes/AppRoutes.tsx", "/api-keys");
 assertIncludes("src/routes/AppRoutes.tsx", "/readiness");
+assertIncludes("src/routes/AppRoutes.tsx", "/program1/synthetic-review");
 assertIncludes("src/routes/AppRoutes.tsx", "/reception");
 assertIncludes("src/components/AppShell.tsx", "/api/public-config");
 assertIncludes("src/components/AppShell.tsx", "Demo/development okruzenje");
 assertIncludes("src/components/AppShell.tsx", "Spremnost");
+assertIncludes("src/components/AppShell.tsx", "Program 1 Demo");
 assertIncludes("src/components/AppShell.tsx", "Dokumenti");
 assertIncludes("src/components/AppShell.tsx", "Prijem");
 assertNotIncludes("src/components/AppShell.tsx", "Epizode");
@@ -456,6 +472,55 @@ assertIncludes("src/pages/ApiKeys.tsx", "opasni scopeovi");
 assertIncludes("src/pages/AppointmentDetail.tsx", "Potvrditi zavrsetak termina");
 assertIncludes("src/pages/PurchaseOrders.tsx", "Potvrditi zaprimanje robe");
 assertIncludes("src/pages/Readiness.tsx", "/api/readiness");
+assertIncludes("src/program1/pages/SyntheticReviewWorkspace.tsx", "Program 1 - Synthetic Review");
+assertIncludes("src/program1/components/SyntheticSafetyBanner.tsx", "SINTETICKI PODACI");
+assertIncludes("src/program1/components/SyntheticSafetyBanner.tsx", "NIJE ZA KLINICKU UPORABU");
+assertIncludes("src/program1/components/SyntheticSafetyBanner.tsx", "NE SADRZI PODATKE STVARNIH PACIJENATA");
+assertIncludes("src/program1/data/syntheticScenarios.ts", "SYN-ALPHA");
+assertIncludes("src/program1/data/syntheticScenarios.ts", "SYN-BETA");
+assertIncludes("src/program1/data/syntheticScenarios.ts", "SYN-GAMMA");
+assertIncludes("src/program1/data/syntheticScenarios.ts", "SYN-DELTA");
+assertIncludes("src/program1/data/syntheticScenarios.ts", "SYN-EPSILON");
+assertIncludes("src/program1/data/syntheticScenarios.ts", "syntheticOnly: true");
+assertIncludes("src/program1/data/syntheticScenarios.ts", "realDataUsed: false");
+assertIncludes("src/program1/utils/syntheticReviewValidation.ts", "validateSyntheticScenarios");
+assertIncludes("src/program1/components/SyntheticComparison.tsx", "Usporedba je deskriptivna");
+assertIncludes("src/program1/components/SyntheticComparison.tsx", "Ne predstavlja rangiranje ili preporuku");
+assertIncludes("src/program1/components/SyntheticComparison.tsx", "Ne odreduje klinicki prioritet");
+[
+  "src/program1/pages/SyntheticReviewWorkspace.tsx",
+  "src/program1/data/syntheticScenarios.ts",
+  "src/program1/utils/syntheticReviewSelectors.ts",
+  "src/program1/utils/syntheticReviewValidation.ts",
+  "src/program1/components/SyntheticSafetyBanner.tsx",
+  "src/program1/components/SyntheticScenarioSelector.tsx",
+  "src/program1/components/SyntheticScenarioOverview.tsx",
+  "src/program1/components/SyntheticTimeline.tsx",
+  "src/program1/components/SyntheticEvidenceList.tsx",
+  "src/program1/components/SyntheticFindingsList.tsx",
+  "src/program1/components/SyntheticReadinessPanel.tsx",
+  "src/program1/components/SyntheticLimitations.tsx",
+  "src/program1/components/SyntheticComparison.tsx",
+].forEach((file) => {
+  [
+    "useApi",
+    "fetch(",
+    "axios",
+    "localStorage",
+    "sessionStorage",
+    "indexedDB",
+    "document.cookie",
+    "navigator.clipboard",
+    "window.print",
+    "showSaveFilePicker",
+    "createObjectURL",
+    "WebSocket",
+    "EventSource",
+    "sendBeacon",
+    "download=",
+    "dangerouslySetInnerHTML"
+  ].forEach((value) => assertNotIncludes(file, value));
+});
 assertIncludes("../backend/app/api/routes/system.py", '"/public-config"');
 assertIncludes("../backend/app/main.py", "system.router");
 assertIncludes("src/pages/Readiness.tsx", "Ne mijenja podatke");

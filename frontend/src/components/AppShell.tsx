@@ -1,5 +1,5 @@
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
-import { Boxes, CalendarCheck, CalendarDays, ClipboardCheck, ClipboardList, FileSearch, FileText, KeyRound, LayoutDashboard, LogOut, PackageSearch, Search, Settings, ShieldCheck, Stethoscope, Users } from "lucide-react";
+import { Boxes, CalendarCheck, CalendarDays, ClipboardCheck, ClipboardList, FileSearch, FileText, KeyRound, LayoutDashboard, LogOut, PackageSearch, Search, Settings, ShieldCheck, Stethoscope, TestTube, Users } from "lucide-react";
 import { clearToken } from "../api/client";
 import { useApi } from "../hooks/useApi";
 import { ToastHost } from "./ToastHost";
@@ -21,6 +21,8 @@ const nav = [
   { to: "/readiness", label: "Spremnost", icon: ClipboardCheck }
 ];
 
+const program1DemoNav = { to: "/program1/synthetic-review", label: "Program 1 Demo", icon: TestTube };
+
 export function AppShell() {
   const navigate = useNavigate();
   const publicConfig = useApi<{ demo_mode: boolean; real_data_allowed: boolean; warnings?: string[] } | null>("/api/public-config", null);
@@ -39,7 +41,7 @@ export function AppShell() {
           </div>
         </div>
         <nav>
-          {nav.map((item) => {
+          {[...nav, ...(showDemoBanner ? [program1DemoNav] : [])].map((item) => {
             const Icon = item.icon;
             return (
               <NavLink key={item.to} to={item.to} className={({ isActive }) => (isActive ? "nav-link active" : "nav-link")}>

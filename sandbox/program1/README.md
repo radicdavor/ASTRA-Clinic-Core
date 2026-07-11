@@ -322,3 +322,22 @@ Phase H does not authorize execution, local evaluation, runtime verification, ma
 The Local Production Readiness Track is closed at the documentation and governance level. Phase A-H are complete, and the final posture is `STOP AND HOLD`.
 
 The candidate remains synthetic-only and was not executed. Runtime was not tested, no machine was configured or approved, No-UI Hold remains active, no-network/no-persistence/no-export/no-real-data boundaries remain active, no clinical workflow is authorized, no deployment occurred, and Phase I was not started.
+
+## Synthetic Read-Only UI Track Closure
+
+The Program 1 Synthetic Read-Only UI Track adds one local/demo-only web workspace at `/program1/synthetic-review`. It is a read-only presentation layer for repository-controlled synthetic fixtures and does not replace the terminal sandbox.
+
+The terminal synthetic sandbox remains available through the existing local commands documented above. Both the terminal sandbox and the web workspace are synthetic-only, non-production, no real patient data, no PHI/PII, and not for clinical use.
+
+The web workspace:
+
+- does not call a Program 1 backend data API
+- does not use a database
+- does not persist state
+- does not export data
+- does not send messages
+- does not mutate appointments
+- does not perform clinical writeback
+- does not make diagnosis, treatment, triage, production, clinical-use, or go-live claims
+
+Program 1 Synthetic Read-Only UI Track is closed, and the default posture is `STOP AND HOLD`.
