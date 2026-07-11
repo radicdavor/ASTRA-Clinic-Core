@@ -302,3 +302,11 @@ Alpha, Beta, Gamma, Delta, Epsilon
 ```
 
 This is ordering only. It does not add scenarios, does not add a CLI command, does not add UI, and does not create ranking, scoring, sequencing, recommendation, protocol, clinical workflow, persistence, export, or production behavior.
+
+## Local-Only Production Boundary
+
+Local Production Readiness Track Phase A is documentation-only. It defines a local-only production-readiness boundary and the first future candidate, `Local Clinician-Facing Synthetic Review Demo`. It does not deploy anything and does not authorize local UI, real data, PHI/PII, clinical use, integrations, persistence/export, or go-live.
+
+The first candidate remains synthetic-only, local-machine-only, clinician-facing, and terminal-first unless a separate future UI track is explicitly authorized. It has no network/database dependency, external integration, patient messaging, appointment mutation, clinical writeback, workflow enforcement, clinical task creation, autonomous diagnosis/treatment, or go-live claim.
+
+No-UI Hold remains active.

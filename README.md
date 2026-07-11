@@ -1067,6 +1067,8 @@ Pilot documents:
 - [Program 1 Synthetic Scenario Expansion Track Phase A Closure Report](docs/programs/PROGRAM_1_SYNTHETIC_SCENARIO_EXPANSION_TRACK_PHASE_A_CLOSURE_REPORT.md)
 - [Program 1 Synthetic Scenario Expansion Track Phase B Scenario Ordering and Comparison Readability Polish](docs/programs/PROGRAM_1_SYNTHETIC_SCENARIO_EXPANSION_TRACK_PHASE_B_SCENARIO_ORDERING_AND_COMPARISON_READABILITY_POLISH.md)
 - [Program 1 Synthetic Scenario Expansion Track Phase B Closure Report](docs/programs/PROGRAM_1_SYNTHETIC_SCENARIO_EXPANSION_TRACK_PHASE_B_CLOSURE_REPORT.md)
+- [Program 1 Local Production Readiness Track Phase A Local-Only Production Boundary and Deployment Candidate Definition](docs/programs/PROGRAM_1_LOCAL_PRODUCTION_READINESS_TRACK_PHASE_A_LOCAL_ONLY_PRODUCTION_BOUNDARY_AND_DEPLOYMENT_CANDIDATE_DEFINITION.md)
+- [Program 1 Local Production Readiness Track Phase A Closure Report](docs/programs/PROGRAM_1_LOCAL_PRODUCTION_READINESS_TRACK_PHASE_A_CLOSURE_REPORT.md)
 - [Lokalni LAN pristup](docs/LAN_ACCESS.md)
 - [Program 1 audit event naming](docs/programs/PROGRAM_1_AUDIT_EVENT_NAMING.md)
 - [Program 1 Phase A regression notes](docs/programs/PROGRAM_1_PHASE_A_REGRESSION_NOTES.md)
