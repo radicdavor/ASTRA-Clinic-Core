@@ -35,6 +35,12 @@ function shortDate(value: string) {
   return `${weekdayLabels[parsed.getDay()]} ${String(parsed.getDate()).padStart(2, "0")}.${String(parsed.getMonth() + 1).padStart(2, "0")}.`;
 }
 
+function mondayOfWeek(value: string) {
+  const parsed = new Date(`${value}T12:00:00`);
+  const daysSinceMonday = (parsed.getDay() + 6) % 7;
+  return moveDate(value, -daysSinceMonday);
+}
+
 export function Reception() {
   const location = useLocation();
   const [date, setDate] = useState(today);
@@ -54,7 +60,10 @@ export function Reception() {
     return `/api/reception/day?${params.toString()}`;
   }, [date, filters]);
   const slots = useApi<ReceptionSlot[]>(query, []);
-  const weekDates = useMemo(() => Array.from({ length: 7 }, (_, index) => moveDate(date, index)), [date]);
+  const weekDates = useMemo(() => {
+    const monday = mondayOfWeek(date);
+    return Array.from({ length: 7 }, (_, index) => moveDate(monday, index));
+  }, [date]);
   const weekQuery = useMemo(() => {
     const params = new URLSearchParams({ date_from: weekDates[0], date_to: weekDates[6] });
     if (filters.room_id) params.set("room_id", filters.room_id);
