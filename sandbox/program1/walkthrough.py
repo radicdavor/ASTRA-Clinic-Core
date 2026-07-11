@@ -3,12 +3,12 @@
 from __future__ import annotations
 
 from .display import (
-    HUMAN_REVIEW_NOTE,
     humanize_label,
     render_allowed_state,
     render_authorized_state,
     render_enabled_state,
     render_safety_banner,
+    review_note_for_scenario,
 )
 from .models import SAFETY_BANNER
 from .scenarios import SCENARIOS, build_scenario
@@ -101,7 +101,7 @@ def render_walkthrough(packet: dict[str, object]) -> str:
             ]
         )
         lines.extend(f"- {humanize_label(finding)}" for finding in summary["findings"])
-        lines.extend(["Clinician review note:", HUMAN_REVIEW_NOTE])
+        lines.extend(["Clinician review note:", review_note_for_scenario(scenario)])
     lines.extend(
         [
             "",

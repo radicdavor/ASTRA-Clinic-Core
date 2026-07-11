@@ -12,14 +12,75 @@ HUMAN_REVIEW_NOTE = (
     "or clinical writeback."
 )
 
+SCENARIO_REVIEW_NOTES = {
+    "gamma": (
+        "This sandbox shows where a clinician would notice incomplete synthetic "
+        "context. No diagnosis, treatment, triage, patient messaging, appointment "
+        "changes, workflow action, or clinical writeback is made."
+    ),
+    "delta": (
+        "This sandbox shows where a clinician would notice conflicting synthetic "
+        "information. No diagnosis, treatment, triage, patient messaging, "
+        "appointment changes, workflow action, or clinical writeback is made."
+    ),
+    "epsilon": (
+        "This sandbox shows where safety boundaries are reviewed in a synthetic "
+        "scenario. No diagnosis, treatment, triage, patient messaging, "
+        "appointment changes, workflow action, or clinical writeback is made."
+    ),
+}
+
+SCENARIO_PURPOSES = {
+    "alpha": "Baseline synthetic review visit with more than one finding.",
+    "beta": "Safety-boundary review for existing local sandbox behavior.",
+    "gamma": (
+        "Demonstrates incomplete documentation context without creating clinical "
+        "recommendations or tasks."
+    ),
+    "delta": (
+        "Demonstrates conflicting synthetic information without resolving it "
+        "clinically or creating an action."
+    ),
+    "epsilon": (
+        "Demonstrates disabled action boundaries without patient messages, "
+        "clinical tasks, appointment changes, workflow actions, or writeback."
+    ),
+}
+
 HUMAN_LABELS = {
     "DEMO_ONLY_PATIENT_ALPHA": "Synthetic patient A",
     "DEMO_ONLY_PATIENT_BETA": "Synthetic patient B",
+    "DEMO_ONLY_PATIENT_GAMMA": "Synthetic patient C",
+    "DEMO_ONLY_PATIENT_DELTA": "Synthetic patient D",
+    "DEMO_ONLY_PATIENT_EPSILON": "Synthetic patient E",
     "DEMO_ENCOUNTER_SYNTHETIC_REVIEW": "Example review visit",
     "DEMO_ENCOUNTER_SYNTHETIC_BOUNDARY_CHECK": "Boundary review visit",
+    "DEMO_ENCOUNTER_INCOMPLETE_DOCUMENTATION_REVIEW": (
+        "Incomplete documentation review visit"
+    ),
+    "DEMO_ENCOUNTER_CONFLICTING_INFORMATION_REVIEW": (
+        "Conflicting information review visit"
+    ),
+    "DEMO_ENCOUNTER_SAFETY_BOUNDARY_STRESS_REVIEW": (
+        "Safety-boundary stress review visit"
+    ),
     "DEMO_FINDING_CONTEXT_REVIEW": "Missing context in uploaded record",
     "DEMO_FINDING_FOLLOWUP_PLACEHOLDER": "Follow-up context placeholder",
     "DEMO_FINDING_BOUNDARY_VISIBILITY": "Visibility of safety boundary",
+    "DEMO_FINDING_MISSING_SOURCE_DOCUMENT_CONTEXT": "Missing source document context",
+    "DEMO_FINDING_MISSING_PRIOR_REVIEW_REFERENCE": "Missing prior review reference",
+    "DEMO_FINDING_CONFLICTING_SYNTHETIC_NOTE_CONTEXT": (
+        "Conflicting synthetic note context"
+    ),
+    "DEMO_FINDING_FOLLOWUP_CLARIFICATION_PLACEHOLDER": (
+        "Follow-up clarification placeholder"
+    ),
+    "DEMO_FINDING_PATIENT_FACING_ACTION_REMAINS_DISABLED": (
+        "Patient-facing action remains disabled"
+    ),
+    "DEMO_FINDING_CLINICAL_WORKFLOW_ACTION_REMAINS_DISABLED": (
+        "Clinical workflow action remains disabled"
+    ),
     "DEMO_THEME_WORKFLOW_CLARITY": "Workflow clarity",
     "DEMO_THEME_USEFULNESS_REVIEW": "Perceived usefulness",
     "EXAMPLE_CHANGE_CLARIFY_SYNTHETIC_SUMMARY_OUTPUT": (
@@ -36,6 +97,12 @@ HUMAN_LABELS = {
         "Proposed for future sandbox design review"
     ),
 }
+
+
+def review_note_for_scenario(scenario: object) -> str:
+    """Return clinician-readable non-clinical review note text for a scenario."""
+
+    return SCENARIO_REVIEW_NOTES.get(str(scenario), HUMAN_REVIEW_NOTE)
 
 HUMAN_CHECKLIST = {
     "DEMO_CHECKLIST_CONFIRM_SYNTHETIC_ONLY": "Confirm the scenario is synthetic only",

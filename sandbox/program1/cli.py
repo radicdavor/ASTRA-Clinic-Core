@@ -6,12 +6,12 @@ import argparse
 import json
 
 from .display import (
-    HUMAN_REVIEW_NOTE,
     humanize_label,
     render_allowed_state,
     render_authorized_state,
     render_enabled_state,
     render_safety_banner,
+    review_note_for_scenario,
 )
 from .feedback_input import build_feedback_input_preview, render_feedback_input_preview
 from .feedback_review import render_feedback_review, review_feedback
@@ -45,7 +45,7 @@ def render_summary(summary: dict[str, object]) -> str:
         [
             "",
             "Clinician review note:",
-            HUMAN_REVIEW_NOTE,
+            review_note_for_scenario(summary.get("scenario", "alpha")),
             "",
             "Safety confirmations:",
             f"- Real patient data: {render_allowed_state(summary['real_patient_data_allowed'])}",

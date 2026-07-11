@@ -2163,6 +2163,21 @@ Recommended next decision:
 
 `Stop after Synthetic Sandbox Maintenance Track Phase B unless another maintenance action is explicitly authorized.`
 
+Synthetic Scenario Expansion Track Phase A update:
+
+- Scenario Expansion Track Phase A starts as a new separate track after Maintenance Track Phase B
+- Phase A adds local synthetic scenarios gamma, delta and epsilon to the existing scenario registry
+- existing commands support the new scenarios through the existing `--scenario` argument
+- walkthrough lists alpha, beta, gamma, delta and epsilon as available synthetic scenarios
+- compare-scenarios now presents the expanded local synthetic scenario set in a concise non-clinical comparison
+- Phase A remains local-only, terminal-only, synthetic-only, non-production and not for clinical use
+- Phase A does not add UI, server/API/network/database/integration behavior, persistence/export, real patient data, PHI/PII, diagnosis, treatment, triage, patient instruction, patient messaging, appointment mutation, clinical writeback, workflow enforcement, clinical task creation, approval/clearance/override capability, production-readiness or go-live authorization
+- No-UI Hold remains active, Scenario Expansion Track Phase B was not started and no UI track was started
+
+Recommended next decision:
+
+`Stop after Synthetic Scenario Expansion Track Phase A unless Phase B is explicitly authorized.`
+
 ## 30. Program 1 Phase D44-D54 - Findings Read-Only Workspace Boundary
 
 Status: implemented as read-only workspace boundary after backend verification passed.

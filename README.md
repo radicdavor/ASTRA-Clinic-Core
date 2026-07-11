@@ -1063,6 +1063,8 @@ Pilot documents:
 - [Program 1 Synthetic Sandbox Maintenance Track Phase A Closure Report](docs/programs/PROGRAM_1_SYNTHETIC_SANDBOX_MAINTENANCE_TRACK_PHASE_A_CLOSURE_REPORT.md)
 - [Program 1 Synthetic Sandbox Maintenance Track Phase B Demo Review Checklist and User Evaluation Notes](docs/programs/PROGRAM_1_SYNTHETIC_SANDBOX_MAINTENANCE_TRACK_PHASE_B_DEMO_REVIEW_CHECKLIST_AND_USER_EVALUATION_NOTES.md)
 - [Program 1 Synthetic Sandbox Maintenance Track Phase B Closure Report](docs/programs/PROGRAM_1_SYNTHETIC_SANDBOX_MAINTENANCE_TRACK_PHASE_B_CLOSURE_REPORT.md)
+- [Program 1 Synthetic Scenario Expansion Track Phase A Additional Local Synthetic Review Scenarios](docs/programs/PROGRAM_1_SYNTHETIC_SCENARIO_EXPANSION_TRACK_PHASE_A_ADDITIONAL_LOCAL_SYNTHETIC_REVIEW_SCENARIOS.md)
+- [Program 1 Synthetic Scenario Expansion Track Phase A Closure Report](docs/programs/PROGRAM_1_SYNTHETIC_SCENARIO_EXPANSION_TRACK_PHASE_A_CLOSURE_REPORT.md)
 - [Lokalni LAN pristup](docs/LAN_ACCESS.md)
 - [Program 1 audit event naming](docs/programs/PROGRAM_1_AUDIT_EVENT_NAMING.md)
 - [Program 1 Phase A regression notes](docs/programs/PROGRAM_1_PHASE_A_REGRESSION_NOTES.md)

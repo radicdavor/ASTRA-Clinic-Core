@@ -2,24 +2,31 @@
 
 from __future__ import annotations
 
-from .display import humanize_label, render_safety_banner
-from .session_recap import SESSION_RECAP_REVIEW_NOTE
-from .scenarios import build_scenario
+from .display import (
+    SCENARIO_PURPOSES,
+    humanize_label,
+    render_safety_banner,
+    review_note_for_scenario,
+)
+from .scenarios import SCENARIOS, build_scenario
 from .workflow import build_workflow_summary
 
 
 COMPARISON_TITLE = "Program 1 Synthetic Sandbox Scenario Comparison"
 COMPARISON_PURPOSE = (
-    "This local synthetic comparison shows how two demo scenarios differ for "
-    "sandbox review. It does not compare real patients and does not support "
+    "This local synthetic comparison shows how local synthetic scenarios differ "
+    "for sandbox review. It does not compare real patients and does not support "
     "clinical decision-making."
 )
 COMPARISON_SUMMARY = (
     "Alpha demonstrates a synthetic review visit with more than one finding.",
     "Beta demonstrates a synthetic safety-boundary review.",
+    "Gamma demonstrates incomplete documentation context.",
+    "Delta demonstrates conflicting synthetic information.",
+    "Epsilon demonstrates disabled action boundaries.",
     (
-        "Neither scenario contains real patient data, PHI, PII, diagnosis, "
-        "treatment advice, triage, patient instruction, or clinical recommendation."
+        "No scenario contains real patient data, PHI, PII, diagnosis, treatment "
+        "advice, triage, patient instruction, or clinical recommendation."
     ),
 )
 
@@ -31,7 +38,8 @@ def _scenario_summary(name: str) -> dict[str, object]:
         "patient": summary["patient"],
         "encounter": summary["encounter"],
         "findings": summary["findings"],
-        "review_note": SESSION_RECAP_REVIEW_NOTE,
+        "purpose": SCENARIO_PURPOSES.get(name, "Synthetic sandbox review scenario."),
+        "review_note": review_note_for_scenario(name),
     }
 
 
@@ -41,10 +49,7 @@ def build_scenario_comparison() -> dict[str, object]:
     return {
         "comparison_title": COMPARISON_TITLE,
         "comparison_purpose": COMPARISON_PURPOSE,
-        "scenarios": {
-            "alpha": _scenario_summary("alpha"),
-            "beta": _scenario_summary("beta"),
-        },
+        "scenarios": {name: _scenario_summary(name) for name in sorted(SCENARIOS)},
         "comparison_summary": list(COMPARISON_SUMMARY),
         "synthetic_only": True,
         "non_production": True,
@@ -68,8 +73,6 @@ def build_scenario_comparison() -> dict[str, object]:
 def render_scenario_comparison(comparison: dict[str, object]) -> str:
     """Render a clinician-readable local scenario comparison."""
 
-    alpha = comparison["scenarios"]["alpha"]
-    beta = comparison["scenarios"]["beta"]
     lines = [
         str(comparison["comparison_title"]),
         render_safety_banner().split("\n", 1)[1],
@@ -77,42 +80,33 @@ def render_scenario_comparison(comparison: dict[str, object]) -> str:
         "Comparison purpose:",
         str(comparison["comparison_purpose"]),
         "",
-        "Scenario Alpha:",
-        "Patient:",
-        humanize_label(alpha["patient"]),
-        "",
-        "Encounter:",
-        humanize_label(alpha["encounter"]),
-        "",
-        "Findings:",
     ]
-    lines.extend(f"- {humanize_label(finding)}" for finding in alpha["findings"])
-    lines.extend(
-        [
-            "",
-            "Clinician review note:",
-            str(alpha["review_note"]),
-            "",
-            "Scenario Beta:",
-            "Patient:",
-            humanize_label(beta["patient"]),
-            "",
-            "Encounter:",
-            humanize_label(beta["encounter"]),
-            "",
-            "Findings:",
-        ]
-    )
-    lines.extend(f"- {humanize_label(finding)}" for finding in beta["findings"])
-    lines.extend(
-        [
-            "",
-            "Clinician review note:",
-            str(beta["review_note"]),
-            "",
-            "Comparison summary:",
-        ]
-    )
+    for scenario, summary in comparison["scenarios"].items():
+        lines.extend(
+            [
+                f"Scenario {str(scenario).title()}:",
+                "Patient:",
+                humanize_label(summary["patient"]),
+                "",
+                "Encounter:",
+                humanize_label(summary["encounter"]),
+                "",
+                "Purpose:",
+                str(summary["purpose"]),
+                "",
+                "Findings:",
+            ]
+        )
+        lines.extend(f"- {humanize_label(finding)}" for finding in summary["findings"])
+        lines.extend(
+            [
+                "",
+                "Clinician review note:",
+                str(summary["review_note"]),
+                "",
+            ]
+        )
+    lines.append("Comparison summary:")
     lines.extend(f"- {item}" for item in comparison["comparison_summary"])
     lines.extend(
         [

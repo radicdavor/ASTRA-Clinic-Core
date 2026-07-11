@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from .display import HUMAN_REVIEW_NOTE, humanize_label, render_safety_banner
+from .display import HUMAN_REVIEW_NOTE, humanize_label, render_safety_banner, review_note_for_scenario
 from .feedback_input import build_feedback_input_preview
 from .scenarios import build_scenario
 from .workflow import build_workflow_summary
@@ -36,7 +36,9 @@ def build_session_recap(
         "encounter": summary["encounter"],
         "findings": summary["findings"],
         "review_note": HUMAN_REVIEW_NOTE,
-        "display_review_note": SESSION_RECAP_REVIEW_NOTE,
+        "display_review_note": review_note_for_scenario(scenario)
+        if scenario in {"gamma", "delta", "epsilon"}
+        else SESSION_RECAP_REVIEW_NOTE,
         "feedback_preview": feedback_preview["entered_feedback"],
         "feedback_entered": not feedback_preview["empty_feedback"],
         "feedback_boundary": feedback_preview["interpretation"],

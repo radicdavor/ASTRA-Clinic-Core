@@ -269,3 +269,26 @@ Reviewer focus:
 - Are additional synthetic scenarios worth considering, without adding scenarios now?
 
 Evaluation notes are guidance only. The sandbox does not store, transmit, export, persist, convert, or use them as clinical content. No-UI Hold remains active.
+
+## Additional Local Synthetic Review Scenarios
+
+Scenario Expansion Track Phase A adds three local terminal-only synthetic scenarios. This is not Phase K, not Maintenance Track Phase C, not a UI track, and not a production-readiness step.
+
+Available scenarios:
+
+- `alpha` - Synthetic patient A, example review visit
+- `beta` - Synthetic patient B, boundary review visit
+- `gamma` - Synthetic patient C, incomplete documentation review visit
+- `delta` - Synthetic patient D, conflicting information review visit
+- `epsilon` - Synthetic patient E, safety-boundary stress review visit
+
+Examples:
+
+```powershell
+python -m sandbox.program1.cli summary --scenario gamma
+python -m sandbox.program1.cli trial --scenario delta
+python -m sandbox.program1.cli session-recap --scenario epsilon
+python -m sandbox.program1.cli compare-scenarios
+```
+
+All scenarios remain local-only, terminal-only, synthetic-only, non-production, no real patient data, no PHI/PII, and not for clinical use. The expansion does not add UI, server/API/network/database/integration behavior, persistence/export, diagnosis, treatment, triage, patient instruction, patient messaging, appointment mutation, clinical writeback, workflow enforcement, clinical task creation, approval/override capability, production-readiness, or go-live authorization.

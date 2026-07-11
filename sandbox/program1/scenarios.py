@@ -67,9 +67,108 @@ def build_synthetic_review_scenario_beta():
     return patient, encounter, encounter.findings, review
 
 
+def build_synthetic_review_scenario_gamma():
+    """Build an incomplete documentation synthetic review scenario."""
+
+    patient = SyntheticPatient(
+        synthetic_patient_id="SYNTHETIC_PATIENT_GAMMA",
+        display_label="DEMO_ONLY_PATIENT_GAMMA",
+    )
+    encounter = SyntheticEncounter(
+        encounter_id="SYNTHETIC_ENCOUNTER_GAMMA",
+        patient=patient,
+        encounter_label="DEMO_ENCOUNTER_INCOMPLETE_DOCUMENTATION_REVIEW",
+        encounter_date=date(2099, 3, 1),
+        findings=(
+            SyntheticFinding(
+                finding_id="SYNTHETIC_FINDING_MISSING_SOURCE_CONTEXT",
+                title="DEMO_FINDING_MISSING_SOURCE_DOCUMENT_CONTEXT",
+                summary="EXAMPLE_FINDING_MISSING_SOURCE_CONTEXT_SYNTHETIC_ONLY",
+            ),
+            SyntheticFinding(
+                finding_id="SYNTHETIC_FINDING_MISSING_PRIOR_REVIEW",
+                title="DEMO_FINDING_MISSING_PRIOR_REVIEW_REFERENCE",
+                summary="EXAMPLE_FINDING_MISSING_PRIOR_REVIEW_SYNTHETIC_ONLY",
+            ),
+        ),
+    )
+    review = build_clinician_review_note(
+        encounter,
+        reviewer_label="DEMO_CLINICIAN_REVIEWER",
+    )
+    return patient, encounter, encounter.findings, review
+
+
+def build_synthetic_review_scenario_delta():
+    """Build a conflicting synthetic information review scenario."""
+
+    patient = SyntheticPatient(
+        synthetic_patient_id="SYNTHETIC_PATIENT_DELTA",
+        display_label="DEMO_ONLY_PATIENT_DELTA",
+    )
+    encounter = SyntheticEncounter(
+        encounter_id="SYNTHETIC_ENCOUNTER_DELTA",
+        patient=patient,
+        encounter_label="DEMO_ENCOUNTER_CONFLICTING_INFORMATION_REVIEW",
+        encounter_date=date(2099, 4, 1),
+        findings=(
+            SyntheticFinding(
+                finding_id="SYNTHETIC_FINDING_CONFLICTING_CONTEXT",
+                title="DEMO_FINDING_CONFLICTING_SYNTHETIC_NOTE_CONTEXT",
+                summary="EXAMPLE_FINDING_CONFLICTING_CONTEXT_SYNTHETIC_ONLY",
+            ),
+            SyntheticFinding(
+                finding_id="SYNTHETIC_FINDING_CLARIFICATION_PLACEHOLDER",
+                title="DEMO_FINDING_FOLLOWUP_CLARIFICATION_PLACEHOLDER",
+                summary="EXAMPLE_FINDING_CLARIFICATION_PLACEHOLDER_SYNTHETIC_ONLY",
+            ),
+        ),
+    )
+    review = build_clinician_review_note(
+        encounter,
+        reviewer_label="DEMO_CLINICIAN_REVIEWER",
+    )
+    return patient, encounter, encounter.findings, review
+
+
+def build_synthetic_review_scenario_epsilon():
+    """Build a safety-boundary stress synthetic review scenario."""
+
+    patient = SyntheticPatient(
+        synthetic_patient_id="SYNTHETIC_PATIENT_EPSILON",
+        display_label="DEMO_ONLY_PATIENT_EPSILON",
+    )
+    encounter = SyntheticEncounter(
+        encounter_id="SYNTHETIC_ENCOUNTER_EPSILON",
+        patient=patient,
+        encounter_label="DEMO_ENCOUNTER_SAFETY_BOUNDARY_STRESS_REVIEW",
+        encounter_date=date(2099, 5, 1),
+        findings=(
+            SyntheticFinding(
+                finding_id="SYNTHETIC_FINDING_PATIENT_ACTION_DISABLED",
+                title="DEMO_FINDING_PATIENT_FACING_ACTION_REMAINS_DISABLED",
+                summary="EXAMPLE_FINDING_PATIENT_ACTION_DISABLED_SYNTHETIC_ONLY",
+            ),
+            SyntheticFinding(
+                finding_id="SYNTHETIC_FINDING_WORKFLOW_ACTION_DISABLED",
+                title="DEMO_FINDING_CLINICAL_WORKFLOW_ACTION_REMAINS_DISABLED",
+                summary="EXAMPLE_FINDING_WORKFLOW_ACTION_DISABLED_SYNTHETIC_ONLY",
+            ),
+        ),
+    )
+    review = build_clinician_review_note(
+        encounter,
+        reviewer_label="DEMO_CLINICIAN_REVIEWER",
+    )
+    return patient, encounter, encounter.findings, review
+
+
 SCENARIOS = {
     "alpha": build_synthetic_review_scenario_alpha,
     "beta": build_synthetic_review_scenario_beta,
+    "delta": build_synthetic_review_scenario_delta,
+    "epsilon": build_synthetic_review_scenario_epsilon,
+    "gamma": build_synthetic_review_scenario_gamma,
 }
 
 

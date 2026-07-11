@@ -3,12 +3,12 @@
 from __future__ import annotations
 
 from .display import (
-    HUMAN_REVIEW_NOTE,
     humanize_label,
     render_allowed_state,
     render_authorized_state,
     render_enabled_state,
     render_safety_banner,
+    review_note_for_scenario,
 )
 from .feedback import build_feedback_template
 from .models import SAFETY_BANNER
@@ -83,7 +83,7 @@ def render_trial_packet(packet: dict[str, object]) -> str:
         [
             "",
             "Clinician review note:",
-            HUMAN_REVIEW_NOTE,
+            review_note_for_scenario(packet["scenario"]),
             "",
             "Clinician trial checklist:",
         ]
