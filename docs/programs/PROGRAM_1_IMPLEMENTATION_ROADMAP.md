@@ -2560,3 +2560,28 @@ Decision:
 No Phase C or external clinician session is started.
 
 Default posture: `STOP AND HOLD`.
+
+## Program 1 Synthetic Read-Only UI Evaluation Track Phase C
+
+Status: external clinician evaluation kit complete; external session not run.
+
+Completed:
+
+- scope, architecture check, and synthetic-only boundaries
+- participant eligibility and consent template
+- moderator preflight, session, and closing runbook
+- eight controlled synthetic evaluation tasks
+- observation, scoring, severity, and session-summary form
+- immediate stop conditions and deviation protocol
+- evidence requirements, decision states, and final decision record
+- final kit status matrix and closure
+
+Decision:
+
+`GO` for kit completeness and readiness for a separately authorized external synthetic-only clinician session.
+
+`NO-GO` for claiming that a clinician session, consent, participant feedback, score, quote, usability conclusion, or clinical validation exists.
+
+No participant recruitment, scheduling, recording, runtime change, real-data use, clinical workflow, deployment, clinical use, or go-live is authorized.
+
+Default posture: `STOP AND HOLD BEFORE EXTERNAL SESSION`.
