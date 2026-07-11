@@ -43,6 +43,7 @@ function unique(values) {
   "src/program1/components/SyntheticEvaluationBoundary.tsx",
   "src/program1/components/SyntheticEvaluationPreflight.tsx",
   "src/program1/components/SyntheticEvaluationTaskList.tsx",
+  "scripts/program1-evaluation-readiness.mjs",
   "src/program1/data/syntheticScenarios.ts",
   "src/program1/types/syntheticReview.ts",
   "src/program1/utils/syntheticReviewSelectors.ts",
@@ -516,6 +517,10 @@ assertIncludes("src/program1/components/SyntheticEvaluationBoundary.tsx", "Ne un
 assertIncludes("src/program1/data/syntheticEvaluation.ts", "Evaluira se sučelje, a ne znanje ili rad sudionika");
 assertIncludes("src/program1/data/syntheticEvaluation.ts", "keyboard");
 assertIncludes("src/program1/pages/SyntheticEvaluationRunner.tsx", "Zaustavi lokalni prolaz");
+assertIncludes("package.json", "program1:evaluation-readiness");
+assertIncludes("scripts/program1-evaluation-readiness.mjs", "candidate:clean-worktree");
+assertIncludes("scripts/program1-evaluation-readiness.mjs", "READY FOR SEPARATELY AUTHORIZED EXTERNAL SESSION");
+assertIncludes("scripts/program1-evaluation-readiness.mjs", "forbiddenPrimitives");
 [
   "src/program1/pages/SyntheticReviewWorkspace.tsx",
   "src/program1/data/syntheticScenarios.ts",
