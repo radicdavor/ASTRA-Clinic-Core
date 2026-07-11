@@ -55,11 +55,12 @@ function timeToMinutes(value: string) {
   return hours * 60 + minutes;
 }
 
-function freeHalfHourTimes(appointments: Appointment[]) {
+function freeHalfHourTimes(appointments: Appointment[], provider: Provider) {
   return halfHourTimes.filter((time) => {
     const start = timeToMinutes(time);
     const end = start + 30;
-    return !appointments.some((appointment) => blockingReceptionStatuses.has(appointment.status)
+    const withinWorkingHours = start >= timeToMinutes(provider.work_start) && end <= timeToMinutes(provider.work_end);
+    return withinWorkingHours && !appointments.some((appointment) => blockingReceptionStatuses.has(appointment.status)
       && timeToMinutes(appointment.start_time) < end
       && timeToMinutes(appointment.end_time) > start);
   });
@@ -108,6 +109,14 @@ export function Reception() {
     () => slots.data.filter((slot) => Boolean(slot.appointment) || (slot.empty && isHalfHour(slot.time))),
     [slots.data]
   );
+  const clinicProviders = useMemo(() => providers.data.filter((provider) => !filters.clinic_id || String(provider.clinic_id ?? "") === filters.clinic_id), [providers.data, filters.clinic_id]);
+  const clinicRooms = useMemo(() => rooms.data.filter((room) => !filters.clinic_id || String(room.clinic_id ?? "") === filters.clinic_id), [rooms.data, filters.clinic_id]);
+  const selectedProvider = useMemo(() => providers.data.find((provider) => String(provider.id) === filters.provider_id), [providers.data, filters.provider_id]);
+  const resourcesReady = Boolean(filters.clinic_id && filters.provider_id && filters.room_id && selectedProvider);
+  const slotWithinProviderHours = (time: string) => Boolean(selectedProvider
+    && timeToMinutes(time) >= timeToMinutes(selectedProvider.work_start)
+    && timeToMinutes(time) + 30 <= timeToMinutes(selectedProvider.work_end));
+  const bookingParams = (bookingDate: string, startTime: string) => new URLSearchParams({ date: bookingDate, start_time: startTime, clinic_id: filters.clinic_id, provider_id: filters.provider_id, room_id: filters.room_id }).toString();
 
   function openAppointment(appointment: Appointment) {
     setSelected(appointment);
@@ -204,12 +213,14 @@ export function Reception() {
       </div>
 
       <div className="filters">
-        <select value={filters.clinic_id} onChange={(event) => setFilters({ ...filters, clinic_id: event.target.value })}><option value="">Sve klinike</option>{clinics.data.map((clinic) => <option key={clinic.id} value={clinic.id}>{clinic.name}</option>)}</select>
-        <select value={filters.room_id} onChange={(event) => setFilters({ ...filters, room_id: event.target.value })}><option value="">Sve sobe</option>{rooms.data.map((room) => <option key={room.id} value={room.id}>{room.name}</option>)}</select>
-        <select value={filters.provider_id} onChange={(event) => setFilters({ ...filters, provider_id: event.target.value })}><option value="">Svi djelatnici</option>{providers.data.map((provider) => <option key={provider.id} value={provider.id}>{provider.full_name}</option>)}</select>
+        <select value={filters.clinic_id} onChange={(event) => setFilters({ ...filters, clinic_id: event.target.value, provider_id: "", room_id: "" })}><option value="">Odaberi kliniku</option>{clinics.data.map((clinic) => <option key={clinic.id} value={clinic.id}>{clinic.name}</option>)}</select>
+        <select disabled={!filters.clinic_id} value={filters.provider_id} onChange={(event) => setFilters({ ...filters, provider_id: event.target.value })}><option value="">Odaberi liječnika</option>{clinicProviders.map((provider) => <option key={provider.id} value={provider.id}>{provider.full_name} · {provider.work_start.slice(0, 5)}–{provider.work_end.slice(0, 5)}</option>)}</select>
+        <select disabled={!filters.clinic_id} value={filters.room_id} onChange={(event) => setFilters({ ...filters, room_id: event.target.value })}><option value="">Odaberi prostoriju</option>{clinicRooms.map((room) => <option key={room.id} value={room.id}>{room.name}</option>)}</select>
         <select value={filters.service_id} onChange={(event) => setFilters({ ...filters, service_id: event.target.value })}><option value="">Sve usluge</option>{services.data.map((service) => <option key={service.id} value={service.id}>{service.name}</option>)}</select>
         <select value={filters.status} onChange={(event) => setFilters({ ...filters, status: event.target.value })}><option value="">Svi statusi</option>{receptionStatuses.map((status) => <option key={status} value={status}>{statusLabel(status)}</option>)}</select>
       </div>
+      {!resourcesReady && <p className="resource-filter-prompt">Odaberite kliniku, liječnika i prostoriju kako bi se prikazali stvarno slobodni termini.</p>}
+      {resourcesReady && selectedProvider && <p className="resource-filter-ready">Slobodni termini po radnom vremenu liječnika: {selectedProvider.work_start.slice(0, 5)}–{selectedProvider.work_end.slice(0, 5)}.</p>}
 
       {view === "day" ? <div className="reception-grid reception-day-list">
         {visibleSlots.map((slot) => (
@@ -229,12 +240,12 @@ export function Reception() {
                   <Trash2 size={18} aria-hidden="true" />
                 </button>
               </div>
-            ) : slot.empty && !isSunday(date) ? (
-              <Link className="empty-slot empty-slot-action" to={`/appointments/new?date=${date}&start_time=${slot.time}`} state={{ backgroundLocation: location }}>
+            ) : slot.empty && !isSunday(date) && resourcesReady && slotWithinProviderHours(slot.time) ? (
+              <Link className="empty-slot empty-slot-action" to={`/appointments/new?${bookingParams(date, slot.time)}`} state={{ backgroundLocation: location }}>
                 <span>Slobodno</span>
                 <strong>Novi termin</strong>
               </Link>
-            ) : <span className="empty-slot">{isSunday(date) ? "Neradni dan" : "Zauzeto"}</span>}
+            ) : <span className="empty-slot">{isSunday(date) ? "Neradni dan" : !resourcesReady ? "Odaberite resurse" : slot.empty ? "Izvan radnog vremena" : "Zauzeto"}</span>}
           </div>
         ))}
       </div> : (
@@ -242,7 +253,7 @@ export function Reception() {
           <div className="reception-week-grid">
             {weekDates.map((weekDate) => {
               const dayAppointments = weekAppointments.filter((appointment) => appointment.date === weekDate);
-              const freeTimes = isSunday(weekDate) ? [] : freeHalfHourTimes(dayAppointments);
+              const freeTimes = isSunday(weekDate) || !selectedProvider ? [] : freeHalfHourTimes(dayAppointments, selectedProvider);
               return (
                 <section className={`reception-week-day ${weekDate === today ? "today" : ""} ${isSunday(weekDate) ? "closed" : ""}`} key={weekDate}>
                   <header>
@@ -266,19 +277,17 @@ export function Reception() {
                     ))}
                     {dayAppointments.length === 0 && <p className="week-empty">Nema upisanih pacijenata</p>}
                   </div>
-                  {!isSunday(weekDate) && (
+                  {!isSunday(weekDate) && resourcesReady && (
                     <div className="week-free-slots">
                       <strong>Slobodno</strong>
                       <div>
                         {freeTimes.map((time) => (
-                          <Link key={time} to={`/appointments/new?date=${weekDate}&start_time=${time}`} state={{ backgroundLocation: location }}>{time}</Link>
+                          <Link key={time} to={`/appointments/new?${bookingParams(weekDate, time)}`} state={{ backgroundLocation: location }}>{time}</Link>
                         ))}
                       </div>
                     </div>
                   )}
-                  {isSunday(weekDate) ? <span className="week-closed-label">Neradni dan</span> : (
-                    <Link className="week-new-appointment" to={`/appointments/new?date=${weekDate}&start_time=09:00`} state={{ backgroundLocation: location }}>+ Novi</Link>
-                  )}
+                  {isSunday(weekDate) && <span className="week-closed-label">Neradni dan</span>}
                 </section>
               );
             })}

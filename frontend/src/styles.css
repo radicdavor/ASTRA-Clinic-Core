@@ -174,6 +174,11 @@ th { color: #667085; font-size: 0.78rem; text-transform: uppercase; letter-spaci
 .week-free-slots a:hover { border-color: #0f766e; background: #e9f7f5; }
 .week-new-appointment { display: block; margin: 0 5px 6px; border: 1px dashed #b7c8d9; border-radius: 6px; padding: 5px; color: #0f766e; font-size: .72rem; font-weight: 800; text-align: center; }
 .week-closed-label { display: block; margin: 0 5px 6px; border-radius: 6px; padding: 5px; background: #d1d5db; color: #475569; font-size: .72rem; font-weight: 800; text-align: center; }
+.resource-filter-prompt, .resource-filter-ready { margin-top: 10px; border-radius: 7px; padding: 8px 11px; font-size: .78rem; font-weight: 750; }
+.resource-filter-prompt { border: 1px solid #f1d27a; background: #fff9e8; color: #8a5700; }
+.resource-filter-ready { border: 1px solid #b7d8c2; background: #f1fbf4; color: #0f766e; }
+.appointment-clinic-field { border: 1px solid #b7d8c2; border-radius: 8px; background: #f1fbf4; padding: 11px; }
+.provider-hours-context { border-left: 3px solid #0f766e; padding: 7px 10px; background: #f8fafc; color: #405069; font-size: .8rem; font-weight: 700; }
 .clinic-admin-page { display: grid; gap: 18px; }
 .clinic-admin-forms { display: grid; grid-template-columns: minmax(220px, .7fr) minmax(260px, .9fr) minmax(360px, 1.35fr); gap: 12px; align-items: start; }
 .clinic-admin-form { display: grid; gap: 10px; border: 1px solid #d9e2ec; border-radius: 9px; background: #ffffff; padding: 15px; }
