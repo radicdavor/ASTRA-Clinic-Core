@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { Trash2 } from "lucide-react";
 import { Link, useLocation } from "react-router-dom";
 import { api } from "../api/client";
 import { ActionButton } from "../components/ActionButton";
@@ -98,6 +99,15 @@ export function Reception() {
     await refresh();
   }
 
+  async function deleteAppointment(appointment: Appointment) {
+    const patientName = appointment.patient ? formatPatientName(appointment.patient) : `pacijenta #${appointment.patient_id}`;
+    const confirmed = window.confirm(`Obrisati termin ${appointment.start_time.slice(0, 5)} za ${patientName}? Pacijent ostaje u evidenciji.`);
+    if (!confirmed) return;
+    await api(`/api/appointments/${appointment.id}`, { method: "DELETE" });
+    if (selected?.id === appointment.id) setSelected(null);
+    await refresh();
+  }
+
   const hasIdentityDetails = Boolean(
     patientDraft.first_name.trim()
     && patientDraft.last_name.trim()
@@ -143,14 +153,19 @@ export function Reception() {
           <div key={slot.time} className={`reception-slot ${slot.empty ? "empty" : "occupied"}`}>
             <time>{slot.time}</time>
             {slot.appointment ? (
-              <button className="reception-card" style={{ minHeight: `${Math.max(Math.ceil(slot.span / 3), 1) * 50}px` }} onClick={() => openAppointment(slot.appointment!)}>
-                <strong>{slot.appointment.start_time.slice(0, 5)} - {slot.appointment.end_time.slice(0, 5)}</strong>
-                <span>{slot.appointment.patient ? formatPatientName(slot.appointment.patient) : `Pacijent #${slot.appointment.patient_id}`}</span>
-                <span>{slot.appointment.service?.name ?? slot.appointment.service_id}</span>
-                <small>{slot.appointment.provider?.full_name ?? slot.appointment.provider_id} / {slot.appointment.room?.name ?? slot.appointment.room_id}</small>
-                <StatusBadge status={slot.appointment.status} />
-                <small>{slot.appointment.arrived_at ? "Dolazak evidentiran" : "Ceka dolazak"}</small>
-              </button>
+              <div className="reception-entry">
+                <button className="reception-card" style={{ minHeight: `${Math.max(Math.ceil(slot.span / 3), 1) * 50}px` }} onClick={() => openAppointment(slot.appointment!)}>
+                  <strong>{slot.appointment.start_time.slice(0, 5)} - {slot.appointment.end_time.slice(0, 5)}</strong>
+                  <span>{slot.appointment.patient ? formatPatientName(slot.appointment.patient) : `Pacijent #${slot.appointment.patient_id}`}</span>
+                  <span>{slot.appointment.service?.name ?? slot.appointment.service_id}</span>
+                  <small>{slot.appointment.provider?.full_name ?? slot.appointment.provider_id} / {slot.appointment.room?.name ?? slot.appointment.room_id}</small>
+                  <StatusBadge status={slot.appointment.status} />
+                  <small>{slot.appointment.arrived_at ? "Dolazak evidentiran" : "Ceka dolazak"}</small>
+                </button>
+                <button type="button" className="icon-button delete-icon-button" aria-label={`Obrisi termin u ${slot.appointment.start_time.slice(0, 5)}`} title="Obrisi termin" onClick={() => deleteAppointment(slot.appointment!)}>
+                  <Trash2 size={18} aria-hidden="true" />
+                </button>
+              </div>
             ) : slot.empty ? (
               <Link className="empty-slot empty-slot-action" to={`/appointments/new?date=${date}&start_time=${slot.time}`} state={{ backgroundLocation: location }}>
                 <span>Slobodno</span>

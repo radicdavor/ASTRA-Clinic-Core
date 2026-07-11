@@ -136,6 +136,10 @@ th { color: #667085; font-size: 0.78rem; text-transform: uppercase; letter-spaci
 .reception-card { display: grid; gap: 4px; width: 100%; border: 1px solid #b7d8c2; border-radius: 8px; background: #f1fbf4; color: #172033; padding: 10px; text-align: left; cursor: pointer; }
 .reception-card:hover { border-color: #0f766e; }
 .reception-card small { color: #667085; }
+.reception-entry { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; min-width: 0; }
+.reception-entry .reception-card { width: fit-content; min-width: min(420px, calc(100% - 50px)); max-width: 720px; }
+.delete-icon-button { flex: 0 0 auto; color: #b42318; border-color: #f0b4b4; background: #fffafa; }
+.delete-icon-button:hover { color: #8f1d1d; border-color: #b42318; background: #fff1f1; }
 .reception-panel { width: min(760px, calc(100vw - 32px)); }
 .readiness-pill, .readiness-badge { display: inline-flex; align-items: center; min-height: 30px; border-radius: 8px; padding: 0 10px; font-weight: 800; white-space: nowrap; }
 .readiness-pill { min-height: 38px; }

@@ -592,6 +592,10 @@ assertIncludes("src/pages/AppointmentForm.tsx", "if (routeState?.backgroundLocat
 assertIncludes("src/pages/AppointmentForm.tsx", 'window.dispatchEvent(new Event("astra:appointments-changed"))');
 assertIncludes("src/pages/AppointmentForm.tsx", "navigate(-1)");
 assertIncludes("src/pages/Reception.tsx", 'window.addEventListener("astra:appointments-changed"');
+assertIncludes("src/pages/Reception.tsx", "Pacijent ostaje u evidenciji");
+assertIncludes("src/pages/Reception.tsx", "deleteAppointment(slot.appointment!)");
+assertIncludes("src/pages/Appointments.tsx", "Pacijent ostaje u evidenciji");
+assertIncludes("src/pages/Appointments.tsx", 'method: "DELETE"');
 assertIncludes("src/pages/AppointmentForm.tsx", "backgroundLocation");
 assertIncludes("src/pages/Appointments.tsx", "backgroundLocation: location");
 assertIncludes("src/pages/Reception.tsx", "backgroundLocation: location");
