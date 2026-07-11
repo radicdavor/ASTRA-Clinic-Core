@@ -167,6 +167,11 @@ th { color: #667085; font-size: 0.78rem; text-transform: uppercase; letter-spaci
 .week-delete-button { position: absolute; top: 5px; right: 4px; width: 23px; height: 23px; display: grid; place-items: center; border: 0; border-radius: 5px; background: transparent; color: #b42318; cursor: pointer; }
 .week-delete-button:hover { background: #fee2e2; }
 .week-empty { padding: 8px 3px; font-size: .73rem; text-align: center; }
+.week-free-slots { margin: 0 5px 6px; border-top: 1px solid #d9e2ec; padding-top: 5px; }
+.week-free-slots > strong { display: block; margin-bottom: 4px; color: #667085; font-size: .67rem; text-transform: uppercase; letter-spacing: .03em; }
+.week-free-slots > div { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 3px; }
+.week-free-slots a { border: 1px solid #cfe3d5; border-radius: 5px; background: #ffffff; color: #0f766e; padding: 3px 1px; font-size: .67rem; font-weight: 800; text-align: center; }
+.week-free-slots a:hover { border-color: #0f766e; background: #e9f7f5; }
 .week-new-appointment { display: block; margin: 0 5px 6px; border: 1px dashed #b7c8d9; border-radius: 6px; padding: 5px; color: #0f766e; font-size: .72rem; font-weight: 800; text-align: center; }
 .week-closed-label { display: block; margin: 0 5px 6px; border-radius: 6px; padding: 5px; background: #d1d5db; color: #475569; font-size: .72rem; font-weight: 800; text-align: center; }
 .reception-panel { width: min(760px, calc(100vw - 32px)); }

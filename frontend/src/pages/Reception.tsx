@@ -18,6 +18,11 @@ function localDateValue(value = new Date()) {
 const today = localDateValue();
 const receptionStatuses = ["scheduled", "confirmed", "arrived", "in_progress", "completed", "cancelled", "no_show"];
 const weekdayLabels = ["Ned", "Pon", "Uto", "Sri", "Čet", "Pet", "Sub"];
+const blockingReceptionStatuses = new Set(["scheduled", "confirmed", "arrived", "in_progress", "waiting_for_result", "follow_up_needed", "rescheduled"]);
+const halfHourTimes = Array.from({ length: 29 }, (_, index) => {
+  const minutes = 7 * 60 + index * 30;
+  return `${String(Math.floor(minutes / 60)).padStart(2, "0")}:${String(minutes % 60).padStart(2, "0")}`;
+});
 
 function moveDate(value: string, days: number) {
   const next = new Date(`${value}T12:00:00`);
@@ -43,6 +48,21 @@ function mondayOfWeek(value: string) {
 
 function isSunday(value: string) {
   return new Date(`${value}T12:00:00`).getDay() === 0;
+}
+
+function timeToMinutes(value: string) {
+  const [hours, minutes] = value.slice(0, 5).split(":").map(Number);
+  return hours * 60 + minutes;
+}
+
+function freeHalfHourTimes(appointments: Appointment[]) {
+  return halfHourTimes.filter((time) => {
+    const start = timeToMinutes(time);
+    const end = start + 30;
+    return !appointments.some((appointment) => blockingReceptionStatuses.has(appointment.status)
+      && timeToMinutes(appointment.start_time) < end
+      && timeToMinutes(appointment.end_time) > start);
+  });
 }
 
 export function Reception() {
@@ -222,6 +242,7 @@ export function Reception() {
           <div className="reception-week-grid">
             {weekDates.map((weekDate) => {
               const dayAppointments = weekAppointments.filter((appointment) => appointment.date === weekDate);
+              const freeTimes = isSunday(weekDate) ? [] : freeHalfHourTimes(dayAppointments);
               return (
                 <section className={`reception-week-day ${weekDate === today ? "today" : ""} ${isSunday(weekDate) ? "closed" : ""}`} key={weekDate}>
                   <header>
@@ -243,8 +264,18 @@ export function Reception() {
                         </button>
                       </article>
                     ))}
-                    {dayAppointments.length === 0 && <p className="week-empty">Nema termina</p>}
+                    {dayAppointments.length === 0 && <p className="week-empty">Nema upisanih pacijenata</p>}
                   </div>
+                  {!isSunday(weekDate) && (
+                    <div className="week-free-slots">
+                      <strong>Slobodno</strong>
+                      <div>
+                        {freeTimes.map((time) => (
+                          <Link key={time} to={`/appointments/new?date=${weekDate}&start_time=${time}`} state={{ backgroundLocation: location }}>{time}</Link>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                   {isSunday(weekDate) ? <span className="week-closed-label">Neradni dan</span> : (
                     <Link className="week-new-appointment" to={`/appointments/new?date=${weekDate}&start_time=09:00`} state={{ backgroundLocation: location }}>+ Novi</Link>
                   )}
