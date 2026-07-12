@@ -1227,4 +1227,5 @@ Za produkciju postavite `APP_ENV=production`, jak `JWT_SECRET`, kraći `ACCESS_T
 - Pretraživanje po pacijentu, usluzi i statusu
 - Katalog usluga i modularni registar
 - Klinička knjižnica s draft protokolom "Priprema za gastroskopiju" za obvezni liječnički pregled
+- Sedam dodatnih gastroenteroloških operativnih draft protokola za pripremu, uzorke, oporavak, dekontaminaciju i sigurnost terapije
 - JWT prijava i osnovna kontrola uloga
