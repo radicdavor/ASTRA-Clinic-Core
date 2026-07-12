@@ -105,18 +105,29 @@ export function Reception() {
     }
     return true;
   }), [weekData.data, filters.service_id, filters.clinic_id]);
-  const visibleSlots = useMemo(
-    () => slots.data.filter((slot) => Boolean(slot.appointment) || (slot.empty && isHalfHour(slot.time))),
-    [slots.data]
-  );
   const clinicProviders = useMemo(() => providers.data.filter((provider) => !filters.clinic_id || String(provider.clinic_id ?? "") === filters.clinic_id), [providers.data, filters.clinic_id]);
   const clinicRooms = useMemo(() => rooms.data.filter((room) => !filters.clinic_id || String(room.clinic_id ?? "") === filters.clinic_id), [rooms.data, filters.clinic_id]);
   const selectedProvider = useMemo(() => providers.data.find((provider) => String(provider.id) === filters.provider_id), [providers.data, filters.provider_id]);
   const resourcesReady = Boolean(filters.clinic_id && filters.provider_id && filters.room_id && selectedProvider);
+  const visibleSlots = useMemo(
+    () => slots.data.filter((slot) => Boolean(slot.appointment) || (resourcesReady && slot.empty && isHalfHour(slot.time))),
+    [slots.data, resourcesReady]
+  );
   const slotWithinProviderHours = (time: string) => Boolean(selectedProvider
     && timeToMinutes(time) >= timeToMinutes(selectedProvider.work_start)
     && timeToMinutes(time) + 30 <= timeToMinutes(selectedProvider.work_end));
   const bookingParams = (bookingDate: string, startTime: string) => new URLSearchParams({ date: bookingDate, start_time: startTime, clinic_id: filters.clinic_id, provider_id: filters.provider_id, room_id: filters.room_id }).toString();
+
+  function selectClinic(clinicId: string) {
+    const matchingProviders = providers.data.filter((provider) => String(provider.clinic_id ?? "") === clinicId);
+    const matchingRooms = rooms.data.filter((room) => String(room.clinic_id ?? "") === clinicId);
+    setFilters({
+      ...filters,
+      clinic_id: clinicId,
+      provider_id: matchingProviders.length === 1 ? String(matchingProviders[0].id) : "",
+      room_id: matchingRooms.length === 1 ? String(matchingRooms[0].id) : ""
+    });
+  }
 
   function openAppointment(appointment: Appointment) {
     setSelected(appointment);
@@ -212,13 +223,18 @@ export function Reception() {
         <button className={view === "week" ? "active" : ""} onClick={() => setView("week")}>Tjedan</button>
       </div>
 
-      <div className="filters">
-        <select value={filters.clinic_id} onChange={(event) => setFilters({ ...filters, clinic_id: event.target.value, provider_id: "", room_id: "" })}><option value="">Odaberi kliniku</option>{clinics.data.map((clinic) => <option key={clinic.id} value={clinic.id}>{clinic.name}</option>)}</select>
+      <div className="filters reception-resource-filters">
+        <select value={filters.clinic_id} onChange={(event) => selectClinic(event.target.value)}><option value="">Odaberi kliniku</option>{clinics.data.map((clinic) => <option key={clinic.id} value={clinic.id}>{clinic.name}</option>)}</select>
         <select disabled={!filters.clinic_id} value={filters.provider_id} onChange={(event) => setFilters({ ...filters, provider_id: event.target.value })}><option value="">Odaberi liječnika</option>{clinicProviders.map((provider) => <option key={provider.id} value={provider.id}>{provider.full_name} · {provider.work_start.slice(0, 5)}–{provider.work_end.slice(0, 5)}</option>)}</select>
         <select disabled={!filters.clinic_id} value={filters.room_id} onChange={(event) => setFilters({ ...filters, room_id: event.target.value })}><option value="">Odaberi prostoriju</option>{clinicRooms.map((room) => <option key={room.id} value={room.id}>{room.name}</option>)}</select>
-        <select value={filters.service_id} onChange={(event) => setFilters({ ...filters, service_id: event.target.value })}><option value="">Sve usluge</option>{services.data.map((service) => <option key={service.id} value={service.id}>{service.name}</option>)}</select>
-        <select value={filters.status} onChange={(event) => setFilters({ ...filters, status: event.target.value })}><option value="">Svi statusi</option>{receptionStatuses.map((status) => <option key={status} value={status}>{statusLabel(status)}</option>)}</select>
       </div>
+      <details className="secondary-filters">
+        <summary>Dodatni filtri{filters.service_id || filters.status ? " · aktivni" : ""}</summary>
+        <div className="filters">
+          <select value={filters.service_id} onChange={(event) => setFilters({ ...filters, service_id: event.target.value })}><option value="">Sve usluge</option>{services.data.map((service) => <option key={service.id} value={service.id}>{service.name}</option>)}</select>
+          <select value={filters.status} onChange={(event) => setFilters({ ...filters, status: event.target.value })}><option value="">Svi statusi</option>{receptionStatuses.map((status) => <option key={status} value={status}>{statusLabel(status)}</option>)}</select>
+        </div>
+      </details>
       {!resourcesReady && <p className="resource-filter-prompt">Odaberite kliniku, liječnika i prostoriju kako bi se prikazali stvarno slobodni termini.</p>}
       {resourcesReady && selectedProvider && <p className="resource-filter-ready">Slobodni termini po radnom vremenu liječnika: {selectedProvider.work_start.slice(0, 5)}–{selectedProvider.work_end.slice(0, 5)}.</p>}
 

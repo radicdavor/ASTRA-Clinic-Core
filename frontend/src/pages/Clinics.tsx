@@ -12,6 +12,7 @@ export function Clinics() {
   const [clinicName, setClinicName] = useState("");
   const [roomDraft, setRoomDraft] = useState({ name: "", type: "ordinacija", clinic_id: "" });
   const [providerDraft, setProviderDraft] = useState({ full_name: "", specialty: "", email: "", clinic_id: "", work_start: "07:00", work_end: "15:00" });
+  const [activeForm, setActiveForm] = useState<"clinic" | "room" | "provider" | null>(null);
 
   const defaultClinicId = useMemo(() => String(clinics.data[0]?.id ?? ""), [clinics.data]);
   const roomClinicId = roomDraft.clinic_id || defaultClinicId;
@@ -22,6 +23,7 @@ export function Clinics() {
     const created = await api<Clinic>("/api/clinics", { method: "POST", body: JSON.stringify({ name: clinicName }) });
     clinics.setData([...clinics.data, created].sort((a, b) => a.name.localeCompare(b.name)));
     setClinicName("");
+    setActiveForm(null);
   }
 
   async function addRoom(event: FormEvent) {
@@ -29,6 +31,7 @@ export function Clinics() {
     const created = await api<Room>("/api/rooms", { method: "POST", body: JSON.stringify({ ...roomDraft, clinic_id: Number(roomClinicId) }) });
     rooms.setData([...rooms.data, created].sort((a, b) => a.name.localeCompare(b.name)));
     setRoomDraft({ name: "", type: "ordinacija", clinic_id: roomClinicId });
+    setActiveForm(null);
   }
 
   async function addProvider(event: FormEvent) {
@@ -36,6 +39,7 @@ export function Clinics() {
     const created = await api<Provider>("/api/providers", { method: "POST", body: JSON.stringify({ ...providerDraft, clinic_id: Number(providerClinicId) }) });
     providers.setData([...providers.data, created].sort((a, b) => a.full_name.localeCompare(b.full_name)));
     setProviderDraft({ full_name: "", specialty: "", email: "", clinic_id: providerClinicId, work_start: "07:00", work_end: "15:00" });
+    setActiveForm(null);
   }
 
   return (
@@ -47,22 +51,28 @@ export function Clinics() {
         </div>
       </div>
 
-      <div className="clinic-admin-forms">
-        <form className="clinic-admin-form" onSubmit={addClinic}>
+      <div className="clinic-create-actions" aria-label="Dodavanje resursa">
+        <button type="button" className={activeForm === "clinic" ? "active" : ""} onClick={() => setActiveForm(activeForm === "clinic" ? null : "clinic")}><Building2 size={17} /> Dodaj kliniku</button>
+        <button type="button" className={activeForm === "room" ? "active" : ""} onClick={() => setActiveForm(activeForm === "room" ? null : "room")}><DoorOpen size={17} /> Dodaj prostoriju</button>
+        <button type="button" className={activeForm === "provider" ? "active" : ""} onClick={() => setActiveForm(activeForm === "provider" ? null : "provider")}><Stethoscope size={17} /> Dodaj liječnika</button>
+      </div>
+
+      {activeForm && <div className="clinic-admin-forms">
+        {activeForm === "clinic" && <form className="clinic-admin-form" onSubmit={addClinic}>
           <div className="clinic-form-title"><Building2 size={19} /><div><strong>Nova klinika</strong><span>Organizacijska cjelina</span></div></div>
           <label>Naziv<input required minLength={2} value={clinicName} onChange={(event) => setClinicName(event.target.value)} placeholder="npr. Gastroenterologija" /></label>
           <button className="primary">Dodaj kliniku</button>
-        </form>
+        </form>}
 
-        <form className="clinic-admin-form" onSubmit={addRoom}>
+        {activeForm === "room" && <form className="clinic-admin-form" onSubmit={addRoom}>
           <div className="clinic-form-title"><DoorOpen size={19} /><div><strong>Nova prostorija</strong><span>Pripada jednoj klinici</span></div></div>
           <label>Klinika<select required value={roomClinicId} onChange={(event) => setRoomDraft({ ...roomDraft, clinic_id: event.target.value })}><option value="">Odaberi</option>{clinics.data.map((clinic) => <option key={clinic.id} value={clinic.id}>{clinic.name}</option>)}</select></label>
           <label>Naziv<input required value={roomDraft.name} onChange={(event) => setRoomDraft({ ...roomDraft, name: event.target.value })} placeholder="npr. Ordinacija 2" /></label>
           <label>Vrsta<input value={roomDraft.type} onChange={(event) => setRoomDraft({ ...roomDraft, type: event.target.value })} /></label>
           <button className="primary" disabled={!roomClinicId}>Dodaj prostoriju</button>
-        </form>
+        </form>}
 
-        <form className="clinic-admin-form provider-form" onSubmit={addProvider}>
+        {activeForm === "provider" && <form className="clinic-admin-form provider-form" onSubmit={addProvider}>
           <div className="clinic-form-title"><Stethoscope size={19} /><div><strong>Novi liječnik</strong><span>Specijalnost, kontakt i radno vrijeme</span></div></div>
           <label>Klinika<select required value={providerClinicId} onChange={(event) => setProviderDraft({ ...providerDraft, clinic_id: event.target.value })}><option value="">Odaberi</option>{clinics.data.map((clinic) => <option key={clinic.id} value={clinic.id}>{clinic.name}</option>)}</select></label>
           <label>Ime i prezime<input required value={providerDraft.full_name} onChange={(event) => setProviderDraft({ ...providerDraft, full_name: event.target.value })} placeholder="dr. Ime Prezime" /></label>
@@ -73,8 +83,8 @@ export function Clinics() {
             <label>Radi do<input required type="time" min={providerDraft.work_start} value={providerDraft.work_end} onChange={(event) => setProviderDraft({ ...providerDraft, work_end: event.target.value })} /></label>
           </div>
           <button className="primary" disabled={!providerClinicId}>Dodaj liječnika</button>
-        </form>
-      </div>
+        </form>}
+      </div>}
 
       <div className="clinic-resource-grid">
         {clinics.data.map((clinic) => {
