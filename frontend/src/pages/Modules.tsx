@@ -1,18 +1,6 @@
-import { DataTable } from "../components/DataTable";
+import { api } from "../api/client";
+import { ActionButton } from "../components/ActionButton";
+import { HelpHint } from "../components/HelpHint";
 import { useApi } from "../hooks/useApi";
-import { Module } from "../types";
-
-export function Modules() {
-  const { data } = useApi<Module[]>("/api/modules", []);
-  return (
-    <section className="page">
-      <h1>Moduli</h1>
-      <DataTable rows={data} columns={[
-        { header: "Modul", render: (row) => row.name },
-        { header: "Ključ", render: (row) => row.key },
-        { header: "Opis", render: (row) => row.description ?? "-" },
-        { header: "Status", render: (row) => row.enabled ? "Aktivan" : "Isključen" }
-      ]} />
-    </section>
-  );
-}
+import { ModuleRegistryItem } from "../types";
+export function Modules(){const registry=useApi<ModuleRegistryItem[]>("/api/modules/registry",[]);async function change(item:ModuleRegistryItem,action:"enable"|"disable"){await api(`/api/modules/${item.name}/${action}`,{method:"POST"});registry.setData(await api<ModuleRegistryItem[]>("/api/modules/registry"));}return <section className="page module-sdk-page"><header className="page-header"><div><span className="eyebrow">Clinical Module SDK 1.0</span><h1>Moduli <HelpHint title="Sigurni moduli">Moduli su data-only paketi. ASTRA ne izvršava proizvoljan kod iz manifesta.</HelpHint></h1><p>Provjerite ugovor, kompatibilnost i dopuštene mogućnosti prije uključivanja modula.</p></div></header><div className="module-registry">{registry.data.map(item=><article className={`module-contract ${item.valid?"valid":"invalid"}`} key={item.name}><div className="compatibility-rail"><span>{item.compatible?"SDK 1.0":"Nekompatibilno"}</span></div><div><header><div><span>{item.name} · v{item.version}</span><h2>{item.display_name}</h2></div><strong>{item.enabled?"Aktivan":item.installed?"Isključen":"Nije instaliran"}</strong></header><p>{item.description||"Data-only klinički modul."}</p><dl><div><dt>Core</dt><dd>≥ {item.min_core_version}</dd></div><div><dt>Mogućnosti</dt><dd>{item.capabilities.join(", ")||"Samo katalog"}</dd></div><div><dt>Ovlasti</dt><dd>{item.permissions.join(", ")||"Bez dodatnih ovlasti"}</dd></div></dl>{item.errors.map(error=><p className="module-error" key={error}>{error}</p>)}{item.warnings.map(warning=><p className="module-warning" key={warning}>{warning}</p>)}<footer>{item.installed&&item.valid&&(item.enabled?<ActionButton variant="danger" confirmMessage="Isključiti modul?" onClick={()=>change(item,"disable")} helpTitle="Isključi modul" help="Modul ostaje instaliran, ali njegove mogućnosti nisu aktivne.">Isključi</ActionButton>:<ActionButton variant="admin" onClick={()=>change(item,"enable")} helpTitle="Uključi modul" help="Uključuje samo validirani data-only modul.">Uključi</ActionButton>)}</footer></div></article>)}</div></section>}

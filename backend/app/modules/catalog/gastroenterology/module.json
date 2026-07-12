@@ -1,7 +1,11 @@
 {
   "name": "gastroenterology",
-  "display_name": "Gastroenterology",
-  "version": "0.1.0",
+  "display_name": "Gastroenterologija",
+  "version": "1.0.0",
+  "sdk_version": "1.0",
+  "description": "Operativni gastroenterološki workspace, katalog usluga i sigurni data-only radni tokovi.",
+  "min_core_version": "0.1.0",
+  "capabilities": ["services", "material_templates", "workflows", "patient_instructions"],
   "enabled": true,
   "permissions": ["services.read", "appointments.read", "inventory.read"]
 }

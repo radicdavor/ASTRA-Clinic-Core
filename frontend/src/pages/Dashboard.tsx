@@ -101,7 +101,7 @@ export function Dashboard() {
       </div>
 
       <div className="filters">
-        <select value={provider} onChange={(event) => setProvider(event.target.value)}><option value="">Svi lijecnici</option>{providers.data.map((p) => <option key={p.id} value={p.id}>{p.full_name}</option>)}</select>
+        <select value={provider} onChange={(event) => setProvider(event.target.value)}><option value="">Svi lijecnici</option>{providers.data.filter((p) => p.staff_role === "physician").map((p) => <option key={p.id} value={p.id}>{p.full_name}</option>)}</select>
         <select value={room} onChange={(event) => setRoom(event.target.value)}><option value="">Sve sobe</option>{rooms.data.map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}</select>
         <select value={service} onChange={(event) => setService(event.target.value)}><option value="">Sve usluge</option>{services.data.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}</select>
         <select value={status} onChange={(event) => setStatus(event.target.value)}><option value="">Svi statusi</option>{["scheduled", "confirmed", "arrived", "in_progress", "completed", "cancelled"].map((s) => <option key={s} value={s}>{statusLabel(s)}</option>)}</select>

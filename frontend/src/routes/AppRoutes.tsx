@@ -18,6 +18,7 @@ import { Episodes } from "../pages/Episodes";
 import { Inventory } from "../pages/Inventory";
 import { Invoices } from "../pages/Invoices";
 import { Login } from "../pages/Login";
+import { Laboratory } from "../pages/Laboratory";
 import { Modules } from "../pages/Modules";
 import { PatientDetail } from "../pages/PatientDetail";
 import { PatientForm } from "../pages/PatientForm";
@@ -27,6 +28,11 @@ import { Readiness } from "../pages/Readiness";
 import { Reception } from "../pages/Reception";
 import { Services } from "../pages/Services";
 import { Suppliers } from "../pages/Suppliers";
+import { WorkflowTaskDetail } from "../pages/WorkflowTaskDetail";
+import { WorkflowTasks } from "../pages/WorkflowTasks";
+import { KnowledgeProtocolDetail } from "../pages/KnowledgeProtocolDetail";
+import { KnowledgeProtocols } from "../pages/KnowledgeProtocols";
+import { GastroenterologyWorkspace } from "../pages/GastroenterologyWorkspace";
 import { SyntheticReviewWorkspace } from "../program1/pages/SyntheticReviewWorkspace";
 import { SyntheticEvaluationRunner } from "../program1/pages/SyntheticEvaluationRunner";
 
@@ -53,10 +59,16 @@ export function AppRoutes() {
           <Route path="/episodes/new" element={<EpisodeForm />} />
           <Route path="/episodes/:id" element={<EpisodeDetail />} />
           <Route path="/clinical-documents" element={<ClinicalDocuments />} />
+          <Route path="/laboratory" element={<Laboratory />} />
           <Route path="/clinical-documents/:id" element={<ClinicalDocumentDetail />} />
           <Route path="/appointments" element={<Appointments />} />
           <Route path="/appointments/new" element={<AppointmentForm />} />
           <Route path="/appointments/:id" element={<AppointmentDetail />} />
+          <Route path="/workflow" element={<WorkflowTasks />} />
+          <Route path="/workflow/:id" element={<WorkflowTaskDetail />} />
+          <Route path="/knowledge" element={<KnowledgeProtocols />} />
+          <Route path="/knowledge/:id" element={<KnowledgeProtocolDetail />} />
+          <Route path="/gastroenterology" element={<GastroenterologyWorkspace />} />
           <Route path="/services" element={<Services />} />
           <Route path="/clinics" element={<Clinics />} />
           <Route path="/modules" element={<Modules />} />

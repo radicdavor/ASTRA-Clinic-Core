@@ -4,7 +4,7 @@ import pytest
 from pydantic import ValidationError
 
 from app.models.domain import InventoryItem, Module, Service, ServiceMaterialTemplate
-from app.modules.manifest import ModuleManifest, load_catalog_material_templates, load_catalog_module, load_module_manifests
+from app.modules.manifest import ModuleManifest, load_catalog_material_templates, load_catalog_module, load_module_manifests, validate_module_directory
 
 
 def write_json(path, payload) -> None:
@@ -112,3 +112,28 @@ def test_loader_does_not_execute_arbitrary_python_code(tmp_path):
 
     assert manifests[0].name == "safe"
     assert not marker.exists()
+
+
+def test_sdk_validator_accepts_declared_data_only_capability(tmp_path):
+    module_dir = tmp_path / "safe"; module_dir.mkdir()
+    write_json(module_dir / "module.json", {"name":"safe","display_name":"Safe","sdk_version":"1.0","capabilities":["services"]})
+    write_json(module_dir / "services.json", [])
+    report = validate_module_directory(module_dir)
+    assert report["valid"] is True and report["compatible"] is True
+
+
+def test_sdk_validator_rejects_code_execution_capability(tmp_path):
+    module_dir = tmp_path / "unsafe"; module_dir.mkdir()
+    write_json(module_dir / "module.json", {"name":"unsafe","display_name":"Unsafe","capabilities":["python_hooks"]})
+    report = validate_module_directory(module_dir)
+    assert report["valid"] is False
+    assert "Nedopuštene mogućnosti" in report["errors"][0]
+
+
+def test_gastroenterology_suite_v1_manifest_is_sdk_compatible():
+    from pathlib import Path
+    module_dir = Path(__file__).resolve().parents[1] / "app" / "modules" / "catalog" / "gastroenterology"
+    report = validate_module_directory(module_dir)
+    assert report["valid"] is True
+    assert report["manifest"]["version"] == "1.0.0"
+    assert "workflows" in report["manifest"]["capabilities"]

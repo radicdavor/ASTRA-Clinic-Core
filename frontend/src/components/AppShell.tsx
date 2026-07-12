@@ -1,5 +1,5 @@
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
-import { Boxes, Building2, CalendarCheck, CalendarDays, ClipboardCheck, ClipboardList, FileSearch, FileText, KeyRound, LayoutDashboard, LogOut, PackageSearch, Search, Settings, ShieldCheck, Stethoscope, TestTube, Users } from "lucide-react";
+import { BookOpenCheck, Boxes, Building2, CalendarCheck, CalendarDays, CheckSquare2, ClipboardCheck, ClipboardList, FileSearch, FileText, KeyRound, LayoutDashboard, LogOut, PackageSearch, Search, Settings, ShieldCheck, Stethoscope, TestTube, Users } from "lucide-react";
 import { clearToken } from "../api/client";
 import { useApi } from "../hooks/useApi";
 import { ToastHost } from "./ToastHost";
@@ -9,9 +9,13 @@ const nav = [
   { to: "/patients", label: "Pacijenti", icon: Users },
   { to: "/reception", label: "Prijem", icon: CalendarCheck },
   { to: "/clinical-documents", label: "Dokumenti", icon: FileSearch },
+  { to: "/laboratory", label: "Laboratorij", icon: TestTube },
   { to: "/appointments", label: "Termini", icon: CalendarDays },
+  { to: "/workflow", label: "Zadaci", icon: CheckSquare2 },
+  { to: "/knowledge", label: "Klinicka knjiznica", icon: BookOpenCheck },
+  { to: "/gastroenterology", label: "Gastroenterologija", icon: Stethoscope },
   { to: "/services", label: "Usluge", icon: Stethoscope },
-  { to: "/clinics", label: "Klinike i resursi", icon: Building2 },
+  { to: "/clinics", label: "Klinike", icon: Building2 },
   { to: "/modules", label: "Moduli", icon: Settings },
   { to: "/inventory", label: "Inventar", icon: Boxes },
   { to: "/suppliers", label: "Dobavljaci", icon: PackageSearch },

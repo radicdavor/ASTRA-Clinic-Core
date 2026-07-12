@@ -5,6 +5,7 @@ import { ActionButton } from "../components/ActionButton";
 import { DataTable } from "../components/DataTable";
 import { DateInput } from "../components/DateInput";
 import { HelpHint } from "../components/HelpHint";
+import { QuickPatientModal } from "../components/QuickPatientModal";
 import { useApi } from "../hooks/useApi";
 import { ClinicalDocument, Patient } from "../types";
 import { formatDate } from "../utils/date";
@@ -66,6 +67,7 @@ export function ClinicalDocuments() {
   const [filter, setFilter] = useState({ q: "", patient_id: initialPatientId, document_type: "", review: initialReview, review_status: initialReviewStatus });
   const [patientSearch, setPatientSearch] = useState("");
   const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null);
+  const [showQuickPatient, setShowQuickPatient] = useState(false);
   const [draft, setDraft] = useState({
     title: "",
     source_type: "uploaded",
@@ -164,7 +166,7 @@ export function ClinicalDocuments() {
                   <span>{[patient.date_of_birth ? formatDate(patient.date_of_birth) : null, patient.oib, patient.phone, patient.email].filter(Boolean).join(" / ") || "Identitet bez dodatnih podataka"}</span>
                 </button>
               ))}
-              {patientSearch.trim().length >= 2 && patientResults.data.length === 0 && <p>Nema pronadenih pacijenata.</p>}
+              {patientSearch.trim().length >= 2 && patientResults.data.length === 0 && <div className="patient-not-found"><p>Nema pronađenih pacijenata.</p><button type="button" className="primary" onClick={()=>setShowQuickPatient(true)}>Dodaj pacijenta</button></div>}
             </div>
           )}
           <label className="wide-field">Naslov<input required value={draft.title} onChange={(event) => setDraft({ ...draft, title: event.target.value })} /></label>
@@ -180,6 +182,7 @@ export function ClinicalDocuments() {
           </ActionButton>
         </form>
       )}
+      {showQuickPatient&&<QuickPatientModal initialQuery={patientSearch} onClose={()=>setShowQuickPatient(false)} onCreated={patient=>{setSelectedPatient(patient);setPatientSearch(formatPatientName(patient));patientResults.setData([patient]);setShowQuickPatient(false)}}/>}
 
       <DataTable rows={documents.data} columns={[
         { header: "Dokument", render: (row) => <Link to={`/clinical-documents/${row.id}`}>{row.title}</Link> },

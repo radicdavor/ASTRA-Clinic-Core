@@ -79,6 +79,8 @@ def auth_setup(db: Session) -> dict[str, User]:
         "clinical_documents.read",
         "clinical_documents.write",
         "clinical_documents.review",
+        "services.read",
+        "services.write",
         "inventory.read",
         "inventory.write",
         "inventory.adjust",
@@ -98,6 +100,12 @@ def auth_setup(db: Session) -> dict[str, User]:
         "clinical_findings.read",
         "clinical_open_questions.read",
         "clinical_evidence_timeline.read",
+        "workflow_tasks.read",
+        "workflow_tasks.write",
+        "workflow_templates.manage",
+        "knowledge_protocols.read",
+        "knowledge_protocols.write",
+        "knowledge_protocols.review",
         "ai.appointments.create",
     ]
     permissions = {name: Permission(name=name, description=name) for name in permission_names}

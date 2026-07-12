@@ -17,12 +17,21 @@ export type Service = {
   price: string;
   module_id?: number;
   active: boolean;
+  visible_in_catalog?: boolean;
+  clinic_ids?: number[];
+  room_ids?: number[];
 };
+export type LabResult = { id:number; test_name:string; value?:string|null; text_value?:string|null; unit?:string|null; reference_low?:string|null; reference_high?:string|null; flag:"pending"|"normal"|"low"|"high"; resulted_at?:string|null };
+export type LabOrder = { id:number; patient_id:number; episode_id?:number|null; appointment_id?:number|null; external_laboratory?:string|null; status:"ordered"|"collected"|"resulted"|"reviewed"|"cancelled"; ordered_at:string; specimen_type:"blood"|"urine"|"stool"|"other"; collected_at?:string|null; collected_by?:number|null; notes?:string|null; review_conclusion?:string|null; reviewed_at?:string|null; cancelled_at?:string|null; cancelled_by?:number|null; cancellation_reason?:string|null; created_at:string; patient:Patient; results:LabResult[] };
+export type LabHistoryItem = {order_id:number;ordered_at:string;test_name:string;value?:string|null;text_value?:string|null;unit?:string|null;flag:string};
+export type LabTemplate = { id:number; name:string; condition:string; category:string; description?:string|null; tests:Array<{test_name:string;unit?:string|null;reference_low?:number|null;reference_high?:number|null}>; active:boolean };
 
-export type Clinic = { id: number; name: string; active: boolean };
-export type Provider = { id: number; full_name: string; specialty?: string; email?: string; work_start: string; work_end: string; staff_role?: string; clinic_id?: number | null; clinic?: Clinic | null };
-export type Room = { id: number; name: string; type?: string; clinic_id?: number | null; clinic?: Clinic | null };
+export type Clinic = { id: number; name: string; active: boolean; visible_in_catalog?: boolean };
+export type DaySchedule = { enabled: boolean; start: string; end: string };
+export type Provider = { id: number; full_name: string; specialty?: string; email?: string; work_start: string; work_end: string; weekly_working_hours?: Record<string, DaySchedule>; staff_role?: string; clinic_id?: number | null; clinic?: Clinic | null; active?: boolean; available_for_work?: boolean };
+export type Room = { id: number; name: string; type?: string; clinic_id?: number | null; clinic?: Clinic | null; active?: boolean; visible_in_catalog?: boolean };
 export type Module = { id: number; key: string; name: string; description?: string; enabled: boolean };
+export type ModuleRegistryItem = { name: string; display_name: string; version: string; sdk_version: string; description?: string | null; min_core_version: string; capabilities: string[]; permissions: string[]; valid: boolean; compatible: boolean; errors: string[]; warnings: string[]; installed: boolean; enabled: boolean };
 
 export type ClinicalEpisode = {
   id: number;
@@ -117,6 +126,32 @@ export type PatientKnowledgeItem = {
   severity?: string | null;
   requires_attention: boolean;
 };
+
+export type WorkflowChecklistItem = { id: number; task_id: number; label: string; position: number; completed: boolean; completed_by?: number | null; completed_at?: string | null };
+export type WorkflowTemplate = { id: number; key: string; name: string; description?: string | null; default_priority: string; checklist_items: string[]; active: boolean };
+export type WorkflowTask = {
+  id: number;
+  title: string;
+  description?: string | null;
+  status: "open" | "in_progress" | "waiting" | "completed" | "cancelled";
+  priority: "routine" | "important" | "urgent";
+  due_date?: string | null;
+  patient_id: number;
+  episode_id?: number | null;
+  appointment_id?: number | null;
+  assignee_provider_id?: number | null;
+  responsible_role?: string | null;
+  template_id?: number | null;
+  completed_at?: string | null;
+  patient?: Patient;
+  episode?: ClinicalEpisode | null;
+  provider?: Provider | null;
+  checklist: WorkflowChecklistItem[];
+  created_at: string;
+  updated_at: string;
+};
+export type KnowledgeRule = { id: number; protocol_id: number; label: string; condition_text: string; guidance_text: string; evidence_level?: string | null; position: number };
+export type KnowledgeProtocol = { id: number; key: string; title: string; specialty: string; version: string; summary: string; source_title: string; source_url: string; status: "draft" | "reviewed" | "archived"; reviewed_by?: number | null; reviewed_at?: string | null; rules: KnowledgeRule[]; created_at: string; updated_at: string };
 
 export type PatientClinicalSummaryRecord = {
   id: number;

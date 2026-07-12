@@ -1168,18 +1168,35 @@ class ServiceCreate(BaseModel):
     price: Decimal = Decimal("0")
     module_id: int | None = None
     active: bool = True
+    visible_in_catalog: bool = True
 
     model_config = ConfigDict(json_schema_extra={"example": {"name": "Gastroskopija", "code": "GASTRO", "duration_minutes": 30, "price": "120.00", "module_id": None, "active": True}})
 
 
 class ServiceOut(ServiceCreate, ORMModel):
     id: int
+    clinic_ids: list[int] = []
+    room_ids: list[int] = []
+
+
+class ServiceUpdate(BaseModel):
+    duration_minutes: int | None = Field(default=None, ge=10, le=480)
+    price: Decimal | None = Field(default=None, ge=0)
+    room_ids: list[int] | None = None
+
+    @field_validator("duration_minutes")
+    @classmethod
+    def validate_duration_step(cls, value: int | None) -> int | None:
+        if value is not None and value % 10 != 0:
+            raise ValueError("Trajanje mora biti u koracima od 10 minuta")
+        return value
 
 
 class ClinicOut(ORMModel):
     id: int
     name: str
     active: bool
+    visible_in_catalog: bool = True
     created_at: DateTimeType
     updated_at: DateTimeType
 
@@ -1195,9 +1212,11 @@ class ProviderOut(ORMModel):
     email: EmailStr | None = None
     work_start: TimeType
     work_end: TimeType
+    weekly_working_hours: dict[str, dict] = {}
     staff_role: str = "physician"
     clinic_id: int | None = None
     active: bool
+    available_for_work: bool = True
     created_at: DateTimeType
     updated_at: DateTimeType
     clinic: ClinicOut | None = None
@@ -1205,11 +1224,49 @@ class ProviderOut(ORMModel):
 
 class ProviderCreate(BaseModel):
     full_name: str = Field(min_length=2, max_length=160)
-    specialty: str = Field(min_length=2, max_length=120)
+    specialty: str | None = Field(default=None, max_length=120)
     email: EmailStr
+    staff_role: str = "physician"
     clinic_id: int
     work_start: TimeType
     work_end: TimeType
+    weekly_working_hours: dict[str, dict] | None = None
+
+    @field_validator("work_start")
+    @classmethod
+    def validate_work_start(cls, value: TimeType) -> TimeType:
+        if value < TimeType(7, 0):
+            raise ValueError("Radno vrijeme ne može početi prije 07:00")
+        return value
+
+    @field_validator("staff_role")
+    @classmethod
+    def validate_staff_role(cls, value: str) -> str:
+        if value not in {"physician", "nurse", "secretary"}:
+            raise ValueError("Nepoznata uloga osoblja")
+        return value
+
+    @field_validator("weekly_working_hours")
+    @classmethod
+    def validate_weekly_hours(cls, value: dict[str, dict] | None):
+        if value is None:
+            return value
+        if set(value) != {str(day) for day in range(7)}:
+            raise ValueError("Radno vrijeme mora sadržavati svih 7 dana")
+        for day, schedule in value.items():
+            if not isinstance(schedule.get("enabled"), bool):
+                raise ValueError(f"Dan {day} mora imati oznaku radi/ne radi")
+            start, end = schedule.get("start", ""), schedule.get("end", "")
+            if schedule["enabled"]:
+                try:
+                    start_time, end_time = TimeType.fromisoformat(start), TimeType.fromisoformat(end)
+                except ValueError as exc:
+                    raise ValueError(f"Neispravno vrijeme za dan {day}") from exc
+                if start_time >= end_time:
+                    raise ValueError(f"Završetak rada za dan {day} mora biti nakon početka")
+                if start_time < TimeType(7, 0) or end_time > TimeType(20, 0):
+                    raise ValueError(f"Radno vrijeme za dan {day} mora biti između 07:00 i 20:00")
+        return value
 
     @field_validator("work_end")
     @classmethod
@@ -1217,6 +1274,32 @@ class ProviderCreate(BaseModel):
         work_start = info.data.get("work_start")
         if work_start and value <= work_start:
             raise ValueError("Kraj radnog vremena mora biti nakon početka")
+        if value > TimeType(20, 0):
+            raise ValueError("Radno vrijeme ne može završiti nakon 20:00")
+        return value
+
+
+class ProviderScheduleUpdate(BaseModel):
+    weekly_working_hours: dict[str, dict]
+
+    @field_validator("weekly_working_hours")
+    @classmethod
+    def validate_weekly_hours(cls, value: dict[str, dict]):
+        if set(value) != {str(day) for day in range(7)}:
+            raise ValueError("Radno vrijeme mora sadržavati svih 7 dana")
+        for day, schedule in value.items():
+            if not isinstance(schedule.get("enabled"), bool):
+                raise ValueError(f"Dan {day} mora imati oznaku radi/ne radi")
+            start, end = schedule.get("start", ""), schedule.get("end", "")
+            if schedule["enabled"]:
+                try:
+                    start_time, end_time = TimeType.fromisoformat(start), TimeType.fromisoformat(end)
+                except ValueError as exc:
+                    raise ValueError(f"Neispravno vrijeme za dan {day}") from exc
+                if start_time >= end_time:
+                    raise ValueError(f"Završetak rada za dan {day} mora biti nakon početka")
+                if start_time < TimeType(7, 0) or end_time > TimeType(20, 0):
+                    raise ValueError(f"Radno vrijeme za dan {day} mora biti između 07:00 i 20:00")
         return value
 
 
@@ -1226,6 +1309,7 @@ class RoomOut(ORMModel):
     type: str | None = None
     clinic_id: int | None = None
     active: bool
+    visible_in_catalog: bool = True
     created_at: DateTimeType
     updated_at: DateTimeType
     clinic: ClinicOut | None = None
@@ -1863,3 +1947,152 @@ class ServiceMaterialCreate(BaseModel):
     required: bool = True
     variable_quantity_allowed: bool = False
     notes: str | None = None
+
+
+WORKFLOW_TASK_STATUSES = {"open", "in_progress", "waiting", "completed", "cancelled"}
+WORKFLOW_TASK_PRIORITIES = {"routine", "important", "urgent"}
+
+
+class WorkflowChecklistItemCreate(BaseModel):
+    label: str = Field(min_length=1, max_length=220)
+
+
+class WorkflowChecklistItemOut(ORMModel):
+    id: int
+    task_id: int
+    label: str
+    position: int
+    completed: bool
+    completed_by: int | None = None
+    completed_at: DateTimeType | None = None
+
+
+class WorkflowTemplateCreate(BaseModel):
+    key: str = Field(pattern=r"^[a-z0-9_-]+$", min_length=2, max_length=80)
+    name: str = Field(min_length=2, max_length=160)
+    description: str | None = None
+    default_priority: str = "routine"
+    checklist_items: list[str] = []
+    active: bool = True
+
+    @field_validator("default_priority")
+    @classmethod
+    def valid_priority(cls, value: str):
+        if value not in WORKFLOW_TASK_PRIORITIES:
+            raise ValueError("Nepoznat prioritet zadatka")
+        return value
+
+
+class WorkflowTemplateOut(WorkflowTemplateCreate, ORMModel):
+    id: int
+    created_at: DateTimeType
+    updated_at: DateTimeType
+
+
+class WorkflowTaskCreate(BaseModel):
+    title: str = Field(min_length=2, max_length=180)
+    description: str | None = None
+    priority: str = "routine"
+    due_date: DateType | None = None
+    patient_id: int
+    episode_id: int | None = None
+    appointment_id: int | None = None
+    assignee_provider_id: int | None = None
+    responsible_role: str | None = Field(default=None, max_length=60)
+    template_id: int | None = None
+    checklist_items: list[str] = []
+
+    @field_validator("priority")
+    @classmethod
+    def valid_task_priority(cls, value: str):
+        if value not in WORKFLOW_TASK_PRIORITIES:
+            raise ValueError("Nepoznat prioritet zadatka")
+        return value
+
+
+class WorkflowTaskUpdate(BaseModel):
+    title: str | None = Field(default=None, min_length=2, max_length=180)
+    description: str | None = None
+    status: str | None = None
+    priority: str | None = None
+    due_date: DateType | None = None
+    assignee_provider_id: int | None = None
+    responsible_role: str | None = Field(default=None, max_length=60)
+
+    @field_validator("status")
+    @classmethod
+    def valid_status(cls, value: str | None):
+        if value is not None and value not in WORKFLOW_TASK_STATUSES:
+            raise ValueError("Nepoznat status zadatka")
+        return value
+
+    @field_validator("priority")
+    @classmethod
+    def valid_update_priority(cls, value: str | None):
+        if value is not None and value not in WORKFLOW_TASK_PRIORITIES:
+            raise ValueError("Nepoznat prioritet zadatka")
+        return value
+
+
+class WorkflowTaskOut(ORMModel):
+    id: int
+    title: str
+    description: str | None = None
+    status: str
+    priority: str
+    due_date: DateType | None = None
+    patient_id: int
+    episode_id: int | None = None
+    appointment_id: int | None = None
+    assignee_provider_id: int | None = None
+    responsible_role: str | None = None
+    template_id: int | None = None
+    created_by: int | None = None
+    completed_at: DateTimeType | None = None
+    patient: PatientOut | None = None
+    episode: ClinicalEpisodeOut | None = None
+    provider: ProviderOut | None = Field(default=None, validation_alias="assignee_provider")
+    checklist: list[WorkflowChecklistItemOut] = []
+    created_at: DateTimeType
+    updated_at: DateTimeType
+
+
+class KnowledgeRuleCreate(BaseModel):
+    label: str = Field(min_length=2, max_length=220)
+    condition_text: str = Field(min_length=2)
+    guidance_text: str = Field(min_length=2)
+    evidence_level: str | None = Field(default=None, max_length=80)
+
+
+class KnowledgeRuleOut(KnowledgeRuleCreate, ORMModel):
+    id: int
+    protocol_id: int
+    position: int
+
+
+class KnowledgeProtocolCreate(BaseModel):
+    key: str = Field(pattern=r"^[a-z0-9_-]+$", min_length=2, max_length=100)
+    title: str = Field(min_length=2, max_length=220)
+    specialty: str = Field(min_length=2, max_length=100)
+    version: str = Field(min_length=1, max_length=40)
+    summary: str = Field(min_length=2)
+    source_title: str = Field(min_length=2, max_length=260)
+    source_url: str = Field(pattern=r"^https://", min_length=10)
+    rules: list[KnowledgeRuleCreate] = []
+
+
+class KnowledgeProtocolOut(ORMModel):
+    id: int
+    key: str
+    title: str
+    specialty: str
+    version: str
+    summary: str
+    source_title: str
+    source_url: str
+    status: str
+    reviewed_by: int | None = None
+    reviewed_at: DateTimeType | None = None
+    rules: list[KnowledgeRuleOut] = []
+    created_at: DateTimeType
+    updated_at: DateTimeType

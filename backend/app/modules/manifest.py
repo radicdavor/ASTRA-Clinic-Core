@@ -13,10 +13,45 @@ class ModuleManifest(BaseModel):
     name: str
     display_name: str
     version: str = "0.1.0"
+    sdk_version: str = "1.0"
+    description: str | None = None
+    min_core_version: str = "0.1.0"
+    capabilities: list[str] = []
     enabled: bool = False
     permissions: list[str] = []
 
     model_config = ConfigDict(extra="forbid")
+
+    @property
+    def compatible(self) -> bool:
+        return self.sdk_version == "1.0"
+
+
+ALLOWED_CAPABILITIES = {"services", "material_templates", "workflows", "patient_instructions", "knowledge_protocols"}
+
+
+def validate_module_directory(module_directory: Path) -> dict:
+    errors: list[str] = []
+    warnings: list[str] = []
+    path = module_directory / "module.json"
+    if not path.exists():
+        return {"valid": False, "compatible": False, "errors": ["Nedostaje module.json"], "warnings": []}
+    try:
+        manifest = ModuleManifest.model_validate_json(path.read_text(encoding="utf-8"))
+    except Exception as exc:
+        return {"valid": False, "compatible": False, "errors": [str(exc)], "warnings": []}
+    unknown = sorted(set(manifest.capabilities) - ALLOWED_CAPABILITIES)
+    if unknown:
+        errors.append(f"Nedopuštene mogućnosti: {', '.join(unknown)}")
+    if any(value.endswith(".write") or value.startswith("admin.") for value in manifest.permissions):
+        warnings.append("Modul traži write/admin ovlasti; potreban je zaseban sigurnosni pregled.")
+    for capability in manifest.capabilities:
+        if capability not in ALLOWED_CAPABILITIES:
+            continue
+        filename = {"services": "services.json", "material_templates": "material_templates.json", "workflows": "workflows.json", "patient_instructions": "patient_instructions.json", "knowledge_protocols": "knowledge_protocols.json"}[capability]
+        if not (module_directory / filename).exists():
+            errors.append(f"Deklarirana mogućnost nema datoteku: {filename}")
+    return {"valid": not errors and manifest.compatible, "compatible": manifest.compatible, "errors": errors, "warnings": warnings, "manifest": manifest.model_dump()}
 
 
 def load_module_manifests(directory: Path) -> list[ModuleManifest]:

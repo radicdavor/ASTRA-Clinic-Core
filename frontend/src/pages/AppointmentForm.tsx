@@ -1,12 +1,14 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
-import { Link, Location, useLocation, useNavigate, useSearchParams } from "react-router-dom";
+import { Location, useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { api } from "../api/client";
 import { ActionButton } from "../components/ActionButton";
 import { DateInput } from "../components/DateInput";
 import { HelpHint } from "../components/HelpHint";
+import { QuickPatientModal } from "../components/QuickPatientModal";
 import { useApi } from "../hooks/useApi";
 import { Clinic, ClinicalEpisode, Patient, Provider, Room, Service } from "../types";
 import { formatPatientIdentity, formatPatientName, hasStrongPatientIdentifier } from "../utils/patientIdentity";
+import { providerHoursForDate } from "../utils/providerSchedule";
 
 function endTimeFrom(startTime: string, duration: number) {
   const [hours, minutes] = startTime.split(":").map(Number);
@@ -36,22 +38,18 @@ export function AppointmentForm() {
   const rooms = useApi<Room[]>("/api/rooms", []);
   const [clinicId, setClinicId] = useState(requestedClinicId);
   const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null);
+  const [showQuickPatient, setShowQuickPatient] = useState(false);
   const [form, setForm] = useState({ patient_id: "", episode_id: initialEpisodeId ?? "", service_id: "", provider_id: requestedProviderId, room_id: requestedRoomId, date: initialDate, start_time: initialStartTime, end_time: endTimeFrom(initialStartTime, 30), duration_minutes: 30, status: "scheduled", source: "manual", notes: "" });
   const patientEpisodesPath = selectedPatient ? `/api/patients/${selectedPatient.id}/episodes` : "/api/episodes?status=__no_patient__";
   const episodes = useApi<ClinicalEpisode[]>(patientEpisodesPath, []);
   const activeEpisodes = episodes.data.filter((episode) => ["open", "active", "waiting"].includes(episode.status));
   const selectedService = useMemo(() => services.data.find((service) => String(service.id) === form.service_id), [form.service_id, services.data]);
-  const availableProviders = useMemo(() => providers.data.filter((provider) => String(provider.clinic_id ?? "") === clinicId), [providers.data, clinicId]);
+  const availableProviders = useMemo(() => providers.data.filter((provider) => provider.staff_role === "physician" && String(provider.clinic_id ?? "") === clinicId), [providers.data, clinicId]);
   const availableRooms = useMemo(() => rooms.data.filter((room) => String(room.clinic_id ?? "") === clinicId), [rooms.data, clinicId]);
   const selectedProvider = useMemo(() => providers.data.find((provider) => String(provider.id) === form.provider_id), [providers.data, form.provider_id]);
-  const withinProviderHours = !selectedProvider || (form.start_time >= selectedProvider.work_start.slice(0, 5) && form.end_time <= selectedProvider.work_end.slice(0, 5));
+  const selectedProviderHours = selectedProvider ? providerHoursForDate(selectedProvider, form.date) : null;
+  const withinProviderHours = !selectedProviderHours || (selectedProviderHours.enabled && form.start_time >= selectedProviderHours.start && form.end_time <= selectedProviderHours.end);
   const similarPatientWarning = patients.data.length > 1 && !selectedPatient;
-  const createPatientLink = useMemo(() => {
-    const next = new URLSearchParams({ return_to: "appointment" });
-    if (patientQuery.trim()) next.set("name", patientQuery.trim());
-    return `/patients/new?${next.toString()}`;
-  }, [patientQuery]);
-
   useEffect(() => {
     if (!initialPatientId || selectedPatient) return;
     let alive = true;
@@ -119,9 +117,7 @@ export function AppointmentForm() {
           <div className="patient-results wide-field">
             {similarPatientWarning && <p className="form-error">Pronadeno je vise slicnih pacijenata - provjerite datum rodenja/OIB prije odabira.</p>}
             {patients.data.length === 0 && (
-              <p>
-                Nema pronadenog pacijenta. <Link to={createPatientLink}>Kreiraj novog pacijenta</Link>
-              </p>
+              <div className="patient-not-found"><p>Nema pronađenog pacijenta.</p><button type="button" className="primary" onClick={()=>setShowQuickPatient(true)}>Dodaj pacijenta</button></div>
             )}
             {patients.data.map((patient) => (
               <button type="button" key={patient.id} onClick={() => selectPatient(patient)}>
@@ -170,17 +166,18 @@ export function AppointmentForm() {
             <small>Materijali se skidaju pri zavrsetku termina ako usluga ima predlozak potrosnje.</small>
           </div>
         )}
-        <label>Liječnik<select required disabled={!clinicId} value={form.provider_id} onChange={(e) => setForm({ ...form, provider_id: e.target.value })}><option value="">{clinicId ? "Odaberi liječnika" : "Prvo odaberi kliniku"}</option>{availableProviders.map((p) => <option key={p.id} value={p.id}>{p.full_name} · {p.specialty} · {p.work_start.slice(0, 5)}–{p.work_end.slice(0, 5)}</option>)}</select></label>
+        <label>Liječnik<select required disabled={!clinicId} value={form.provider_id} onChange={(e) => setForm({ ...form, provider_id: e.target.value })}><option value="">{clinicId ? "Odaberi liječnika" : "Prvo odaberi kliniku"}</option>{availableProviders.map((p) => { const hours = providerHoursForDate(p, form.date); return <option key={p.id} value={p.id}>{p.full_name} · {p.specialty} · {hours.enabled ? `${hours.start}–${hours.end}` : "ne radi"}</option>; })}</select></label>
         <label>Prostorija<select required disabled={!clinicId} value={form.room_id} onChange={(e) => setForm({ ...form, room_id: e.target.value })}><option value="">{clinicId ? "Odaberi prostoriju" : "Prvo odaberi kliniku"}</option>{availableRooms.map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}</select></label>
         <label>Datum<DateInput required value={form.date} onChange={(value) => setForm({ ...form, date: value })} /></label>
-        <label>Početak<input type="time" min={selectedProvider?.work_start.slice(0, 5)} max={selectedProvider?.work_end.slice(0, 5)} value={form.start_time} onChange={(e) => setForm({ ...form, start_time: e.target.value, end_time: selectedService ? endTimeFrom(e.target.value, selectedService.duration_minutes) : form.end_time })} /></label>
-        <label>Kraj<input type="time" min={selectedProvider?.work_start.slice(0, 5)} max={selectedProvider?.work_end.slice(0, 5)} value={form.end_time} onChange={(e) => setForm({ ...form, end_time: e.target.value })} /></label>
-        {selectedProvider && <p className={`wide-field provider-hours-context ${withinProviderHours ? "" : "form-error"}`}>Radno vrijeme liječnika: {selectedProvider.work_start.slice(0, 5)}–{selectedProvider.work_end.slice(0, 5)}{withinProviderHours ? "" : ". Promijenite vrijeme termina."}</p>}
+        <label>Početak<input type="time" min={selectedProviderHours?.start} max={selectedProviderHours?.end} value={form.start_time} onChange={(e) => setForm({ ...form, start_time: e.target.value, end_time: selectedService ? endTimeFrom(e.target.value, selectedService.duration_minutes) : form.end_time })} /></label>
+        <label>Kraj<input type="time" min={selectedProviderHours?.start} max={selectedProviderHours?.end} value={form.end_time} onChange={(e) => setForm({ ...form, end_time: e.target.value })} /></label>
+        {selectedProviderHours && <p className={`wide-field provider-hours-context ${withinProviderHours ? "" : "form-error"}`}>Radno vrijeme liječnika: {selectedProviderHours.enabled ? `${selectedProviderHours.start}–${selectedProviderHours.end}` : "ne radi odabranog dana"}{withinProviderHours ? "" : ". Promijenite datum ili vrijeme termina."}</p>}
         <label>Trajanje<input type="number" value={form.duration_minutes} onChange={(e) => setForm({ ...form, duration_minutes: Number(e.target.value) })} /></label>
         <ActionButton type="submit" className="primary" variant="create" disabled={!selectedPatient || !clinicId || !form.provider_id || !form.room_id || !withinProviderHours} helpTitle="Spremi termin" help="Termin se može spremiti nakon odabira pacijenta, klinike, liječnika i prostorije te samo unutar radnog vremena liječnika.">
           Spremi termin
         </ActionButton>
       </form>
+      {showQuickPatient&&<QuickPatientModal initialQuery={patientQuery} onClose={()=>setShowQuickPatient(false)} onCreated={patient=>{selectPatient(patient);setShowQuickPatient(false)}}/>}
     </section>
   );
 }

@@ -20,6 +20,9 @@ function mutationSuccessMessage(path: string, method: string) {
   const normalizedMethod = method.toUpperCase();
   if (normalizedMethod === "POST" && path === "/api/patients") return "Pacijent je spremljen.";
   if (normalizedMethod === "POST" && path === "/api/appointments") return "Termin je spremljen.";
+  if (normalizedMethod === "POST" && path === "/api/workflow-tasks") return "Zadatak je spremljen.";
+  if (normalizedMethod === "PATCH" && path.startsWith("/api/workflow-tasks/")) return "Zadatak je azuriran.";
+  if (normalizedMethod === "POST" && path.includes("/checklist/")) return "Checklista je azurirana.";
   if (normalizedMethod === "POST" && path === "/api/episodes") return "Epizoda je spremljena.";
   if (normalizedMethod === "POST" && path === "/api/clinical-documents/upload") return "Klinicki dokument je spremljen.";
   if (normalizedMethod === "POST" && path === "/api/clinical-documents") return "Klinicki dokument je spremljen.";
@@ -56,6 +59,20 @@ function notifyMutation(path: string, method: string, message: string, tone: Toa
   notifyUser(message, tone);
 }
 
+function apiErrorMessage(detail: unknown): string {
+  if (typeof detail === "string") return detail;
+  if (Array.isArray(detail)) {
+    const messages = detail.map((item) => {
+      if (!item || typeof item !== "object") return null;
+      const entry = item as { msg?: string; loc?: Array<string | number> };
+      const field = entry.loc?.at(-1);
+      return entry.msg ? `${field ? `${field}: ` : ""}${entry.msg}` : null;
+    }).filter(Boolean);
+    if (messages.length) return messages.join(" ");
+  }
+  return "Radnja nije spremljena. Provjerite unesene podatke.";
+}
+
 export function getToken() {
   return localStorage.getItem("astra_token");
 }
@@ -89,8 +106,8 @@ export async function api<T>(path: string, options: RequestInit = {}): Promise<T
   }
   if (!response.ok) {
     const error = await response.json().catch(() => ({ detail: "Greska u komunikaciji s API-jem" }));
-    const message = error.detail ?? "Greska u komunikaciji s API-jem";
-    notifyMutation(path, method, Array.isArray(message) ? "Radnja nije spremljena. Provjerite unesene podatke." : message, "error");
+    const message = apiErrorMessage(error.detail);
+    notifyMutation(path, method, message, "error");
     throw new Error(message);
   }
   notifyMutation(path, method, mutationSuccessMessage(path, method));

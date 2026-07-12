@@ -21,6 +21,7 @@ from app.models.domain import (
     StockLocation,
     Supplier,
     User,
+    WorkflowTemplate,
 )
 
 PERMISSIONS = [
@@ -58,6 +59,12 @@ PERMISSIONS = [
     "clinical_findings.read",
     "clinical_open_questions.read",
     "clinical_evidence_timeline.read",
+    "workflow_tasks.read",
+    "workflow_tasks.write",
+    "workflow_templates.manage",
+    "knowledge_protocols.read",
+    "knowledge_protocols.write",
+    "knowledge_protocols.review",
     "ai.appointments.create",
     "ai.patients.create",
     "ai.free_slots.read",
@@ -65,9 +72,9 @@ PERMISSIONS = [
 
 ROLE_PERMISSIONS = {
     "admin": PERMISSIONS,
-    "physician": ["patients.read", "patients.write", "appointments.read", "appointments.write", "episodes.read", "episodes.write", "clinical_plans.read", "clinical_plans.write", "clinical_documents.read", "clinical_documents.write", "clinical_documents.review", "services.read", "inventory.read", "billing.read", "clinical_readiness.snapshots.read", "clinical_readiness.snapshots.write", "clinical_readiness.snapshots.supersede", "clinical_readiness.acknowledgments.read", "clinical_findings.read", "clinical_open_questions.read", "clinical_evidence_timeline.read"],
-    "nurse": ["patients.read", "appointments.read", "appointments.write", "episodes.read", "clinical_plans.read", "clinical_documents.read", "clinical_documents.write", "clinical_documents.review", "inventory.read", "inventory.write", "clinical_readiness.snapshots.read"],
-    "receptionist": ["patients.read", "patients.write", "appointments.read", "appointments.write", "episodes.read", "clinical_plans.read", "clinical_documents.read", "services.read", "billing.read"],
+    "physician": ["patients.read", "patients.write", "appointments.read", "appointments.write", "episodes.read", "episodes.write", "clinical_plans.read", "clinical_plans.write", "clinical_documents.read", "clinical_documents.write", "clinical_documents.review", "services.read", "inventory.read", "billing.read", "clinical_readiness.snapshots.read", "clinical_readiness.snapshots.write", "clinical_readiness.snapshots.supersede", "clinical_readiness.acknowledgments.read", "clinical_findings.read", "clinical_open_questions.read", "clinical_evidence_timeline.read", "workflow_tasks.read", "workflow_tasks.write", "knowledge_protocols.read", "knowledge_protocols.write", "knowledge_protocols.review"],
+    "nurse": ["patients.read", "appointments.read", "appointments.write", "episodes.read", "clinical_plans.read", "clinical_documents.read", "clinical_documents.write", "clinical_documents.review", "inventory.read", "inventory.write", "clinical_readiness.snapshots.read", "workflow_tasks.read", "workflow_tasks.write"],
+    "receptionist": ["patients.read", "patients.write", "appointments.read", "appointments.write", "episodes.read", "clinical_plans.read", "clinical_documents.read", "services.read", "billing.read", "workflow_tasks.read", "workflow_tasks.write"],
     "inventory_manager": ["inventory.read", "inventory.write", "inventory.adjust", "inventory.write_off", "inventory.transfer", "procurement.read", "procurement.write"],
     "billing": ["billing.read", "billing.write", "billing.mark_paid", "patients.read", "appointments.read"],
     "ai_agent": ["ai.appointments.create", "ai.patients.create", "ai.free_slots.read"],
@@ -79,6 +86,8 @@ MODULE_SEEDS = [
     {"key": "procurement", "name": "Nabava", "description": "Dobavljaci i narudzbenice"},
     {"key": "billing", "name": "Naplata", "description": "Priprema racuna i stavki"},
     {"key": "ai_agents", "name": "AI agenti", "description": "API rute za automatizaciju"},
+    {"key": "workflow", "name": "Radni tokovi", "description": "Zadaci, odgovornost, rokovi i checkliste"},
+    {"key": "knowledge", "name": "Klinicka knjižnica", "description": "Izvorno povezani i liječnički pregledani protokoli"},
 ]
 
 GASTRO_SERVICE_SEEDS = [
@@ -127,12 +136,9 @@ def seed_catalog(db: Session) -> None:
         modules[module_seed["key"]] = module
     db.flush()
 
-    active_services = db.scalars(select(Service).where(Service.active.is_(True))).all()
     for room in db.scalars(select(Room)).all():
         if room.clinic_id is None:
             room.clinic_id = aesthetic_clinic.id if "estet" in f"{room.name} {room.type}".lower() else gastro_clinic.id
-        if not room.allowed_services:
-            room.allowed_services = active_services
     for provider in db.scalars(select(Provider)).all():
         provider.staff_role = provider.staff_role or "physician"
         if provider.clinic_id is None:
@@ -200,6 +206,25 @@ def seed(db: Session) -> None:
     gastro_clinic = Clinic(name="Gastroenterologija")
     aesthetic_clinic = Clinic(name="Estetika")
     db.add_all([gastro_clinic, aesthetic_clinic])
+    db.flush()
+
+    for room in db.scalars(select(Room)).all():
+        if not room.allowed_services:
+            prefix = "AEST-%" if room.clinic_id == aesthetic_clinic.id else "GASTRO-%"
+            room.allowed_services = list(db.scalars(select(Service).where(Service.active.is_(True), Service.code.like(prefix))).all())
+    workflow_templates = [
+        {"key": "review-result", "name": "Pregled nalaza", "description": "Sigurna operativna checklista za pregled pristiglog nalaza.", "default_priority": "important", "checklist_items": ["Provjeri identitet pacijenta", "Otvori izvorni dokument", "Evidentiraj da je nalaz pregledan", "Odredi sljedeci ljudski korak"]},
+        {"key": "prepare-appointment", "name": "Priprema termina", "description": "Priprema tima i prostora prije dolaska pacijenta.", "default_priority": "routine", "checklist_items": ["Provjeri termin i uslugu", "Provjeri prostoriju", "Provjeri potrebne materijale"]},
+        {"key": "follow-up", "name": "Organiziraj kontrolu", "description": "Operativna organizacija kontrole bez automatske klinicke odluke.", "default_priority": "routine", "checklist_items": ["Provjeri lijecnicku uputu", "Kontaktiraj pacijenta", "Evidentiraj dogovoreni termin"]},
+    ]
+    for values in workflow_templates:
+        template = db.scalar(select(WorkflowTemplate).where(WorkflowTemplate.key == values["key"]))
+        if template is None:
+            db.add(WorkflowTemplate(**values))
+        else:
+            for field, value in values.items():
+                setattr(template, field, value)
+            template.active = True
     db.flush()
     admin = User(email="admin@astra.local", full_name="ASTRA Administrator", password_hash=hash_password("astra123"), role_id=roles["admin"].id)
     provider = Provider(full_name="dr. Ana Kovač", specialty="Gastroenterologija", clinic_id=gastro_clinic.id)

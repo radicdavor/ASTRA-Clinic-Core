@@ -32,6 +32,13 @@ function unique(values) {
   "src/pages/Episodes.tsx",
   "src/pages/EpisodeForm.tsx",
   "src/pages/EpisodeDetail.tsx",
+  "src/pages/WorkflowTasks.tsx",
+  "src/pages/WorkflowTaskDetail.tsx",
+  "src/pages/KnowledgeProtocols.tsx",
+  "src/pages/KnowledgeProtocolDetail.tsx",
+  "src/pages/GastroenterologyWorkspace.tsx",
+  "src/pages/Services.tsx",
+  "src/components/WorkflowTaskPanel.tsx",
   "src/pages/PurchaseOrders.tsx",
   "src/pages/Invoices.tsx",
   "src/pages/ApiKeys.tsx",
@@ -78,6 +85,39 @@ assertIncludes("src/routes/AppRoutes.tsx", "/patients/:id");
 assertIncludes("src/routes/AppRoutes.tsx", "/episodes");
 assertIncludes("src/routes/AppRoutes.tsx", "/episodes/new");
 assertIncludes("src/routes/AppRoutes.tsx", "/episodes/:id");
+assertIncludes("src/routes/AppRoutes.tsx", "/workflow");
+assertIncludes("src/routes/AppRoutes.tsx", "/workflow/:id");
+assertIncludes("src/routes/AppRoutes.tsx", "/knowledge");
+assertIncludes("src/pages/Modules.tsx", "Clinical Module SDK 1.0");
+assertIncludes("src/pages/Modules.tsx", "ne izvršava proizvoljan kod");
+assertIncludes("src/routes/AppRoutes.tsx", "/gastroenterology");
+assertIncludes("src/pages/GastroenterologyWorkspace.tsx", "nema automatske dijagnoze");
+assertIncludes("src/pages/Services.tsx", "Sve klinike");
+assertIncludes("src/pages/Services.tsx", "Jeste li sigurni");
+assertIncludes("src/pages/Services.tsx", "Trash2");
+assertIncludes("src/pages/Services.tsx", "EyeOff");
+assertIncludes("src/pages/Services.tsx", "include_hidden=true");
+assertIncludes("src/pages/Services.tsx", "Array.from({ length: 48 }");
+assertIncludes("src/pages/Services.tsx", "Spremi promjene");
+assertIncludes("src/pages/Services.tsx", "Prostorije");
+assertIncludes("src/pages/Services.tsx", "room_ids");
+assertIncludes("src/pages/Clinics.tsx", "Sakrij/prikaži kliniku");
+assertIncludes("src/pages/Clinics.tsx", "Obriši prostoriju");
+assertIncludes("src/pages/Clinics.tsx", "Jeste li sigurni");
+assertIncludes("src/pages/Clinics.tsx", "Prostorije klinike");
+assertIncludes("src/pages/Clinics.tsx", "Medicinska sestra/tehničar");
+assertIncludes("src/pages/Clinics.tsx", "Tajnik/administrator");
+assertIncludes("src/pages/Clinics.tsx", "Dodaj osobu");
+assertIncludes("src/pages/Clinics.tsx", "Označi da osoba ne radi");
+assertIncludes("src/pages/Clinics.tsx", "Obriši osobu");
+assertIncludes("src/pages/Clinics.tsx", "resource-tabs");
+assertIncludes("src/pages/Clinics.tsx", "Promijeni radno vrijeme");
+assertIncludes("src/pages/Clinics.tsx", "/schedule");
+assertIncludes("src/pages/Clinics.tsx", "Spremi radno vrijeme");
+assertIncludes("src/utils/providerSchedule.ts", "weekly_working_hours");
+assertIncludes("src/pages/KnowledgeProtocols.tsx", "Ne primjenjuju se automatski na pacijente");
+assertIncludes("src/pages/WorkflowTasks.tsx", "Zadatak nije klinicka odluka");
+assertIncludes("src/pages/WorkflowTaskDetail.tsx", "Sve stavke moraju biti dovrsene");
 assertIncludes("src/routes/AppRoutes.tsx", "/clinical-documents");
 assertIncludes("src/routes/AppRoutes.tsx", "/clinical-documents/:id");
 assertIncludes("src/routes/AppRoutes.tsx", "/api-keys");
@@ -96,8 +136,8 @@ assertNotIncludes("src/components/AppShell.tsx", "Epizode");
 assertIncludes("src/components/SourceBadge.tsx", "/clinical-documents/${source.document_id}");
 assertIncludes("src/components/ToastHost.tsx", "Radnja je spremljena");
 assertIncludes("src/components/ToastHost.tsx", "Zatvori obavijest");
-assertIncludes("src/components/DateInput.tsx", "dd/mm/yyyy");
-assertIncludes("src/utils/date.ts", "`${match[3]}/${match[2]}/${match[1]}`");
+assertIncludes("src/components/DateInput.tsx", "dd. mm. yyyy.");
+assertIncludes("src/utils/date.ts", "`${match[3]}. ${match[2]}. ${match[1]}.`");
 [
   "src/pages/PatientForm.tsx",
   "src/pages/AppointmentForm.tsx",
@@ -110,14 +150,14 @@ assertIncludes("src/api/client.ts", "Pacijent je spremljen.");
 assertIncludes("src/api/client.ts", "import.meta.env.DEV");
 assertIncludes("vite.config.ts", '"/api": "http://127.0.0.1:8000"');
 assertIncludes("vite.config.ts", '"/auth": "http://127.0.0.1:8000"');
-assertIncludes("src/pages/Clinics.tsx", "Klinike i resursi");
+assertIncludes("src/pages/Clinics.tsx", "Organizacija klinika, prostorija i osoblja");
 assertIncludes("src/pages/Clinics.tsx", 'api<Clinic>("/api/clinics"');
 assertIncludes("src/pages/Clinics.tsx", 'api<Room>("/api/rooms"');
 assertIncludes("src/pages/Clinics.tsx", 'api<Provider>("/api/providers"');
 assertIncludes("src/pages/Clinics.tsx", "work_start");
 assertIncludes("src/pages/Clinics.tsx", "work_end");
-assertIncludes("src/pages/Clinics.tsx", "activeForm");
-assertIncludes("src/pages/Clinics.tsx", "clinic-create-actions");
+assertIncludes("src/pages/Clinics.tsx", "weekly_working_hours");
+assertIncludes("src/pages/Clinics.tsx", "resource-master-detail");
 assertIncludes("src/styles.css", ".route-modal-content .help-hint-popover { left: 0; right: auto; }");
 assertIncludes("src/api/client.ts", "Klinicki dokument je spremljen.");
 assertIncludes("src/api/client.ts", "Epizoda je spremljena.");
@@ -161,8 +201,8 @@ assertIncludes("../backend/app/main.py", "search.router");
 assertNotIncludes("../backend/app/main.py", "core.router");
 assertIncludes("src/pages/AppointmentForm.tsx", "Ime, prezime ili OIB");
 assertIncludes("src/pages/AppointmentForm.tsx", "selectedPatient");
-assertIncludes("src/pages/AppointmentForm.tsx", "return_to");
-assertIncludes("src/pages/AppointmentForm.tsx", "appointment");
+assertIncludes("src/pages/AppointmentForm.tsx", "QuickPatientModal");
+assertIncludes("src/pages/AppointmentForm.tsx", "Dodaj pacijenta");
 assertIncludes("src/pages/AppointmentForm.tsx", "/appointments/${appointment.id}");
 assertIncludes("src/pages/AppointmentForm.tsx", "service-context");
 assertIncludes("src/pages/AppointmentForm.tsx", "formatPatientIdentity");
@@ -297,7 +337,7 @@ assertNotIncludes("src/pages/PatientDetail.tsx", "task created");
 assertNotIncludes("src/pages/PatientDetail.tsx", "outcome proven");
 assertNotIncludes("src/pages/PatientDetail.tsx", "patient notified");
 assertNotIncludes("src/pages/PatientDetail.tsx", "automatski zakljuceno");
-assertNotIncludes("src/pages/PatientDetail.tsx", "Task");
+assertIncludes("src/pages/PatientDetail.tsx", "WorkflowTaskPanel");
 assertNotIncludes("src/pages/PatientDetail.tsx", "Outcome Evidence");
 assertNotIncludes("src/pages/PatientDetail.tsx", "Potvrdi nalaz");
 assertNotIncludes("src/pages/PatientDetail.tsx", "Potvrdi timeline");

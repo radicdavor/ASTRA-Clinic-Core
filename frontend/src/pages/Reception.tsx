@@ -10,6 +10,7 @@ import { useApi } from "../hooks/useApi";
 import { Appointment, Clinic, Provider, ReceptionSlot, Room, Service } from "../types";
 import { formatDate } from "../utils/date";
 import { formatPatientName } from "../utils/patientIdentity";
+import { providerHoursForDate } from "../utils/providerSchedule";
 
 function localDateValue(value = new Date()) {
   return `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, "0")}-${String(value.getDate()).padStart(2, "0")}`;
@@ -55,11 +56,13 @@ function timeToMinutes(value: string) {
   return hours * 60 + minutes;
 }
 
-function freeHalfHourTimes(appointments: Appointment[], provider: Provider) {
+function freeHalfHourTimes(appointments: Appointment[], provider: Provider, date: string) {
+  const hours = providerHoursForDate(provider, date);
+  if (!hours.enabled) return [];
   return halfHourTimes.filter((time) => {
     const start = timeToMinutes(time);
     const end = start + 30;
-    const withinWorkingHours = start >= timeToMinutes(provider.work_start) && end <= timeToMinutes(provider.work_end);
+    const withinWorkingHours = start >= timeToMinutes(hours.start) && end <= timeToMinutes(hours.end);
     return withinWorkingHours && !appointments.some((appointment) => blockingReceptionStatuses.has(appointment.status)
       && timeToMinutes(appointment.start_time) < end
       && timeToMinutes(appointment.end_time) > start);
@@ -105,7 +108,7 @@ export function Reception() {
     }
     return true;
   }), [weekData.data, filters.service_id, filters.clinic_id]);
-  const clinicProviders = useMemo(() => providers.data.filter((provider) => !filters.clinic_id || String(provider.clinic_id ?? "") === filters.clinic_id), [providers.data, filters.clinic_id]);
+  const clinicProviders = useMemo(() => providers.data.filter((provider) => provider.staff_role === "physician" && (!filters.clinic_id || String(provider.clinic_id ?? "") === filters.clinic_id)), [providers.data, filters.clinic_id]);
   const clinicRooms = useMemo(() => rooms.data.filter((room) => !filters.clinic_id || String(room.clinic_id ?? "") === filters.clinic_id), [rooms.data, filters.clinic_id]);
   const selectedProvider = useMemo(() => providers.data.find((provider) => String(provider.id) === filters.provider_id), [providers.data, filters.provider_id]);
   const resourcesReady = Boolean(filters.clinic_id && filters.provider_id && filters.room_id && selectedProvider);
@@ -113,13 +116,14 @@ export function Reception() {
     () => slots.data.filter((slot) => Boolean(slot.appointment) || (resourcesReady && slot.empty && isHalfHour(slot.time))),
     [slots.data, resourcesReady]
   );
-  const slotWithinProviderHours = (time: string) => Boolean(selectedProvider
-    && timeToMinutes(time) >= timeToMinutes(selectedProvider.work_start)
-    && timeToMinutes(time) + 30 <= timeToMinutes(selectedProvider.work_end));
+  const selectedProviderHours = selectedProvider ? providerHoursForDate(selectedProvider, date) : null;
+  const slotWithinProviderHours = (time: string) => Boolean(selectedProviderHours?.enabled
+    && timeToMinutes(time) >= timeToMinutes(selectedProviderHours.start)
+    && timeToMinutes(time) + 30 <= timeToMinutes(selectedProviderHours.end));
   const bookingParams = (bookingDate: string, startTime: string) => new URLSearchParams({ date: bookingDate, start_time: startTime, clinic_id: filters.clinic_id, provider_id: filters.provider_id, room_id: filters.room_id }).toString();
 
   function selectClinic(clinicId: string) {
-    const matchingProviders = providers.data.filter((provider) => String(provider.clinic_id ?? "") === clinicId);
+    const matchingProviders = providers.data.filter((provider) => provider.staff_role === "physician" && String(provider.clinic_id ?? "") === clinicId);
     const matchingRooms = rooms.data.filter((room) => String(room.clinic_id ?? "") === clinicId);
     setFilters({
       ...filters,
@@ -225,7 +229,7 @@ export function Reception() {
 
       <div className="filters reception-resource-filters">
         <select value={filters.clinic_id} onChange={(event) => selectClinic(event.target.value)}><option value="">Odaberi kliniku</option>{clinics.data.map((clinic) => <option key={clinic.id} value={clinic.id}>{clinic.name}</option>)}</select>
-        <select disabled={!filters.clinic_id} value={filters.provider_id} onChange={(event) => setFilters({ ...filters, provider_id: event.target.value })}><option value="">Odaberi liječnika</option>{clinicProviders.map((provider) => <option key={provider.id} value={provider.id}>{provider.full_name} · {provider.work_start.slice(0, 5)}–{provider.work_end.slice(0, 5)}</option>)}</select>
+        <select disabled={!filters.clinic_id} value={filters.provider_id} onChange={(event) => setFilters({ ...filters, provider_id: event.target.value })}><option value="">Odaberi liječnika</option>{clinicProviders.map((provider) => { const hours=providerHoursForDate(provider,date); return <option key={provider.id} value={provider.id}>{provider.full_name} · {hours.enabled?`${hours.start}–${hours.end}`:"ne radi"}</option>; })}</select>
         <select disabled={!filters.clinic_id} value={filters.room_id} onChange={(event) => setFilters({ ...filters, room_id: event.target.value })}><option value="">Odaberi prostoriju</option>{clinicRooms.map((room) => <option key={room.id} value={room.id}>{room.name}</option>)}</select>
       </div>
       <details className="secondary-filters">
@@ -236,7 +240,7 @@ export function Reception() {
         </div>
       </details>
       {!resourcesReady && <p className="resource-filter-prompt">Odaberite kliniku, liječnika i prostoriju kako bi se prikazali stvarno slobodni termini.</p>}
-      {resourcesReady && selectedProvider && <p className="resource-filter-ready">Slobodni termini po radnom vremenu liječnika: {selectedProvider.work_start.slice(0, 5)}–{selectedProvider.work_end.slice(0, 5)}.</p>}
+      {resourcesReady && selectedProviderHours && <p className="resource-filter-ready">{selectedProviderHours.enabled ? `Slobodni termini po radnom vremenu liječnika: ${selectedProviderHours.start}–${selectedProviderHours.end}.` : "Liječnik ne radi odabranog dana."}</p>}
 
       {view === "day" ? <div className="reception-grid reception-day-list">
         {visibleSlots.map((slot) => (
@@ -269,7 +273,7 @@ export function Reception() {
           <div className="reception-week-grid">
             {weekDates.map((weekDate) => {
               const dayAppointments = weekAppointments.filter((appointment) => appointment.date === weekDate);
-              const freeTimes = isSunday(weekDate) || !selectedProvider ? [] : freeHalfHourTimes(dayAppointments, selectedProvider);
+              const freeTimes = isSunday(weekDate) || !selectedProvider ? [] : freeHalfHourTimes(dayAppointments, selectedProvider, weekDate);
               return (
                 <section className={`reception-week-day ${weekDate === today ? "today" : ""} ${isSunday(weekDate) ? "closed" : ""}`} key={weekDate}>
                   <header>

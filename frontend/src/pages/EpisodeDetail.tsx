@@ -10,6 +10,7 @@ import { StatusBadge } from "../components/StatusBadge";
 import { WorkspaceHeader } from "../components/workspace/WorkspaceHeader";
 import { WorkspaceLayout } from "../components/workspace/WorkspaceLayout";
 import { WorkspaceSection } from "../components/workspace/WorkspaceSection";
+import { WorkflowTaskPanel } from "../components/WorkflowTaskPanel";
 import { useApi } from "../hooks/useApi";
 import { Appointment, AuditLog, ClinicalDecisionTimelineItem, ClinicalEpisode, ClinicalPlan } from "../types";
 import { formatDate, formatDateTime } from "../utils/date";
@@ -258,6 +259,8 @@ export function EpisodeDetail() {
       <WorkspaceSection title="Nalazi i patologija">
         <p>U ovoj verziji nalazi i patologija nisu zasebni dokumenti. AI prijedlog koristi samo tekst koji lijecnik unese u obrazac prijedloga plana.</p>
       </WorkspaceSection>
+
+      <WorkflowTaskPanel episodeId={episode.data.id} />
 
       <WorkspaceSection title="Audit timeline">
         <AuditTimeline logs={audit.data} />

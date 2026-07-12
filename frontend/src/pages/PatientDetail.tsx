@@ -10,6 +10,7 @@ import { WorkspaceHeader } from "../components/workspace/WorkspaceHeader";
 import { WorkspaceLayout } from "../components/workspace/WorkspaceLayout";
 import { WorkspaceSection } from "../components/workspace/WorkspaceSection";
 import { WorkspaceTabs } from "../components/workspace/WorkspaceTabs";
+import { WorkflowTaskPanel } from "../components/WorkflowTaskPanel";
 import { useApi } from "../hooks/useApi";
 import { Appointment, AuditLog, ClinicalDocument, ClinicalEvidenceTimelineEventPreview, ClinicalEvidenceTimelineListResponse, ClinicalFindingListResponse, ClinicalFindingReadItem, Invoice, Patient, PatientClinicalSummary, PatientClinicalSummaryRecord, PatientKnowledgeItem } from "../types";
 import { formatDate, formatDateTime } from "../utils/date";
@@ -345,6 +346,7 @@ export function PatientDetail() {
         </div>
       </WorkspaceSection>
 
+      <WorkflowTaskPanel patientId={patient.data.id} />
       <div className="patient-knowledge-layout">
         <div>
           <WorkspaceSection title={<>{activeSummaryTitle} <HelpHint title="Sazetak pacijenta">Sazetak je pomocni prikaz i nije izvor istine. Izvor istine su pregledani, source-linked klinicki dokumenti.</HelpHint></>}>

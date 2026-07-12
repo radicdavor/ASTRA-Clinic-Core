@@ -1,9 +1,10 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
-import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { api } from "../api/client";
 import { ActionButton } from "../components/ActionButton";
 import { DateInput } from "../components/DateInput";
 import { HelpHint } from "../components/HelpHint";
+import { QuickPatientModal } from "../components/QuickPatientModal";
 import { useApi } from "../hooks/useApi";
 import { ClinicalEpisode, Patient, Provider } from "../types";
 import { formatPatientIdentity, formatPatientName } from "../utils/patientIdentity";
@@ -21,6 +22,7 @@ export function EpisodeForm() {
   const patients = useApi<Patient[]>(patientSearchPath, []);
   const providers = useApi<Provider[]>("/api/providers", []);
   const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null);
+  const [showQuickPatient, setShowQuickPatient] = useState(false);
   const [form, setForm] = useState({
     title: "",
     episode_type: "general",
@@ -32,12 +34,6 @@ export function EpisodeForm() {
     summary: "",
     clinical_notes: ""
   });
-
-  const createPatientLink = useMemo(() => {
-    const next = new URLSearchParams({ return_to: "episode" });
-    if (patientQuery.trim()) next.set("name", patientQuery.trim());
-    return `/patients/new?${next.toString()}`;
-  }, [patientQuery]);
 
   useEffect(() => {
     if (!initialPatientId || selectedPatient) return;
@@ -89,9 +85,7 @@ export function EpisodeForm() {
         {patientQuery.trim().length >= 2 && !selectedPatient && (
           <div className="patient-results wide-field">
             {patients.data.length === 0 && (
-              <p>
-                Nema pronadenog pacijenta. <Link to={createPatientLink}>Kreiraj novog pacijenta</Link>
-              </p>
+              <div className="patient-not-found"><p>Nema pronađenog pacijenta.</p><button type="button" className="primary" onClick={()=>setShowQuickPatient(true)}>Dodaj pacijenta</button></div>
             )}
             {patients.data.map((patient) => (
               <button type="button" key={patient.id} onClick={() => selectPatient(patient)}>
@@ -114,7 +108,7 @@ export function EpisodeForm() {
         <label>Tip<select value={form.episode_type} onChange={(event) => setForm({ ...form, episode_type: event.target.value })}>{episodeTypes.map((value) => <option key={value} value={value}>{value}</option>)}</select></label>
         <label>Status<select value={form.status} onChange={(event) => setForm({ ...form, status: event.target.value })}>{episodeStatuses.map((value) => <option key={value} value={value}>{value}</option>)}</select></label>
         <label>Prioritet<select value={form.priority} onChange={(event) => setForm({ ...form, priority: event.target.value })}>{priorities.map((value) => <option key={value} value={value}>{value}</option>)}</select></label>
-        <label>Voditelj<select value={form.owner_provider_id} onChange={(event) => setForm({ ...form, owner_provider_id: event.target.value })}><option value="">Bez voditelja</option>{providers.data.map((provider) => <option key={provider.id} value={provider.id}>{provider.full_name}</option>)}</select></label>
+        <label>Voditelj<select value={form.owner_provider_id} onChange={(event) => setForm({ ...form, owner_provider_id: event.target.value })}><option value="">Bez voditelja</option>{providers.data.filter((provider) => provider.staff_role === "physician").map((provider) => <option key={provider.id} value={provider.id}>{provider.full_name}</option>)}</select></label>
         <label>Pocetak<DateInput required value={form.start_date} onChange={(value) => setForm({ ...form, start_date: value })} /></label>
         <label>Kraj<DateInput value={form.end_date} onChange={(value) => setForm({ ...form, end_date: value })} /></label>
         <label className="wide-field">Sazetak<textarea value={form.summary} onChange={(event) => setForm({ ...form, summary: event.target.value })} rows={3} /></label>
@@ -123,6 +117,7 @@ export function EpisodeForm() {
           Spremi epizodu
         </ActionButton>
       </form>
+      {showQuickPatient&&<QuickPatientModal initialQuery={patientQuery} onClose={()=>setShowQuickPatient(false)} onCreated={patient=>{selectPatient(patient);setShowQuickPatient(false)}}/>}
     </section>
   );
 }

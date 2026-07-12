@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, time
 
 from fastapi import HTTPException
 from sqlalchemy import and_, select
@@ -53,8 +53,21 @@ def validate_appointment_payload(
     provider = db.get(Provider, provider_id)
     if not provider:
         raise HTTPException(status_code=404, detail="Liječnik nije pronađen")
-    if start_time < provider.work_start or end_time > provider.work_end:
-        raise HTTPException(status_code=409, detail=f"Termin je izvan radnog vremena liječnika ({provider.work_start.strftime('%H:%M')}–{provider.work_end.strftime('%H:%M')})")
+    if provider.staff_role != "physician":
+        raise HTTPException(status_code=422, detail="Termin se može dodijeliti samo liječniku")
+    if not provider.active or not provider.available_for_work:
+        raise HTTPException(status_code=409, detail="Liječnik trenutačno ne radi")
+    weekly = provider.weekly_working_hours or {}
+    day_schedule = weekly.get(str(appointment_date.weekday()))
+    if day_schedule is not None:
+        if not day_schedule.get("enabled"):
+            raise HTTPException(status_code=409, detail="Liječnik ne radi odabranog dana")
+        provider_start = time.fromisoformat(day_schedule["start"])
+        provider_end = time.fromisoformat(day_schedule["end"])
+    else:
+        provider_start, provider_end = provider.work_start, provider.work_end
+    if start_time < provider_start or end_time > provider_end:
+        raise HTTPException(status_code=409, detail=f"Termin je izvan radnog vremena liječnika ({provider_start.strftime('%H:%M')}–{provider_end.strftime('%H:%M')})")
     if service_id is not None:
         service = db.get(Service, service_id)
         room = db.get(Room, room_id)

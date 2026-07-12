@@ -111,9 +111,11 @@ class Provider(TimestampMixin, Base):
     email: Mapped[str | None] = mapped_column(String(255), unique=True, index=True)
     work_start: Mapped[time] = mapped_column(Time, default=time(7, 0))
     work_end: Mapped[time] = mapped_column(Time, default=time(15, 0))
+    weekly_working_hours: Mapped[dict] = mapped_column(JSON, default=dict)
     staff_role: Mapped[str] = mapped_column(String(60), default="physician", index=True)
     clinic_id: Mapped[int | None] = mapped_column(ForeignKey("clinics.id"))
     active: Mapped[bool] = mapped_column(Boolean, default=True)
+    available_for_work: Mapped[bool] = mapped_column(Boolean, default=True, index=True)
     clinic: Mapped["Clinic | None"] = relationship()
 
 
@@ -124,6 +126,7 @@ class Room(TimestampMixin, Base):
     type: Mapped[str | None] = mapped_column(String(80))
     clinic_id: Mapped[int | None] = mapped_column(ForeignKey("clinics.id"))
     active: Mapped[bool] = mapped_column(Boolean, default=True)
+    visible_in_catalog: Mapped[bool] = mapped_column(Boolean, default=True, index=True)
     clinic: Mapped["Clinic | None"] = relationship()
     allowed_services: Mapped[list["Service"]] = relationship(secondary=room_services, back_populates="allowed_rooms")
 
@@ -133,6 +136,7 @@ class Clinic(TimestampMixin, Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     name: Mapped[str] = mapped_column(String(120), unique=True, index=True)
     active: Mapped[bool] = mapped_column(Boolean, default=True, index=True)
+    visible_in_catalog: Mapped[bool] = mapped_column(Boolean, default=True, index=True)
 
 
 class Module(TimestampMixin, Base):
@@ -181,6 +185,82 @@ class ClinicalPlan(TimestampMixin, Base):
     confirmed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     episode: Mapped[ClinicalEpisode] = relationship()
     confirmer: Mapped[User | None] = relationship()
+
+
+class WorkflowTemplate(TimestampMixin, Base):
+    __tablename__ = "workflow_templates"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    key: Mapped[str] = mapped_column(String(80), unique=True, index=True)
+    name: Mapped[str] = mapped_column(String(160), index=True)
+    description: Mapped[str | None] = mapped_column(Text)
+    default_priority: Mapped[str] = mapped_column(String(40), default="routine")
+    checklist_items: Mapped[list] = mapped_column(JSON, default=list)
+    active: Mapped[bool] = mapped_column(Boolean, default=True, index=True)
+
+
+class WorkflowTask(TimestampMixin, Base):
+    __tablename__ = "workflow_tasks"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    title: Mapped[str] = mapped_column(String(180), index=True)
+    description: Mapped[str | None] = mapped_column(Text)
+    status: Mapped[str] = mapped_column(String(40), default="open", index=True)
+    priority: Mapped[str] = mapped_column(String(40), default="routine", index=True)
+    due_date: Mapped[date | None] = mapped_column(Date, index=True)
+    patient_id: Mapped[int] = mapped_column(ForeignKey("patients.id"), index=True)
+    episode_id: Mapped[int | None] = mapped_column(ForeignKey("clinical_episodes.id"), index=True)
+    appointment_id: Mapped[int | None] = mapped_column(ForeignKey("appointments.id"), index=True)
+    assignee_provider_id: Mapped[int | None] = mapped_column(ForeignKey("providers.id"), index=True)
+    responsible_role: Mapped[str | None] = mapped_column(String(60), index=True)
+    template_id: Mapped[int | None] = mapped_column(ForeignKey("workflow_templates.id"))
+    created_by: Mapped[int | None] = mapped_column(ForeignKey("users.id"))
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    patient: Mapped[Patient] = relationship()
+    episode: Mapped[ClinicalEpisode | None] = relationship()
+    appointment: Mapped["Appointment | None"] = relationship(foreign_keys=[appointment_id])
+    assignee_provider: Mapped[Provider | None] = relationship()
+    template: Mapped[WorkflowTemplate | None] = relationship()
+    checklist: Mapped[list["WorkflowChecklistItem"]] = relationship(back_populates="task", cascade="all, delete-orphan", order_by="WorkflowChecklistItem.position")
+
+
+class WorkflowChecklistItem(TimestampMixin, Base):
+    __tablename__ = "workflow_checklist_items"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    task_id: Mapped[int] = mapped_column(ForeignKey("workflow_tasks.id", ondelete="CASCADE"), index=True)
+    label: Mapped[str] = mapped_column(String(220))
+    position: Mapped[int] = mapped_column(Integer, default=0)
+    completed: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
+    completed_by: Mapped[int | None] = mapped_column(ForeignKey("users.id"))
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    task: Mapped[WorkflowTask] = relationship(back_populates="checklist")
+
+
+class KnowledgeProtocol(TimestampMixin, Base):
+    __tablename__ = "knowledge_protocols"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    key: Mapped[str] = mapped_column(String(100), unique=True, index=True)
+    title: Mapped[str] = mapped_column(String(220), index=True)
+    specialty: Mapped[str] = mapped_column(String(100), index=True)
+    version: Mapped[str] = mapped_column(String(40))
+    summary: Mapped[str] = mapped_column(Text)
+    source_title: Mapped[str] = mapped_column(String(260))
+    source_url: Mapped[str] = mapped_column(Text)
+    status: Mapped[str] = mapped_column(String(40), default="draft", index=True)
+    reviewed_by: Mapped[int | None] = mapped_column(ForeignKey("users.id"))
+    reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_by: Mapped[int | None] = mapped_column(ForeignKey("users.id"))
+    rules: Mapped[list["KnowledgeRule"]] = relationship(back_populates="protocol", cascade="all, delete-orphan", order_by="KnowledgeRule.position")
+
+
+class KnowledgeRule(TimestampMixin, Base):
+    __tablename__ = "knowledge_rules"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    protocol_id: Mapped[int] = mapped_column(ForeignKey("knowledge_protocols.id", ondelete="CASCADE"), index=True)
+    label: Mapped[str] = mapped_column(String(220))
+    condition_text: Mapped[str] = mapped_column(Text)
+    guidance_text: Mapped[str] = mapped_column(Text)
+    evidence_level: Mapped[str | None] = mapped_column(String(80))
+    position: Mapped[int] = mapped_column(Integer, default=0)
+    protocol: Mapped[KnowledgeProtocol] = relationship(back_populates="rules")
 
 
 class ClinicalDocument(TimestampMixin, Base):
@@ -313,6 +393,7 @@ class Service(TimestampMixin, Base):
     price: Mapped[Decimal] = mapped_column(Numeric(12, 2), default=0)
     module_id: Mapped[int | None] = mapped_column(ForeignKey("modules.id"))
     active: Mapped[bool] = mapped_column(Boolean, default=True)
+    visible_in_catalog: Mapped[bool] = mapped_column(Boolean, default=True, index=True)
     module: Mapped[Module | None] = relationship()
     allowed_rooms: Mapped[list[Room]] = relationship(secondary=room_services, back_populates="allowed_services")
 
@@ -495,6 +576,63 @@ event.listen(
         """
     ).execute_if(dialect="sqlite"),
 )
+
+
+class LabTemplate(TimestampMixin, Base):
+    __tablename__ = "lab_templates"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    name: Mapped[str] = mapped_column(String(180), unique=True, index=True)
+    condition: Mapped[str] = mapped_column(String(120), index=True)
+    category: Mapped[str] = mapped_column(String(80), index=True)
+    description: Mapped[str | None] = mapped_column(Text)
+    tests: Mapped[list] = mapped_column(JSON, default=list)
+    active: Mapped[bool] = mapped_column(Boolean, default=True, index=True)
+
+
+class LabOrder(TimestampMixin, Base):
+    __tablename__ = "lab_orders"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    patient_id: Mapped[int] = mapped_column(ForeignKey("patients.id"), index=True)
+    episode_id: Mapped[int | None] = mapped_column(ForeignKey("clinical_episodes.id"), index=True)
+    appointment_id: Mapped[int | None] = mapped_column(ForeignKey("appointments.id"), index=True)
+    template_id: Mapped[int | None] = mapped_column(ForeignKey("lab_templates.id"))
+    external_laboratory: Mapped[str | None] = mapped_column(String(180))
+    status: Mapped[str] = mapped_column(String(40), default="ordered", index=True)
+    ordered_at: Mapped[date] = mapped_column(Date, default=date.today, index=True)
+    specimen_type: Mapped[str] = mapped_column(String(40), default="blood", index=True)
+    collected_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    collected_by: Mapped[int | None] = mapped_column(ForeignKey("users.id"))
+    dispatched_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), index=True)
+    dispatched_by: Mapped[int | None] = mapped_column(ForeignKey("users.id"))
+    external_received_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    notes: Mapped[str | None] = mapped_column(Text)
+    review_conclusion: Mapped[str | None] = mapped_column(Text)
+    created_by: Mapped[int | None] = mapped_column(ForeignKey("users.id"))
+    reviewed_by: Mapped[int | None] = mapped_column(ForeignKey("users.id"))
+    reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    cancelled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    cancelled_by: Mapped[int | None] = mapped_column(ForeignKey("users.id"))
+    cancellation_reason: Mapped[str | None] = mapped_column(Text)
+    patient: Mapped[Patient] = relationship()
+    episode: Mapped[ClinicalEpisode | None] = relationship()
+    appointment: Mapped["Appointment | None"] = relationship()
+    template: Mapped[LabTemplate | None] = relationship()
+    results: Mapped[list["LabResult"]] = relationship(back_populates="order", cascade="all, delete-orphan", order_by="LabResult.id")
+
+
+class LabResult(TimestampMixin, Base):
+    __tablename__ = "lab_results"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    order_id: Mapped[int] = mapped_column(ForeignKey("lab_orders.id", ondelete="CASCADE"), index=True)
+    test_name: Mapped[str] = mapped_column(String(180), index=True)
+    value: Mapped[Decimal | None] = mapped_column(Numeric(14, 4))
+    text_value: Mapped[str | None] = mapped_column(String(240))
+    unit: Mapped[str | None] = mapped_column(String(60))
+    reference_low: Mapped[Decimal | None] = mapped_column(Numeric(14, 4))
+    reference_high: Mapped[Decimal | None] = mapped_column(Numeric(14, 4))
+    flag: Mapped[str] = mapped_column(String(30), default="pending", index=True)
+    resulted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    order: Mapped[LabOrder] = relationship(back_populates="results")
 
 
 class ApiKey(TimestampMixin, Base):

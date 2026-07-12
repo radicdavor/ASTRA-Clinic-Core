@@ -3,7 +3,7 @@ from uuid import uuid4
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api.routes import ai, appointments, audit, auth, catalog, clinical_documents, episodes, inventory, patient_clinical_summary, patients, readiness, reception, search, system
+from app.api.routes import ai, appointments, audit, auth, catalog, clinical_documents, episodes, inventory, knowledge, laboratory, patient_clinical_summary, patients, readiness, reception, search, system, workflow
 from app.core.config import get_settings
 
 settings = get_settings()
@@ -32,6 +32,9 @@ app.include_router(patients.router)
 app.include_router(appointments.router)
 app.include_router(reception.router)
 app.include_router(episodes.router)
+app.include_router(workflow.router)
+app.include_router(knowledge.router)
+app.include_router(laboratory.router)
 app.include_router(catalog.router)
 app.include_router(audit.router)
 app.include_router(search.router)

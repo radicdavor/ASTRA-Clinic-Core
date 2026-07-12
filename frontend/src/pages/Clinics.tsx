@@ -1,106 +1,32 @@
 import { FormEvent, useMemo, useState } from "react";
-import { Building2, Clock3, DoorOpen, Mail, Stethoscope } from "lucide-react";
+import { Building2, Clock3, DoorOpen, Eye, EyeOff, Mail, Search, Trash2, UserRoundCog } from "lucide-react";
 import { api } from "../api/client";
 import { HelpHint } from "../components/HelpHint";
 import { useApi } from "../hooks/useApi";
-import { Clinic, Provider, Room } from "../types";
+import { Clinic, DaySchedule, Provider, Room } from "../types";
 
-export function Clinics() {
-  const clinics = useApi<Clinic[]>("/api/clinics", []);
-  const rooms = useApi<Room[]>("/api/rooms", []);
-  const providers = useApi<Provider[]>("/api/providers", []);
-  const [clinicName, setClinicName] = useState("");
-  const [roomDraft, setRoomDraft] = useState({ name: "", type: "ordinacija", clinic_id: "" });
-  const [providerDraft, setProviderDraft] = useState({ full_name: "", specialty: "", email: "", clinic_id: "", work_start: "07:00", work_end: "15:00" });
-  const [activeForm, setActiveForm] = useState<"clinic" | "room" | "provider" | null>(null);
+const DAYS=["Ponedjeljak","Utorak","Srijeda","Četvrtak","Petak","Subota","Nedjelja"];
+const TIME_OPTIONS=Array.from({length:14},(_,index)=>`${String(7+index).padStart(2,"0")}:00`);
+const defaultWeek=()=>Object.fromEntries(DAYS.map((_,day)=>[String(day),{enabled:day<5,start:"07:00",end:"15:00"}])) as Record<string,DaySchedule>;
+const roleLabel=(role?:string)=>role==="nurse"?"Medicinska sestra/tehničar":role==="secretary"?"Tajnik/administrator":"Liječnik";
+function WeekEditor({value,onChange,onSave,onCancel}:{value:Record<string,DaySchedule>;onChange:(value:Record<string,DaySchedule>)=>void;onSave:()=>void;onCancel:()=>void}){return <div className="weekly-hours schedule-edit-panel"><h3>Promijeni radno vrijeme</h3><p className="field-help">Radno vrijeme klinike: 07:00–20:00.</p>{DAYS.map((label,index)=>{const d=value[String(index)];return <div className={d.enabled?"":"day-off"} key={label}><label><input type="checkbox" checked={d.enabled} onChange={e=>onChange({...value,[String(index)]:{...d,enabled:e.target.checked}})}/>{label}</label><select aria-label={`${label}, početak rada`} disabled={!d.enabled} value={d.start} onChange={e=>{const start=e.target.value;const end=d.end<=start?TIME_OPTIONS.find(time=>time>start)??"20:00":d.end;onChange({...value,[String(index)]:{...d,start,end}})}}>{TIME_OPTIONS.slice(0,-1).map(time=><option key={time} value={time}>{time}</option>)}</select><span>–</span><select aria-label={`${label}, završetak rada`} disabled={!d.enabled} value={d.end} onChange={e=>onChange({...value,[String(index)]:{...d,end:e.target.value}})}>{TIME_OPTIONS.filter(time=>time>d.start).map(time=><option key={time} value={time}>{time}</option>)}</select><small>{d.enabled?"Radi":"Ne radi"}</small></div>})}<footer><button type="button" className="primary" onClick={onSave}>Spremi radno vrijeme</button><button type="button" onClick={onCancel}>Odustani</button></footer></div>}
 
-  const defaultClinicId = useMemo(() => String(clinics.data[0]?.id ?? ""), [clinics.data]);
-  const roomClinicId = roomDraft.clinic_id || defaultClinicId;
-  const providerClinicId = providerDraft.clinic_id || defaultClinicId;
+export function Clinics(){
+  const clinics=useApi<Clinic[]>("/api/clinics?include_hidden=true",[]);const rooms=useApi<Room[]>("/api/rooms?include_hidden=true",[]);const providers=useApi<Provider[]>("/api/providers?include_hidden=true",[]);
+  const [tab,setTab]=useState<"clinics"|"staff">("clinics");const [query,setQuery]=useState("");const [selectedClinicId,setSelectedClinicId]=useState<number|null>(null);const [form,setForm]=useState<"clinic"|"room"|"staff"|null>(null);
+  const [clinicName,setClinicName]=useState("");const [roomDraft,setRoomDraft]=useState({name:"",type:"ordinacija"});const [staff,setStaff]=useState({full_name:"",specialty:"",email:"",staff_role:"physician",clinic_id:""});const [week,setWeek]=useState(defaultWeek());
+  const [scheduleProviderId,setScheduleProviderId]=useState<number|null>(null);const [scheduleWeek,setScheduleWeek]=useState<Record<string,DaySchedule>>(defaultWeek());
+  const visibleClinics=useMemo(()=>clinics.data.filter(c=>c.name.toLowerCase().includes(query.toLowerCase())),[clinics.data,query]);const selectedClinic=clinics.data.find(c=>c.id===selectedClinicId);
+  async function addClinic(e:FormEvent){e.preventDefault();const created=await api<Clinic>("/api/clinics",{method:"POST",body:JSON.stringify({name:clinicName})});clinics.setData([...clinics.data,created].sort((a,b)=>a.name.localeCompare(b.name)));setSelectedClinicId(created.id);setClinicName("");setForm(null)}
+  async function addRoom(e:FormEvent){e.preventDefault();if(!selectedClinicId)return;const created=await api<Room>("/api/rooms",{method:"POST",body:JSON.stringify({...roomDraft,clinic_id:selectedClinicId})});rooms.setData([...rooms.data,created]);setRoomDraft({name:"",type:"ordinacija"});setForm(null)}
+  async function addStaff(e:FormEvent){e.preventDefault();const enabled=Object.values(week).find(d=>d.enabled);const created=await api<Provider>("/api/providers",{method:"POST",body:JSON.stringify({...staff,specialty:staff.specialty.trim()||null,clinic_id:Number(staff.clinic_id),work_start:enabled?.start??"07:00",work_end:enabled?.end??"15:00",weekly_working_hours:week})});providers.setData([...providers.data,created].sort((a,b)=>a.full_name.localeCompare(b.full_name)));setStaff({full_name:"",specialty:"",email:"",staff_role:"physician",clinic_id:""});setWeek(defaultWeek());setForm(null)}
+  async function toggleClinic(x:Clinic){const u=await api<Clinic>(`/api/clinics/${x.id}/visibility`,{method:"POST"});clinics.setData(clinics.data.map(i=>i.id===u.id?u:i))}async function removeClinic(x:Clinic){if(!confirm(`Jeste li sigurni da želite obrisati kliniku „${x.name}“?`))return;await api(`/api/clinics/${x.id}`,{method:"DELETE"});clinics.setData(clinics.data.filter(i=>i.id!==x.id));rooms.setData(rooms.data.filter(r=>r.clinic_id!==x.id));setSelectedClinicId(null)}
+  async function toggleRoom(x:Room){const u=await api<Room>(`/api/rooms/${x.id}/visibility`,{method:"POST"});rooms.setData(rooms.data.map(i=>i.id===u.id?u:i))}async function removeRoom(x:Room){if(!confirm(`Jeste li sigurni da želite obrisati prostoriju „${x.name}“?`))return;await api(`/api/rooms/${x.id}`,{method:"DELETE"});rooms.setData(rooms.data.filter(i=>i.id!==x.id))}
+  async function toggleProvider(x:Provider){const u=await api<Provider>(`/api/providers/${x.id}/availability`,{method:"POST"});providers.setData(providers.data.map(i=>i.id===u.id?u:i))}async function removeProvider(x:Provider){if(!confirm(`Jeste li sigurni da želite obrisati osobu „${x.full_name}“? Povijesni termini ostaju sačuvani.`))return;await api(`/api/providers/${x.id}`,{method:"DELETE"});providers.setData(providers.data.filter(i=>i.id!==x.id))}
+  function editSchedule(x:Provider){setScheduleProviderId(x.id);setScheduleWeek(x.weekly_working_hours??defaultWeek())}async function saveSchedule(){if(!scheduleProviderId)return;const u=await api<Provider>(`/api/providers/${scheduleProviderId}/schedule`,{method:"PATCH",body:JSON.stringify({weekly_working_hours:scheduleWeek})});providers.setData(providers.data.map(i=>i.id===u.id?u:i));setScheduleProviderId(null)}
 
-  async function addClinic(event: FormEvent) {
-    event.preventDefault();
-    const created = await api<Clinic>("/api/clinics", { method: "POST", body: JSON.stringify({ name: clinicName }) });
-    clinics.setData([...clinics.data, created].sort((a, b) => a.name.localeCompare(b.name)));
-    setClinicName("");
-    setActiveForm(null);
-  }
-
-  async function addRoom(event: FormEvent) {
-    event.preventDefault();
-    const created = await api<Room>("/api/rooms", { method: "POST", body: JSON.stringify({ ...roomDraft, clinic_id: Number(roomClinicId) }) });
-    rooms.setData([...rooms.data, created].sort((a, b) => a.name.localeCompare(b.name)));
-    setRoomDraft({ name: "", type: "ordinacija", clinic_id: roomClinicId });
-    setActiveForm(null);
-  }
-
-  async function addProvider(event: FormEvent) {
-    event.preventDefault();
-    const created = await api<Provider>("/api/providers", { method: "POST", body: JSON.stringify({ ...providerDraft, clinic_id: Number(providerClinicId) }) });
-    providers.setData([...providers.data, created].sort((a, b) => a.full_name.localeCompare(b.full_name)));
-    setProviderDraft({ full_name: "", specialty: "", email: "", clinic_id: providerClinicId, work_start: "07:00", work_end: "15:00" });
-    setActiveForm(null);
-  }
-
-  return (
-    <section className="page clinic-admin-page">
-      <div className="page-header">
-        <div>
-          <h1>Klinike i resursi <HelpHint title="Klinike i resursi">Svaka klinika ima svoje prostorije i liječnike. Raspored sprječava istodobno zauzeće liječnika ili prostorije i poštuje radno vrijeme liječnika.</HelpHint></h1>
-          <p>Upravljanje organizacijom koja se koristi u prijemu i terminima.</p>
-        </div>
-      </div>
-
-      <div className="clinic-create-actions" aria-label="Dodavanje resursa">
-        <button type="button" className={activeForm === "clinic" ? "active" : ""} onClick={() => setActiveForm(activeForm === "clinic" ? null : "clinic")}><Building2 size={17} /> Dodaj kliniku</button>
-        <button type="button" className={activeForm === "room" ? "active" : ""} onClick={() => setActiveForm(activeForm === "room" ? null : "room")}><DoorOpen size={17} /> Dodaj prostoriju</button>
-        <button type="button" className={activeForm === "provider" ? "active" : ""} onClick={() => setActiveForm(activeForm === "provider" ? null : "provider")}><Stethoscope size={17} /> Dodaj liječnika</button>
-      </div>
-
-      {activeForm && <div className="clinic-admin-forms">
-        {activeForm === "clinic" && <form className="clinic-admin-form" onSubmit={addClinic}>
-          <div className="clinic-form-title"><Building2 size={19} /><div><strong>Nova klinika</strong><span>Organizacijska cjelina</span></div></div>
-          <label>Naziv<input required minLength={2} value={clinicName} onChange={(event) => setClinicName(event.target.value)} placeholder="npr. Gastroenterologija" /></label>
-          <button className="primary">Dodaj kliniku</button>
-        </form>}
-
-        {activeForm === "room" && <form className="clinic-admin-form" onSubmit={addRoom}>
-          <div className="clinic-form-title"><DoorOpen size={19} /><div><strong>Nova prostorija</strong><span>Pripada jednoj klinici</span></div></div>
-          <label>Klinika<select required value={roomClinicId} onChange={(event) => setRoomDraft({ ...roomDraft, clinic_id: event.target.value })}><option value="">Odaberi</option>{clinics.data.map((clinic) => <option key={clinic.id} value={clinic.id}>{clinic.name}</option>)}</select></label>
-          <label>Naziv<input required value={roomDraft.name} onChange={(event) => setRoomDraft({ ...roomDraft, name: event.target.value })} placeholder="npr. Ordinacija 2" /></label>
-          <label>Vrsta<input value={roomDraft.type} onChange={(event) => setRoomDraft({ ...roomDraft, type: event.target.value })} /></label>
-          <button className="primary" disabled={!roomClinicId}>Dodaj prostoriju</button>
-        </form>}
-
-        {activeForm === "provider" && <form className="clinic-admin-form provider-form" onSubmit={addProvider}>
-          <div className="clinic-form-title"><Stethoscope size={19} /><div><strong>Novi liječnik</strong><span>Specijalnost, kontakt i radno vrijeme</span></div></div>
-          <label>Klinika<select required value={providerClinicId} onChange={(event) => setProviderDraft({ ...providerDraft, clinic_id: event.target.value })}><option value="">Odaberi</option>{clinics.data.map((clinic) => <option key={clinic.id} value={clinic.id}>{clinic.name}</option>)}</select></label>
-          <label>Ime i prezime<input required value={providerDraft.full_name} onChange={(event) => setProviderDraft({ ...providerDraft, full_name: event.target.value })} placeholder="dr. Ime Prezime" /></label>
-          <label>Specijalnost<input required value={providerDraft.specialty} onChange={(event) => setProviderDraft({ ...providerDraft, specialty: event.target.value })} placeholder="npr. gastroenterologija" /></label>
-          <label>E-mail<input required type="email" value={providerDraft.email} onChange={(event) => setProviderDraft({ ...providerDraft, email: event.target.value })} placeholder="lijecnik@klinika.hr" /></label>
-          <div className="working-hours-fields">
-            <label>Radi od<input required type="time" value={providerDraft.work_start} onChange={(event) => setProviderDraft({ ...providerDraft, work_start: event.target.value })} /></label>
-            <label>Radi do<input required type="time" min={providerDraft.work_start} value={providerDraft.work_end} onChange={(event) => setProviderDraft({ ...providerDraft, work_end: event.target.value })} /></label>
-          </div>
-          <button className="primary" disabled={!providerClinicId}>Dodaj liječnika</button>
-        </form>}
-      </div>}
-
-      <div className="clinic-resource-grid">
-        {clinics.data.map((clinic) => {
-          const clinicRooms = rooms.data.filter((room) => room.clinic_id === clinic.id);
-          const clinicProviders = providers.data.filter((provider) => provider.clinic_id === clinic.id);
-          return (
-            <article className="clinic-resource-card" key={clinic.id}>
-              <header><div><Building2 size={18} /><strong>{clinic.name}</strong></div><span>{clinicRooms.length} prostorija · {clinicProviders.length} liječnika</span></header>
-              <div className="clinic-resource-columns">
-                <section><h2><DoorOpen size={16} /> Prostorije</h2>{clinicRooms.map((room) => <div className="resource-line" key={room.id}><strong>{room.name}</strong><span>{room.type || "Prostorija"}</span></div>)}{clinicRooms.length === 0 && <p>Nema prostorija.</p>}</section>
-                <section><h2><Stethoscope size={16} /> Liječnici</h2>{clinicProviders.map((provider) => <div className="resource-line provider-line" key={provider.id}><strong>{provider.full_name}</strong><span>{provider.specialty}</span><small><Mail size={13} /> {provider.email || "E-mail nije upisan"}</small><small><Clock3 size={13} /> {provider.work_start.slice(0, 5)}–{provider.work_end.slice(0, 5)}</small></div>)}{clinicProviders.length === 0 && <p>Nema liječnika.</p>}</section>
-              </div>
-            </article>
-          );
-        })}
-      </div>
-    </section>
-  );
+  return <section className="page clinic-admin-page"><header className="page-header"><div><h1>Klinike</h1><p>Organizacija klinika, prostorija i osoblja.</p></div></header><nav className="resource-tabs" aria-label="Klinike i osoblje"><button className={tab==="clinics"?"active":""} onClick={()=>{setTab("clinics");setForm(null)}}>Klinike</button><button className={tab==="staff"?"active":""} onClick={()=>{setTab("staff");setForm(null)}}>Osoblje</button></nav>
+  {tab==="clinics"?<div className="resource-master-detail clinics-only"><section className="resource-pane"><header><div><span className="eyebrow">Popis</span><h2>Klinike</h2></div><button className="primary" onClick={()=>setForm(form==="clinic"?null:"clinic")}>Dodaj</button></header><div className="clinic-search"><Search size={16}/><input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Pretraži prema imenu klinike"/></div>{form==="clinic"&&<form className="compact-resource-form" onSubmit={addClinic}><input required value={clinicName} onChange={e=>setClinicName(e.target.value)} placeholder="Naziv nove klinike"/><button className="primary">Spremi kliniku</button></form>}<div className="clinic-navigator">{visibleClinics.map(c=><article className={`${selectedClinicId===c.id?"selected":""} ${c.visible_in_catalog===false?"resource-hidden":""}`} key={c.id}><button className="clinic-select" onClick={()=>setSelectedClinicId(c.id)}><Building2 size={17}/><strong>{c.name}</strong><span>{rooms.data.filter(r=>r.clinic_id===c.id).length}</span></button><div className="resource-line-actions"><button title="Sakrij/prikaži kliniku" onClick={()=>toggleClinic(c)}>{c.visible_in_catalog===false?<Eye size={15}/>:<EyeOff size={15}/>}</button><button className="danger-icon" title="Obriši kliniku" onClick={()=>removeClinic(c)}><Trash2 size={15}/></button></div></article>)}</div></section><section className="resource-pane"><header><div><span className="eyebrow">{selectedClinic?.name??"Odaberite kliniku"}</span><h2>Prostorije klinike</h2></div>{selectedClinic&&<button className="primary" onClick={()=>setForm(form==="room"?null:"room")}>Dodaj</button>}</header>{!selectedClinic&&<p className="resource-empty">Kliknite kliniku kako biste prikazali njezine prostorije.</p>}{selectedClinic&&<>{form==="room"&&<form className="compact-resource-form" onSubmit={addRoom}><input required value={roomDraft.name} onChange={e=>setRoomDraft({...roomDraft,name:e.target.value})} placeholder="Ime prostorije"/><input value={roomDraft.type} onChange={e=>setRoomDraft({...roomDraft,type:e.target.value})} placeholder="Vrsta prostorije"/><button className="primary">Spremi prostoriju</button></form>}<div className="room-detail-list">{rooms.data.filter(r=>r.clinic_id===selectedClinic.id).map(r=><article className={r.visible_in_catalog===false?"resource-hidden":""} key={r.id}><div><DoorOpen size={17}/><span><strong>{r.name}</strong><small>{r.type}</small></span></div><div className="resource-line-actions"><button title="Sakrij/prikaži prostoriju" onClick={()=>toggleRoom(r)}>{r.visible_in_catalog===false?<Eye size={15}/>:<EyeOff size={15}/>}</button><button className="danger-icon" title="Obriši prostoriju" onClick={()=>removeRoom(r)}><Trash2 size={15}/></button></div></article>)}</div></>}</section></div>
+  :<section className="resource-pane staff-only"><header><div><span className="eyebrow">Tim</span><h2>Osoblje</h2></div><button className="primary" onClick={()=>setForm(form==="staff"?null:"staff")}>Dodaj osobu</button></header>{form==="staff"&&<form className="staff-week-form" onSubmit={addStaff}><div className="form-grid"><label>Uloga<select value={staff.staff_role} onChange={e=>setStaff({...staff,staff_role:e.target.value,specialty:e.target.value==="physician"?staff.specialty:""})}><option value="physician">Liječnik</option><option value="nurse">Medicinska sestra/tehničar</option><option value="secretary">Tajnik/administrator</option></select></label><label>Klinika<select required value={staff.clinic_id} onChange={e=>setStaff({...staff,clinic_id:e.target.value})}><option value="">Odaberi kliniku</option>{clinics.data.filter(c=>c.visible_in_catalog!==false).map(c=><option key={c.id} value={c.id}>{c.name}</option>)}</select></label><label>Ime i prezime<input required value={staff.full_name} onChange={e=>setStaff({...staff,full_name:e.target.value})}/></label><label>E-mail<input required type="email" value={staff.email} onChange={e=>setStaff({...staff,email:e.target.value})}/></label><label>Specijalnost / radno mjesto<input required={staff.staff_role==="physician"} value={staff.specialty} onChange={e=>setStaff({...staff,specialty:e.target.value})}/></label></div><WeekEditor value={week} onChange={setWeek} onSave={()=>undefined} onCancel={()=>setForm(null)}/><button className="primary">Spremi osobu</button></form>}<div className="staff-roster">{providers.data.map(p=><div className="staff-roster-item" key={p.id}><article className={p.available_for_work===false?"resource-hidden":""}><div className="staff-avatar"><UserRoundCog size={17}/></div><div><strong>{p.full_name}</strong><span>{roleLabel(p.staff_role)}{p.specialty?` · ${p.specialty}`:""} · {clinics.data.find(c=>c.id===p.clinic_id)?.name??"Bez klinike"}</span><small><Mail size={12}/>{p.email||"E-mail nije upisan"}</small></div><div className="staff-week-summary">{DAYS.map((_,day)=>p.weekly_working_hours?.[String(day)]?.enabled?<b key={day}>{day+1}</b>:<i key={day}>{day+1}</i>)}</div><div className="resource-line-actions"><button title="Promijeni radno vrijeme" onClick={()=>editSchedule(p)}><Clock3 size={16}/></button><button title={p.available_for_work===false?"Označi da osoba radi":"Označi da osoba ne radi"} onClick={()=>toggleProvider(p)}>{p.available_for_work===false?<Eye size={16}/>:<EyeOff size={16}/>}</button><button className="danger-icon" title="Obriši osobu" onClick={()=>removeProvider(p)}><Trash2 size={16}/></button></div></article>{scheduleProviderId===p.id&&<WeekEditor value={scheduleWeek} onChange={setScheduleWeek} onSave={saveSchedule} onCancel={()=>setScheduleProviderId(null)}/>}</div>)}</div></section>}
+  </section>;
 }
