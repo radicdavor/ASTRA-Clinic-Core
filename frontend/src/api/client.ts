@@ -2,6 +2,7 @@ import type { ClinicalEvidenceTimelineListResponse, ClinicalFindingDetailRespons
 
 function defaultApiBaseUrl() {
   if (typeof window === "undefined") return "http://localhost:8000";
+  if (import.meta.env.DEV) return window.location.origin;
   return `${window.location.protocol}//${window.location.hostname}:8000`;
 }
 

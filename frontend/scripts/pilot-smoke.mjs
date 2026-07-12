@@ -107,6 +107,9 @@ assertIncludes("src/utils/date.ts", "`${match[3]}/${match[2]}/${match[1]}`");
   "src/pages/PurchaseOrders.tsx",
 ].forEach((file) => assertNotIncludes(file, "type=\"date\""));
 assertIncludes("src/api/client.ts", "Pacijent je spremljen.");
+assertIncludes("src/api/client.ts", "import.meta.env.DEV");
+assertIncludes("vite.config.ts", '"/api": "http://127.0.0.1:8000"');
+assertIncludes("vite.config.ts", '"/auth": "http://127.0.0.1:8000"');
 assertIncludes("src/pages/Clinics.tsx", "Klinike i resursi");
 assertIncludes("src/pages/Clinics.tsx", 'api<Clinic>("/api/clinics"');
 assertIncludes("src/pages/Clinics.tsx", 'api<Room>("/api/rooms"');
