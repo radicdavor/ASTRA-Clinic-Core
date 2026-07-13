@@ -5,7 +5,7 @@ import { useApi } from "../hooks/useApi";
 import { ToastHost } from "./ToastHost";
 
 const nav = [
-  { to: "/", label: "Nadzorna ploca", icon: LayoutDashboard },
+  { to: "/", label: "Danas u poliklinici", icon: LayoutDashboard },
   { to: "/patients", label: "Pacijenti", icon: Users },
   { to: "/reception", label: "Prijem", icon: CalendarCheck },
   { to: "/clinical-documents", label: "Dokumenti", icon: FileSearch },

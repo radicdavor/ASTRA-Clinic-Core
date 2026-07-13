@@ -65,7 +65,7 @@ function apiErrorMessage(detail: unknown): string {
     const messages = detail.map((item) => {
       if (!item || typeof item !== "object") return null;
       const entry = item as { msg?: string; loc?: Array<string | number> };
-      const field = entry.loc?.at(-1);
+      const field = entry.loc?.[entry.loc.length - 1];
       return entry.msg ? `${field ? `${field}: ` : ""}${entry.msg}` : null;
     }).filter(Boolean);
     if (messages.length) return messages.join(" ");

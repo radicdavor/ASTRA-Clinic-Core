@@ -8,7 +8,7 @@ import { AppointmentDetail } from "../pages/AppointmentDetail";
 import { Appointments } from "../pages/Appointments";
 import { AuditLog } from "../pages/AuditLog";
 import { ApiKeys } from "../pages/ApiKeys";
-import { Dashboard } from "../pages/Dashboard";
+import { DailyClinicDashboard } from "../pages/DailyClinicDashboard";
 import { ClinicalDocumentDetail } from "../pages/ClinicalDocumentDetail";
 import { ClinicalDocuments } from "../pages/ClinicalDocuments";
 import { Clinics } from "../pages/Clinics";
@@ -51,7 +51,7 @@ export function AppRoutes() {
       <Routes location={backgroundLocation ?? location}>
         <Route path="/login" element={<Login />} />
         <Route element={<Protected />}>
-          <Route path="/" element={<Dashboard />} />
+          <Route path="/" element={<DailyClinicDashboard />} />
           <Route path="/patients" element={<Patients />} />
           <Route path="/patients/new" element={<PatientForm />} />
           <Route path="/patients/:id" element={<PatientDetail />} />

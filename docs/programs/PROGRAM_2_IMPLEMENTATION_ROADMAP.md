@@ -27,7 +27,7 @@ One canonical workflow: `Prijava → dokumenti → priprema → dolazak → prov
 - [x] D — versioned preparation/forms/reminder contracts
 - [x] E — document ingestion and OCR provider boundary
 - [x] F — unified timeline and source-linked summary projection
-- [ ] G — daily clinic dashboard
+- [x] G — daily clinic dashboard
 - [ ] H — reception check-in
 - [ ] I — encounter workspace
 - [ ] J — consumables, billing, payment and closure orchestration
