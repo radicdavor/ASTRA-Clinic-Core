@@ -117,6 +117,8 @@ def auth_setup(db: Session) -> dict[str, User]:
         "documents.scan",
         "documents.view_source",
         "documents.review",
+        "summary.generate",
+        "summary.review",
     ]
     permissions = {name: Permission(name=name, description=name) for name in permission_names}
     admin_role = Role(name="admin", description="Admin", permissions=list(permissions.values()))

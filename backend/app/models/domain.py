@@ -340,6 +340,38 @@ class DocumentProcessingJob(TimestampMixin, Base):
     document: Mapped[ClinicalDocument] = relationship()
 
 
+class JourneyAISummary(TimestampMixin, Base):
+    __tablename__ = "journey_ai_summaries"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    journey_id: Mapped[int] = mapped_column(ForeignKey("patient_journeys.id", ondelete="CASCADE"), index=True)
+    provider: Mapped[str] = mapped_column(String(80))
+    model_name: Mapped[str] = mapped_column(String(120))
+    status: Mapped[str] = mapped_column(String(40), default="pending_review", index=True)
+    content_json: Mapped[dict] = mapped_column(JSON, default=dict)
+    source_refs_json: Mapped[list] = mapped_column(JSON, default=list)
+    limitations_json: Mapped[list] = mapped_column(JSON, default=list)
+    generated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), index=True)
+    reviewed_by: Mapped[int | None] = mapped_column(ForeignKey("users.id"))
+    reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    journey: Mapped[PatientJourney] = relationship()
+    facts: Mapped[list["JourneyAISummaryFact"]] = relationship(cascade="all, delete-orphan", order_by="JourneyAISummaryFact.id")
+
+
+class JourneyAISummaryFact(TimestampMixin, Base):
+    __tablename__ = "journey_ai_summary_facts"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    summary_id: Mapped[int] = mapped_column(ForeignKey("journey_ai_summaries.id", ondelete="CASCADE"), index=True)
+    statement: Mapped[str] = mapped_column(Text)
+    fact_type: Mapped[str] = mapped_column(String(40), index=True)
+    source_document_id: Mapped[int | None] = mapped_column(ForeignKey("clinical_documents.id", ondelete="SET NULL"), index=True)
+    confidence: Mapped[Decimal | None] = mapped_column(Numeric(5, 4))
+    limitation: Mapped[str | None] = mapped_column(Text)
+    review_status: Mapped[str] = mapped_column(String(40), default="pending_review", index=True)
+    reviewed_by: Mapped[int | None] = mapped_column(ForeignKey("users.id"))
+    reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    source_document: Mapped[ClinicalDocument | None] = relationship()
+
+
 class ClinicalFinding(TimestampMixin, Base):
     __tablename__ = "clinical_findings"
     __table_args__ = (
