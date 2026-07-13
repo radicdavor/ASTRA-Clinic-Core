@@ -26,6 +26,7 @@ def test_daily_dashboard_returns_one_aggregated_row_per_journey(client, db, auth
     assert body["rows"][0]["journey_id"] == journey["id"]
     assert body["rows"][0]["service_name"] == appt.service.name
     assert set(("document_status", "preparation_status", "check_in_status", "billing_status", "payment_status", "blocker_status")).issubset(body["rows"][0])
+    assert isinstance(body["rows"][0]["allowed_actions"], list)
 
 
 def test_daily_dashboard_filters_server_side_and_exposes_blockers(client, db, auth_setup):
@@ -36,12 +37,13 @@ def test_daily_dashboard_filters_server_side_and_exposes_blockers(client, db, au
     client.post(
         f"/api/patient-journeys/{first_journey['id']}/blockers",
         headers=headers(client),
-        json={"blocker_key": "missing_source", "category": "documents", "title": "Nedostaje sintetički dokument", "is_clinical": False},
+        json={"blocker_key": "missing_source", "category": "documents", "title": "Nedostaje sintetički dokument", "details": "Nalaz nije priložen uz termin.", "is_clinical": False},
     )
     response = client.get("/api/dashboard/day?selected_date=2026-07-06&blocker=true&q=Alpha", headers=headers(client))
     assert response.status_code == 200
     assert len(response.json()["rows"]) == 1
     assert response.json()["rows"][0]["blocker_labels"] == ["Nedostaje sintetički dokument"]
+    assert response.json()["rows"][0]["blockers"] == [{"id": response.json()["rows"][0]["blockers"][0]["id"], "title": "Nedostaje sintetički dokument", "details": "Nalaz nije priložen uz termin.", "is_clinical": False}]
 
 
 def test_daily_dashboard_requires_journey_read_permission(client, db, auth_setup):

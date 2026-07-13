@@ -20,6 +20,18 @@ def test_start_check_in_records_arrival_and_structured_items(client,db,auth_setu
     assert {item["category"] for item in body["items"]}=={"identity","documents","preparation","preconditions"}
     detail=client.get(f"/api/patient-journeys/{journey['id']}",headers=headers).json();assert detail["current_stage"]=="check_in_review" and detail["check_in_status"]=="in_review"
 
+def test_arrival_is_recorded_without_starting_check_in(client,db,auth_setup):
+    journey,headers=ready_journey(client,db)
+    response=client.post(f"/api/patient-journeys/{journey['id']}/arrival",headers=headers)
+    assert response.status_code==200 and response.json()["current_stage"]=="arrived"
+    assert response.json()["check_in_status"]=="arrived"
+    assert client.get(f"/api/patient-journeys/{journey['id']}/check-in",headers=headers).status_code==404
+
+def test_arrival_requires_checkin_permission(client,db,auth_setup):
+    journey,_=ready_journey(client,db)
+    denied=client.post(f"/api/patient-journeys/{journey['id']}/arrival",headers={"Authorization":f"Bearer {login_token(client,'limited@test.local')}"})
+    assert denied.status_code==403
+
 def test_reception_may_escalate_but_not_clear_clinical_item(client,db,auth_setup):
     journey,admin=ready_journey(client,db);checkin=client.post(f"/api/patient-journeys/{journey['id']}/check-in",headers=admin).json();clinical=next(item for item in checkin["items"] if item["item_key"]=="anticoagulants");reception=reception_headers(client,db)
     denied=client.patch(f"/api/patient-journeys/{journey['id']}/check-in/items/{clinical['id']}",headers=reception,json={"state":"confirmed"});assert denied.status_code==403

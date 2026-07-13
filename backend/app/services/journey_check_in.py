@@ -28,6 +28,15 @@ def start_check_in(db: Session, journey: PatientJourney, actor: Actor, request: 
     if journey.current_stage == "arrived": transition(db, journey, "check_in_review", actor, request, "Započeta prijemna provjera")
     db.flush(); return item
 
+def record_arrival(db: Session, journey: PatientJourney, actor: Actor, request: Request):
+    if journey.current_stage != "ready_for_arrival":
+        raise HTTPException(409, detail="Dolazak se može evidentirati samo kada tijek pacijenta čeka dolazak")
+    now = datetime.now(timezone.utc)
+    journey.appointment.arrived_at = journey.appointment.arrived_at or now
+    transition(db, journey, "arrived", actor, request, "Pacijent stigao")
+    db.flush()
+    return journey
+
 def update_item(db: Session, journey: PatientJourney, check_in: JourneyCheckIn, item: JourneyCheckInItem, state: str, note: str | None, actor: Actor, request: Request):
     if item.requires_clinician and state in {"confirmed", "not_applicable"} and "checkin.clinical_review" not in actor.permissions: raise HTTPException(403, detail="Kliničku stavku mora potvrditi ovlašteni liječnik")
     before=item.state; item.state=state; item.note=note; item.updated_by=actor.user_id

@@ -59,6 +59,13 @@ def daily_dashboard(
         if blocker is False and open_blockers:
             continue
         appointment = journey.appointment
+        allowed_actions = []
+        if "checkin.update" in actor.permissions and journey.current_stage == "ready_for_arrival":
+            allowed_actions.append("mark_arrived")
+        if "checkin.update" in actor.permissions and journey.current_stage in {"arrived", "check_in_review"}:
+            allowed_actions.append("open_check_in")
+        if "encounter.read" in actor.permissions and journey.current_stage in {"ready_for_clinician", "in_encounter"}:
+            allowed_actions.append("open_encounter")
         rows.append(DailyDashboardRow(
             journey_id=journey.id, appointment_id=appointment.id, time=appointment.start_time,
             patient_id=journey.patient_id,
@@ -75,6 +82,8 @@ def daily_dashboard(
             payment_status=journey.payment_status,
             blocker_status="blocked" if open_blockers else "clear",
             blocker_labels=[item.title for item in open_blockers],
+            blockers=[{"id": item.id, "title": item.title, "details": item.details, "is_clinical": item.is_clinical} for item in open_blockers],
+            allowed_actions=allowed_actions,
         ))
     sections = ["operations", "documents", "preparation", "check_in"]
     if "encounter.read" in actor.permissions:

@@ -2,6 +2,12 @@ from datetime import date, datetime, time
 
 from pydantic import BaseModel, Field
 
+class DailyDashboardBlocker(BaseModel):
+    id: int
+    title: str
+    details: str | None = None
+    is_clinical: bool = False
+
 
 class DailyDashboardRow(BaseModel):
     journey_id: int
@@ -28,6 +34,8 @@ class DailyDashboardRow(BaseModel):
     payment_status: str
     blocker_status: str
     blocker_labels: list[str] = Field(default_factory=list)
+    blockers: list[DailyDashboardBlocker] = Field(default_factory=list)
+    allowed_actions: list[str] = Field(default_factory=list)
 
 
 class DailyDashboardResponse(BaseModel):

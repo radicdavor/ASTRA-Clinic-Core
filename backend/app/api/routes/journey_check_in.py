@@ -6,7 +6,8 @@ from app.auth.dependencies import Actor, require_permission
 from app.core.database import get_db
 from app.models.domain import JourneyCheckIn, JourneyCheckInItem, PatientJourney
 from app.schemas.journey_check_in import CheckInItemUpdate, CheckInOut
-from app.services.journey_check_in import start_check_in, update_item
+from app.schemas.patient_journeys import JourneyOut
+from app.services.journey_check_in import record_arrival, start_check_in, update_item
 
 router=APIRouter(prefix="/api/patient-journeys",tags=["journey-check-in"])
 
@@ -16,6 +17,10 @@ def get_journey(db,id):
     item=db.scalar(journey_query().where(PatientJourney.id==id))
     if not item: raise HTTPException(404,detail="Tijek pacijenta nije pronađen")
     return item
+
+@router.post("/{journey_id}/arrival",response_model=JourneyOut)
+def mark_arrival(journey_id:int,request:Request,db:Session=Depends(get_db),actor:Actor=Depends(require_permission("checkin.update"))):
+    journey=get_journey(db,journey_id);before=snapshot(journey);record_arrival(db,journey,actor,request);audit(db,"patient_arrived","PatientJourney",journey.id,"Pacijent stigao",actor.user_id,actor.actor_type,actor.api_key_id,before,snapshot(journey),request);db.commit();return get_journey(db,journey.id)
 
 @router.post("/{journey_id}/check-in",response_model=CheckInOut)
 def begin(journey_id:int,request:Request,db:Session=Depends(get_db),actor:Actor=Depends(require_permission("checkin.update"))):

@@ -65,7 +65,7 @@ def transition(db:Session,journey:PatientJourney,target:str,actor:Actor,request:
  db.flush();add_event(db,journey,"stage_transition",reason or f"Prijelaz {before} → {target}",actor,request,before,target)
 
 def add_blocker(db:Session,journey:PatientJourney,data:dict,actor:Actor,request:Request)->JourneyBlocker:
- if journey.current_stage in TERMINAL_STAGES: raise HTTPException(409,detail="Zatvorenom putovanju nije moguće dodati blokator")
+ if journey.current_stage in TERMINAL_STAGES: raise HTTPException(409,detail="Zatvorenom tijeku pacijenta nije moguće dodati blokator")
  item=JourneyBlocker(journey_id=journey.id,created_by=actor.user_id,**data);db.add(item);db.flush();add_event(db,journey,"blocker_added",f"Dodan blokator: {item.title}",actor,request,journey.current_stage,journey.current_stage,{"blocker_id":item.id,"clinical":item.is_clinical});return item
 
 def resolve_blocker(db:Session,journey:PatientJourney,item:JourneyBlocker,note:str,actor:Actor,request:Request):

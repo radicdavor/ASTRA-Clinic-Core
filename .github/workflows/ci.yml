@@ -67,6 +67,9 @@ jobs:
       - name: Typecheck frontend
         working-directory: frontend
         run: npm run typecheck
+      - name: Test frontend interactions
+        working-directory: frontend
+        run: npm test -- --run
       - name: Frontend pilot smoke
         working-directory: frontend
         run: npm run smoke

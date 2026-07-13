@@ -1,41 +1,36 @@
-import { AlertTriangle, CheckCircle2, Circle, Clock3, RefreshCw, Search } from "lucide-react";
-import { Link } from "react-router-dom";
+import { AlertTriangle, CheckCircle2, Circle, ClipboardCheck, Clock3, RefreshCw, Search, Stethoscope, UserCheck } from "lucide-react";
+import { Link, useNavigate } from "react-router-dom";
 import { useMemo, useState } from "react";
+import { api } from "../api/client";
 import { DateInput } from "../components/DateInput";
+import { journeyStatusLabel } from "../components/program2/journeyStatus";
 import { useApi } from "../hooks/useApi";
 import type { Provider, Room, Service } from "../types";
 
+type DashboardBlocker = { id: number; title: string; details: string | null; is_clinical: boolean };
 type DashboardRow = {
   journey_id: number; appointment_id: number; time: string; patient_name: string;
   service_id: number; service_name: string; clinician_id: number; clinician_name: string;
   room_id: number; room_name: string; intake_channel: string; workflow_stage: string;
   document_status: string; preparation_status: string; arrival_status: string;
   check_in_status: string; encounter_status: string; consumables_status: string;
-  billing_status: string; payment_status: string; blocker_status: string; blocker_labels: string[];
+  billing_status: string; payment_status: string; blocker_status: string;
+  blocker_labels: string[]; blockers: DashboardBlocker[]; allowed_actions: string[];
 };
 type DashboardResponse = { date: string; refreshed_at: string; visible_sections: string[]; rows: DashboardRow[] };
 
 const today = new Date().toISOString().slice(0, 10);
-const labels: Record<string, string> = {
-  not_requested: "Nije zatraženo", requested: "Zatraženo", partial: "Nedostaje dio", complete: "Dovršeno",
-  review_required: "Treba pregled", blocked: "Blokirano", not_assigned: "Nije dodijeljeno", assigned: "Dodijeljeno",
-  acknowledged: "Potvrđeno", in_progress: "U tijeku", not_arrived: "Nije stigao/la", arrived: "Stigao/la",
-  in_review: "U provjeri", ready: "Spremno", not_started: "Nije započeto", completed: "Dovršeno",
-  aborted: "Prekinuto", not_ready: "Nije spremno", pending: "Čeka potvrdu", confirmed: "Potvrđeno",
-  not_applicable: "Nije primjenjivo", invoice_created: "Račun izrađen", adjustment_required: "Treba ispravak",
-  closed: "Zatvoreno", not_due: "Nije dospjelo", unpaid: "Neplaćeno", partially_paid: "Djelomično plaćeno",
-  paid: "Plaćeno", refunded: "Vraćeno", cancelled: "Otkazano", deferred: "Odgođeno", clear: "Bez blokatora"
-};
 const good = new Set(["complete", "completed", "confirmed", "ready", "paid", "closed", "not_applicable", "clear"]);
 const warning = new Set(["partial", "review_required", "blocked", "adjustment_required", "unpaid", "partially_paid"]);
 
 function JourneyState({ value }: { value: string }) {
   const Icon = good.has(value) ? CheckCircle2 : warning.has(value) ? AlertTriangle : value.includes("progress") || value === "in_review" ? Clock3 : Circle;
   const tone = good.has(value) ? "ok" : warning.has(value) ? "warning" : "neutral";
-  return <span className={`journey-state ${tone}`}><Icon size={14} />{labels[value] ?? value}</span>;
+  return <span className={`journey-state ${tone}`}><Icon size={14} />{journeyStatusLabel(value)}</span>;
 }
 
 export function DailyClinicDashboard() {
+  const navigate = useNavigate();
   const [day, setDay] = useState(today);
   const [clinician, setClinician] = useState("");
   const [room, setRoom] = useState("");
@@ -44,6 +39,8 @@ export function DailyClinicDashboard() {
   const [blocker, setBlocker] = useState("");
   const [query, setQuery] = useState("");
   const [refresh, setRefresh] = useState(0);
+  const [busyJourney, setBusyJourney] = useState<number | null>(null);
+  const [actionError, setActionError] = useState("");
   const params = new URLSearchParams({ selected_date: day, refresh: String(refresh) });
   if (clinician) params.set("clinician_id", clinician);
   if (room) params.set("room_id", room);
@@ -56,6 +53,24 @@ export function DailyClinicDashboard() {
   const rooms = useApi<Room[]>("/api/rooms", []);
   const services = useApi<Service[]>("/api/services", []);
   const counts = useMemo(() => ({ total: board.data.rows.length, blocked: board.data.rows.filter(row => row.blocker_status === "blocked").length, arrived: board.data.rows.filter(row => row.arrival_status === "arrived").length }), [board.data.rows]);
+
+  async function markArrived(row: DashboardRow) {
+    setBusyJourney(row.journey_id); setActionError("");
+    try { await api(`/api/patient-journeys/${row.journey_id}/arrival`, { method: "POST" }); setRefresh(value => value + 1); }
+    catch (error) { setActionError(error instanceof Error ? error.message : "Dolazak nije evidentiran."); }
+    finally { setBusyJourney(null); }
+  }
+
+  async function openReception(row: DashboardRow) {
+    setBusyJourney(row.journey_id); setActionError("");
+    try {
+      if (row.workflow_stage === "arrived") await api(`/api/patient-journeys/${row.journey_id}/check-in`, { method: "POST" });
+      navigate(`/journeys/${row.journey_id}?focus=check-in`);
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : "Prijem nije otvoren.");
+      setBusyJourney(null);
+    }
+  }
 
   return <section className="page clinic-day-page">
     <header className="clinic-day-header">
@@ -72,14 +87,20 @@ export function DailyClinicDashboard() {
       <select aria-label="Blokator" value={blocker} onChange={event => setBlocker(event.target.value)}><option value="">Svi blokatori</option><option value="true">S blokatorom</option><option value="false">Bez blokatora</option></select>
     </div>
     {board.error && <p className="form-error">Dnevni pregled nije učitan: {board.error}</p>}
-    <div className="clinic-day-table-wrap"><table className="clinic-day-table"><thead><tr><th>Vrijeme i pacijent</th><th>Usluga</th><th>Dokumenti</th><th>Priprema</th><th>Dolazak</th><th>Check-in</th><th>Pregled</th><th>Materijal</th><th>Račun</th><th>Plaćanje</th><th>Blokator</th></tr></thead><tbody>
+    {actionError && <p className="form-error" role="alert">Radnja nije izvršena: {actionError}</p>}
+    <div className="clinic-day-table-wrap"><table className="clinic-day-table"><thead><tr><th>Vrijeme i pacijent</th><th>Usluga</th><th>Dokumenti</th><th>Priprema</th><th>Dolazak</th><th>Check-in</th><th>Pregled</th><th>Materijal</th><th>Račun</th><th>Plaćanje</th><th>Razlog blokade</th><th>Sljedeća radnja</th></tr></thead><tbody>
       {board.data.rows.map(row => <tr key={row.journey_id} className={row.blocker_status === "blocked" ? "has-blocker" : ""}>
         <td><span className="patient-time">{row.time.slice(0,5)}</span><Link to={`/journeys/${row.journey_id}`}>{row.patient_name}</Link><small>{row.clinician_name} · {row.room_name}</small></td>
         <td><strong>{row.service_name}</strong><small>{row.intake_channel === "ai_secretary" ? "AI tajnica" : row.intake_channel === "web" ? "Web" : "Ručni unos"}</small></td>
         <td><JourneyState value={row.document_status}/></td><td><JourneyState value={row.preparation_status}/></td><td><JourneyState value={row.arrival_status}/></td><td><JourneyState value={row.check_in_status}/></td><td><JourneyState value={row.encounter_status}/></td><td><JourneyState value={row.consumables_status}/></td><td><JourneyState value={row.billing_status}/></td><td><JourneyState value={row.payment_status}/></td>
-        <td>{row.blocker_status === "blocked" ? <span className="blocker-copy"><AlertTriangle size={15}/>{row.blocker_labels.join(", ")}</span> : <JourneyState value="clear"/>}</td>
+        <td>{row.blocker_status === "blocked" ? <div className="blocker-list">{row.blockers.map(item => <span className="blocker-copy" key={item.id}><AlertTriangle size={15}/><span><strong>{item.title}</strong><small>{item.details || (item.is_clinical ? "Potrebna je odluka ovlaštenog liječnika." : "Potrebna je provjera prije nastavka.")}</small></span></span>)}</div> : <JourneyState value="clear"/>}</td>
+        <td className="clinic-day-actions">
+          {row.allowed_actions.includes("mark_arrived") && <button type="button" disabled={busyJourney === row.journey_id} onClick={() => markArrived(row)}><UserCheck size={15}/>Pacijent stigao</button>}
+          {row.allowed_actions.includes("open_check_in") && <button type="button" disabled={busyJourney === row.journey_id} onClick={() => openReception(row)}><ClipboardCheck size={15}/>Otvori prijem</button>}
+          {row.allowed_actions.includes("open_encounter") && <button type="button" onClick={() => navigate(`/journeys/${row.journey_id}?focus=encounter`)}><Stethoscope size={15}/>Otvori pregled</button>}
+        </td>
       </tr>)}
-      {!board.loading && !board.data.rows.length && <tr><td colSpan={11} className="clinic-day-empty">Za odabrani dan i filtre nema dolazaka.</td></tr>}
+      {!board.loading && !board.data.rows.length && <tr><td colSpan={12} className="clinic-day-empty">Za odabrani dan i filtre nema dolazaka.</td></tr>}
     </tbody></table></div>
   </section>;
 }
