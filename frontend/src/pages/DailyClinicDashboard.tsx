@@ -59,10 +59,10 @@ export function DailyClinicDashboard() {
 
   return <section className="page clinic-day-page">
     <header className="clinic-day-header">
-      <div><span className="eyebrow">Dnevni operativni pregled</span><h1>Danas u poliklinici</h1><p>Jedan red prikazuje cijeli put pacijenta — od dokumenata do plaćanja.</p></div>
+      <div><span className="eyebrow">Dnevni operativni pregled</span><h1>Danas u poliklinici</h1><p>Jedan red prikazuje cijeli tijek pacijenta — od dokumentacije i pripreme do pregleda i plaćanja.</p></div>
       <div className="clinic-day-date"><DateInput value={day} onChange={setDay} required /><button type="button" onClick={() => setRefresh(value => value + 1)}><RefreshCw size={16}/>Osvježi</button></div>
     </header>
-    <div className="clinic-day-summary"><span><b>{counts.total}</b> putovanja</span><span><b>{counts.arrived}</b> stiglo</span><span className={counts.blocked ? "attention" : ""}><b>{counts.blocked}</b> blokirano</span><small>Zadnje osvježenje: {board.data.refreshed_at ? new Date(board.data.refreshed_at).toLocaleTimeString("hr-HR", { hour: "2-digit", minute: "2-digit" }) : "—"}</small></div>
+    <div className="clinic-day-summary"><span><b>{counts.total}</b> dolazaka</span><span><b>{counts.arrived}</b> stiglih</span><span className={counts.blocked ? "attention" : ""}><b>{counts.blocked}</b> s blokadom</span><small>Zadnje osvježenje: {board.data.refreshed_at ? new Date(board.data.refreshed_at).toLocaleTimeString("hr-HR", { hour: "2-digit", minute: "2-digit" }) : "—"}</small></div>
     <div className="clinic-day-filters">
       <label className="clinic-day-search"><Search size={16}/><input aria-label="Pretraži pacijenta" placeholder="Pretraži pacijenta" value={query} onChange={event => setQuery(event.target.value)}/></label>
       <select aria-label="Liječnik" value={clinician} onChange={event => setClinician(event.target.value)}><option value="">Svi liječnici</option>{providers.data.filter(item => item.staff_role === "physician").map(item => <option key={item.id} value={item.id}>{item.full_name}</option>)}</select>
@@ -79,7 +79,7 @@ export function DailyClinicDashboard() {
         <td><JourneyState value={row.document_status}/></td><td><JourneyState value={row.preparation_status}/></td><td><JourneyState value={row.arrival_status}/></td><td><JourneyState value={row.check_in_status}/></td><td><JourneyState value={row.encounter_status}/></td><td><JourneyState value={row.consumables_status}/></td><td><JourneyState value={row.billing_status}/></td><td><JourneyState value={row.payment_status}/></td>
         <td>{row.blocker_status === "blocked" ? <span className="blocker-copy"><AlertTriangle size={15}/>{row.blocker_labels.join(", ")}</span> : <JourneyState value="clear"/>}</td>
       </tr>)}
-      {!board.loading && !board.data.rows.length && <tr><td colSpan={11} className="clinic-day-empty">Za odabrani dan i filtre nema putovanja pacijenata.</td></tr>}
+      {!board.loading && !board.data.rows.length && <tr><td colSpan={11} className="clinic-day-empty">Za odabrani dan i filtre nema dolazaka.</td></tr>}
     </tbody></table></div>
   </section>;
 }
