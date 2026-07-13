@@ -14,6 +14,7 @@ from app.models.domain import (
     InventoryBatch,
     InventoryItem,
     Patient,
+    PatientJourney,
     PatientClinicalSummaryRecord,
     Permission,
     Provider,
@@ -139,6 +140,39 @@ def main() -> None:
 
         if db.scalar(select(Appointment).where(Appointment.patient_id == patient.id, Appointment.date == date.today())) is None:
             db.add(Appointment(patient_id=patient.id, provider_id=provider.id, room_id=room.id, service_id=service.id, episode_id=gerb_episode.id, date=date.today(), start_time=time(9, 0), end_time=time(9, 30), duration_minutes=30, status="scheduled", source="manual"))
+
+        journey_variants = [
+            ("web", "booked", "requested", "assigned", "not_arrived", "not_started", "not_ready", "not_ready", "not_due"),
+            ("ai_secretary", "awaiting_documents", "partial", "acknowledged", "not_arrived", "not_started", "not_ready", "not_ready", "not_due"),
+            ("manual", "preparation_in_progress", "complete", "in_progress", "not_arrived", "not_started", "not_ready", "not_ready", "not_due"),
+            ("web", "ready_for_arrival", "complete", "complete", "not_arrived", "not_started", "not_ready", "not_ready", "not_due"),
+            ("manual", "arrived", "complete", "complete", "arrived", "not_started", "not_ready", "not_ready", "not_due"),
+            ("ai_secretary", "check_in_review", "review_required", "complete", "in_review", "not_started", "not_ready", "not_ready", "not_due"),
+            ("manual", "ready_for_clinician", "complete", "complete", "ready", "not_started", "not_ready", "not_ready", "not_due"),
+            ("web", "in_encounter", "complete", "complete", "ready", "in_progress", "not_ready", "not_ready", "not_due"),
+            ("manual", "procedure_completed", "complete", "complete", "ready", "completed", "pending", "not_ready", "not_due"),
+            ("ai_secretary", "awaiting_billing", "complete", "complete", "ready", "completed", "confirmed", "ready", "not_due"),
+            ("manual", "awaiting_payment", "complete", "complete", "ready", "completed", "not_applicable", "invoice_created", "unpaid"),
+            ("web", "cancelled", "requested", "assigned", "not_arrived", "aborted", "not_applicable", "closed", "cancelled"),
+        ]
+        for index, variant in enumerate(journey_variants, start=1):
+            email = f"synthetic.journey.{index:02d}@example.invalid"
+            synthetic = db.scalar(select(Patient).where(Patient.email == email))
+            if synthetic is None:
+                synthetic = Patient(first_name=f"Sintetički {index:02d}", last_name="Pacijent", email=email)
+                db.add(synthetic); db.flush()
+            appointment = db.scalar(select(Appointment).where(Appointment.patient_id == synthetic.id, Appointment.date == date.today()))
+            if appointment is None:
+                start = time(7 + index // 2, 30 if index % 2 else 0)
+                end_dt = datetime.combine(date.today(), start) + timedelta(minutes=30)
+                appointment = Appointment(patient_id=synthetic.id, provider_id=provider.id, room_id=room.id, service_id=service.id, date=date.today(), start_time=start, end_time=end_dt.time(), duration_minutes=30, status="cancelled" if variant[1] == "cancelled" else "scheduled", source=variant[0])
+                db.add(appointment); db.flush()
+            journey = db.scalar(select(PatientJourney).where(PatientJourney.appointment_id == appointment.id))
+            if journey is None:
+                journey = PatientJourney(patient_id=synthetic.id, appointment_id=appointment.id, intake_channel=variant[0])
+                db.add(journey)
+            journey.current_stage, journey.document_status, journey.preparation_status, journey.check_in_status, journey.encounter_status, journey.consumables_status, journey.billing_status, journey.payment_status = variant[1:]
+            journey.closed_at = datetime.now(timezone.utc) if variant[1] == "cancelled" else None
 
         demo_documents = [
             {

@@ -23,6 +23,14 @@ docker compose exec backend python -m app.demo.reset
 
 Pilot documents:
 
+Program 2 — Unified Patient Journey Workflow:
+
+- [Implementation roadmap](docs/programs/PROGRAM_2_IMPLEMENTATION_ROADMAP.md)
+- [Final status matrix](docs/programs/PROGRAM_2_FINAL_STATUS_MATRIX.md)
+- [Closure report](docs/programs/PROGRAM_2_UNIFIED_PATIENT_JOURNEY_WORKFLOW_CLOSURE_REPORT.md)
+
+Program 2 provides one canonical clinic flow: `Prijava → dokumenti → priprema → dolazak → provjera → pregled → potrošni materijal → račun → plaćanje → završetak`. Live AI, OCR, mailbox, SMS, payment-terminal and fiscalization integrations are not enabled by default; local/demo providers preserve the human-review and source-document boundaries.
+
 - [ASTRA Architecture Bible](docs/ASTRA_ARCHITECTURE_BIBLE.md)
 - [ASTRA Design System](docs/ASTRA_DESIGN_SYSTEM.md)
 - [ASTRA Workspace Architecture](docs/ASTRA_WORKSPACE_ARCHITECTURE.md)

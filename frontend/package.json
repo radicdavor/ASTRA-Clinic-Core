@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite --host 0.0.0.0",
     "typecheck": "tsc --noEmit",
+    "test": "node --test scripts/program2-contract.test.mjs",
     "smoke": "node scripts/pilot-smoke.mjs",
     "program1:evaluation-readiness": "node scripts/program1-evaluation-readiness.mjs",
     "build": "tsc && vite build",
