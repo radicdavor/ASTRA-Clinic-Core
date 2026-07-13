@@ -1,4 +1,4 @@
-import { AlertTriangle, CheckCircle2, Circle, ClipboardCheck, Clock3, PackageCheck, RefreshCw, Search, Stethoscope } from "lucide-react";
+import { AlertTriangle, CheckCircle2, ClipboardCheck, Clock3, PackageCheck, RefreshCw, Search, Stethoscope } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import { useMemo, useState } from "react";
 import { api } from "../api/client";
@@ -20,21 +20,27 @@ type DashboardRow = {
 type DashboardResponse = { date: string; refreshed_at: string; visible_sections: string[]; rows: DashboardRow[] };
 
 const today = new Date().toISOString().slice(0, 10);
-const good = new Set(["complete", "completed", "confirmed", "ready", "paid", "closed", "not_applicable", "clear"]);
-const warning = new Set(["partial", "review_required", "blocked", "adjustment_required", "unpaid", "partially_paid"]);
+const resolved = new Set(["complete", "completed", "confirmed", "ready", "paid", "closed", "not_applicable", "clear", "refunded", "cancelled", "deferred"]);
+const active = new Set(["requested", "assigned", "acknowledged", "in_progress", "in_review", "pending", "invoice_created", "unpaid", "partially_paid"]);
+const problem = new Set(["partial", "review_required", "blocked", "adjustment_required", "failed", "aborted", "not_confirmed", "requires_clinician_review"]);
 
-function JourneyState({ value }: { value: string }) {
-  const Icon = good.has(value) ? CheckCircle2 : warning.has(value) ? AlertTriangle : value.includes("progress") || value === "in_review" ? Clock3 : Circle;
-  const tone = good.has(value) ? "ok" : warning.has(value) ? "warning" : "neutral";
-  return <span className={`journey-state ${tone}`}><Icon size={14} />{journeyStatusLabel(value)}</span>;
+function StatusSignal({ value, description }: { value: string; description: string }) {
+  const tone = resolved.has(value) ? "resolved" : problem.has(value) ? "problem" : active.has(value) ? "active" : "unresolved";
+  const symbol = tone === "resolved" ? "✓" : tone === "problem" ? "!" : tone === "active" ? "–" : "";
+  return <span className="status-signal-wrap">
+    <span className={`status-signal ${tone}`} tabIndex={0} aria-label={description} title={description}>
+      <span aria-hidden="true">{symbol}</span>
+      <span className="status-signal-tooltip" role="tooltip">{description}</span>
+    </span>
+  </span>;
 }
 
 function BillingState({ row }: { row: DashboardRow }) {
-  if (row.billing_status === "adjustment_required") return <JourneyState value={row.billing_status}/>;
-  if (["paid", "refunded", "cancelled", "deferred", "unpaid", "partially_paid"].includes(row.payment_status)) return <JourneyState value={row.payment_status}/>;
-  if (row.billing_status === "invoice_created") return <JourneyState value={row.billing_status}/>;
-  if (row.billing_status === "ready" || row.workflow_stage === "awaiting_billing") return <span className="journey-state warning"><AlertTriangle size={14}/>Račun treba izraditi</span>;
-  return <span className="journey-state neutral"><Circle size={14}/>Nije započeta</span>;
+  if (row.billing_status === "adjustment_required") return <StatusSignal value={row.billing_status} description="Naplata: račun treba ispraviti."/>;
+  if (["paid", "refunded", "cancelled", "deferred", "unpaid", "partially_paid"].includes(row.payment_status)) return <StatusSignal value={row.payment_status} description={`Naplata: ${journeyStatusLabel(row.payment_status)}.`}/>;
+  if (row.billing_status === "invoice_created") return <StatusSignal value={row.billing_status} description="Naplata: račun je izrađen i čeka plaćanje."/>;
+  if (row.billing_status === "ready" || row.workflow_stage === "awaiting_billing") return <StatusSignal value="in_progress" description="Naplata: račun treba izraditi."/>;
+  return <StatusSignal value="not_started" description="Naplata još nije započeta."/>;
 }
 
 const preparationAttention: Record<string, string> = {
@@ -115,7 +121,7 @@ export function DailyClinicDashboard() {
       {board.data.rows.map(row => <tr key={row.journey_id} className={row.blocker_status === "blocked" ? "has-blocker" : ""}>
         <td><span className="patient-time">{row.time.slice(0,5)}</span><Link to={`/journeys/${row.journey_id}`}>{row.patient_name}</Link><small>{row.clinician_name} · {row.room_name}</small></td>
         <td><strong>{row.service_name}</strong><small>{row.intake_channel === "ai_secretary" ? "AI tajnica" : row.intake_channel === "web" ? "Web" : "Ručni unos"}</small></td>
-        <td><JourneyState value={row.check_in_status}/></td><td><JourneyState value={row.encounter_status}/></td><td><BillingState row={row}/></td>
+        <td className="status-cell"><StatusSignal value={row.check_in_status} description={`Prijemna provjera: ${journeyStatusLabel(row.check_in_status)}.`}/></td><td className="status-cell"><StatusSignal value={row.encounter_status} description={`Pregled: ${journeyStatusLabel(row.encounter_status)}.`}/></td><td className="status-cell"><BillingState row={row}/></td>
         <td>{row.blockers.length || preparationAttention[row.preparation_status] || documentAttention[row.document_status] || consumablesAttention(row) ? <div className="blocker-list">
           {row.blockers.map(item => <span className="blocker-copy" key={item.id}><AlertTriangle size={15}/><span><strong>{item.title}</strong><small>{item.details || (item.is_clinical ? "Potrebna je odluka ovlaštenog liječnika." : "Potrebna je provjera prije nastavka.")}</small></span></span>)}
           {documentAttention[row.document_status] && <span className="blocker-copy document-attention"><AlertTriangle size={15}/><span><strong>Dokumentacija</strong><small>{documentAttention[row.document_status]}</small></span></span>}

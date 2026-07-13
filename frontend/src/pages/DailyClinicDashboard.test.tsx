@@ -73,8 +73,8 @@ describe("dnevni tijek pacijenata", () => {
   test("prikazuje prevedene statuse i puni razlog blokade", async () => {
     renderDashboard();
     expect(await screen.findByText("Sintetički Dolazak")).toBeTruthy();
-    expect(screen.getAllByText("U tijeku").length).toBeGreaterThan(0);
-    expect(screen.getByText("Neplaćeno")).toBeTruthy();
+    expect(screen.getByLabelText("Pregled: U tijeku.")).toBeTruthy();
+    expect(screen.getByLabelText("Naplata: Neplaćeno.")).toBeTruthy();
     expect(screen.getByText("Dokumentacija je zatražena, ali još nije zaprimljena.")).toBeTruthy();
     expect(screen.getByText("Laboratorijski nalaz nije priložen.")).toBeTruthy();
     expect(screen.queryByText("in_progress")).toBeNull();
@@ -118,7 +118,19 @@ describe("dnevni tijek pacijenata", () => {
     expect(screen.getByRole("columnheader", { name: "Naplata" })).toBeTruthy();
     expect(screen.queryByRole("columnheader", { name: "Račun" })).toBeNull();
     expect(screen.queryByRole("columnheader", { name: "Plaćanje" })).toBeNull();
-    expect(screen.getByText("Neplaćeno")).toBeTruthy();
+    expect(screen.getByLabelText("Naplata: Neplaćeno.")).toBeTruthy();
+  });
+
+  test("statuse prikazuje kao pristupačne semaforske krugove", async () => {
+    renderDashboard();
+    const unresolved = (await screen.findAllByLabelText("Prijemna provjera: Nije započeta."))[0];
+    const activeSignal = screen.getByLabelText("Pregled: U tijeku.");
+    const resolvedSignal = screen.getAllByLabelText("Prijemna provjera: Spremno.")[0];
+    expect(unresolved.classList.contains("unresolved")).toBe(true);
+    expect(activeSignal.classList.contains("active")).toBe(true);
+    expect(resolvedSignal.classList.contains("resolved")).toBe(true);
+    expect(activeSignal.getAttribute("title")).toBe("Pregled: U tijeku.");
+    expect(within(activeSignal).getByRole("tooltip").textContent).toBe("Pregled: U tijeku.");
   });
 
   test("otvara prijem i usmjerava na prijemnu provjeru", async () => {
