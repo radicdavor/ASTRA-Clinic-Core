@@ -12,7 +12,7 @@ import { WorkspaceLayout } from "../components/workspace/WorkspaceLayout";
 import { WorkspaceSection } from "../components/workspace/WorkspaceSection";
 import { WorkflowTaskPanel } from "../components/WorkflowTaskPanel";
 import { useApi } from "../hooks/useApi";
-import { Appointment, AuditLog, ClinicalDecisionTimelineItem, ClinicalEpisode, ClinicalPlan } from "../types";
+import { Appointment, AuditLog, ClinicalDecisionTimelineItem, ClinicalEpisode, ClinicalPlan, Therapy } from "../types";
 import { formatDate, formatDateTime } from "../utils/date";
 import { formatPatientIdentity, formatPatientName } from "../utils/patientIdentity";
 import { episodeTypeLabel } from "./Episodes";
@@ -24,6 +24,7 @@ export function EpisodeDetail() {
   const plans = useApi<ClinicalPlan[]>(`/api/episodes/${id}/clinical-plans`, []);
   const decisionTimeline = useApi<ClinicalDecisionTimelineItem[]>(`/api/episodes/${id}/clinical-timeline`, []);
   const audit = useApi<AuditLog[]>(`/api/audit-log?entity_type=ClinicalEpisode&entity_id=${id}`, []);
+  const therapies = useApi<Therapy[]>(`/api/therapies?episode_id=${id}`, []);
   const [planDraft, setPlanDraft] = useState({ appointment_id: "", procedure_type: "", findings: "", pathology_ordered: false, physician_conclusion: "", episode_goal: "" });
   const [editDraft, setEditDraft] = useState({ proposed_episode_status: "waiting", next_action: "wait_for_pathology", due_date: "", priority: "important", rationale: "", suggested_follow_up: "", physician_conclusion: "" });
   const [editingPlanId, setEditingPlanId] = useState<number | null>(null);
@@ -113,6 +114,7 @@ export function EpisodeDetail() {
         actions={
           <>
             <Link className="primary link-button" to={`/appointments/new?patient_id=${episode.data.patient_id}&episode_id=${episode.data.id}`}>Novi termin</Link>
+            <Link className="link-button" to={`/therapies?patient_id=${episode.data.patient_id}&episode_id=${episode.data.id}`}>Nova terapija</Link>
             <ActionButton
               variant="workflow"
               disabled={!canClose}
@@ -244,6 +246,17 @@ export function EpisodeDetail() {
           ))}
           {decisionTimeline.data.length === 0 && <p>Nema klinickih odluka u timelineu.</p>}
         </div>
+      </WorkspaceSection>
+
+      <WorkspaceSection title={<>Terapije epizode <HelpHint title="Terapije epizode">Prikazuju se samo terapije izravno povezane s ovom epizodom. Liječnik određuje i potvrđuje terapiju.</HelpHint></>}>
+        <DataTable rows={therapies.data} columns={[
+          {header:"Terapija",render:(row)=>row.name},
+          {header:"Upute",render:(row)=>row.instructions},
+          {header:"Početak",render:(row)=>formatDate(row.start_date)},
+          {header:"Završetak",render:(row)=>row.end_date?formatDate(row.end_date):"-"},
+          {header:"Status",render:(row)=><StatusBadge status={row.status}/>},
+          {header:"Detalj",render:()=> <Link to={`/therapies?patient_id=${episode.data?.patient_id}&episode_id=${id}`}>Otvori</Link>}
+        ]}/>
       </WorkspaceSection>
 
       <WorkspaceSection title="Povezani termini">

@@ -12,7 +12,7 @@ import { WorkspaceSection } from "../components/workspace/WorkspaceSection";
 import { WorkspaceTabs } from "../components/workspace/WorkspaceTabs";
 import { WorkflowTaskPanel } from "../components/WorkflowTaskPanel";
 import { useApi } from "../hooks/useApi";
-import { Appointment, AuditLog, ClinicalDocument, ClinicalEvidenceTimelineEventPreview, ClinicalEvidenceTimelineListResponse, ClinicalFindingListResponse, ClinicalFindingReadItem, Invoice, Patient, PatientClinicalSummary, PatientClinicalSummaryRecord, PatientKnowledgeItem } from "../types";
+import { Appointment, AuditLog, ClinicalDocument, ClinicalEvidenceTimelineEventPreview, ClinicalEvidenceTimelineListResponse, ClinicalFindingListResponse, ClinicalFindingReadItem, Invoice, LabOrder, Patient, PatientClinicalSummary, PatientClinicalSummaryRecord, PatientKnowledgeItem, Therapy } from "../types";
 import { formatDate, formatDateTime } from "../utils/date";
 import { formatPatientIdentity, formatPatientName } from "../utils/patientIdentity";
 import { aiExtractionStatusLabel, documentTypeLabel, reviewStatusLabel, sourceTypeLabel } from "./ClinicalDocuments";
@@ -208,6 +208,8 @@ export function PatientDetail() {
   const clinicalTimeline = useApi<ClinicalEvidenceTimelineListResponse>(`/api/patients/${id}/clinical-evidence-timeline`, { patient_id: Number(id), events: [], count: 0, is_read_only: true, warning: "" });
   const appointments = useApi<Appointment[]>(`/api/patients/${id}/appointments`, []);
   const invoices = useApi<Invoice[]>(`/api/patients/${id}/invoices`, []);
+  const labOrders = useApi<LabOrder[]>(`/api/laboratory/orders?patient_id=${id}`, []);
+  const therapies = useApi<Therapy[]>(`/api/therapies?patient_id=${id}`, []);
   const audit = useApi<AuditLog[]>(`/api/audit-log?entity_type=Patient&entity_id=${id}`, []);
   const duplicatePath = patient.data?.first_name && patient.data?.last_name
     ? `/api/patients/possible-duplicates?first_name=${encodeURIComponent(patient.data.first_name)}&last_name=${encodeURIComponent(patient.data.last_name)}${patient.data.date_of_birth ? `&date_of_birth=${patient.data.date_of_birth}` : ""}${patient.data.oib ? `&oib=${patient.data.oib}` : ""}`
@@ -225,6 +227,7 @@ export function PatientDetail() {
   const procedures = documents.data.filter((document) => ["gastroscopy", "colonoscopy"].includes(document.document_type));
   const pathology = documents.data.filter((document) => document.document_type === "pathology");
   const laboratory = documents.data.filter((document) => document.document_type === "laboratory");
+  const labAwaitingReview = labOrders.data.filter((order) => order.status === "resulted");
   const imaging = documents.data.filter((document) => document.document_type === "radiology");
   const openInvoices = invoices.data.filter((invoice) => invoice.payment_status !== "paid");
   const unpaidTotal = openInvoices.reduce((sum, invoice) => sum + Number(invoice.total_amount || 0), 0);
@@ -268,6 +271,13 @@ export function PatientDetail() {
     { header: "Pregled", render: (row: ClinicalDocument) => reviewStatusLabel(row.review_status) },
     { header: "AI", render: (row: ClinicalDocument) => aiExtractionStatusLabel(row.ai_extraction_status) }
   ];
+  const labOrderColumns = [
+    { header: "Datum", render: (row: LabOrder) => formatDate(row.ordered_at) },
+    { header: "Pretrage", render: (row: LabOrder) => row.results.map((result) => result.test_name).join(", ") },
+    { header: "Uzorak", render: (row: LabOrder) => row.collected_at ? formatDateTime(row.collected_at) : "Čeka uzimanje" },
+    { header: "Status", render: (row: LabOrder) => <StatusBadge status={row.status} /> },
+    { header: "Detalj", render: (row: LabOrder) => <Link to={`/laboratory?patient_id=${patient.data?.id}&order_id=${row.id}`}>Otvori</Link> }
+  ];
 
   if (patient.loading || !patient.data) {
     return <WorkspaceLayout><p>Ucitavanje pacijenta...</p></WorkspaceLayout>;
@@ -298,6 +308,14 @@ export function PatientDetail() {
             >
               Novi termin
             </ActionButton>
+            <ActionButton
+              variant="create"
+              onClick={() => { window.location.href = `/laboratory?patient_id=${patient.data?.id}`; }}
+              helpTitle="Nova laboratorijska narudžba"
+              help="Otvara laboratorij u kontekstu ovog pacijenta i zadržava mogućnost izmjene pretraga prije naručivanja."
+            >
+              Laboratorij
+            </ActionButton>
           </>
         }
       />
@@ -321,6 +339,7 @@ export function PatientDetail() {
         <div><span>Zadnji termin</span><strong>{lastAppointment ? `${formatDate(lastAppointment.date)} / ${lastAppointment.status}` : "-"}</strong></div>
         <div><span>Sljedeci termin</span><strong>{nextAppointment ? `${formatDate(nextAppointment.date)} / ${nextAppointment.status}` : "-"}</strong></div>
         <div><span>Otvoreni racuni</span><strong>{openInvoices.length ? `${openInvoices.length} / ${unpaidTotal.toFixed(2)} EUR` : "Nema"}</strong></div>
+        <div><span>Laboratorij čeka liječnika</span><strong>{labAwaitingReview.length}</strong></div>
       </div>
 
       <div className="metrics">
@@ -328,6 +347,8 @@ export function PatientDetail() {
         <div><span>Termini</span><strong>{appointments.data.length}</strong></div>
         <div><span>Racuni</span><strong>{invoices.data.length}</strong></div>
         <div><span>Audit zapisi</span><strong>{audit.data.length}</strong></div>
+        <div><span>Laboratorijske narudžbe</span><strong>{labOrders.data.length}</strong></div>
+        <div><span>Aktivne terapije</span><strong>{therapies.data.filter((therapy) => therapy.status === "active").length}</strong></div>
       </div>
 
       <WorkspaceSection
@@ -416,7 +437,22 @@ export function PatientDetail() {
               { id: "external-documents", label: "Vanjski dokumenti", content: <DataTable rows={externalDocuments} columns={documentColumns} /> },
               { id: "procedures", label: "Postupci", content: <DataTable rows={procedures} columns={documentColumns} /> },
               { id: "pathology", label: "Patologija", content: <DataTable rows={pathology} columns={documentColumns} /> },
-              { id: "laboratory", label: "Laboratorij", content: <DataTable rows={laboratory} columns={documentColumns} /> },
+              { id: "laboratory", label: "Laboratorij", content: <>
+                <div className="tab-section-heading"><h3>Laboratorijske narudžbe</h3><Link className="button-link" to={`/laboratory?patient_id=${patient.data.id}`}>Nova narudžba</Link></div>
+                <DataTable rows={labOrders.data} columns={labOrderColumns} />
+                {laboratory.length > 0 && <><h3>Laboratorijski dokumenti</h3><DataTable rows={laboratory} columns={documentColumns} /></>}
+              </> },
+              { id: "therapies", label: "Terapije", content: <>
+                <div className="tab-section-heading"><h3>Strukturirana evidencija terapije</h3><Link className="button-link" to={`/therapies?patient_id=${patient.data.id}`}>Nova terapija</Link></div>
+                <DataTable rows={therapies.data} columns={[
+                  { header: "Terapija", render: (row) => row.name },
+                  { header: "Upute", render: (row) => row.instructions },
+                  { header: "Početak", render: (row) => formatDate(row.start_date) },
+                  { header: "Završetak", render: (row) => row.end_date ? formatDate(row.end_date) : "-" },
+                  { header: "Status", render: (row) => <StatusBadge status={row.status} /> },
+                  { header: "Detalj", render: () => <Link to={`/therapies?patient_id=${id}`}>Otvori</Link> }
+                ]} />
+              </> },
               { id: "imaging", label: "Slikovna obrada", content: <DataTable rows={imaging} columns={documentColumns} /> },
               {
                 id: "appointments",

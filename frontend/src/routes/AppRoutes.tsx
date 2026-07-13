@@ -19,6 +19,7 @@ import { Inventory } from "../pages/Inventory";
 import { Invoices } from "../pages/Invoices";
 import { Login } from "../pages/Login";
 import { Laboratory } from "../pages/Laboratory";
+import { Therapies } from "../pages/Therapies";
 import { Modules } from "../pages/Modules";
 import { PatientDetail } from "../pages/PatientDetail";
 import { PatientForm } from "../pages/PatientForm";
@@ -60,6 +61,7 @@ export function AppRoutes() {
           <Route path="/episodes/:id" element={<EpisodeDetail />} />
           <Route path="/clinical-documents" element={<ClinicalDocuments />} />
           <Route path="/laboratory" element={<Laboratory />} />
+          <Route path="/therapies" element={<Therapies />} />
           <Route path="/clinical-documents/:id" element={<ClinicalDocumentDetail />} />
           <Route path="/appointments" element={<Appointments />} />
           <Route path="/appointments/new" element={<AppointmentForm />} />

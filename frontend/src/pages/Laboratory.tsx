@@ -1,4 +1,5 @@
-import { FormEvent, useMemo, useRef, useState } from "react";
+import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import {
   CheckCircle2,
   Ban,
@@ -32,6 +33,9 @@ const statusLabel: Record<string, string> = {
 const today = () => new Date().toISOString().slice(0, 10);
 const TEMPLATE_CATEGORIES = ["Metabolizam", "Kosa i koža", "Gastroenterologija", "Endokrinologija", "Nutritivni status", "Preventiva"];
 export function Laboratory() {
+  const [searchParams] = useSearchParams();
+  const patientScopeId = searchParams.get("patient_id");
+  const requestedOrderId = searchParams.get("order_id");
   const dayPickerRef=useRef<HTMLInputElement>(null);
   const orders = useApi<LabOrder[]>("/api/laboratory/orders", []),
     patients = useApi<Patient[]>("/api/patients", []),
@@ -49,7 +53,7 @@ export function Laboratory() {
     [historyTest,setHistoryTest]=useState(""),
     [selectedId, setSelectedId] = useState<number | null>(null);
   const [draft, setDraft] = useState({
-    patient_id: "",
+    patient_id: patientScopeId ?? "",
     external_laboratory: "",
     ordered_at: today(),
     notes: "",
@@ -63,6 +67,7 @@ export function Laboratory() {
     [specimenType, setSpecimenType] = useState("blood");
   const selected = orders.data.find((o) => o.id === selectedId);
   const selectedPatient = patients.data.find((patient) => patient.id === Number(draft.patient_id));
+  const scopedPatient = patients.data.find((patient) => patient.id === Number(patientScopeId));
   const patientMatches = patientQuery.trim().length < 2 ? [] : patients.data.filter((patient) => `${patient.first_name} ${patient.last_name} ${patient.oib ?? ""} ${patient.phone ?? ""}`.toLocaleLowerCase("hr").includes(patientQuery.trim().toLocaleLowerCase("hr"))).slice(0, 8);
   const filtered = useMemo(
     () =>
@@ -72,11 +77,22 @@ export function Laboratory() {
           .includes(query.toLocaleLowerCase("hr"));
         const matchesActivity = activityFilter === "all" || (activityFilter === "ordered" ? o.ordered_at === activityDate : o.collected_at?.slice(0,10) === activityDate);
         const matchesResult = resultFilter==="all" || (resultFilter==="sample"&&!o.collected_at) || (resultFilter==="results"&&!!o.collected_at&&o.results.some(result=>result.flag==="pending")) || (resultFilter==="review"&&o.status==="resulted");
-        return matchesText && matchesActivity && matchesResult;
+        const matchesPatient = !patientScopeId || o.patient_id === Number(patientScopeId);
+        return matchesText && matchesActivity && matchesResult && matchesPatient;
       }),
-    [orders.data, query, activityDate, activityFilter, resultFilter],
+    [orders.data, query, activityDate, activityFilter, resultFilter, patientScopeId],
   );
-  const dailyCollected=orders.data.filter(order=>order.collected_at?.slice(0,10)===activityDate);
+  const scopedOrders = patientScopeId ? orders.data.filter(order => order.patient_id === Number(patientScopeId)) : orders.data;
+  const dailyCollected=scopedOrders.filter(order=>order.collected_at?.slice(0,10)===activityDate);
+  useEffect(() => {
+    if (!orders.data.length || selectedId !== null) return;
+    const requested = requestedOrderId ? orders.data.find(order => order.id === Number(requestedOrderId) && (!patientScopeId || order.patient_id === Number(patientScopeId))) : undefined;
+    const firstScoped = patientScopeId ? orders.data.find(order => order.patient_id === Number(patientScopeId)) : undefined;
+    if (requested || firstScoped) open(requested ?? firstScoped!);
+  }, [orders.data, patientScopeId, requestedOrderId, selectedId]);
+  useEffect(() => {
+    if (scopedPatient && !patientQuery) setPatientQuery(`${scopedPatient.first_name} ${scopedPatient.last_name}`);
+  }, [scopedPatient, patientQuery]);
   function moveDay(offset:number){const date=new Date(`${activityDate}T12:00:00`);date.setDate(date.getDate()+offset);setActivityDate(`${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,"0")}-${String(date.getDate()).padStart(2,"0")}`)}
   function open(order: LabOrder) {
     setSelectedId(order.id);
@@ -186,6 +202,7 @@ export function Laboratory() {
       <section className="lab-day-board"><div className="lab-day-navigator"><span className="eyebrow">Dnevni pregled uzoraka</span><div><button aria-label="Prethodni dan" title="Prethodni dan" onClick={()=>moveDay(-1)}><ChevronLeft size={19}/></button><button className="lab-day-date" title="Odaberi datum iz kalendara" onClick={()=>dayPickerRef.current?.showPicker()}><CalendarDays size={17}/><strong>{formatDate(activityDate)}</strong></button><button aria-label="Sljedeći dan" title="Sljedeći dan" onClick={()=>moveDay(1)}><ChevronRight size={19}/></button><input ref={dayPickerRef} className="native-date-picker" type="date" value={activityDate} tabIndex={-1} aria-hidden="true" onChange={e=>setActivityDate(e.target.value)}/></div></div><label>Prikaži<select value={activityFilter} onChange={e=>setActivityFilter(e.target.value)}><option value="all">Sve narudžbe</option><option value="ordered">Naručeno taj dan</option><option value="collected">Uzorak uzet taj dan</option></select></label><div className="lab-day-counts"><button className={resultFilter==="sample"?"active":""} onClick={()=>setResultFilter(resultFilter==="sample"?"all":"sample")}><b>{orders.data.filter(order=>!order.collected_at).length}</b> čeka uzorak</button><button className={resultFilter==="results"?"active":""} onClick={()=>setResultFilter(resultFilter==="results"?"all":"results")}><b>{orders.data.filter(order=>order.collected_at&&order.results.some(result=>result.flag==="pending")).length}</b> čeka rezultate</button><button className={resultFilter==="review"?"active":""} onClick={()=>setResultFilter(resultFilter==="review"?"all":"review")}><b>{orders.data.filter(order=>order.status==="resulted").length}</b> čeka liječnika</button><span><b>{dailyCollected.length}</b> uzeto taj dan</span></div></section>
       <div className="lab-workspace">
         <section className="lab-list">
+          {scopedPatient && <div className="lab-patient-scope"><span>Pacijent</span><strong>{scopedPatient.first_name} {scopedPatient.last_name}</strong><a href="/laboratory">Prikaži sve</a></div>}
           <div className="lab-search">
             <Search size={16} />
             <input

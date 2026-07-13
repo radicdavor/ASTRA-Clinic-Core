@@ -635,6 +635,30 @@ class LabResult(TimestampMixin, Base):
     order: Mapped[LabOrder] = relationship(back_populates="results")
 
 
+class Therapy(TimestampMixin, Base):
+    __tablename__ = "therapies"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    patient_id: Mapped[int] = mapped_column(ForeignKey("patients.id"), index=True)
+    episode_id: Mapped[int | None] = mapped_column(ForeignKey("clinical_episodes.id"), index=True)
+    parent_therapy_id: Mapped[int | None] = mapped_column(ForeignKey("therapies.id"), index=True)
+    name: Mapped[str] = mapped_column(String(180), index=True)
+    instructions: Mapped[str] = mapped_column(Text)
+    start_date: Mapped[date] = mapped_column(Date, index=True)
+    end_date: Mapped[date | None] = mapped_column(Date, index=True)
+    status: Mapped[str] = mapped_column(String(30), default="active", index=True)
+    prescriber: Mapped[str | None] = mapped_column(String(160))
+    notes: Mapped[str | None] = mapped_column(Text)
+    stopped_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    stopped_by: Mapped[int | None] = mapped_column(ForeignKey("users.id"))
+    stop_reason: Mapped[str | None] = mapped_column(Text)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    completed_by: Mapped[int | None] = mapped_column(ForeignKey("users.id"))
+    completion_note: Mapped[str | None] = mapped_column(Text)
+    created_by: Mapped[int | None] = mapped_column(ForeignKey("users.id"))
+    patient: Mapped[Patient] = relationship()
+    episode: Mapped[ClinicalEpisode | None] = relationship()
+
+
 class ApiKey(TimestampMixin, Base):
     __tablename__ = "api_keys"
     id: Mapped[int] = mapped_column(primary_key=True)
