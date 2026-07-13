@@ -26,7 +26,7 @@ jobs:
       TEST_DATABASE_URL: postgresql+psycopg://astra:astra@localhost:5432/astra_ci
       JWT_SECRET: ci-secret-key-for-quality-gate-tests
       JWT_SECRET_KEY: ci-secret-key
-      DOCUMENT_STORAGE_PATH: ${{ runner.temp }}/astra-documents
+      DOCUMENT_STORAGE_PATH: /tmp/astra-documents
       PYTHONPATH: ${{ github.workspace }}/backend
     steps:
       - uses: actions/checkout@v4
