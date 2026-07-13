@@ -59,7 +59,7 @@ describe("dnevni tijek pacijenata", () => {
     expect(await screen.findByText("Sintetički Dolazak")).toBeTruthy();
     expect(screen.getAllByText("U tijeku").length).toBeGreaterThan(0);
     expect(screen.getByText("Neplaćeno")).toBeTruthy();
-    expect(screen.getByText("Zatraženo")).toBeTruthy();
+    expect(screen.getByText("Dokumentacija je zatražena, ali još nije zaprimljena.")).toBeTruthy();
     expect(screen.getByText("Laboratorijski nalaz nije priložen.")).toBeTruthy();
     expect(screen.queryByText("in_progress")).toBeNull();
     expect(screen.queryByText("unpaid")).toBeNull();
@@ -79,7 +79,14 @@ describe("dnevni tijek pacijenata", () => {
     expect(screen.queryByRole("columnheader", { name: "Priprema" })).toBeNull();
     expect(screen.getByRole("columnheader", { name: "Potrebno riješiti" })).toBeTruthy();
     expect(screen.getByText("Priprema još nije dovršena.")).toBeTruthy();
-    expect(screen.getAllByText("Nema otvorenih stavki")).toHaveLength(2);
+    expect(screen.getAllByText("Nema otvorenih stavki")).toHaveLength(1);
+  });
+
+  test("dokumentaciju prikazuje samo kada je potrebno nešto riješiti", async () => {
+    renderDashboard();
+    expect(await screen.findByText("Sintetički Prijem")).toBeTruthy();
+    expect(screen.queryByRole("columnheader", { name: "Dokumenti" })).toBeNull();
+    expect(screen.getByText("Dokumentacija je zatražena, ali još nije zaprimljena.")).toBeTruthy();
   });
 
   test("otvara prijem i usmjerava na prijemnu provjeru", async () => {
