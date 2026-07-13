@@ -30,7 +30,7 @@ One canonical workflow: `Prijava → dokumenti → priprema → dolazak → prov
 - [x] G — daily clinic dashboard
 - [x] H — reception check-in
 - [x] I — encounter workspace
-- [ ] J — consumables, billing, payment and closure orchestration
+- [x] J — consumables, billing, payment and closure orchestration
 - [ ] K — full validation and formal closure
 
 No later phase may bypass the Phase B transition service.

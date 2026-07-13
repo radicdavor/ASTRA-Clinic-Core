@@ -93,7 +93,7 @@ def draft_invoice_from_appointment(db: Session, appointment_id: int) -> tuple[In
     db.add(invoice)
     db.flush()
     line = InvoiceLine(
-        invoice_id=invoice.id,
+        invoice=invoice,
         service_id=service.id,
         description=service.name,
         quantity=Decimal("1"),
@@ -103,7 +103,6 @@ def draft_invoice_from_appointment(db: Session, appointment_id: int) -> tuple[In
     )
     db.add(line)
     db.flush()
-    invoice.lines.append(line)
     return invoice, line, True
 
 
