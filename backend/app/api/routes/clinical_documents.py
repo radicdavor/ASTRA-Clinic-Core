@@ -177,6 +177,8 @@ def update_clinical_document(
 ):
     document = get_document_or_404(db, document_id)
     update_data = payload.model_dump(exclude_unset=True)
+    if document.checksum_sha256 and "attachment_path" in update_data and update_data["attachment_path"] != document.attachment_path:
+        raise HTTPException(409, detail="Putanja pohranjenog izvornog dokumenta je nepromjenjiva")
     validate_document_links(db, update_data.get("patient_id", document.patient_id), update_data.get("appointment_id", document.appointment_id))
     before = snapshot(document)
     patch_model(document, update_data)

@@ -17,6 +17,8 @@ class Settings(BaseSettings):
     demo_mode: bool = True
     real_data_allowed: bool = False
     fiscalization_mode: str = "noop"
+    document_storage_path: str = "/app/data/documents"
+    document_max_upload_bytes: int = 15 * 1024 * 1024
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 

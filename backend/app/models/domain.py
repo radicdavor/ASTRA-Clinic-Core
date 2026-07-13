@@ -287,6 +287,19 @@ class ClinicalDocument(TimestampMixin, Base):
     reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     attachment_path: Mapped[str | None] = mapped_column(Text)
     appointment_id: Mapped[int | None] = mapped_column(ForeignKey("appointments.id"))
+    journey_id: Mapped[int | None] = mapped_column(ForeignKey("patient_journeys.id", ondelete="SET NULL"), index=True)
+    clinical_episode_id: Mapped[int | None] = mapped_column(ForeignKey("clinical_episodes.id", ondelete="SET NULL"), index=True)
+    upload_channel: Mapped[str | None] = mapped_column(String(60), index=True)
+    original_filename: Mapped[str | None] = mapped_column(String(255))
+    mime_type: Mapped[str | None] = mapped_column(String(120))
+    checksum_sha256: Mapped[str | None] = mapped_column(String(64), index=True)
+    file_size_bytes: Mapped[int | None] = mapped_column(Integer)
+    lifecycle_status: Mapped[str] = mapped_column(String(50), default="received", index=True)
+    ocr_text: Mapped[str | None] = mapped_column(Text)
+    extraction_confidence: Mapped[Decimal | None] = mapped_column(Numeric(5, 4))
+    classification_confidence: Mapped[Decimal | None] = mapped_column(Numeric(5, 4))
+    provenance_json: Mapped[dict | None] = mapped_column(JSON)
+    received_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), index=True)
     patient: Mapped[Patient] = relationship()
     appointment: Mapped[Appointment | None] = relationship()
     reviewer: Mapped[User | None] = relationship()
@@ -309,6 +322,22 @@ class PatientClinicalSummaryRecord(TimestampMixin, Base):
     reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     patient: Mapped[Patient] = relationship()
     reviewer: Mapped[User | None] = relationship()
+
+
+class DocumentProcessingJob(TimestampMixin, Base):
+    __tablename__ = "document_processing_jobs"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    clinical_document_id: Mapped[int] = mapped_column(ForeignKey("clinical_documents.id", ondelete="CASCADE"), index=True)
+    job_type: Mapped[str] = mapped_column(String(40), index=True)
+    provider: Mapped[str] = mapped_column(String(80))
+    status: Mapped[str] = mapped_column(String(40), default="pending", index=True)
+    attempts: Mapped[int] = mapped_column(Integer, default=0)
+    error_message: Mapped[str | None] = mapped_column(Text)
+    result_metadata_json: Mapped[dict | None] = mapped_column(JSON)
+    queued_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    document: Mapped[ClinicalDocument] = relationship()
 
 
 class ClinicalFinding(TimestampMixin, Base):
