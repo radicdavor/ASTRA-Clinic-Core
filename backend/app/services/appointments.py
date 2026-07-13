@@ -34,7 +34,7 @@ def create_appointment_with_journey(db:Session,data:dict,actor:Actor,request:Req
     audit(db,"create","Appointment",appointment.id,f"Termin {appointment.date}",actor.user_id,actor.actor_type,actor.api_key_id,None,snapshot(appointment),request)
     channel=SOURCE_TO_INTAKE.get(appointment.source,"manual")
     journey=create_journey(db,appointment,channel,"booked",actor,request)
-    audit(db,"create","PatientJourney",journey.id,"Kanonsko putovanje stvoreno uz termin",actor.user_id,actor.actor_type,actor.api_key_id,None,snapshot(journey),request)
+    audit(db,"create","PatientJourney",journey.id,"Kanonski tijek pacijenta stvoren uz termin",actor.user_id,actor.actor_type,actor.api_key_id,None,snapshot(journey),request)
     return appointment
 
 

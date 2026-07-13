@@ -18,7 +18,7 @@ DEFAULT_ITEMS = [
 ]
 
 def start_check_in(db: Session, journey: PatientJourney, actor: Actor, request: Request):
-    if journey.current_stage not in {"ready_for_arrival", "arrived", "check_in_review"}: raise HTTPException(409, detail="Putovanje nije u fazi prijema")
+    if journey.current_stage not in {"ready_for_arrival", "arrived", "check_in_review"}: raise HTTPException(409, detail="Tijek pacijenta nije u fazi prijema")
     existing = db.query(JourneyCheckIn).filter_by(journey_id=journey.id).one_or_none()
     if existing: return existing
     now = datetime.now(timezone.utc); item = JourneyCheckIn(journey_id=journey.id, status="in_review", arrived_at=now, started_by=actor.user_id); db.add(item); db.flush()

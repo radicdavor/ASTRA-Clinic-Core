@@ -148,7 +148,7 @@ def generate_local_summary(db: Session, journey: PatientJourney) -> JourneyAISum
     if not documents and not missing_requests:
         db.add(JourneyAISummaryFact(
             summary_id=summary.id,
-            statement="Nema izvornih dokumenata povezanih s ovim putovanjem.",
+            statement="Nema izvornih dokumenata povezanih s ovim tijekom pacijenta.",
             fact_type="missing_information",
             confidence=Decimal("1.0000"),
             limitation="Nedostatak izvora nije normalan nalaz.",

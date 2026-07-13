@@ -12,7 +12,7 @@ from app.services.journey_preparation import assign_preparation,dispatch_reminde
 router=APIRouter(prefix="/api",tags=["journey-preparation"])
 def journey(db,id):
  item=db.scalar(select(PatientJourney).options(joinedload(PatientJourney.appointment)).where(PatientJourney.id==id))
- if not item: raise HTTPException(404,detail="Putovanje pacijenta nije pronađeno")
+ if not item: raise HTTPException(404,detail="Tijek pacijenta nije pronađen")
  return item
 
 @router.get("/preparation-templates",response_model=list[PreparationTemplateOut])

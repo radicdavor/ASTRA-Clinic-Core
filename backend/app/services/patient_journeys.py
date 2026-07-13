@@ -33,21 +33,21 @@ def create_journey(db:Session,appointment:Appointment,intake_channel:str,initial
  if intake_channel not in INTAKE_CHANNELS: raise HTTPException(422,detail="Dopušteni intake kanali su web, ai_secretary i manual")
  if initial_stage not in {"requested","booked"}: raise HTTPException(422,detail="Početna faza mora biti requested ili booked")
  existing=db.scalar(select(PatientJourney).where(PatientJourney.appointment_id==appointment.id))
- if existing: raise HTTPException(409,detail="Termin već ima kanonsko putovanje pacijenta")
+ if existing: raise HTTPException(409,detail="Termin već ima kanonski tijek pacijenta")
  journey=PatientJourney(patient_id=appointment.patient_id,appointment_id=appointment.id,intake_channel=intake_channel,current_stage=initial_stage,created_by=actor.user_id,updated_by=actor.user_id)
- db.add(journey);db.flush();add_event(db,journey,"journey_created",f"Putovanje pacijenta stvoreno iz kanala {intake_channel}",actor,request,None,initial_stage)
+ db.add(journey);db.flush();add_event(db,journey,"journey_created",f"Tijek pacijenta stvoren iz kanala {intake_channel}",actor,request,None,initial_stage)
  return journey
 
 def update_substatuses(db:Session,journey:PatientJourney,updates:dict,actor:Actor,request:Request):
- if journey.current_stage in TERMINAL_STAGES: raise HTTPException(409,detail="Zatvoreno putovanje više se ne može mijenjati")
+ if journey.current_stage in TERMINAL_STAGES: raise HTTPException(409,detail="Završeni tijek pacijenta više se ne može mijenjati")
  before={}
  for field,value in updates.items():
   if field not in STATUS_VALUES or value not in STATUS_VALUES[field]: raise HTTPException(422,detail=f"Neispravan status: {field}={value}")
   before[field]=getattr(journey,field);setattr(journey,field,value)
- journey.updated_by=actor.user_id;db.flush();add_event(db,journey,"substatus_updated","Ažurirani podstatusi putovanja",actor,request,journey.current_stage,journey.current_stage,{"before":before,"after":updates})
+ journey.updated_by=actor.user_id;db.flush();add_event(db,journey,"substatus_updated","Ažurirani podstatusi tijeka pacijenta",actor,request,journey.current_stage,journey.current_stage,{"before":before,"after":updates})
 
 def transition(db:Session,journey:PatientJourney,target:str,actor:Actor,request:Request,reason:str|None=None):
- if target not in STAGES: raise HTTPException(422,detail="Nepoznata faza putovanja")
+ if target not in STAGES: raise HTTPException(422,detail="Nepoznata faza tijeka pacijenta")
  if target not in ALLOWED_TRANSITIONS.get(journey.current_stage,set()): raise HTTPException(409,detail=f"Prijelaz {journey.current_stage} → {target} nije dopušten")
  open_blockers=[item for item in journey.blockers if item.status=="open"]
  if target in {"ready_for_clinician","in_encounter","completed"} and open_blockers: raise HTTPException(409,detail="Otvoreni blokatori moraju biti riješeni prije ovog prijelaza")

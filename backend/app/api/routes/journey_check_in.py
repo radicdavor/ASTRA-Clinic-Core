@@ -14,7 +14,7 @@ def journey_query(): return select(PatientJourney).options(joinedload(PatientJou
 def checkin_query(): return select(JourneyCheckIn).options(selectinload(JourneyCheckIn.items))
 def get_journey(db,id):
     item=db.scalar(journey_query().where(PatientJourney.id==id))
-    if not item: raise HTTPException(404,detail="Putovanje pacijenta nije pronađeno")
+    if not item: raise HTTPException(404,detail="Tijek pacijenta nije pronađen")
     return item
 
 @router.post("/{journey_id}/check-in",response_model=CheckInOut)

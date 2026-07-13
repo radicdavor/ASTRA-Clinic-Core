@@ -11,7 +11,7 @@ from app.services.patient_journeys import transition
 router=APIRouter(prefix="/api/patient-journeys",tags=["journey-encounter"])
 def get_journey(db,id):
  item=db.scalar(select(PatientJourney).options(joinedload(PatientJourney.appointment),selectinload(PatientJourney.blockers)).where(PatientJourney.id==id))
- if not item: raise HTTPException(404,detail="Putovanje pacijenta nije pronađeno")
+ if not item: raise HTTPException(404,detail="Tijek pacijenta nije pronađen")
  return item
 def get_encounter(db,jid):
  item=db.scalar(select(JourneyEncounter).where(JourneyEncounter.journey_id==jid))

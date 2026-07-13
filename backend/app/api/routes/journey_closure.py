@@ -18,7 +18,7 @@ router = APIRouter(prefix="/api/patient-journeys", tags=["journey-closure"])
 def load_journey(db: Session, journey_id: int) -> PatientJourney:
     item = db.scalar(select(PatientJourney).options(joinedload(PatientJourney.appointment), selectinload(PatientJourney.blockers)).where(PatientJourney.id == journey_id))
     if not item:
-        raise HTTPException(404, detail="Putovanje pacijenta nije pronađeno")
+        raise HTTPException(404, detail="Tijek pacijenta nije pronađen")
     return item
 
 def projection(db: Session, journey: PatientJourney) -> ClosureOut:
@@ -54,7 +54,7 @@ def confirm_consumables(journey_id: int, payload: ConsumablesConfirm, request: R
             movement.unit_cost = batch.purchase_price if batch else None
         journey.consumables_status = "confirmed"
     journey.billing_status = "ready"
-    transition(db, journey, "awaiting_billing", actor, request, "Potrošni materijal potvrđen i putovanje predano naplati")
+    transition(db, journey, "awaiting_billing", actor, request, "Potrošni materijal potvrđen i tijek pacijenta predan naplati")
     add_event(db, journey, "consumables_confirmed", "Potrošni materijal izričito potvrđen", actor, request, metadata={"status": journey.consumables_status})
     db.commit()
     return projection(db, journey)
@@ -70,7 +70,7 @@ def prepare_billing(journey_id: int, request: Request, db: Session = Depends(get
     journey.billing_status = "invoice_created"
     journey.payment_status = "unpaid"
     transition(db, journey, "awaiting_payment", actor, request, "Račun izrađen; čeka plaćanje")
-    audit(db, "invoice_issued", "Invoice", invoice.id, "Izdan račun za putovanje pacijenta", actor.user_id, actor.actor_type, actor.api_key_id, None, snapshot(invoice), request)
+    audit(db, "invoice_issued", "Invoice", invoice.id, "Izdan račun za tijek pacijenta", actor.user_id, actor.actor_type, actor.api_key_id, None, snapshot(invoice), request)
     db.commit()
     return projection(db, journey)
 
@@ -78,7 +78,7 @@ def prepare_billing(journey_id: int, request: Request, db: Session = Depends(get
 def add_payment(journey_id: int, payload: PaymentRecord, request: Request, db: Session = Depends(get_db), actor: Actor = Depends(require_permission("payment.record"))):
     journey = load_journey(db, journey_id)
     if journey.current_stage != "awaiting_payment":
-        raise HTTPException(409, detail="Putovanje ne čeka plaćanje")
+        raise HTTPException(409, detail="Tijek pacijenta ne čeka plaćanje")
     invoice = db.scalar(select(Invoice).options(selectinload(Invoice.lines), selectinload(Invoice.payments)).where(Invoice.appointment_id == journey.appointment_id))
     if not invoice:
         raise HTTPException(409, detail="Račun nije izrađen")
@@ -87,7 +87,7 @@ def add_payment(journey_id: int, payload: PaymentRecord, request: Request, db: S
     journey.payment_status = invoice.payment_status
     if invoice.payment_status == "paid":
         journey.billing_status = "closed"
-    audit(db, "payment_recorded", "PaymentTransaction", payment.id, "Evidentirano plaćanje putovanja", actor.user_id, actor.actor_type, actor.api_key_id, None, snapshot(payment), request)
+    audit(db, "payment_recorded", "PaymentTransaction", payment.id, "Evidentirano plaćanje u tijeku pacijenta", actor.user_id, actor.actor_type, actor.api_key_id, None, snapshot(payment), request)
     add_event(db, journey, "payment_recorded", "Evidentirano plaćanje", actor, request, metadata={"amount": str(payment.amount), "method": payment.method})
     db.commit()
     return projection(db, journey)
@@ -104,6 +104,6 @@ def defer_payment(journey_id: int, payload: DeferPayment, request: Request, db: 
 @router.post("/{journey_id}/close", response_model=ClosureOut)
 def close_journey(journey_id: int, request: Request, db: Session = Depends(get_db), actor: Actor = Depends(require_permission("journey.transition"))):
     journey = load_journey(db, journey_id)
-    transition(db, journey, "completed", actor, request, "Administrativno i financijski razriješeno putovanje")
-    audit(db, "journey_completed", "PatientJourney", journey.id, "Putovanje pacijenta završeno", actor.user_id, actor.actor_type, actor.api_key_id, None, snapshot(journey), request)
+    transition(db, journey, "completed", actor, request, "Tijek pacijenta administrativno i financijski razriješen")
+    audit(db, "journey_completed", "PatientJourney", journey.id, "Tijek pacijenta završen", actor.user_id,actor.actor_type,actor.api_key_id,None,snapshot(journey),request)
     db.commit(); return projection(db, journey)

@@ -14,7 +14,7 @@ router=APIRouter(prefix="/api/patient-journeys",tags=["patient-journeys"])
 def query(): return select(PatientJourney).options(joinedload(PatientJourney.patient),joinedload(PatientJourney.appointment),selectinload(PatientJourney.events),selectinload(PatientJourney.blockers))
 def get_journey(db:Session,journey_id:int):
  item=db.scalar(query().where(PatientJourney.id==journey_id))
- if not item: raise HTTPException(404,detail="Putovanje pacijenta nije pronađeno")
+ if not item: raise HTTPException(404,detail="Tijek pacijenta nije pronađen")
  return item
 
 @router.get("",response_model=list[JourneyOut])
@@ -32,17 +32,17 @@ def journey_detail(journey_id:int,db:Session=Depends(get_db),actor:Actor=Depends
 def create(payload:JourneyCreate,request:Request,db:Session=Depends(get_db),actor:Actor=Depends(require_permission("journey.create"))):
  appointment=db.get(Appointment,payload.appointment_id)
  if not appointment: raise HTTPException(404,detail="Termin nije pronađen")
- item=create_journey(db,appointment,payload.intake_channel,payload.initial_stage,actor,request);audit(db,"create","PatientJourney",item.id,"Stvoreno kanonsko putovanje pacijenta",actor.user_id,actor.actor_type,actor.api_key_id,None,snapshot(item),request);db.commit();return get_journey(db,item.id)
+ item=create_journey(db,appointment,payload.intake_channel,payload.initial_stage,actor,request);audit(db,"create","PatientJourney",item.id,"Stvoren kanonski tijek pacijenta",actor.user_id,actor.actor_type,actor.api_key_id,None,snapshot(item),request);db.commit();return get_journey(db,item.id)
 
 @router.post("/{journey_id}/transition",response_model=JourneyOut)
 def change_stage(journey_id:int,payload:JourneyTransition,request:Request,db:Session=Depends(get_db),actor:Actor=Depends(require_permission("journey.transition"))):
- item=get_journey(db,journey_id);before=snapshot(item);transition(db,item,payload.target_stage,actor,request,payload.reason);audit(db,"transition","PatientJourney",item.id,payload.reason or "Promjena faze putovanja",actor.user_id,actor.actor_type,actor.api_key_id,before,snapshot(item),request);db.commit();return get_journey(db,item.id)
+ item=get_journey(db,journey_id);before=snapshot(item);transition(db,item,payload.target_stage,actor,request,payload.reason);audit(db,"transition","PatientJourney",item.id,payload.reason or "Promjena faze tijeka pacijenta",actor.user_id,actor.actor_type,actor.api_key_id,before,snapshot(item),request);db.commit();return get_journey(db,item.id)
 
 @router.patch("/{journey_id}/statuses",response_model=JourneyOut)
 def change_statuses(journey_id:int,payload:JourneyStatusUpdate,request:Request,db:Session=Depends(get_db),actor:Actor=Depends(require_permission("journey.transition"))):
  item=get_journey(db,journey_id);updates=payload.model_dump(exclude_none=True)
  if not updates: raise HTTPException(422,detail="Nije poslana nijedna promjena")
- before=snapshot(item);update_substatuses(db,item,updates,actor,request);audit(db,"status_update","PatientJourney",item.id,"Ažurirani podstatusi putovanja",actor.user_id,actor.actor_type,actor.api_key_id,before,snapshot(item),request);db.commit();return get_journey(db,item.id)
+ before=snapshot(item);update_substatuses(db,item,updates,actor,request);audit(db,"status_update","PatientJourney",item.id,"Ažurirani podstatusi tijeka pacijenta",actor.user_id,actor.actor_type,actor.api_key_id,before,snapshot(item),request);db.commit();return get_journey(db,item.id)
 
 @router.post("/{journey_id}/blockers",response_model=JourneyBlockerOut)
 def create_blocker(journey_id:int,payload:BlockerCreate,request:Request,db:Session=Depends(get_db),actor:Actor=Depends(require_permission("journey.transition"))):

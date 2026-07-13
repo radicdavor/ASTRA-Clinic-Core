@@ -31,7 +31,7 @@ def get_journey(db: Session, journey_id: int) -> PatientJourney:
         .where(PatientJourney.id == journey_id)
     )
     if not journey:
-        raise HTTPException(404, detail="Putovanje pacijenta nije pronađeno")
+        raise HTTPException(404, detail="Tijek pacijenta nije pronađen")
     return journey
 
 

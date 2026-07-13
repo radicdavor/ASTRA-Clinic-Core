@@ -14,7 +14,7 @@ def assign_preparation(db:Session,journey:PatientJourney,template:PreparationPla
  if not template.active or not template.approved_at: raise HTTPException(422,detail="Plan pripreme mora biti aktivan i ljudski odobren")
  if journey.current_stage in {"completed","cancelled","no_show"}: raise HTTPException(409,detail="Zatvorenom putovanju nije moguće dodijeliti pripremu")
  existing=db.query(JourneyPreparation).filter_by(journey_id=journey.id).one_or_none()
- if existing: raise HTTPException(409,detail="Putovanje već ima dodijeljen plan pripreme")
+ if existing: raise HTTPException(409,detail="Tijek pacijenta već ima dodijeljen plan pripreme")
  states={item.get("key",f"requirement_{index}"):"not_confirmed" for index,item in enumerate(template.requirements_json)}
  assignment=JourneyPreparation(journey_id=journey.id,template_id=template.id,status="assigned",assigned_by=actor.user_id,requirement_states_json=states);db.add(assignment);journey.preparation_status="assigned";db.flush()
  start=datetime.combine(journey.appointment.date,journey.appointment.start_time,tzinfo=timezone.utc)

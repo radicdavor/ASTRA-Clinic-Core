@@ -57,7 +57,7 @@ def evaluate_email_ingestion(envelope: EmailIngestionEnvelope) -> EmailIngestion
         return EmailIngestionReview(status="rejected", reason="Poruka nema privitak")
     return EmailIngestionReview(
         status="manual_review_required",
-        reason="Pošiljatelj i putovanje moraju biti ljudski potvrđeni prije pohrane",
+        reason="Pošiljatelj i tijek pacijenta moraju biti ljudski potvrđeni prije pohrane",
     )
 
 
