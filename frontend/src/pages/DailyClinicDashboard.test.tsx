@@ -11,7 +11,7 @@ const rows = [
     room_id: 1, room_name: "Ordinacija 1", intake_channel: "manual", workflow_stage: "ready_for_arrival",
     document_status: "complete", preparation_status: "in_progress", arrival_status: "not_arrived",
     check_in_status: "not_arrived", encounter_status: "not_started", consumables_status: "not_ready",
-    billing_status: "not_ready", payment_status: "unpaid", blocker_status: "blocked",
+    billing_status: "not_ready", payment_status: "not_due", blocker_status: "blocked",
     blocker_labels: ["Nedostaje nalaz"], blockers: [{ id: 1, title: "Nedostaje nalaz", details: "Laboratorijski nalaz nije priložen.", is_clinical: false }], allowed_actions: ["open_check_in"],
   },
   {
@@ -37,6 +37,14 @@ const rows = [
     document_status: "complete", preparation_status: "complete", arrival_status: "arrived",
     check_in_status: "ready", encounter_status: "completed", consumables_status: "pending",
     billing_status: "not_ready", payment_status: "not_due", blocker_status: "clear", blocker_labels: [], blockers: [], allowed_actions: [],
+  },
+  {
+    journey_id: 15, appointment_id: 105, time: "12:00:00", patient_name: "Sintetička Naplata",
+    service_id: 1, service_name: "Naplata usluge", clinician_id: 1, clinician_name: "dr. Test",
+    room_id: 1, room_name: "Ordinacija 1", intake_channel: "manual", workflow_stage: "awaiting_payment",
+    document_status: "complete", preparation_status: "complete", arrival_status: "arrived",
+    check_in_status: "ready", encounter_status: "completed", consumables_status: "confirmed",
+    billing_status: "invoice_created", payment_status: "unpaid", blocker_status: "clear", blocker_labels: [], blockers: [], allowed_actions: [],
   },
 ];
 
@@ -87,7 +95,7 @@ describe("dnevni tijek pacijenata", () => {
     expect(screen.queryByRole("columnheader", { name: "Priprema" })).toBeNull();
     expect(screen.getByRole("columnheader", { name: "Potrebno riješiti" })).toBeTruthy();
     expect(screen.getByText("Priprema još nije dovršena.")).toBeTruthy();
-    expect(screen.getAllByText("Nema otvorenih stavki")).toHaveLength(1);
+    expect(screen.getAllByText("Nema otvorenih stavki")).toHaveLength(2);
   });
 
   test("dokumentaciju prikazuje samo kada je potrebno nešto riješiti", async () => {
@@ -102,6 +110,15 @@ describe("dnevni tijek pacijenata", () => {
     expect(await screen.findByText("Sintetički Materijal")).toBeTruthy();
     expect(screen.queryByRole("columnheader", { name: "Materijal" })).toBeNull();
     expect(screen.getByText("Potrošni materijal treba potvrditi prije izrade računa.")).toBeTruthy();
+  });
+
+  test("račun i plaćanje prikazuje kao jednu naplatu", async () => {
+    renderDashboard();
+    expect(await screen.findByText("Sintetička Naplata")).toBeTruthy();
+    expect(screen.getByRole("columnheader", { name: "Naplata" })).toBeTruthy();
+    expect(screen.queryByRole("columnheader", { name: "Račun" })).toBeNull();
+    expect(screen.queryByRole("columnheader", { name: "Plaćanje" })).toBeNull();
+    expect(screen.getByText("Neplaćeno")).toBeTruthy();
   });
 
   test("otvara prijem i usmjerava na prijemnu provjeru", async () => {

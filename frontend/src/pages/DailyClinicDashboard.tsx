@@ -29,6 +29,14 @@ function JourneyState({ value }: { value: string }) {
   return <span className={`journey-state ${tone}`}><Icon size={14} />{journeyStatusLabel(value)}</span>;
 }
 
+function BillingState({ row }: { row: DashboardRow }) {
+  if (row.billing_status === "adjustment_required") return <JourneyState value={row.billing_status}/>;
+  if (["paid", "refunded", "cancelled", "deferred", "unpaid", "partially_paid"].includes(row.payment_status)) return <JourneyState value={row.payment_status}/>;
+  if (row.billing_status === "invoice_created") return <JourneyState value={row.billing_status}/>;
+  if (row.billing_status === "ready" || row.workflow_stage === "awaiting_billing") return <span className="journey-state warning"><AlertTriangle size={14}/>Račun treba izraditi</span>;
+  return <span className="journey-state neutral"><Circle size={14}/>Nije započeta</span>;
+}
+
 const preparationAttention: Record<string, string> = {
   assigned: "Priprema čeka potvrdu pacijenta.",
   acknowledged: "Pripremu treba dovršiti prije pregleda.",
@@ -103,11 +111,11 @@ export function DailyClinicDashboard() {
     </div>
     {board.error && <p className="form-error">Dnevni pregled nije učitan: {board.error}</p>}
     {actionError && <p className="form-error" role="alert">Radnja nije izvršena: {actionError}</p>}
-    <div className="clinic-day-table-wrap"><table className="clinic-day-table"><thead><tr><th>Vrijeme i pacijent</th><th>Usluga</th><th>Prijemna provjera</th><th>Pregled</th><th>Račun</th><th>Plaćanje</th><th>Potrebno riješiti</th><th>Sljedeća radnja</th></tr></thead><tbody>
+    <div className="clinic-day-table-wrap"><table className="clinic-day-table"><thead><tr><th>Vrijeme i pacijent</th><th>Usluga</th><th>Prijemna provjera</th><th>Pregled</th><th>Naplata</th><th>Potrebno riješiti</th><th>Sljedeća radnja</th></tr></thead><tbody>
       {board.data.rows.map(row => <tr key={row.journey_id} className={row.blocker_status === "blocked" ? "has-blocker" : ""}>
         <td><span className="patient-time">{row.time.slice(0,5)}</span><Link to={`/journeys/${row.journey_id}`}>{row.patient_name}</Link><small>{row.clinician_name} · {row.room_name}</small></td>
         <td><strong>{row.service_name}</strong><small>{row.intake_channel === "ai_secretary" ? "AI tajnica" : row.intake_channel === "web" ? "Web" : "Ručni unos"}</small></td>
-        <td><JourneyState value={row.check_in_status}/></td><td><JourneyState value={row.encounter_status}/></td><td><JourneyState value={row.billing_status}/></td><td><JourneyState value={row.payment_status}/></td>
+        <td><JourneyState value={row.check_in_status}/></td><td><JourneyState value={row.encounter_status}/></td><td><BillingState row={row}/></td>
         <td>{row.blockers.length || preparationAttention[row.preparation_status] || documentAttention[row.document_status] || consumablesAttention(row) ? <div className="blocker-list">
           {row.blockers.map(item => <span className="blocker-copy" key={item.id}><AlertTriangle size={15}/><span><strong>{item.title}</strong><small>{item.details || (item.is_clinical ? "Potrebna je odluka ovlaštenog liječnika." : "Potrebna je provjera prije nastavka.")}</small></span></span>)}
           {documentAttention[row.document_status] && <span className="blocker-copy document-attention"><AlertTriangle size={15}/><span><strong>Dokumentacija</strong><small>{documentAttention[row.document_status]}</small></span></span>}
@@ -119,7 +127,7 @@ export function DailyClinicDashboard() {
           {row.allowed_actions.includes("open_encounter") && <button type="button" onClick={() => navigate(`/journeys/${row.journey_id}?focus=encounter`)}><Stethoscope size={15}/>Otvori pregled</button>}
         </td>
       </tr>)}
-      {!board.loading && !board.data.rows.length && <tr><td colSpan={8} className="clinic-day-empty">Za odabrani dan i filtre nema dolazaka.</td></tr>}
+      {!board.loading && !board.data.rows.length && <tr><td colSpan={7} className="clinic-day-empty">Za odabrani dan i filtre nema dolazaka.</td></tr>}
     </tbody></table></div>
   </section>;
 }
