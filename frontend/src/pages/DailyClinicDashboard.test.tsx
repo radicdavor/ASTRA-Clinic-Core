@@ -73,6 +73,15 @@ describe("dnevni tijek pacijenata", () => {
     expect(screen.getAllByRole("button", { name: "Otvori prijem" })).toHaveLength(2);
   });
 
+  test("pripremu prikazuje samo kada je potrebno nešto riješiti", async () => {
+    renderDashboard();
+    expect(await screen.findByText("Sintetički Dolazak")).toBeTruthy();
+    expect(screen.queryByRole("columnheader", { name: "Priprema" })).toBeNull();
+    expect(screen.getByRole("columnheader", { name: "Potrebno riješiti" })).toBeTruthy();
+    expect(screen.getByText("Priprema još nije dovršena.")).toBeTruthy();
+    expect(screen.getAllByText("Nema otvorenih stavki")).toHaveLength(2);
+  });
+
   test("otvara prijem i usmjerava na prijemnu provjeru", async () => {
     const user = userEvent.setup(); renderDashboard();
     const patient = await screen.findByText("Sintetički Dolazak");
