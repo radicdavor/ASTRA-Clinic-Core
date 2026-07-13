@@ -30,6 +30,14 @@ const rows = [
     check_in_status: "ready", encounter_status: "in_progress", consumables_status: "not_ready",
     billing_status: "not_ready", payment_status: "not_due", blocker_status: "clear", blocker_labels: [], blockers: [], allowed_actions: ["open_encounter"],
   },
+  {
+    journey_id: 14, appointment_id: 104, time: "11:00:00", patient_name: "Sintetički Materijal",
+    service_id: 1, service_name: "Završeni zahvat", clinician_id: 1, clinician_name: "dr. Test",
+    room_id: 1, room_name: "Ordinacija 1", intake_channel: "manual", workflow_stage: "procedure_completed",
+    document_status: "complete", preparation_status: "complete", arrival_status: "arrived",
+    check_in_status: "ready", encounter_status: "completed", consumables_status: "pending",
+    billing_status: "not_ready", payment_status: "not_due", blocker_status: "clear", blocker_labels: [], blockers: [], allowed_actions: [],
+  },
 ];
 
 function response(body: unknown) {
@@ -87,6 +95,13 @@ describe("dnevni tijek pacijenata", () => {
     expect(await screen.findByText("Sintetički Prijem")).toBeTruthy();
     expect(screen.queryByRole("columnheader", { name: "Dokumenti" })).toBeNull();
     expect(screen.getByText("Dokumentacija je zatražena, ali još nije zaprimljena.")).toBeTruthy();
+  });
+
+  test("materijal prikazuje samo nakon završenog pregleda kada traži radnju", async () => {
+    renderDashboard();
+    expect(await screen.findByText("Sintetički Materijal")).toBeTruthy();
+    expect(screen.queryByRole("columnheader", { name: "Materijal" })).toBeNull();
+    expect(screen.getByText("Potrošni materijal treba potvrditi prije izrade računa.")).toBeTruthy();
   });
 
   test("otvara prijem i usmjerava na prijemnu provjeru", async () => {

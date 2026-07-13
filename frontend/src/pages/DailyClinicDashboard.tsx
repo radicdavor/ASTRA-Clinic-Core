@@ -1,4 +1,4 @@
-import { AlertTriangle, CheckCircle2, Circle, ClipboardCheck, Clock3, RefreshCw, Search, Stethoscope } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Circle, ClipboardCheck, Clock3, PackageCheck, RefreshCw, Search, Stethoscope } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import { useMemo, useState } from "react";
 import { api } from "../api/client";
@@ -43,6 +43,13 @@ const documentAttention: Record<string, string> = {
   review_required: "Dokumentaciju treba pregledati ovlaštena osoba.",
   blocked: "Dokumentacija blokira nastavak obrade.",
 };
+
+function consumablesAttention(row: DashboardRow) {
+  if (row.encounter_status !== "completed" || ["confirmed", "not_applicable"].includes(row.consumables_status)) return "";
+  return row.consumables_status === "pending"
+    ? "Potrošni materijal treba potvrditi prije izrade računa."
+    : "Potrošni materijal još nije evidentiran.";
+}
 
 export function DailyClinicDashboard() {
   const navigate = useNavigate();
@@ -96,22 +103,23 @@ export function DailyClinicDashboard() {
     </div>
     {board.error && <p className="form-error">Dnevni pregled nije učitan: {board.error}</p>}
     {actionError && <p className="form-error" role="alert">Radnja nije izvršena: {actionError}</p>}
-    <div className="clinic-day-table-wrap"><table className="clinic-day-table"><thead><tr><th>Vrijeme i pacijent</th><th>Usluga</th><th>Prijemna provjera</th><th>Pregled</th><th>Materijal</th><th>Račun</th><th>Plaćanje</th><th>Potrebno riješiti</th><th>Sljedeća radnja</th></tr></thead><tbody>
+    <div className="clinic-day-table-wrap"><table className="clinic-day-table"><thead><tr><th>Vrijeme i pacijent</th><th>Usluga</th><th>Prijemna provjera</th><th>Pregled</th><th>Račun</th><th>Plaćanje</th><th>Potrebno riješiti</th><th>Sljedeća radnja</th></tr></thead><tbody>
       {board.data.rows.map(row => <tr key={row.journey_id} className={row.blocker_status === "blocked" ? "has-blocker" : ""}>
         <td><span className="patient-time">{row.time.slice(0,5)}</span><Link to={`/journeys/${row.journey_id}`}>{row.patient_name}</Link><small>{row.clinician_name} · {row.room_name}</small></td>
         <td><strong>{row.service_name}</strong><small>{row.intake_channel === "ai_secretary" ? "AI tajnica" : row.intake_channel === "web" ? "Web" : "Ručni unos"}</small></td>
-        <td><JourneyState value={row.check_in_status}/></td><td><JourneyState value={row.encounter_status}/></td><td><JourneyState value={row.consumables_status}/></td><td><JourneyState value={row.billing_status}/></td><td><JourneyState value={row.payment_status}/></td>
-        <td>{row.blockers.length || preparationAttention[row.preparation_status] || documentAttention[row.document_status] ? <div className="blocker-list">
+        <td><JourneyState value={row.check_in_status}/></td><td><JourneyState value={row.encounter_status}/></td><td><JourneyState value={row.billing_status}/></td><td><JourneyState value={row.payment_status}/></td>
+        <td>{row.blockers.length || preparationAttention[row.preparation_status] || documentAttention[row.document_status] || consumablesAttention(row) ? <div className="blocker-list">
           {row.blockers.map(item => <span className="blocker-copy" key={item.id}><AlertTriangle size={15}/><span><strong>{item.title}</strong><small>{item.details || (item.is_clinical ? "Potrebna je odluka ovlaštenog liječnika." : "Potrebna je provjera prije nastavka.")}</small></span></span>)}
           {documentAttention[row.document_status] && <span className="blocker-copy document-attention"><AlertTriangle size={15}/><span><strong>Dokumentacija</strong><small>{documentAttention[row.document_status]}</small></span></span>}
           {preparationAttention[row.preparation_status] && <span className="blocker-copy preparation-attention"><Clock3 size={15}/><span><strong>Priprema</strong><small>{preparationAttention[row.preparation_status]}</small></span></span>}
+          {consumablesAttention(row) && <span className="blocker-copy material-attention"><PackageCheck size={15}/><span><strong>Potrošni materijal</strong><small>{consumablesAttention(row)}</small></span></span>}
         </div> : <span className="nothing-to-resolve"><CheckCircle2 size={14}/>Nema otvorenih stavki</span>}</td>
         <td className="clinic-day-actions">
           {row.allowed_actions.includes("open_check_in") && <button type="button" disabled={busyJourney === row.journey_id} onClick={() => openReception(row)}><ClipboardCheck size={15}/>Otvori prijem</button>}
           {row.allowed_actions.includes("open_encounter") && <button type="button" onClick={() => navigate(`/journeys/${row.journey_id}?focus=encounter`)}><Stethoscope size={15}/>Otvori pregled</button>}
         </td>
       </tr>)}
-      {!board.loading && !board.data.rows.length && <tr><td colSpan={9} className="clinic-day-empty">Za odabrani dan i filtre nema dolazaka.</td></tr>}
+      {!board.loading && !board.data.rows.length && <tr><td colSpan={8} className="clinic-day-empty">Za odabrani dan i filtre nema dolazaka.</td></tr>}
     </tbody></table></div>
   </section>;
 }
