@@ -482,6 +482,37 @@ class JourneyBlocker(TimestampMixin, Base):
     journey: Mapped[PatientJourney] = relationship(back_populates="blockers")
 
 
+class PreparationPlanTemplate(TimestampMixin, Base):
+    __tablename__="preparation_plan_templates"
+    __table_args__=(UniqueConstraint("template_key","version",name="uq_preparation_template_version"),)
+    id:Mapped[int]=mapped_column(primary_key=True);template_key:Mapped[str]=mapped_column(String(100),index=True);name:Mapped[str]=mapped_column(String(180));procedure_type:Mapped[str]=mapped_column(String(100),index=True);version:Mapped[str]=mapped_column(String(40));patient_instructions:Mapped[str]=mapped_column(Text);requirements_json:Mapped[list]=mapped_column(JSON,default=list);reminder_schedule_json:Mapped[list]=mapped_column(JSON,default=list);active:Mapped[bool]=mapped_column(Boolean,default=True,index=True);approved_by:Mapped[int|None]=mapped_column(ForeignKey("users.id"));approved_at:Mapped[datetime|None]=mapped_column(DateTime(timezone=True))
+
+class JourneyPreparation(TimestampMixin, Base):
+    __tablename__="journey_preparations"
+    id:Mapped[int]=mapped_column(primary_key=True);journey_id:Mapped[int]=mapped_column(ForeignKey("patient_journeys.id",ondelete="CASCADE"),unique=True,index=True);template_id:Mapped[int]=mapped_column(ForeignKey("preparation_plan_templates.id"));status:Mapped[str]=mapped_column(String(40),default="assigned",index=True);assigned_by:Mapped[int|None]=mapped_column(ForeignKey("users.id"));assigned_at:Mapped[datetime]=mapped_column(DateTime(timezone=True),server_default=func.now());acknowledged_at:Mapped[datetime|None]=mapped_column(DateTime(timezone=True));completed_at:Mapped[datetime|None]=mapped_column(DateTime(timezone=True));requirement_states_json:Mapped[dict]=mapped_column(JSON,default=dict);journey:Mapped[PatientJourney]=relationship();template:Mapped[PreparationPlanTemplate]=relationship()
+
+class PatientFormTemplate(TimestampMixin, Base):
+    __tablename__="patient_form_templates"
+    __table_args__=(UniqueConstraint("template_key","version",name="uq_patient_form_template_version"),)
+    id:Mapped[int]=mapped_column(primary_key=True);template_key:Mapped[str]=mapped_column(String(100),index=True);name:Mapped[str]=mapped_column(String(180));version:Mapped[str]=mapped_column(String(40));fields_json:Mapped[list]=mapped_column(JSON,default=list);active:Mapped[bool]=mapped_column(Boolean,default=True,index=True);approved_by:Mapped[int|None]=mapped_column(ForeignKey("users.id"));approved_at:Mapped[datetime|None]=mapped_column(DateTime(timezone=True))
+
+class JourneyForm(TimestampMixin, Base):
+    __tablename__="journey_forms"
+    id:Mapped[int]=mapped_column(primary_key=True);journey_id:Mapped[int]=mapped_column(ForeignKey("patient_journeys.id",ondelete="CASCADE"),index=True);template_id:Mapped[int]=mapped_column(ForeignKey("patient_form_templates.id"));status:Mapped[str]=mapped_column(String(40),default="requested",index=True);answers_json:Mapped[dict|None]=mapped_column(JSON);requested_at:Mapped[datetime]=mapped_column(DateTime(timezone=True),server_default=func.now());completed_at:Mapped[datetime|None]=mapped_column(DateTime(timezone=True));reviewed_at:Mapped[datetime|None]=mapped_column(DateTime(timezone=True));reviewed_by:Mapped[int|None]=mapped_column(ForeignKey("users.id"));journey:Mapped[PatientJourney]=relationship();template:Mapped[PatientFormTemplate]=relationship()
+
+class DocumentRequest(TimestampMixin, Base):
+    __tablename__="document_requests"
+    id:Mapped[int]=mapped_column(primary_key=True);journey_id:Mapped[int]=mapped_column(ForeignKey("patient_journeys.id",ondelete="CASCADE"),index=True);document_type:Mapped[str]=mapped_column(String(100),index=True);title:Mapped[str]=mapped_column(String(220));mandatory:Mapped[bool]=mapped_column(Boolean,default=True,index=True);status:Mapped[str]=mapped_column(String(40),default="requested",index=True);clinical_document_id:Mapped[int|None]=mapped_column(ForeignKey("clinical_documents.id"));requested_by:Mapped[int|None]=mapped_column(ForeignKey("users.id"));resolved_at:Mapped[datetime|None]=mapped_column(DateTime(timezone=True));journey:Mapped[PatientJourney]=relationship();clinical_document:Mapped[ClinicalDocument|None]=relationship()
+
+class CommunicationEvent(TimestampMixin, Base):
+    __tablename__="communication_events"
+    id:Mapped[int]=mapped_column(primary_key=True);journey_id:Mapped[int]=mapped_column(ForeignKey("patient_journeys.id",ondelete="CASCADE"),index=True);channel:Mapped[str]=mapped_column(String(40),index=True);template_key:Mapped[str]=mapped_column(String(120));status:Mapped[str]=mapped_column(String(40),default="queued",index=True);scheduled_at:Mapped[datetime|None]=mapped_column(DateTime(timezone=True),index=True);sent_at:Mapped[datetime|None]=mapped_column(DateTime(timezone=True));delivered_at:Mapped[datetime|None]=mapped_column(DateTime(timezone=True));failure_reason:Mapped[str|None]=mapped_column(Text);correlation_id:Mapped[str]=mapped_column(String(100),unique=True,index=True);journey:Mapped[PatientJourney]=relationship()
+
+class JourneyReminder(TimestampMixin, Base):
+    __tablename__="journey_reminders"
+    id:Mapped[int]=mapped_column(primary_key=True);journey_id:Mapped[int]=mapped_column(ForeignKey("patient_journeys.id",ondelete="CASCADE"),index=True);reminder_type:Mapped[str]=mapped_column(String(100),index=True);channel:Mapped[str]=mapped_column(String(40));scheduled_at:Mapped[datetime]=mapped_column(DateTime(timezone=True),index=True);status:Mapped[str]=mapped_column(String(40),default="scheduled",index=True);communication_event_id:Mapped[int|None]=mapped_column(ForeignKey("communication_events.id"));journey:Mapped[PatientJourney]=relationship();communication_event:Mapped[CommunicationEvent|None]=relationship()
+
+
 class ClinicalReadinessSnapshot(Base):
     __tablename__ = "clinical_readiness_snapshots"
     __table_args__ = (

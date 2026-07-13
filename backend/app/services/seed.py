@@ -72,6 +72,9 @@ PERMISSIONS = [
     "journey.create",
     "journey.update_admin",
     "journey.transition",
+    "preparation.assign",
+    "preparation.review",
+    "documents.request",
     "checkin.update",
     "checkin.clinical_review",
     "encounter.read",
@@ -85,9 +88,9 @@ PERMISSIONS = [
 
 ROLE_PERMISSIONS = {
     "admin": PERMISSIONS,
-    "physician": ["patients.read", "patients.write", "appointments.read", "appointments.write", "episodes.read", "episodes.write", "clinical_plans.read", "clinical_plans.write", "clinical_documents.read", "clinical_documents.write", "clinical_documents.review", "services.read", "inventory.read", "billing.read", "clinical_readiness.snapshots.read", "clinical_readiness.snapshots.write", "clinical_readiness.snapshots.supersede", "clinical_readiness.acknowledgments.read", "clinical_findings.read", "clinical_open_questions.read", "clinical_evidence_timeline.read", "workflow_tasks.read", "workflow_tasks.write", "knowledge_protocols.read", "knowledge_protocols.write", "knowledge_protocols.review", "journey.read", "journey.transition", "checkin.clinical_review", "encounter.read", "encounter.write", "encounter.complete", "summary.generate", "summary.review"],
-    "nurse": ["patients.read", "appointments.read", "appointments.write", "episodes.read", "clinical_plans.read", "clinical_documents.read", "clinical_documents.write", "clinical_documents.review", "inventory.read", "inventory.write", "clinical_readiness.snapshots.read", "workflow_tasks.read", "workflow_tasks.write", "journey.read", "journey.transition", "checkin.update", "encounter.read", "consumables.record"],
-    "receptionist": ["patients.read", "patients.write", "appointments.read", "appointments.write", "episodes.read", "clinical_plans.read", "clinical_documents.read", "services.read", "billing.read", "workflow_tasks.read", "workflow_tasks.write", "journey.read", "journey.create", "journey.transition", "checkin.update"],
+    "physician": ["patients.read", "patients.write", "appointments.read", "appointments.write", "episodes.read", "episodes.write", "clinical_plans.read", "clinical_plans.write", "clinical_documents.read", "clinical_documents.write", "clinical_documents.review", "services.read", "inventory.read", "billing.read", "clinical_readiness.snapshots.read", "clinical_readiness.snapshots.write", "clinical_readiness.snapshots.supersede", "clinical_readiness.acknowledgments.read", "clinical_findings.read", "clinical_open_questions.read", "clinical_evidence_timeline.read", "workflow_tasks.read", "workflow_tasks.write", "knowledge_protocols.read", "knowledge_protocols.write", "knowledge_protocols.review", "journey.read", "journey.transition", "preparation.assign", "preparation.review", "documents.request", "checkin.clinical_review", "encounter.read", "encounter.write", "encounter.complete", "summary.generate", "summary.review"],
+    "nurse": ["patients.read", "appointments.read", "appointments.write", "episodes.read", "clinical_plans.read", "clinical_documents.read", "clinical_documents.write", "clinical_documents.review", "inventory.read", "inventory.write", "clinical_readiness.snapshots.read", "workflow_tasks.read", "workflow_tasks.write", "journey.read", "journey.transition", "preparation.assign", "documents.request", "checkin.update", "encounter.read", "consumables.record"],
+    "receptionist": ["patients.read", "patients.write", "appointments.read", "appointments.write", "episodes.read", "clinical_plans.read", "clinical_documents.read", "services.read", "billing.read", "workflow_tasks.read", "workflow_tasks.write", "journey.read", "journey.create", "journey.transition", "preparation.assign", "documents.request", "checkin.update"],
     "inventory_manager": ["inventory.read", "inventory.write", "inventory.adjust", "inventory.write_off", "inventory.transfer", "procurement.read", "procurement.write"],
     "billing": ["billing.read", "billing.write", "billing.mark_paid", "patients.read", "appointments.read", "journey.read", "journey.transition", "payment.record"],
     "ai_agent": ["ai.appointments.create", "ai.patients.create", "ai.free_slots.read", "journey.read", "journey.create"],

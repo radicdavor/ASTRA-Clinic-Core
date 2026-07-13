@@ -110,6 +110,9 @@ def auth_setup(db: Session) -> dict[str, User]:
         "journey.read",
         "journey.create",
         "journey.transition",
+        "preparation.assign",
+        "preparation.review",
+        "documents.request",
     ]
     permissions = {name: Permission(name=name, description=name) for name in permission_names}
     admin_role = Role(name="admin", description="Admin", permissions=list(permissions.values()))

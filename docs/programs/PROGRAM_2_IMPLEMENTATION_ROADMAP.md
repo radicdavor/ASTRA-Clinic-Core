@@ -24,7 +24,7 @@ One canonical workflow: `Prijava → dokumenti → priprema → dolazak → prov
 - [x] A — domain contract and additive foundation
 - [x] B — explicit state machine, blockers and transition audit
 - [x] C — shared intake orchestration and safe channel boundaries
-- [ ] D — versioned preparation/forms/reminder contracts
+- [x] D — versioned preparation/forms/reminder contracts
 - [ ] E — document ingestion and OCR provider boundary
 - [ ] F — unified timeline and source-linked summary projection
 - [ ] G — daily clinic dashboard
