@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { DailyClinicDashboard } from "./DailyClinicDashboard";
@@ -12,7 +12,7 @@ const rows = [
     document_status: "complete", preparation_status: "in_progress", arrival_status: "not_arrived",
     check_in_status: "not_arrived", encounter_status: "not_started", consumables_status: "not_ready",
     billing_status: "not_ready", payment_status: "unpaid", blocker_status: "blocked",
-    blocker_labels: ["Nedostaje nalaz"], blockers: [{ id: 1, title: "Nedostaje nalaz", details: "Laboratorijski nalaz nije priložen.", is_clinical: false }], allowed_actions: ["mark_arrived"],
+    blocker_labels: ["Nedostaje nalaz"], blockers: [{ id: 1, title: "Nedostaje nalaz", details: "Laboratorijski nalaz nije priložen.", is_clinical: false }], allowed_actions: ["open_check_in"],
   },
   {
     journey_id: 12, appointment_id: 102, time: "09:00:00", patient_name: "Sintetički Prijem",
@@ -65,17 +65,21 @@ describe("dnevni tijek pacijenata", () => {
     expect(screen.queryByText("unpaid")).toBeNull();
   });
 
-  test("evidentira dolazak bez automatskog otvaranja prijema", async () => {
-    const user = userEvent.setup(); renderDashboard();
-    await user.click(await screen.findByRole("button", { name: "Pacijent stigao" }));
-    await waitFor(() => expect(fetch).toHaveBeenCalledWith(expect.stringContaining("/api/patient-journeys/11/arrival"), expect.objectContaining({ method: "POST" })));
-    expect(fetch).not.toHaveBeenCalledWith(expect.stringContaining("/api/patient-journeys/11/check-in"), expect.anything());
+  test("ne prikazuje zaseban dolazak ni dodatni administrativni gumb", async () => {
+    renderDashboard();
+    expect(await screen.findByText("Sintetički Dolazak")).toBeTruthy();
+    expect(screen.queryByRole("columnheader", { name: "Dolazak" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Pacijent stigao" })).toBeNull();
+    expect(screen.getAllByRole("button", { name: "Otvori prijem" })).toHaveLength(2);
   });
 
   test("otvara prijem i usmjerava na prijemnu provjeru", async () => {
     const user = userEvent.setup(); renderDashboard();
-    await user.click(await screen.findByRole("button", { name: "Otvori prijem" }));
-    await waitFor(() => expect(fetch).toHaveBeenCalledWith(expect.stringContaining("/api/patient-journeys/12/check-in"), expect.objectContaining({ method: "POST" })));
+    const patient = await screen.findByText("Sintetički Dolazak");
+    const patientRow = patient.closest("tr");
+    expect(patientRow).toBeTruthy();
+    await user.click(within(patientRow as HTMLTableRowElement).getByRole("button", { name: "Otvori prijem" }));
+    await waitFor(() => expect(fetch).toHaveBeenCalledWith(expect.stringContaining("/api/patient-journeys/11/check-in"), expect.objectContaining({ method: "POST" })));
     expect(await screen.findByText("Otvoren radni prostor")).toBeTruthy();
   });
 

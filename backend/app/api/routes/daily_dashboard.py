@@ -60,9 +60,7 @@ def daily_dashboard(
             continue
         appointment = journey.appointment
         allowed_actions = []
-        if "checkin.update" in actor.permissions and journey.current_stage == "ready_for_arrival":
-            allowed_actions.append("mark_arrived")
-        if "checkin.update" in actor.permissions and journey.current_stage in {"arrived", "check_in_review"}:
+        if "checkin.update" in actor.permissions and journey.current_stage in {"ready_for_arrival", "arrived", "check_in_review"}:
             allowed_actions.append("open_check_in")
         if "encounter.read" in actor.permissions and journey.current_stage in {"ready_for_clinician", "in_encounter"}:
             allowed_actions.append("open_encounter")

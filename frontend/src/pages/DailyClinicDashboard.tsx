@@ -1,4 +1,4 @@
-import { AlertTriangle, CheckCircle2, Circle, ClipboardCheck, Clock3, RefreshCw, Search, Stethoscope, UserCheck } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Circle, ClipboardCheck, Clock3, RefreshCw, Search, Stethoscope } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import { useMemo, useState } from "react";
 import { api } from "../api/client";
@@ -52,19 +52,12 @@ export function DailyClinicDashboard() {
   const providers = useApi<Provider[]>("/api/providers", []);
   const rooms = useApi<Room[]>("/api/rooms", []);
   const services = useApi<Service[]>("/api/services", []);
-  const counts = useMemo(() => ({ total: board.data.rows.length, blocked: board.data.rows.filter(row => row.blocker_status === "blocked").length, arrived: board.data.rows.filter(row => row.arrival_status === "arrived").length }), [board.data.rows]);
-
-  async function markArrived(row: DashboardRow) {
-    setBusyJourney(row.journey_id); setActionError("");
-    try { await api(`/api/patient-journeys/${row.journey_id}/arrival`, { method: "POST" }); setRefresh(value => value + 1); }
-    catch (error) { setActionError(error instanceof Error ? error.message : "Dolazak nije evidentiran."); }
-    finally { setBusyJourney(null); }
-  }
+  const counts = useMemo(() => ({ total: board.data.rows.length, blocked: board.data.rows.filter(row => row.blocker_status === "blocked").length }), [board.data.rows]);
 
   async function openReception(row: DashboardRow) {
     setBusyJourney(row.journey_id); setActionError("");
     try {
-      if (row.workflow_stage === "arrived") await api(`/api/patient-journeys/${row.journey_id}/check-in`, { method: "POST" });
+      if (["ready_for_arrival", "arrived"].includes(row.workflow_stage)) await api(`/api/patient-journeys/${row.journey_id}/check-in`, { method: "POST" });
       navigate(`/journeys/${row.journey_id}?focus=check-in`);
     } catch (error) {
       setActionError(error instanceof Error ? error.message : "Prijem nije otvoren.");
@@ -77,7 +70,7 @@ export function DailyClinicDashboard() {
       <div><span className="eyebrow">Dnevni operativni pregled</span><h1>Danas u poliklinici</h1><p>Jedan red prikazuje cijeli tijek pacijenta — od dokumentacije i pripreme do pregleda i plaćanja.</p></div>
       <div className="clinic-day-date"><DateInput value={day} onChange={setDay} required /><button type="button" onClick={() => setRefresh(value => value + 1)}><RefreshCw size={16}/>Osvježi</button></div>
     </header>
-    <div className="clinic-day-summary"><span><b>{counts.total}</b> dolazaka</span><span><b>{counts.arrived}</b> stiglih</span><span className={counts.blocked ? "attention" : ""}><b>{counts.blocked}</b> s blokadom</span><small>Zadnje osvježenje: {board.data.refreshed_at ? new Date(board.data.refreshed_at).toLocaleTimeString("hr-HR", { hour: "2-digit", minute: "2-digit" }) : "—"}</small></div>
+    <div className="clinic-day-summary"><span><b>{counts.total}</b> dolazaka</span><span className={counts.blocked ? "attention" : ""}><b>{counts.blocked}</b> s blokadom</span><small>Zadnje osvježenje: {board.data.refreshed_at ? new Date(board.data.refreshed_at).toLocaleTimeString("hr-HR", { hour: "2-digit", minute: "2-digit" }) : "—"}</small></div>
     <div className="clinic-day-filters">
       <label className="clinic-day-search"><Search size={16}/><input aria-label="Pretraži pacijenta" placeholder="Pretraži pacijenta" value={query} onChange={event => setQuery(event.target.value)}/></label>
       <select aria-label="Liječnik" value={clinician} onChange={event => setClinician(event.target.value)}><option value="">Svi liječnici</option>{providers.data.filter(item => item.staff_role === "physician").map(item => <option key={item.id} value={item.id}>{item.full_name}</option>)}</select>
@@ -88,19 +81,18 @@ export function DailyClinicDashboard() {
     </div>
     {board.error && <p className="form-error">Dnevni pregled nije učitan: {board.error}</p>}
     {actionError && <p className="form-error" role="alert">Radnja nije izvršena: {actionError}</p>}
-    <div className="clinic-day-table-wrap"><table className="clinic-day-table"><thead><tr><th>Vrijeme i pacijent</th><th>Usluga</th><th>Dokumenti</th><th>Priprema</th><th>Dolazak</th><th>Check-in</th><th>Pregled</th><th>Materijal</th><th>Račun</th><th>Plaćanje</th><th>Razlog blokade</th><th>Sljedeća radnja</th></tr></thead><tbody>
+    <div className="clinic-day-table-wrap"><table className="clinic-day-table"><thead><tr><th>Vrijeme i pacijent</th><th>Usluga</th><th>Dokumenti</th><th>Priprema</th><th>Prijemna provjera</th><th>Pregled</th><th>Materijal</th><th>Račun</th><th>Plaćanje</th><th>Razlog blokade</th><th>Sljedeća radnja</th></tr></thead><tbody>
       {board.data.rows.map(row => <tr key={row.journey_id} className={row.blocker_status === "blocked" ? "has-blocker" : ""}>
         <td><span className="patient-time">{row.time.slice(0,5)}</span><Link to={`/journeys/${row.journey_id}`}>{row.patient_name}</Link><small>{row.clinician_name} · {row.room_name}</small></td>
         <td><strong>{row.service_name}</strong><small>{row.intake_channel === "ai_secretary" ? "AI tajnica" : row.intake_channel === "web" ? "Web" : "Ručni unos"}</small></td>
-        <td><JourneyState value={row.document_status}/></td><td><JourneyState value={row.preparation_status}/></td><td><JourneyState value={row.arrival_status}/></td><td><JourneyState value={row.check_in_status}/></td><td><JourneyState value={row.encounter_status}/></td><td><JourneyState value={row.consumables_status}/></td><td><JourneyState value={row.billing_status}/></td><td><JourneyState value={row.payment_status}/></td>
+        <td><JourneyState value={row.document_status}/></td><td><JourneyState value={row.preparation_status}/></td><td><JourneyState value={row.check_in_status}/></td><td><JourneyState value={row.encounter_status}/></td><td><JourneyState value={row.consumables_status}/></td><td><JourneyState value={row.billing_status}/></td><td><JourneyState value={row.payment_status}/></td>
         <td>{row.blocker_status === "blocked" ? <div className="blocker-list">{row.blockers.map(item => <span className="blocker-copy" key={item.id}><AlertTriangle size={15}/><span><strong>{item.title}</strong><small>{item.details || (item.is_clinical ? "Potrebna je odluka ovlaštenog liječnika." : "Potrebna je provjera prije nastavka.")}</small></span></span>)}</div> : <JourneyState value="clear"/>}</td>
         <td className="clinic-day-actions">
-          {row.allowed_actions.includes("mark_arrived") && <button type="button" disabled={busyJourney === row.journey_id} onClick={() => markArrived(row)}><UserCheck size={15}/>Pacijent stigao</button>}
           {row.allowed_actions.includes("open_check_in") && <button type="button" disabled={busyJourney === row.journey_id} onClick={() => openReception(row)}><ClipboardCheck size={15}/>Otvori prijem</button>}
           {row.allowed_actions.includes("open_encounter") && <button type="button" onClick={() => navigate(`/journeys/${row.journey_id}?focus=encounter`)}><Stethoscope size={15}/>Otvori pregled</button>}
         </td>
       </tr>)}
-      {!board.loading && !board.data.rows.length && <tr><td colSpan={12} className="clinic-day-empty">Za odabrani dan i filtre nema dolazaka.</td></tr>}
+      {!board.loading && !board.data.rows.length && <tr><td colSpan={11} className="clinic-day-empty">Za odabrani dan i filtre nema dolazaka.</td></tr>}
     </tbody></table></div>
   </section>;
 }
