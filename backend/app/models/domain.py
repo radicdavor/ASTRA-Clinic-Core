@@ -424,6 +424,64 @@ class Appointment(TimestampMixin, Base):
     episode: Mapped[ClinicalEpisode | None] = relationship()
 
 
+class PatientJourney(TimestampMixin, Base):
+    __tablename__ = "patient_journeys"
+    __table_args__ = (UniqueConstraint("appointment_id", name="uq_patient_journeys_appointment_id"),)
+    id: Mapped[int] = mapped_column(primary_key=True)
+    patient_id: Mapped[int] = mapped_column(ForeignKey("patients.id"), index=True)
+    appointment_id: Mapped[int] = mapped_column(ForeignKey("appointments.id"), unique=True, index=True)
+    intake_channel: Mapped[str] = mapped_column(String(30), index=True)
+    current_stage: Mapped[str] = mapped_column(String(50), default="requested", index=True)
+    document_status: Mapped[str] = mapped_column(String(40), default="not_requested", index=True)
+    preparation_status: Mapped[str] = mapped_column(String(40), default="not_assigned", index=True)
+    check_in_status: Mapped[str] = mapped_column(String(40), default="not_arrived", index=True)
+    encounter_status: Mapped[str] = mapped_column(String(40), default="not_started", index=True)
+    consumables_status: Mapped[str] = mapped_column(String(40), default="not_ready", index=True)
+    billing_status: Mapped[str] = mapped_column(String(40), default="not_ready", index=True)
+    payment_status: Mapped[str] = mapped_column(String(40), default="not_due", index=True)
+    closed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), index=True)
+    created_by: Mapped[int | None] = mapped_column(ForeignKey("users.id"))
+    updated_by: Mapped[int | None] = mapped_column(ForeignKey("users.id"))
+    patient: Mapped[Patient] = relationship()
+    appointment: Mapped[Appointment] = relationship()
+    events: Mapped[list["JourneyEvent"]] = relationship(back_populates="journey", cascade="all, delete-orphan", order_by="JourneyEvent.created_at")
+    blockers: Mapped[list["JourneyBlocker"]] = relationship(back_populates="journey", cascade="all, delete-orphan", order_by="JourneyBlocker.created_at")
+
+
+class JourneyEvent(Base):
+    __tablename__ = "journey_events"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    journey_id: Mapped[int] = mapped_column(ForeignKey("patient_journeys.id", ondelete="CASCADE"), index=True)
+    event_type: Mapped[str] = mapped_column(String(80), index=True)
+    from_stage: Mapped[str | None] = mapped_column(String(50), index=True)
+    to_stage: Mapped[str | None] = mapped_column(String(50), index=True)
+    summary: Mapped[str] = mapped_column(Text)
+    source_channel: Mapped[str] = mapped_column(String(40), index=True)
+    actor_user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"))
+    actor_type: Mapped[str] = mapped_column(String(40), default="user")
+    request_id: Mapped[str | None] = mapped_column(String(80), index=True)
+    metadata_json: Mapped[dict | None] = mapped_column(JSON)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), index=True)
+    journey: Mapped[PatientJourney] = relationship(back_populates="events")
+
+
+class JourneyBlocker(TimestampMixin, Base):
+    __tablename__ = "journey_blockers"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    journey_id: Mapped[int] = mapped_column(ForeignKey("patient_journeys.id", ondelete="CASCADE"), index=True)
+    blocker_key: Mapped[str] = mapped_column(String(120), index=True)
+    category: Mapped[str] = mapped_column(String(60), index=True)
+    title: Mapped[str] = mapped_column(String(220))
+    details: Mapped[str | None] = mapped_column(Text)
+    is_clinical: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
+    status: Mapped[str] = mapped_column(String(30), default="open", index=True)
+    created_by: Mapped[int | None] = mapped_column(ForeignKey("users.id"))
+    resolved_by: Mapped[int | None] = mapped_column(ForeignKey("users.id"))
+    resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    resolution_note: Mapped[str | None] = mapped_column(Text)
+    journey: Mapped[PatientJourney] = relationship(back_populates="blockers")
+
+
 class ClinicalReadinessSnapshot(Base):
     __tablename__ = "clinical_readiness_snapshots"
     __table_args__ = (
