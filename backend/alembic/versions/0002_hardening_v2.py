@@ -6,6 +6,7 @@ Create Date: 2026-07-05
 """
 
 from alembic import op
+import sqlalchemy as sa
 
 
 revision = "0002_hardening_v2"
@@ -15,6 +16,31 @@ depends_on = None
 
 
 def upgrade() -> None:
+    op.create_table(
+        "permissions",
+        sa.Column("id", sa.Integer(), primary_key=True),
+        sa.Column("name", sa.String(120), nullable=False),
+        sa.Column("description", sa.Text()),
+    )
+    op.create_index("ix_permissions_name", "permissions", ["name"], unique=True)
+    op.create_table(
+        "role_permissions",
+        sa.Column("role_id", sa.Integer(), sa.ForeignKey("roles.id"), primary_key=True),
+        sa.Column("permission_id", sa.Integer(), sa.ForeignKey("permissions.id"), primary_key=True),
+    )
+    op.add_column("api_keys", sa.Column("scopes", sa.JSON(), nullable=False, server_default="[]"))
+    op.add_column("api_keys", sa.Column("expires_at", sa.DateTime(timezone=True)))
+    op.add_column("api_keys", sa.Column("last_used_at", sa.DateTime(timezone=True)))
+    op.add_column("audit_logs", sa.Column("actor_type", sa.String(40), nullable=False, server_default="system"))
+    op.add_column("audit_logs", sa.Column("actor_api_key_id", sa.Integer()))
+    op.add_column("audit_logs", sa.Column("before_json", sa.JSON()))
+    op.add_column("audit_logs", sa.Column("after_json", sa.JSON()))
+    op.add_column("audit_logs", sa.Column("request_id", sa.String(80)))
+    op.add_column("audit_logs", sa.Column("ip_address", sa.String(80)))
+    op.add_column("audit_logs", sa.Column("user_agent", sa.Text()))
+    op.create_foreign_key("fk_audit_logs_actor_api_key_id", "audit_logs", "api_keys", ["actor_api_key_id"], ["id"])
+    op.create_index("ix_audit_logs_actor_type", "audit_logs", ["actor_type"])
+    op.create_index("ix_audit_logs_request_id", "audit_logs", ["request_id"])
     op.execute("ALTER TABLE invoices ADD COLUMN IF NOT EXISTS operator VARCHAR(120)")
     op.execute("ALTER TABLE invoices ADD COLUMN IF NOT EXISTS business_unit VARCHAR(120)")
     op.execute("ALTER TABLE invoices ADD COLUMN IF NOT EXISTS register_id VARCHAR(80)")
@@ -71,3 +97,19 @@ def downgrade() -> None:
     op.execute("ALTER TABLE invoices DROP COLUMN IF EXISTS register_id")
     op.execute("ALTER TABLE invoices DROP COLUMN IF EXISTS business_unit")
     op.execute("ALTER TABLE invoices DROP COLUMN IF EXISTS operator")
+    op.drop_index("ix_audit_logs_request_id", table_name="audit_logs")
+    op.drop_index("ix_audit_logs_actor_type", table_name="audit_logs")
+    op.drop_constraint("fk_audit_logs_actor_api_key_id", "audit_logs", type_="foreignkey")
+    op.drop_column("audit_logs", "user_agent")
+    op.drop_column("audit_logs", "ip_address")
+    op.drop_column("audit_logs", "request_id")
+    op.drop_column("audit_logs", "after_json")
+    op.drop_column("audit_logs", "before_json")
+    op.drop_column("audit_logs", "actor_api_key_id")
+    op.drop_column("audit_logs", "actor_type")
+    op.drop_column("api_keys", "last_used_at")
+    op.drop_column("api_keys", "expires_at")
+    op.drop_column("api_keys", "scopes")
+    op.drop_table("role_permissions")
+    op.drop_index("ix_permissions_name", table_name="permissions")
+    op.drop_table("permissions")

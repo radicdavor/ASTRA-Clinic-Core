@@ -5,7 +5,7 @@ from sqlalchemy import inspect
 
 from app.auth.dependencies import hash_api_key
 from app.core.security import hash_password
-from app.models.domain import ApiKey, AuditLog, Invoice, InvoiceLine, Patient, Permission, Provider, Role, Room, Service, User
+from app.models.domain import ApiKey, AuditLog, Invoice, InvoiceLine, Patient, PatientJourney, Permission, Provider, Role, Room, Service, User
 
 
 pytestmark = pytest.mark.integration
@@ -135,6 +135,10 @@ def test_appointment_api_conflict_schedule_order_and_audit(pg_client, pg_db):
     )
     schedule = pg_client.get("/api/schedule/day?date=2026-07-06", headers=headers)
     updated = pg_client.patch(f"/api/appointments/{first.json()['id']}", headers=headers, json={"status": "arrived"})
+    # This legacy CRUD probe tests the appointment delete endpoint in isolation.
+    # Canonical journeys intentionally protect their appointments from hard delete.
+    pg_db.query(PatientJourney).filter(PatientJourney.appointment_id == later.json()["id"]).delete()
+    pg_db.flush()
     deleted = pg_client.delete(f"/api/appointments/{later.json()['id']}", headers=headers)
 
     assert first.status_code == 200

@@ -16,6 +16,16 @@ depends_on = None
 
 
 def upgrade() -> None:
+    # Alembic's default version table uses VARCHAR(32), while this and later
+    # immutable revision identifiers are longer. Widen it before Alembic records
+    # this revision so a clean, linear upgrade can continue.
+    op.alter_column(
+        "alembic_version",
+        "version_num",
+        existing_type=sa.String(length=32),
+        type_=sa.String(length=128),
+        existing_nullable=False,
+    )
     op.create_table(
         "clinics",
         sa.Column("id", sa.Integer(), nullable=False),
