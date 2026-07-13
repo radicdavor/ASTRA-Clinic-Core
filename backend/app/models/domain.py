@@ -400,6 +400,26 @@ class JourneyCheckInItem(TimestampMixin, Base):
     check_in: Mapped[JourneyCheckIn] = relationship(back_populates="items")
 
 
+class JourneyEncounter(TimestampMixin, Base):
+    __tablename__ = "journey_encounters"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    journey_id: Mapped[int] = mapped_column(ForeignKey("patient_journeys.id", ondelete="CASCADE"), unique=True, index=True)
+    clinical_episode_id: Mapped[int | None] = mapped_column(ForeignKey("clinical_episodes.id", ondelete="SET NULL"), index=True)
+    status: Mapped[str] = mapped_column(String(40), default="in_progress", index=True)
+    anamnesis: Mapped[str | None] = mapped_column(Text)
+    examination: Mapped[str | None] = mapped_column(Text)
+    procedure_findings: Mapped[str | None] = mapped_column(Text)
+    diagnosis: Mapped[str | None] = mapped_column(Text)
+    treatment: Mapped[str | None] = mapped_column(Text)
+    recommendations: Mapped[str | None] = mapped_column(Text)
+    follow_up_plan: Mapped[str | None] = mapped_column(Text)
+    opened_by: Mapped[int | None] = mapped_column(ForeignKey("users.id"))
+    opened_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    completed_by: Mapped[int | None] = mapped_column(ForeignKey("users.id"))
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    journey: Mapped[PatientJourney] = relationship()
+
+
 class ClinicalFinding(TimestampMixin, Base):
     __tablename__ = "clinical_findings"
     __table_args__ = (

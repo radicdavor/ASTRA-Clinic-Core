@@ -74,7 +74,7 @@ export function DailyClinicDashboard() {
     {board.error && <p className="form-error">Dnevni pregled nije učitan: {board.error}</p>}
     <div className="clinic-day-table-wrap"><table className="clinic-day-table"><thead><tr><th>Vrijeme i pacijent</th><th>Usluga</th><th>Dokumenti</th><th>Priprema</th><th>Dolazak</th><th>Check-in</th><th>Pregled</th><th>Materijal</th><th>Račun</th><th>Plaćanje</th><th>Blokator</th></tr></thead><tbody>
       {board.data.rows.map(row => <tr key={row.journey_id} className={row.blocker_status === "blocked" ? "has-blocker" : ""}>
-        <td><span className="patient-time">{row.time.slice(0,5)}</span><Link to={`/appointments/${row.appointment_id}`}>{row.patient_name}</Link><small>{row.clinician_name} · {row.room_name}</small></td>
+        <td><span className="patient-time">{row.time.slice(0,5)}</span><Link to={`/journeys/${row.journey_id}`}>{row.patient_name}</Link><small>{row.clinician_name} · {row.room_name}</small></td>
         <td><strong>{row.service_name}</strong><small>{row.intake_channel === "ai_secretary" ? "AI tajnica" : row.intake_channel === "web" ? "Web" : "Ručni unos"}</small></td>
         <td><JourneyState value={row.document_status}/></td><td><JourneyState value={row.preparation_status}/></td><td><JourneyState value={row.arrival_status}/></td><td><JourneyState value={row.check_in_status}/></td><td><JourneyState value={row.encounter_status}/></td><td><JourneyState value={row.consumables_status}/></td><td><JourneyState value={row.billing_status}/></td><td><JourneyState value={row.payment_status}/></td>
         <td>{row.blocker_status === "blocked" ? <span className="blocker-copy"><AlertTriangle size={15}/>{row.blocker_labels.join(", ")}</span> : <JourneyState value="clear"/>}</td>

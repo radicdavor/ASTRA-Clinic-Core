@@ -9,6 +9,7 @@ import { Appointments } from "../pages/Appointments";
 import { AuditLog } from "../pages/AuditLog";
 import { ApiKeys } from "../pages/ApiKeys";
 import { DailyClinicDashboard } from "../pages/DailyClinicDashboard";
+import { PatientJourneyWorkspace } from "../pages/PatientJourneyWorkspace";
 import { ClinicalDocumentDetail } from "../pages/ClinicalDocumentDetail";
 import { ClinicalDocuments } from "../pages/ClinicalDocuments";
 import { Clinics } from "../pages/Clinics";
@@ -66,6 +67,7 @@ export function AppRoutes() {
           <Route path="/appointments" element={<Appointments />} />
           <Route path="/appointments/new" element={<AppointmentForm />} />
           <Route path="/appointments/:id" element={<AppointmentDetail />} />
+          <Route path="/journeys/:id" element={<PatientJourneyWorkspace />} />
           <Route path="/workflow" element={<WorkflowTasks />} />
           <Route path="/workflow/:id" element={<WorkflowTaskDetail />} />
           <Route path="/knowledge" element={<KnowledgeProtocols />} />
