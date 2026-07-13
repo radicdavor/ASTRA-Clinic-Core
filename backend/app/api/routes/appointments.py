@@ -9,7 +9,7 @@ from app.auth.dependencies import Actor, get_current_actor, require_permission
 from app.core.database import get_db
 from app.models.domain import Appointment, ClinicalEpisode, ClinicalReadinessReviewAcknowledgment, ClinicalReadinessSnapshot, Patient, Service
 from app.schemas.common import AppointmentCreate, AppointmentOut, AppointmentUpdate, ClinicalReadinessAcknowledgmentDetailResponse, ClinicalReadinessAcknowledgmentListResponse, ClinicalReadinessAcknowledgmentReadItem, ClinicalReadinessPreviewResponse, ClinicalReadinessSnapshotCaptureRequest, ClinicalReadinessSnapshotDetailResponse, ClinicalReadinessSnapshotHistoryItem, ClinicalReadinessSnapshotHistoryResponse, ClinicalReadinessSnapshotResponse, ClinicalReadinessSnapshotSupersedeRequest, ClinicalReadinessSnapshotSupersedeResponse, ErrorResponse
-from app.services.appointments import validate_appointment_payload
+from app.services.appointments import create_appointment_with_journey, validate_appointment_payload
 from app.services.clinical_readiness_preview import build_clinical_readiness_preview
 from app.services.clinical_readiness_acknowledgments import get_clinical_readiness_review_acknowledgment, list_clinical_readiness_review_acknowledgments, record_acknowledgment_read_denied_audit
 from app.services.clinical_readiness_snapshots import SnapshotIdempotencyConflict, capture_clinical_readiness_snapshot, supersede_clinical_readiness_snapshot
@@ -285,26 +285,9 @@ def create_appointment(
     db: Session = Depends(get_db),
     actor: Actor = Depends(require_permission("appointments.write")),
 ):
-    data = payload.model_dump()
-    validate_episode_for_patient(db, data.get("episode_id"), payload.patient_id)
-    data["duration_minutes"] = validate_appointment_payload(
-        db,
-        payload.date,
-        payload.start_time,
-        payload.end_time,
-        payload.provider_id,
-        payload.room_id,
-        payload.status,
-        payload.source,
-        service_id=payload.service_id,
-    )
-    appointment = Appointment(**data, created_by=actor.user_id)
-    db.add(appointment)
-    db.flush()
-    audit(db, "create", "Appointment", appointment.id, f"Termin {appointment.date}", actor.user_id, actor.actor_type, actor.api_key_id, None, snapshot(appointment), request)
+    appointment = create_appointment_with_journey(db, payload.model_dump(), actor, request)
     db.commit()
-    db.refresh(appointment)
-    return appointment
+    return get_appointment_or_404(db, appointment.id)
 
 
 @router.get("/appointments", response_model=list[AppointmentOut])

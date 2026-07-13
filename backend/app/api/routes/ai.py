@@ -9,7 +9,7 @@ from app.auth.dependencies import Actor, require_permission
 from app.core.database import get_db
 from app.models.domain import Appointment, Patient
 from app.schemas.common import AppointmentCreate, AppointmentOut, ErrorResponse, PatientCreate, PatientOut
-from app.services.appointments import BLOCKING_STATUSES, validate_appointment_payload
+from app.services.appointments import BLOCKING_STATUSES, create_appointment_with_journey
 
 ERROR_RESPONSES = {400: {"model": ErrorResponse}, 401: {"model": ErrorResponse}, 403: {"model": ErrorResponse}, 404: {"model": ErrorResponse}, 409: {"model": ErrorResponse}, 422: {"model": ErrorResponse}}
 
@@ -31,11 +31,7 @@ def ai_create_patient(payload: PatientCreate, request: Request, db: Session = De
 def ai_create_appointment(payload: AppointmentCreate, request: Request, db: Session = Depends(get_db), actor: Actor = Depends(require_permission("ai.appointments.create"))):
     data = payload.model_dump()
     data["source"] = "ai_agent"
-    data["duration_minutes"] = validate_appointment_payload(db, payload.date, payload.start_time, payload.end_time, payload.provider_id, payload.room_id, payload.status, data["source"])
-    appointment = Appointment(**data, created_by=actor.user_id)
-    db.add(appointment)
-    db.flush()
-    audit(db, "create", "Appointment", appointment.id, "AI kreirao termin", actor.user_id, actor.actor_type, actor.api_key_id, None, snapshot(appointment), request)
+    appointment = create_appointment_with_journey(db,data,actor,request)
     db.commit()
     db.refresh(appointment)
     return appointment

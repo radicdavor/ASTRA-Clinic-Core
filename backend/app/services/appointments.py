@@ -1,10 +1,13 @@
 from datetime import datetime, time
 
-from fastapi import HTTPException
+from fastapi import HTTPException, Request
 from sqlalchemy import and_, select
 from sqlalchemy.orm import Session
 
-from app.models.domain import Appointment, AppointmentSource, AppointmentStatus, Provider, Room, Service, room_services
+from app.audit.service import audit, snapshot
+from app.auth.dependencies import Actor
+from app.models.domain import Appointment, AppointmentSource, AppointmentStatus, ClinicalEpisode, Patient, Provider, Room, Service, room_services
+from app.services.patient_journeys import create_journey
 
 BLOCKING_STATUSES = {
     AppointmentStatus.scheduled.value,
@@ -15,6 +18,24 @@ BLOCKING_STATUSES = {
     AppointmentStatus.follow_up_needed.value,
     AppointmentStatus.rescheduled.value,
 }
+
+SOURCE_TO_INTAKE={"web_booking":"web","ai_agent":"ai_secretary"}
+
+def create_appointment_with_journey(db:Session,data:dict,actor:Actor,request:Request)->Appointment:
+    patient_id=data["patient_id"]
+    if not db.get(Patient,patient_id): raise HTTPException(404,detail="Pacijent nije pronađen")
+    episode_id=data.get("episode_id")
+    if episode_id:
+        episode=db.get(ClinicalEpisode,episode_id)
+        if not episode: raise HTTPException(404,detail="Klinička epizoda nije pronađena")
+        if episode.patient_id!=patient_id: raise HTTPException(422,detail="Klinička epizoda mora pripadati istom pacijentu kao termin")
+    data["duration_minutes"]=validate_appointment_payload(db,data["date"],data["start_time"],data["end_time"],data["provider_id"],data["room_id"],data["status"],data["source"],service_id=data["service_id"])
+    appointment=Appointment(**data,created_by=actor.user_id);db.add(appointment);db.flush()
+    audit(db,"create","Appointment",appointment.id,f"Termin {appointment.date}",actor.user_id,actor.actor_type,actor.api_key_id,None,snapshot(appointment),request)
+    channel=SOURCE_TO_INTAKE.get(appointment.source,"manual")
+    journey=create_journey(db,appointment,channel,"booked",actor,request)
+    audit(db,"create","PatientJourney",journey.id,"Kanonsko putovanje stvoreno uz termin",actor.user_id,actor.actor_type,actor.api_key_id,None,snapshot(journey),request)
+    return appointment
 
 
 def calculate_duration_minutes(appointment_date, start_time, end_time) -> int:
