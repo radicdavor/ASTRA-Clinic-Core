@@ -372,6 +372,34 @@ class JourneyAISummaryFact(TimestampMixin, Base):
     source_document: Mapped[ClinicalDocument | None] = relationship()
 
 
+class JourneyCheckIn(TimestampMixin, Base):
+    __tablename__ = "journey_check_ins"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    journey_id: Mapped[int] = mapped_column(ForeignKey("patient_journeys.id", ondelete="CASCADE"), unique=True, index=True)
+    status: Mapped[str] = mapped_column(String(40), default="in_review", index=True)
+    arrived_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    started_by: Mapped[int | None] = mapped_column(ForeignKey("users.id"))
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    completed_by: Mapped[int | None] = mapped_column(ForeignKey("users.id"))
+    journey: Mapped[PatientJourney] = relationship()
+    items: Mapped[list["JourneyCheckInItem"]] = relationship(back_populates="check_in", cascade="all, delete-orphan", order_by="JourneyCheckInItem.position")
+
+
+class JourneyCheckInItem(TimestampMixin, Base):
+    __tablename__ = "journey_check_in_items"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    check_in_id: Mapped[int] = mapped_column(ForeignKey("journey_check_ins.id", ondelete="CASCADE"), index=True)
+    item_key: Mapped[str] = mapped_column(String(100), index=True)
+    category: Mapped[str] = mapped_column(String(60), index=True)
+    label: Mapped[str] = mapped_column(String(220))
+    state: Mapped[str] = mapped_column(String(50), default="not_confirmed", index=True)
+    requires_clinician: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
+    note: Mapped[str | None] = mapped_column(Text)
+    position: Mapped[int] = mapped_column(Integer, default=0)
+    updated_by: Mapped[int | None] = mapped_column(ForeignKey("users.id"))
+    check_in: Mapped[JourneyCheckIn] = relationship(back_populates="items")
+
+
 class ClinicalFinding(TimestampMixin, Base):
     __tablename__ = "clinical_findings"
     __table_args__ = (
