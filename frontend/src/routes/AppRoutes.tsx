@@ -91,6 +91,7 @@ export function AppRoutes() {
         <Routes>
           <Route path="/appointments/new" element={<RouteModal title="Novi termin"><AppointmentForm /></RouteModal>} />
           <Route path="/appointments/:id" element={<RouteModal title="Detalj termina"><AppointmentDetail /></RouteModal>} />
+          <Route path="/knowledge/:id" element={<RouteModal title="Klinički protokol"><KnowledgeProtocolDetail /></RouteModal>} />
         </Routes>
       )}
     </Fragment>

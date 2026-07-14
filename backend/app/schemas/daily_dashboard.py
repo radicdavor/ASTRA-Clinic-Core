@@ -9,6 +9,11 @@ class DailyDashboardBlocker(BaseModel):
     is_clinical: bool = False
 
 
+class DailyDashboardClinic(BaseModel):
+    id: int
+    name: str
+
+
 class DailyDashboardRow(BaseModel):
     journey_id: int
     appointment_id: int
@@ -22,6 +27,8 @@ class DailyDashboardRow(BaseModel):
     clinician_name: str
     room_id: int
     room_name: str
+    clinic_id: int | None = None
+    clinic_name: str | None = None
     intake_channel: str
     workflow_stage: str
     document_status: str
@@ -42,4 +49,10 @@ class DailyDashboardResponse(BaseModel):
     date: date
     refreshed_at: datetime
     visible_sections: list[str]
+    viewer_role: str
+    scope: str
+    scope_label: str
+    scoped_clinician_id: int | None = None
+    can_filter_clinician: bool = False
+    available_clinics: list[DailyDashboardClinic] = Field(default_factory=list)
     rows: list[DailyDashboardRow]

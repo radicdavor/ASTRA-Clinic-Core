@@ -80,6 +80,7 @@ def main() -> None:
         patient.email = DEMO_PATIENT_EMAIL
         provider = db.scalar(select(Provider).where(Provider.full_name == "dr. Demo Gastro")) or Provider(full_name="dr. Demo Gastro", specialty="Gastroenterologija")
         provider.clinic_id = provider.clinic_id or gastro_clinic.id
+        provider.email = DEMO_EMAILS["physician"]
         provider.staff_role = provider.staff_role or "physician"
         room = db.scalar(select(Room).where(Room.name == "Demo ordinacija 1")) or Room(name="Demo ordinacija 1", type="ordinacija")
         room.clinic_id = room.clinic_id or gastro_clinic.id

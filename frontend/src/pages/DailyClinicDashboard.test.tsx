@@ -8,7 +8,7 @@ const rows = [
   {
     journey_id: 11, appointment_id: 101, time: "08:00:00", patient_name: "Sintetički Dolazak",
     service_id: 1, service_name: "Prvi pregled", clinician_id: 1, clinician_name: "dr. Test",
-    room_id: 1, room_name: "Ordinacija 1", intake_channel: "manual", workflow_stage: "ready_for_arrival",
+    room_id: 1, room_name: "Ordinacija 1", clinic_id: 1, clinic_name: "Klinika Sjever", intake_channel: "manual", workflow_stage: "ready_for_arrival",
     document_status: "complete", preparation_status: "in_progress", arrival_status: "not_arrived",
     check_in_status: "not_arrived", encounter_status: "not_started", consumables_status: "not_ready",
     billing_status: "not_ready", payment_status: "not_due", blocker_status: "blocked",
@@ -64,6 +64,15 @@ const rows = [
   },
 ];
 
+let dashboardAccess: {
+  viewer_role: string; scope: string; scope_label: string; scoped_clinician_id: number | null;
+  can_filter_clinician: boolean; available_clinics: Array<{ id: number; name: string }>;
+} = {
+  viewer_role: "admin", scope: "all", scope_label: "Svi liječnici", scoped_clinician_id: null,
+  can_filter_clinician: true,
+  available_clinics: [{ id: 1, name: "Klinika Sjever" }, { id: 2, name: "Klinika Jug" }],
+};
+
 function response(body: unknown) {
   return Promise.resolve(new Response(JSON.stringify(body), { status: 200, headers: { "Content-Type": "application/json" } }));
 }
@@ -71,8 +80,9 @@ function response(body: unknown) {
 function installFetchMock() {
   return vi.spyOn(globalThis, "fetch").mockImplementation((input, init) => {
     const url = String(input);
-    if (url.includes("/api/dashboard/day")) return response({ date: "2026-07-13", refreshed_at: "2026-07-13T08:00:00Z", visible_sections: [], rows });
-    if (url.endsWith("/api/providers") || url.endsWith("/api/rooms") || url.endsWith("/api/services")) return response([]);
+    if (url.includes("/api/dashboard/day")) return response({ date: "2026-07-13", refreshed_at: "2026-07-13T08:00:00Z", visible_sections: [], ...dashboardAccess, rows });
+    if (url.endsWith("/api/providers")) return response([{ id: 1, full_name: "dr. Test", staff_role: "physician" }]);
+    if (url.endsWith("/api/rooms") || url.endsWith("/api/services")) return response([]);
     if (init?.method === "POST") return response({});
     throw new Error(`Neočekivani testni API poziv: ${url}`);
   });
@@ -82,7 +92,10 @@ function renderDashboard() {
   return render(<MemoryRouter initialEntries={["/"]}><Routes><Route path="/" element={<DailyClinicDashboard/>}/><Route path="/journeys/:id" element={<p>Otvoren radni prostor</p>}/></Routes></MemoryRouter>);
 }
 
-beforeEach(() => { installFetchMock(); vi.spyOn(window, "confirm").mockReturnValue(true); });
+beforeEach(() => {
+  dashboardAccess = { viewer_role: "admin", scope: "all", scope_label: "Svi liječnici", scoped_clinician_id: null, can_filter_clinician: true, available_clinics: [{ id: 1, name: "Klinika Sjever" }, { id: 2, name: "Klinika Jug" }] };
+  installFetchMock(); vi.spyOn(window, "confirm").mockReturnValue(true);
+});
 afterEach(() => { cleanup(); vi.restoreAllMocks(); });
 
 describe("pojednostavljeni dnevni tijek pacijenata", () => {
@@ -148,5 +161,22 @@ describe("pojednostavljeni dnevni tijek pacijenata", () => {
     const search = await screen.findByRole("textbox", { name: "Pretraži pacijenta" });
     await user.type(search, "Dolazak");
     await waitFor(() => expect(fetch).toHaveBeenCalledWith(expect.stringMatching(/dashboard\/day\?.*q=Dolazak/), expect.anything()));
+  });
+
+  test("administrator vidi sve liječnike i filter klinike kada ih ima više", async () => {
+    const user = userEvent.setup(); renderDashboard();
+    expect(await screen.findByText("Prikaz: Svi liječnici")).toBeTruthy();
+    expect(screen.getByRole("combobox", { name: "Liječnik" })).toBeTruthy();
+    const clinic = screen.getByRole("combobox", { name: "Klinika" });
+    await user.selectOptions(clinic, "2");
+    await waitFor(() => expect(fetch).toHaveBeenCalledWith(expect.stringMatching(/dashboard\/day\?.*clinic_id=2/), expect.anything()));
+  });
+
+  test("liječnik vidi vlastiti opseg bez filtera drugih liječnika", async () => {
+    dashboardAccess = { viewer_role: "physician", scope: "own_clinician", scope_label: "dr. Test", scoped_clinician_id: 1, can_filter_clinician: false, available_clinics: [{ id: 1, name: "Klinika Sjever" }] };
+    renderDashboard();
+    expect(await screen.findByText("Prikaz: dr. Test")).toBeTruthy();
+    expect(screen.queryByRole("combobox", { name: "Liječnik" })).toBeNull();
+    expect(screen.queryByRole("combobox", { name: "Klinika" })).toBeNull();
   });
 });

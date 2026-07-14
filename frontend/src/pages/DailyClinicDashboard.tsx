@@ -1,6 +1,6 @@
 import { ClipboardCheck, CreditCard, PackageCheck, RefreshCw, Search, Stethoscope } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
-import { useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { api } from "../api/client";
 import { DateInput } from "../components/DateInput";
 import { useApi } from "../hooks/useApi";
@@ -10,13 +10,19 @@ type DashboardBlocker = { id: number; title: string; details: string | null; is_
 type DashboardRow = {
   journey_id: number; appointment_id: number; time: string; patient_name: string;
   service_id: number; service_name: string; clinician_id: number; clinician_name: string;
-  room_id: number; room_name: string; intake_channel: string; workflow_stage: string;
+  room_id: number; room_name: string; clinic_id: number | null; clinic_name: string | null;
+  intake_channel: string; workflow_stage: string;
   document_status: string; preparation_status: string; arrival_status: string;
   check_in_status: string; encounter_status: string; consumables_status: string;
   billing_status: string; payment_status: string; blocker_status: string;
   blocker_labels: string[]; blockers: DashboardBlocker[]; allowed_actions: string[];
 };
-type DashboardResponse = { date: string; refreshed_at: string; visible_sections: string[]; rows: DashboardRow[] };
+type DashboardClinic = { id: number; name: string };
+type DashboardResponse = {
+  date: string; refreshed_at: string; visible_sections: string[]; viewer_role: string;
+  scope: string; scope_label: string; scoped_clinician_id: number | null;
+  can_filter_clinician: boolean; available_clinics: DashboardClinic[]; rows: DashboardRow[];
+};
 type SignalTone = "resolved" | "active" | "problem" | "unresolved";
 type OperationalState = { tone: SignalTone; label: string; detail: string; action?: "reception" | "encounter" | "consumables" | "billing" | "open"; actionLabel?: string; icon?: ReactNode };
 
@@ -54,14 +60,17 @@ function operationalState(row: DashboardRow): OperationalState {
 export function DailyClinicDashboard() {
   const navigate = useNavigate();
   const [day, setDay] = useState(today);
-  const [clinician, setClinician] = useState(""); const [room, setRoom] = useState(""); const [service, setService] = useState("");
+  const [clinician, setClinician] = useState(""); const [clinic, setClinic] = useState(""); const [room, setRoom] = useState(""); const [service, setService] = useState("");
   const [stage, setStage] = useState(""); const [blocker, setBlocker] = useState(""); const [query, setQuery] = useState("");
   const [refresh, setRefresh] = useState(0); const [busyJourney, setBusyJourney] = useState<number | null>(null); const [actionError, setActionError] = useState("");
   const params = new URLSearchParams({ selected_date: day, refresh: String(refresh) });
-  if (clinician) params.set("clinician_id", clinician); if (room) params.set("room_id", room); if (service) params.set("service_id", service);
+  if (clinician) params.set("clinician_id", clinician); if (clinic) params.set("clinic_id", clinic); if (room) params.set("room_id", room); if (service) params.set("service_id", service);
   if (stage) params.set("status", stage); if (blocker) params.set("blocker", blocker); if (query.trim()) params.set("q", query.trim());
-  const board = useApi<DashboardResponse>(`/api/dashboard/day?${params}`, { date: day, refreshed_at: "", visible_sections: [], rows: [] });
+  const board = useApi<DashboardResponse>(`/api/dashboard/day?${params}`, { date: day, refreshed_at: "", visible_sections: [], viewer_role: "", scope: "", scope_label: "", scoped_clinician_id: null, can_filter_clinician: false, available_clinics: [], rows: [] });
   const providers = useApi<Provider[]>("/api/providers", []); const rooms = useApi<Room[]>("/api/rooms", []); const services = useApi<Service[]>("/api/services", []);
+  useEffect(() => {
+    if (clinic && !board.data.available_clinics.some(item => String(item.id) === clinic)) setClinic("");
+  }, [board.data.available_clinics, clinic]);
   const counts = useMemo(() => ({ total: board.data.rows.length, active: board.data.rows.filter(row => operationalState(row).tone === "active").length, problems: board.data.rows.filter(row => operationalState(row).tone === "problem").length }), [board.data.rows]);
 
   async function openReception(row: DashboardRow) {
@@ -89,12 +98,12 @@ export function DailyClinicDashboard() {
   }
 
   return <section className="page clinic-day-page">
-    <header className="clinic-day-header"><div><span className="eyebrow">Dnevni operativni pregled</span><h1>Danas u poliklinici</h1><p>Tko je sljedeći, postoji li problem i što sada treba napraviti.</p></div><div className="clinic-day-date"><DateInput value={day} onChange={setDay} required/><button type="button" onClick={() => setRefresh(value => value + 1)}><RefreshCw size={16}/>Osvježi</button></div></header>
+    <header className="clinic-day-header"><div><span className="eyebrow">Dnevni operativni pregled</span><h1>Danas u poliklinici</h1><p>Tko je sljedeći, postoji li problem i što sada treba napraviti.</p><span className="clinic-day-scope">Prikaz: {board.data.scope_label || "učitavanje…"}</span></div><div className="clinic-day-date"><DateInput value={day} onChange={setDay} required/><button type="button" onClick={() => setRefresh(value => value + 1)}><RefreshCw size={16}/>Osvježi</button></div></header>
     <div className="clinic-day-summary"><span><b>{counts.total}</b> dolazaka</span><span><b>{counts.active}</b> u tijeku</span><span className={counts.problems ? "attention" : ""}><b>{counts.problems}</b> s problemom</span><small>Zadnje osvježenje: {board.data.refreshed_at ? new Date(board.data.refreshed_at).toLocaleTimeString("hr-HR", { hour: "2-digit", minute: "2-digit" }) : "—"}</small></div>
-    <div className="clinic-day-filters"><label className="clinic-day-search"><Search size={16}/><input aria-label="Pretraži pacijenta" placeholder="Pretraži pacijenta" value={query} onChange={event => setQuery(event.target.value)}/></label><select aria-label="Liječnik" value={clinician} onChange={event => setClinician(event.target.value)}><option value="">Svi liječnici</option>{providers.data.filter(item => item.staff_role === "physician").map(item => <option key={item.id} value={item.id}>{item.full_name}</option>)}</select><select aria-label="Prostorija" value={room} onChange={event => setRoom(event.target.value)}><option value="">Sve prostorije</option>{rooms.data.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select><select aria-label="Usluga" value={service} onChange={event => setService(event.target.value)}><option value="">Sve usluge</option>{services.data.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select><select aria-label="Faza" value={stage} onChange={event => setStage(event.target.value)}><option value="">Sve faze</option><option value="ready_for_arrival">Čeka dolazak</option><option value="check_in_review">Prijem u tijeku</option><option value="ready_for_clinician">Čeka liječnika</option><option value="in_encounter">Pregled u tijeku</option><option value="awaiting_payment">Čeka naplatu</option></select><select aria-label="Problem" value={blocker} onChange={event => setBlocker(event.target.value)}><option value="">Sva stanja</option><option value="true">S problemom</option><option value="false">Bez problema</option></select></div>
+    <div className="clinic-day-filters"><label className="clinic-day-search"><Search size={16}/><input aria-label="Pretraži pacijenta" placeholder="Pretraži pacijenta" value={query} onChange={event => setQuery(event.target.value)}/></label>{board.data.can_filter_clinician && <select aria-label="Liječnik" value={clinician} onChange={event => { setClinician(event.target.value); setClinic(""); setRoom(""); }}><option value="">Svi liječnici</option>{providers.data.filter(item => item.staff_role === "physician").map(item => <option key={item.id} value={item.id}>{item.full_name}</option>)}</select>}{board.data.available_clinics.length > 1 && <select aria-label="Klinika" value={clinic} onChange={event => { setClinic(event.target.value); setRoom(""); }}><option value="">Sve klinike</option>{board.data.available_clinics.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select>}<select aria-label="Prostorija" value={room} onChange={event => setRoom(event.target.value)}><option value="">Sve prostorije</option>{rooms.data.filter(item => !clinic || String(item.clinic_id ?? "") === clinic).map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select><select aria-label="Usluga" value={service} onChange={event => setService(event.target.value)}><option value="">Sve usluge</option>{services.data.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select><select aria-label="Faza" value={stage} onChange={event => setStage(event.target.value)}><option value="">Sve faze</option><option value="ready_for_arrival">Čeka dolazak</option><option value="check_in_review">Prijem u tijeku</option><option value="ready_for_clinician">Čeka liječnika</option><option value="in_encounter">Pregled u tijeku</option><option value="awaiting_payment">Čeka naplatu</option></select><select aria-label="Problem" value={blocker} onChange={event => setBlocker(event.target.value)}><option value="">Sva stanja</option><option value="true">S problemom</option><option value="false">Bez problema</option></select></div>
     {board.error && <p className="form-error">Dnevni pregled nije učitan: {board.error}</p>}{actionError && <p className="form-error" role="alert">Radnja nije izvršena: {actionError}</p>}
     <div className="clinic-day-table-wrap"><table className="clinic-day-table clinic-day-table-simple"><thead><tr><th>Vrijeme i pacijent</th><th>Usluga i liječnik</th><th>Trenutačno stanje</th><th>Sljedeća radnja</th></tr></thead><tbody>
-      {board.data.rows.map(row => { const state = operationalState(row); return <tr key={row.journey_id} className={`${state.tone}-row ${state.tone === "problem" ? "has-blocker" : ""}`}><td><span className="patient-time">{row.time.slice(0,5)}</span><Link to={`/journeys/${row.journey_id}`}>{row.patient_name}</Link><small>{row.room_name}</small></td><td><strong>{row.service_name}</strong><small>{row.clinician_name}</small></td><td><div className="operational-state"><StatusSignal tone={state.tone} description={`${state.label}. ${state.detail}`}/><span><strong>{state.label}</strong><small>{state.detail}</small></span></div></td><td className="clinic-day-actions">{state.action && <button type="button" disabled={busyJourney === row.journey_id} onClick={() => runAction(row, state)}>{state.icon}{state.actionLabel}</button>}</td></tr>; })}
+      {board.data.rows.map(row => { const state = operationalState(row); return <tr key={row.journey_id} className={`${state.tone}-row ${state.tone === "problem" ? "has-blocker" : ""}`}><td><span className="patient-time">{row.time.slice(0,5)}</span><Link to={`/journeys/${row.journey_id}`}>{row.patient_name}</Link><small>{board.data.available_clinics.length > 1 && row.clinic_name ? `${row.clinic_name} · ` : ""}{row.room_name}</small></td><td><strong>{row.service_name}</strong><small>{row.clinician_name}</small></td><td><div className="operational-state"><StatusSignal tone={state.tone} description={`${state.label}. ${state.detail}`}/><span><strong>{state.label}</strong><small>{state.detail}</small></span></div></td><td className="clinic-day-actions">{state.action && <button type="button" disabled={busyJourney === row.journey_id} onClick={() => runAction(row, state)}>{state.icon}{state.actionLabel}</button>}</td></tr>; })}
       {!board.loading && !board.data.rows.length && <tr><td colSpan={4} className="clinic-day-empty">Za odabrani dan i filtre nema dolazaka.</td></tr>}
     </tbody></table></div>
     <p className="clinic-day-legend"><StatusSignal tone="unresolved" description="Nije započeto"/> nije započeto <StatusSignal tone="active" description="U tijeku"/> u tijeku <StatusSignal tone="problem" description="Postoji problem"/> problem <StatusSignal tone="resolved" description="Završeno"/> završeno</p>

@@ -1,12 +1,12 @@
 from datetime import date, datetime, timezone
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException, status as http_status
 from sqlalchemy import or_, select
 from sqlalchemy.orm import Session, joinedload, selectinload
 
 from app.auth.dependencies import Actor, require_permission
 from app.core.database import get_db
-from app.models.domain import Appointment, Patient, PatientJourney
+from app.models.domain import Appointment, Clinic, Patient, PatientJourney, Provider, Room
 from app.schemas.daily_dashboard import DailyDashboardResponse, DailyDashboardRow
 
 
@@ -17,6 +17,7 @@ router = APIRouter(prefix="/api/dashboard", tags=["daily-dashboard"])
 def daily_dashboard(
     selected_date: date,
     clinician_id: int | None = None,
+    clinic_id: int | None = None,
     room_id: int | None = None,
     service_id: int | None = None,
     status: str | None = None,
@@ -25,6 +26,36 @@ def daily_dashboard(
     db: Session = Depends(get_db),
     actor: Actor = Depends(require_permission("journey.read")),
 ):
+    role_name = actor.user.role.name if actor.user else "api_key"
+    normalized_role = role_name.removeprefix("demo_")
+    is_admin = normalized_role == "admin"
+    scoped_provider = None
+    if normalized_role == "physician":
+        scoped_provider = db.scalar(
+            select(Provider).where(Provider.email.ilike(actor.user.email), Provider.active.is_(True))
+        )
+        if scoped_provider is None:
+            raise HTTPException(
+                status_code=http_status.HTTP_403_FORBIDDEN,
+                detail="Korisnički račun liječnika nije povezan s osobljem. Administrator treba uskladiti službeni e-mail.",
+            )
+        if clinician_id is not None and clinician_id != scoped_provider.id:
+            raise HTTPException(status_code=http_status.HTTP_403_FORBIDDEN, detail="Liječnik može otvoriti samo vlastiti dnevni raspored")
+        clinician_id = scoped_provider.id
+
+    clinic_stmt = (
+        select(Clinic.id, Clinic.name)
+        .join(Room, Room.clinic_id == Clinic.id)
+        .join(Appointment, Appointment.room_id == Room.id)
+        .join(PatientJourney, PatientJourney.appointment_id == Appointment.id)
+        .where(Appointment.date == selected_date)
+        .distinct()
+        .order_by(Clinic.name)
+    )
+    if clinician_id:
+        clinic_stmt = clinic_stmt.where(Appointment.provider_id == clinician_id)
+    available_clinics = [{"id": item.id, "name": item.name} for item in db.execute(clinic_stmt).all()]
+
     stmt = (
         select(PatientJourney)
         .join(PatientJourney.appointment)
@@ -33,7 +64,7 @@ def daily_dashboard(
             joinedload(PatientJourney.patient),
             joinedload(PatientJourney.appointment).joinedload(Appointment.service),
             joinedload(PatientJourney.appointment).joinedload(Appointment.provider),
-            joinedload(PatientJourney.appointment).joinedload(Appointment.room),
+            joinedload(PatientJourney.appointment).joinedload(Appointment.room).joinedload(Room.clinic),
             selectinload(PatientJourney.blockers),
         )
         .where(Appointment.date == selected_date)
@@ -41,6 +72,8 @@ def daily_dashboard(
     )
     if clinician_id:
         stmt = stmt.where(Appointment.provider_id == clinician_id)
+    if clinic_id:
+        stmt = stmt.join(Room, Appointment.room_id == Room.id).where(Room.clinic_id == clinic_id)
     if room_id:
         stmt = stmt.where(Appointment.room_id == room_id)
     if service_id:
@@ -78,6 +111,8 @@ def daily_dashboard(
             service_id=appointment.service_id, service_name=appointment.service.name,
             clinician_id=appointment.provider_id, clinician_name=appointment.provider.full_name,
             room_id=appointment.room_id, room_name=appointment.room.name,
+            clinic_id=appointment.room.clinic_id,
+            clinic_name=appointment.room.clinic.name if appointment.room.clinic else None,
             intake_channel=journey.intake_channel, workflow_stage=journey.current_stage,
             document_status=journey.document_status, preparation_status=journey.preparation_status,
             arrival_status="arrived" if appointment.arrived_at else "not_arrived",
@@ -94,4 +129,24 @@ def daily_dashboard(
         sections.extend(["clinical", "encounter"])
     if "billing.read" in actor.permissions:
         sections.extend(["billing", "payment"])
-    return DailyDashboardResponse(date=selected_date, refreshed_at=datetime.now(timezone.utc), visible_sections=sections, rows=rows)
+    if scoped_provider:
+        scope = "own_clinician"
+        scope_label = scoped_provider.full_name
+    elif is_admin:
+        scope = "all"
+        scope_label = "Svi liječnici"
+    else:
+        scope = "operational"
+        scope_label = "Operativni pregled"
+    return DailyDashboardResponse(
+        date=selected_date,
+        refreshed_at=datetime.now(timezone.utc),
+        visible_sections=sections,
+        viewer_role=normalized_role,
+        scope=scope,
+        scope_label=scope_label,
+        scoped_clinician_id=scoped_provider.id if scoped_provider else None,
+        can_filter_clinician=is_admin,
+        available_clinics=available_clinics,
+        rows=rows,
+    )
