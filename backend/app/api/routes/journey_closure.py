@@ -89,6 +89,10 @@ def add_payment(journey_id: int, payload: PaymentRecord, request: Request, db: S
         journey.billing_status = "closed"
     audit(db, "payment_recorded", "PaymentTransaction", payment.id, "Evidentirano plaćanje u tijeku pacijenta", actor.user_id, actor.actor_type, actor.api_key_id, None, snapshot(payment), request)
     add_event(db, journey, "payment_recorded", "Evidentirano plaćanje", actor, request, metadata={"amount": str(payment.amount), "method": payment.method})
+    if invoice.payment_status == "paid" and "journey.transition" in actor.permissions:
+        before_journey = snapshot(journey)
+        transition(db, journey, "completed", actor, request, "Puna uplata evidentirana; tijek pacijenta automatski završen")
+        audit(db, "journey_completed", "PatientJourney", journey.id, "Tijek automatski završen nakon pune uplate", actor.user_id, actor.actor_type, actor.api_key_id, before_journey, snapshot(journey), request)
     db.commit()
     return projection(db, journey)
 
@@ -99,6 +103,10 @@ def defer_payment(journey_id: int, payload: DeferPayment, request: Request, db: 
         raise HTTPException(409, detail="Odgoda plaćanja mora imati razlog i izdani račun")
     journey.payment_status = "deferred"; journey.billing_status = "closed"
     add_event(db, journey, "payment_deferred", "Plaćanje izričito odgođeno", actor, request, metadata={"reason": payload.reason})
+    if "journey.transition" in actor.permissions:
+        before_journey = snapshot(journey)
+        transition(db, journey, "completed", actor, request, "Odgoda plaćanja evidentirana; tijek pacijenta automatski završen")
+        audit(db, "journey_completed", "PatientJourney", journey.id, "Tijek automatski završen nakon odgode plaćanja", actor.user_id, actor.actor_type, actor.api_key_id, before_journey, snapshot(journey), request)
     db.commit(); return projection(db, journey)
 
 @router.post("/{journey_id}/close", response_model=ClosureOut)

@@ -22,6 +22,7 @@ The three intake sources — WEB, AI_SECRETARY and MANUAL — converge through o
 - canonical source-document ingestion with OCR/classification/review lifecycle;
 - source-linked document and longitudinal summary boundaries;
 - unified timeline and role-aware daily dashboard;
+- simplified four-column daily view with one traffic-light state and one next action;
 - structured arrival/check-in and human-owned clinical blocker resolution;
 - one interactive encounter workspace for check-in, preparation, source and AI fact review, blocker resolution, clinical record and operational completion;
 - confirmed consumables, invoice preparation, payment/deferment and guarded closure;
@@ -30,7 +31,7 @@ The three intake sources — WEB, AI_SECRETARY and MANUAL — converge through o
 
 ## Validation and limitations
 
-The backend suite completed with 472 passed and 9 PostgreSQL tests skipped because the full invocation did not supply `TEST_DATABASE_URL`. PostgreSQL migrations and runtime health were separately validated in Docker. Three frontend contract tests and 15 DOM interaction tests passed, together with typecheck and the production build. The daily dashboard and journey workspace were manually inspected in the browser with 12 synthetic journeys and no browser errors.
+The backend suite completed with 473 passed and 9 PostgreSQL tests skipped because the full invocation did not supply `TEST_DATABASE_URL`. PostgreSQL migrations and runtime health were separately validated in Docker. Three frontend contract tests and 14 DOM interaction tests passed, together with typecheck and the production build. The daily dashboard and journey workspace were manually inspected in the browser with 12 synthetic journeys and no browser errors.
 
 Frontend interaction tests cover dashboard status behavior and the principal workspace mutations: check-in, preparation, source-linked AI fact review, blocker resolution and consumable confirmation. Backend API/service tests remain the authoritative coverage for workflow transitions, RBAC, audit and stock/billing invariants. Build warnings for bundle size and Tailwind content configuration are non-blocking follow-up items.
 

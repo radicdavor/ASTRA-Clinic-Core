@@ -14,11 +14,13 @@ Each item uses exactly one of `confirmed`, `not_confirmed`, `not_applicable`, `r
 
 Reception and nursing staff may record administrative states, mark a problem blocked or request clinician review. They cannot confirm or dismiss a clinician-owned item. Recording `blocked` or `requires_clinician_review` creates an explicit journey blocker. Later changing the checklist answer does not silently resolve that blocker; an authorized human must use the audited blocker-resolution action.
 
+To reduce repetitive clicking, `POST /api/patient-journeys/{id}/check-in/confirm-administrative` confirms all unresolved non-clinical items in one transaction and writes both item-level and batch audit evidence. Clinician-owned items are deliberately excluded and remain human-reviewed one by one.
+
 Check-in becomes `ready` and advances to `READY_FOR_CLINICIAN` only when every item is confirmed or not applicable and no open blocker remains. The system never performs procedural, fasting, sedation or medication clearance.
 
 ## Audit
 
-Arrival/check-in start, each item mutation, blocker creation and final workflow transition are recorded through the existing audit and journey-event mechanisms.
+Arrival/check-in start, each item mutation, grouped administrative confirmation, blocker creation and final workflow transition are recorded through the existing audit and journey-event mechanisms.
 
 ## Frontend handoff
 

@@ -13,12 +13,12 @@
 | OCR | Provider boundary/stub, tested | Failure states explicit; no external vendor |
 | AI document/longitudinal summaries | Provider boundary/stub, tested | Source-linked, labeled, human review required |
 | Patient timeline | Implemented, tested | Unified projection with provenance/source links |
-| Daily clinic dashboard | Implemented, tested, browser-validated | Date/filter/search and role-aware status projection |
-| Reception check-in | Implemented, tested | Clinical-review items cannot be auto-cleared |
+| Daily clinic dashboard | Implemented, tested, browser-validated | Four operational columns, one traffic-light state and at most one permission-aware action |
+| Reception check-in | Implemented, tested | One-click administrative confirmation; clinical-review items cannot be auto-cleared |
 | Unified encounter workspace | Implemented, tested, browser-validated | Interactive check-in, preparation, source review, AI fact review, blocker resolution, encounter and closure operations |
 | Consumables | Implemented, tested | FEFO inventory ledger; explicit item/quantity or not-used confirmation |
 | Billing/invoice | Implemented, tested | Existing invoice source of truth reused |
-| Payment tracking/deferment | Implemented, tested | Explicit record/defer operations and audit |
+| Payment tracking/deferment | Implemented, tested | Direct payment-method actions; authorized auto-closure after explicit resolution |
 | Journey closure | Implemented, tested | Preconditions enforced; blockers documented |
 | RBAC | Implemented, tested | Least-privilege journey permissions |
 | Audit | Implemented, tested | Actor, entity, journey, action and state change evidence |
@@ -33,8 +33,8 @@
 
 ## Validation summary
 
-- Backend: 472 passed, 9 environment-dependent PostgreSQL tests skipped in the full invocation.
-- Frontend: 3 contract tests and 15 DOM interaction tests passed; typecheck and production build passed.
+- Backend: 473 passed, 9 environment-dependent PostgreSQL tests skipped in the full invocation.
+- Frontend: 3 contract tests and 14 DOM interaction tests passed; typecheck and production build passed.
 - PostgreSQL/Alembic: head `0045_program2_closure` validated in Docker.
 - Browser: daily dashboard and unified workspace validated using synthetic data.
 

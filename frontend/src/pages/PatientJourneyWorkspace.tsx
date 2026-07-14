@@ -54,6 +54,9 @@ export function PatientJourneyWorkspace() {
   async function updateCheckIn(itemId: number, state: string, note: string) {
     await perform(async () => { checkin.setData(await api(`/api/patient-journeys/${id}/check-in/items/${itemId}`, { method: "PATCH", body: JSON.stringify({ state, note: note || null }) })); await refresh(); });
   }
+  async function confirmAdministrativeCheckIn() {
+    await perform(async () => { checkin.setData(await api(`/api/patient-journeys/${id}/check-in/confirm-administrative`, { method: "POST" })); await refresh(); });
+  }
   async function updatePreparation(requirementKey: string, state: string) {
     await perform(async () => { preparation.setData(await api(`/api/patient-journeys/${id}/preparation/requirements`, { method: "PATCH", body: JSON.stringify({ requirement_key: requirementKey, state }) })); await refresh(); });
   }
@@ -98,7 +101,7 @@ export function PatientJourneyWorkspace() {
     <div className="journey-columns">
       <aside><PatientTimeline items={timeline.data}/><SourceDocumentViewer documents={documents.data} onReview={reviewDocument}/><AISummaryPanel summary={summary.data} onGenerate={generateSummary} onReview={reviewSummaryFact}/></aside>
       <main id="journey-encounter" tabIndex={-1}><EncounterPanel draft={draft} setDraft={setDraft} status={encounter.data?.status} onOpen={open} onSave={save} onComplete={complete}/></main>
-      <aside><BlockerPanel items={j.blockers} onResolve={resolveBlocker}/><div id="journey-check-in" tabIndex={-1}><CheckInChecklist data={checkin.data} onUpdate={updateCheckIn}/></div><DocumentReadinessPanel status={j.document_status}/><PreparationPanel status={j.preparation_status} data={preparation.data} onUpdate={updatePreparation}/><ConsumablesPanel status={j.consumables_status} canConfirm={j.current_stage === "procedure_completed"} items={inventory.data} onConfirm={confirmConsumables}/><BillingPanel status={j.billing_status} invoice={closure.data?.invoice} onPrepare={prepareBilling}/><PaymentPanel status={j.payment_status} invoice={closure.data?.invoice} onPay={pay} onDefer={defer} onClose={close}/></aside>
+      <aside><div id="journey-attention" tabIndex={-1}><BlockerPanel items={j.blockers} onResolve={resolveBlocker}/></div><div id="journey-check-in" tabIndex={-1}><CheckInChecklist data={checkin.data} onUpdate={updateCheckIn} onConfirmAdministrative={confirmAdministrativeCheckIn}/></div><DocumentReadinessPanel status={j.document_status}/><PreparationPanel status={j.preparation_status} data={preparation.data} onUpdate={updatePreparation}/><div id="journey-consumables" tabIndex={-1}><ConsumablesPanel status={j.consumables_status} canConfirm={j.current_stage === "procedure_completed"} items={inventory.data} onConfirm={confirmConsumables}/></div><div id="journey-billing" tabIndex={-1}><BillingPanel status={j.billing_status} invoice={closure.data?.invoice} onPrepare={prepareBilling}/></div><div id="journey-payment" tabIndex={-1}><PaymentPanel status={j.payment_status} invoice={closure.data?.invoice} stage={j.current_stage} onPay={pay} onDefer={defer} onClose={close}/></div></aside>
     </div>
   </section>;
 }

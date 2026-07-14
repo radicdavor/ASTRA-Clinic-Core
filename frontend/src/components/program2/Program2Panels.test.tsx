@@ -18,6 +18,15 @@ describe("radnje u radnom prostoru tijeka pacijenta", () => {
     expect(onUpdate).toHaveBeenCalledWith(7, "confirmed", "Provjeren dokument");
   });
 
+  test("administrativne podatke potvrđuje jednom radnjom", async () => {
+    const user = userEvent.setup();
+    const onConfirmAdministrative = vi.fn().mockResolvedValue(undefined);
+    render(<CheckInChecklist data={{ items: [{ id: 1, label: "Identitet potvrđen", state: "not_confirmed", note: null, requires_clinician: false }, { id: 2, label: "Antikoagulansi", state: "not_confirmed", note: null, requires_clinician: true }] }} onUpdate={vi.fn()} onConfirmAdministrative={onConfirmAdministrative}/>);
+
+    await user.click(screen.getByRole("button", { name: "Potvrdi administrativne podatke" }));
+    expect(onConfirmAdministrative).toHaveBeenCalledOnce();
+  });
+
   test("odmah sprema odluku o stavci pripreme", async () => {
     const user = userEvent.setup();
     const onUpdate = vi.fn().mockResolvedValue(undefined);

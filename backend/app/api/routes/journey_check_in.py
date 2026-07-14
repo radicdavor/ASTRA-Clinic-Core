@@ -32,3 +32,15 @@ def change_item(journey_id:int,item_id:int,payload:CheckInItemUpdate,request:Req
     journey=get_journey(db,journey_id);check_in=db.scalar(checkin_query().where(JourneyCheckIn.journey_id==journey_id));item=db.get(JourneyCheckInItem,item_id)
     if not check_in or not item or item.check_in_id!=check_in.id: raise HTTPException(404,detail="Stavka prijemne provjere nije pronađena")
     before=snapshot(item);update_item(db,journey,check_in,item,payload.state,payload.note,actor,request);audit(db,"checkin_item_changed","PatientJourney",journey.id,item.label,actor.user_id,actor.actor_type,actor.api_key_id,before,snapshot(item),request);db.commit();return db.scalar(checkin_query().where(JourneyCheckIn.id==check_in.id))
+
+@router.post("/{journey_id}/check-in/confirm-administrative",response_model=CheckInOut)
+def confirm_administrative(journey_id:int,request:Request,db:Session=Depends(get_db),actor:Actor=Depends(require_permission("checkin.update"))):
+    journey=get_journey(db,journey_id);check_in=db.scalar(checkin_query().where(JourneyCheckIn.journey_id==journey_id))
+    if not check_in: raise HTTPException(404,detail="Prijemna provjera nije započeta")
+    changed=[]
+    for item in check_in.items:
+        if item.requires_clinician or item.state in {"confirmed","not_applicable"}: continue
+        before=snapshot(item);update_item(db,journey,check_in,item,"confirmed",item.note,actor,request);changed.append(item.item_key)
+        audit(db,"checkin_item_changed","PatientJourney",journey.id,item.label,actor.user_id,actor.actor_type,actor.api_key_id,before,snapshot(item),request)
+    audit(db,"checkin_administrative_confirmed","PatientJourney",journey.id,"Administrativne stavke prijema potvrđene",actor.user_id,actor.actor_type,actor.api_key_id,None,{"items":changed},request)
+    db.commit();return db.scalar(checkin_query().where(JourneyCheckIn.id==check_in.id))

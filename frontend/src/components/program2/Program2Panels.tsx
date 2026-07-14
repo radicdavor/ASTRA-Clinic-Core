@@ -44,8 +44,10 @@ function CheckInItemRow({ item, onUpdate }: { item: any; onUpdate: (id: number, 
   </div>;
 }
 
-export function CheckInChecklist({ data, onUpdate }: { data: any; onUpdate?: (id: number, state: string, note: string) => Promise<void> }) {
+export function CheckInChecklist({ data, onUpdate, onConfirmAdministrative }: { data: any; onUpdate?: (id: number, state: string, note: string) => Promise<void>; onConfirmAdministrative?: () => Promise<void> }) {
+  const administrativeOpen = data?.items?.some((item: any) => !item.requires_clinician && !["confirmed", "not_applicable"].includes(item.state));
   return <Panel title="Prijemna provjera">
+    {administrativeOpen && onConfirmAdministrative && <div className="check-in-quick-action"><span><strong>Administrativni podaci</strong><small>Identitet, kontakt, platitelj i zaprimljeni dokumenti.</small></span><button type="button" className="primary" onClick={onConfirmAdministrative}>Potvrdi administrativne podatke</button></div>}
     {data?.items?.map((item: any) => onUpdate ? <CheckInItemRow item={item} onUpdate={onUpdate} key={item.id}/> : <p className="journey-check" key={item.id}><span>{item.label}</span><strong>{journeyStatusLabel(item.state)}</strong></p>)}
     {!data && <p>Provjera nije započeta.</p>}
   </Panel>;
@@ -85,10 +87,11 @@ export function BillingPanel({ status, invoice, onPrepare }: { status: string; i
   return <Panel title="Račun"><p>Status: <strong>{journeyStatusLabel(status)}</strong></p>{invoice && <p>{invoice.number}<br/><strong>{invoice.total} EUR</strong></p>}{status === "ready" && onPrepare && <button className="primary" onClick={onPrepare}>Izradi i izdaj račun</button>}</Panel>;
 }
 
-export function PaymentPanel({ status, invoice, onPay, onDefer, onClose }: { status: string; invoice?: any; onPay?: (amount: string, method: string) => void; onDefer?: () => void; onClose?: () => void }) {
+export function PaymentPanel({ status, invoice, stage, onPay, onDefer, onClose }: { status: string; invoice?: any; stage?: string; onPay?: (amount: string, method: string) => void; onDefer?: () => void; onClose?: () => void }) {
   const [amount, setAmount] = useState(invoice?.total ?? ""); const [method, setMethod] = useState("card");
   useEffect(() => { if (invoice?.total) setAmount(invoice.total); }, [invoice?.total]);
-  return <Panel title="Plaćanje"><p>Status: <strong>{journeyStatusLabel(status)}</strong></p>{status === "unpaid" && <><label className="encounter-field">Iznos<input type="number" min="0.01" step="0.01" value={amount} onChange={event => setAmount(event.target.value)}/></label><label className="encounter-field">Način<select value={method} onChange={event => setMethod(event.target.value)}><option value="card">Kartica</option><option value="cash">Gotovina</option><option value="bank_transfer">Bankovna uplata</option><option value="insurance">Osiguranje</option></select></label><div className="form-actions"><button onClick={onDefer}>Odgođeno plaćanje</button><button className="primary" disabled={!amount || Number(amount) <= 0} onClick={() => onPay?.(amount, method)}>Evidentiraj uplatu</button></div></>}{["paid", "deferred", "refunded", "cancelled"].includes(status) && onClose && <button className="primary" onClick={onClose}>Završi tijek pacijenta</button>}</Panel>;
+  const methods = [["card", "Kartica"], ["cash", "Gotovina"], ["bank_transfer", "Bankovna uplata"], ["insurance", "Osiguranje"]];
+  return <Panel title="Plaćanje"><p>Status: <strong>{journeyStatusLabel(status)}</strong></p>{status === "unpaid" && <><p>Puni iznos: <strong>{invoice?.total ?? amount} EUR</strong></p><div className="payment-method-actions">{methods.map(([value, label]) => <button type="button" key={value} onClick={() => onPay?.(invoice?.total ?? amount, value)}>{label}</button>)}</div><details className="partial-payment"><summary>Drugi iznos ili djelomična uplata</summary><label className="encounter-field">Iznos<input type="number" min="0.01" step="0.01" value={amount} onChange={event => setAmount(event.target.value)}/></label><label className="encounter-field">Način<select value={method} onChange={event => setMethod(event.target.value)}>{methods.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label><button type="button" disabled={!amount || Number(amount) <= 0} onClick={() => onPay?.(amount, method)}>Evidentiraj drugi iznos</button></details><button type="button" className="payment-defer" onClick={onDefer}>Platit će naknadno</button></>}{["paid", "deferred", "refunded", "cancelled"].includes(status) && (stage === "completed" ? <p className="payment-complete">Tijek je automatski završen.</p> : onClose && <button className="primary" onClick={onClose}>Završi tijek pacijenta</button>)}</Panel>;
 }
 
 function BlockerItem({ item, onResolve }: { item: any; onResolve: (id: number, note: string) => Promise<void> }) {

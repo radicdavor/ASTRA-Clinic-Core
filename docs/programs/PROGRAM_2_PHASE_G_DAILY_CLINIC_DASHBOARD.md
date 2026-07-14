@@ -12,16 +12,12 @@ Each row exposes intake channel, documents, preparation, arrival, check-in, enco
 
 ## Frontend
 
-The application home route now renders `DailyClinicDashboard`. The page uses the existing ASTRA design system and Croatian copy. Its status rail is the primary visual device: every workflow dimension has an icon and textual state, so meaning never depends on color alone.
+The application home route renders `DailyClinicDashboard`. The operational table intentionally exposes only four columns: **Vrijeme i pacijent**, **Usluga i liječnik**, **Trenutačno stanje** and **Sljedeća radnja**. Documents, preparation, check-in, encounter, consumables and payment remain canonical sub-statuses, but the frontend projects them into one traffic-light signal and at most one contextual action.
 
-Capabilities include selected date, clinician/room/service/stage/blocker filters, patient search, manual refresh, last-refresh time, row count, arrival count, blocker count and navigation to the appointment context. The table remains horizontally scrollable on smaller screens and controls have visible keyboard focus through the shared design system.
+The empty circle means not started, amber means active, red means a problem and green means completed. Text and a hover/focus explanation accompany every signal, so meaning never depends on color alone. Capabilities include selected date, clinician/room/service/stage/problem filters, patient search, manual refresh and permission-aware actions such as **Započni prijem**, **Otvori pregled**, **Evidentiraj materijal** and **Naplati**.
 
 ## Role and safety boundary
 
-The dashboard is an operational read projection. It does not change workflow state, clear a blocker, approve preparation or make clinical decisions. Existing permission-protected detail surfaces own all mutations.
+The dashboard may initiate only an already permission-protected administrative action: starting reception records arrival and opens the canonical check-in; entering billing may prepare the invoice after explicit confirmation. It never clears blockers, confirms preparation, resolves clinical items, records consumables or marks payment without a human action.
 
-## Deferred to later phases
-
-- Phase H structured check-in mutation surface
-- Phase I full patient journey/encounter workspace route
-- role-specific column hiding based on a frontend current-user capability endpoint
+`allowed_actions` is calculated by the backend from RBAC permissions. Users without the relevant permission receive a neutral **Otvori** action instead of a mutation control.

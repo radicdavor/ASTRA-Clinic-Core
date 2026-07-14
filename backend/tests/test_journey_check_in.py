@@ -1,5 +1,5 @@
 from app.core.security import hash_password
-from app.models.domain import JourneyBlocker, Permission, Role, User
+from app.models.domain import AuditLog, JourneyBlocker, Permission, Role, User
 from tests.conftest import login_token
 from tests.factories import appointment
 
@@ -32,6 +32,15 @@ def test_reception_may_escalate_but_not_clear_clinical_item(client,db,auth_setup
     confirmed=client.patch(f"/api/patient-journeys/{journey['id']}/check-in/items/{clinical['id']}",headers=admin,json={"state":"confirmed","note":"Liječnik pregledao"});assert confirmed.status_code==200
     assert confirmed.json()["status"]=="in_review"
     assert db.query(JourneyBlocker).filter_by(journey_id=journey["id"],status="open").count()==1
+
+def test_reception_confirms_administrative_items_with_one_audited_action(client,db,auth_setup):
+    journey,admin=ready_journey(client,db);client.post(f"/api/patient-journeys/{journey['id']}/check-in",headers=admin);reception=reception_headers(client,db)
+    response=client.post(f"/api/patient-journeys/{journey['id']}/check-in/confirm-administrative",headers=reception)
+    assert response.status_code==200
+    items=response.json()["items"]
+    assert all(item["state"]=="confirmed" for item in items if not item["requires_clinician"])
+    assert all(item["state"]=="not_confirmed" for item in items if item["requires_clinician"])
+    assert db.query(AuditLog).filter_by(entity_type="PatientJourney",entity_id=journey["id"],action="checkin_administrative_confirmed").count()==1
 
 def test_check_in_becomes_ready_only_after_every_item_is_human_resolved(client,db,auth_setup):
     journey,headers=ready_journey(client,db);checkin=client.post(f"/api/patient-journeys/{journey['id']}/check-in",headers=headers).json()

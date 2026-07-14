@@ -21,7 +21,7 @@ def test_explicit_no_consumables_invoice_payment_and_closure(client,db,auth_setu
     response=client.post(f"{url}/billing/prepare",headers=h);assert response.status_code==200 and response.json()["invoice"]["status"]=="issued"
     total=response.json()["invoice"]["total"]
     response=client.post(f"{url}/payments",headers=h,json={"amount":total,"method":"card","reference":"SYNTHETIC"});assert response.status_code==200 and response.json()["payment_status"]=="paid", (total,response.json()["invoice"]["total"],response.json()["invoice"]["paid"])
-    response=client.post(f"{url}/close",headers=h);assert response.status_code==200 and response.json()["stage"]=="completed"
+    assert response.json()["stage"]=="completed"
 
 def test_cannot_close_with_unresolved_payment(client,db,auth_setup):
     journey,h=completed_encounter(client,db);url=f"/api/patient-journeys/{journey['id']}"
@@ -31,5 +31,5 @@ def test_cannot_close_with_unresolved_payment(client,db,auth_setup):
 def test_payment_may_be_explicitly_deferred_with_reason(client,db,auth_setup):
     journey,h=completed_encounter(client,db);url=f"/api/patient-journeys/{journey['id']}"
     client.post(f"{url}/consumables/confirm",headers=h,json={"not_applicable":True});client.post(f"{url}/billing/prepare",headers=h)
-    assert client.post(f"{url}/payments/defer",headers=h,json={"reason":"Sintetički ugovorni platitelj"}).status_code==200
-    assert client.post(f"{url}/close",headers=h).status_code==200
+    response=client.post(f"{url}/payments/defer",headers=h,json={"reason":"Sintetički ugovorni platitelj"})
+    assert response.status_code==200 and response.json()["stage"]=="completed"

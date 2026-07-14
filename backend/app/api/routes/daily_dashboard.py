@@ -64,6 +64,12 @@ def daily_dashboard(
             allowed_actions.append("open_check_in")
         if "encounter.read" in actor.permissions and journey.current_stage in {"ready_for_clinician", "in_encounter"}:
             allowed_actions.append("open_encounter")
+        if "consumables.record" in actor.permissions and journey.current_stage == "procedure_completed":
+            allowed_actions.append("record_consumables")
+        if "billing.write" in actor.permissions and journey.current_stage == "awaiting_billing":
+            allowed_actions.append("prepare_billing")
+        if "billing.read" in actor.permissions and journey.current_stage == "awaiting_payment":
+            allowed_actions.append("open_payment")
         rows.append(DailyDashboardRow(
             journey_id=journey.id, appointment_id=appointment.id, time=appointment.start_time,
             patient_id=journey.patient_id,
