@@ -58,6 +58,13 @@ def test_approved_preparation_assignment_schedules_default_reminders(client, db,
         "appointment_reminder",
         "preparation_reminder",
     ]
+    detail = client.get(
+        f"/api/patient-journeys/{journey['id']}/preparation",
+        headers=headers(client),
+    )
+    assert detail.status_code == 200
+    assert detail.json()["template"]["name"] == "Sintetička priprema za gastroskopiju"
+    assert detail.json()["requirement_states_json"]["fasting"] == "not_confirmed"
 
 
 def test_unapproved_preparation_template_cannot_be_assigned(client, db, auth_setup):

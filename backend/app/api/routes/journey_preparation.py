@@ -20,6 +20,11 @@ def templates(db:Session=Depends(get_db),actor:Actor=Depends(require_permission(
 @router.post("/preparation-templates",response_model=PreparationTemplateOut)
 def create_template(payload:PreparationTemplateCreate,request:Request,db:Session=Depends(get_db),actor:Actor=Depends(require_permission("preparation.review"))):
  data=payload.model_dump(exclude={"approved"});item=PreparationPlanTemplate(**data,approved_by=actor.user_id if payload.approved else None,approved_at=datetime.now(timezone.utc) if payload.approved else None);db.add(item);db.flush();audit(db,"create","PreparationPlanTemplate",item.id,item.name,actor.user_id,actor.actor_type,actor.api_key_id,None,snapshot(item),request);db.commit();db.refresh(item);return item
+@router.get("/patient-journeys/{journey_id}/preparation",response_model=PreparationOut)
+def preparation_detail(journey_id:int,db:Session=Depends(get_db),actor:Actor=Depends(require_permission("journey.read"))):
+ j=journey(db,journey_id);item=db.scalar(select(JourneyPreparation).options(joinedload(JourneyPreparation.template)).where(JourneyPreparation.journey_id==j.id))
+ if not item: raise HTTPException(404,detail="Priprema nije dodijeljena")
+ return item
 @router.post("/patient-journeys/{journey_id}/preparation",response_model=PreparationOut)
 def assign(journey_id:int,payload:PreparationAssign,request:Request,db:Session=Depends(get_db),actor:Actor=Depends(require_permission("preparation.assign"))):
  j=journey(db,journey_id);template=db.get(PreparationPlanTemplate,payload.template_id)

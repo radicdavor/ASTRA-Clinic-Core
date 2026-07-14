@@ -2,8 +2,15 @@ import { useEffect, useState } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
 import { api } from "../api/client";
 import { useApi } from "../hooks/useApi";
+import type { InventoryItem } from "../types";
 import { AISummaryPanel, BillingPanel, BlockerPanel, CheckInChecklist, ConsumablesPanel, DocumentReadinessPanel, EncounterPanel, PatientTimeline, PaymentPanel, PreparationPanel, SourceDocumentViewer } from "../components/program2/Program2Panels";
 import { journeyStageLabel, journeyStatusLabel } from "../components/program2/journeyStatus";
+
+function formatDate(value?: string | null) {
+  if (!value) return "nije upisano";
+  const date = new Date(`${value.slice(0, 10)}T00:00:00`);
+  return Number.isNaN(date.getTime()) ? value : date.toLocaleDateString("hr-HR");
+}
 
 export function PatientJourneyWorkspace() {
   const { id } = useParams();
@@ -12,29 +19,86 @@ export function PatientJourneyWorkspace() {
   const timeline = useApi<any[]>(`/api/patient-journeys/${id}/timeline`, []);
   const summary = useApi<any>(`/api/patient-journeys/${id}/summary`, null);
   const checkin = useApi<any>(`/api/patient-journeys/${id}/check-in`, null);
+  const preparation = useApi<any>(`/api/patient-journeys/${id}/preparation`, null);
   const encounter = useApi<any>(`/api/patient-journeys/${id}/encounter`, null);
   const closure = useApi<any>(`/api/patient-journeys/${id}/closure`, null);
+  const inventory = useApi<InventoryItem[]>("/api/inventory/items", []);
   const documents = useApi<any[]>(`/api/clinical-documents?patient_id=${journey.data?.patient_id ?? 0}`, []);
   const [draft, setDraft] = useState<any>({});
+  const [actionError, setActionError] = useState("");
+
   useEffect(() => { if (encounter.data) setDraft(encounter.data); }, [encounter.data]);
   useEffect(() => {
     const focus = searchParams.get("focus");
     if (journey.data && focus) requestAnimationFrame(() => document.getElementById(`journey-${focus}`)?.scrollIntoView({ behavior: "smooth", block: "start" }));
   }, [journey.data, searchParams]);
+
   if (!journey.data) return <section className="page"><p>Učitavanje tijeka pacijenta...</p></section>;
   const j = journey.data;
-  async function refresh() { journey.setData(await api(`/api/patient-journeys/${id}`)); closure.setData(await api(`/api/patient-journeys/${id}/closure`)); }
-  async function open() { encounter.setData(await api(`/api/patient-journeys/${id}/encounter`, { method: "POST" })); }
-  async function save() { encounter.setData(await api(`/api/patient-journeys/${id}/encounter`, { method: "PATCH", body: JSON.stringify(draft) })); }
-  async function complete() { encounter.setData(await api(`/api/patient-journeys/${id}/encounter/complete`, { method: "POST" })); await refresh(); }
-  async function confirmNone() { await api(`/api/patient-journeys/${id}/consumables/confirm`, { method: "POST", body: JSON.stringify({ not_applicable: true }) }); await refresh(); }
-  async function prepare() { await api(`/api/patient-journeys/${id}/billing/prepare`, { method: "POST" }); await refresh(); }
-  async function pay(amount: string, method: string) { await api(`/api/patient-journeys/${id}/payments`, { method: "POST", body: JSON.stringify({ amount, method }) }); await refresh(); }
-  async function defer() { const reason = window.prompt("Upišite razlog odgode plaćanja"); if (reason) { await api(`/api/patient-journeys/${id}/payments/defer`, { method: "POST", body: JSON.stringify({ reason }) }); await refresh(); } }
-  async function close() { await api(`/api/patient-journeys/${id}/close`, { method: "POST" }); await refresh(); }
+
+  async function perform(action: () => Promise<void>) {
+    setActionError("");
+    try { await action(); }
+    catch (error) { setActionError(error instanceof Error ? error.message : "Radnja nije spremljena."); }
+  }
+  async function refresh() {
+    journey.setData(await api(`/api/patient-journeys/${id}`));
+    closure.setData(await api(`/api/patient-journeys/${id}/closure`));
+  }
+  async function open() { await perform(async () => { encounter.setData(await api(`/api/patient-journeys/${id}/encounter`, { method: "POST" })); await refresh(); }); }
+  async function save() { await perform(async () => { encounter.setData(await api(`/api/patient-journeys/${id}/encounter`, { method: "PATCH", body: JSON.stringify(draft) })); }); }
+  async function complete() {
+    if (!window.confirm("Dovršiti klinički susret? Nakon toga bilješka više nije dostupna za redovno uređivanje.")) return;
+    await perform(async () => { encounter.setData(await api(`/api/patient-journeys/${id}/encounter/complete`, { method: "POST" })); await refresh(); });
+  }
+  async function updateCheckIn(itemId: number, state: string, note: string) {
+    await perform(async () => { checkin.setData(await api(`/api/patient-journeys/${id}/check-in/items/${itemId}`, { method: "PATCH", body: JSON.stringify({ state, note: note || null }) })); await refresh(); });
+  }
+  async function updatePreparation(requirementKey: string, state: string) {
+    await perform(async () => { preparation.setData(await api(`/api/patient-journeys/${id}/preparation/requirements`, { method: "PATCH", body: JSON.stringify({ requirement_key: requirementKey, state }) })); await refresh(); });
+  }
+  async function generateSummary() {
+    await perform(async () => { summary.setData(await api(`/api/patient-journeys/${id}/summary`, { method: "POST" })); timeline.setData(await api(`/api/patient-journeys/${id}/timeline`)); });
+  }
+  async function reviewSummaryFact(summaryId: number, factId: number, action: "accept" | "reject") {
+    await perform(async () => { summary.setData(await api(`/api/patient-journeys/${id}/summary/${summaryId}/facts/${factId}`, { method: "PATCH", body: JSON.stringify({ action }) })); });
+  }
+  async function reviewDocument(documentId: number) {
+    await perform(async () => { await api(`/api/clinical-documents/${documentId}/review`, { method: "POST" }); documents.setData(await api(`/api/clinical-documents?patient_id=${j.patient_id}`)); await refresh(); });
+  }
+  async function resolveBlocker(blockerId: number, resolutionNote: string) {
+    await perform(async () => { await api(`/api/patient-journeys/${id}/blockers/${blockerId}/resolve`, { method: "POST", body: JSON.stringify({ resolution_note: resolutionNote }) }); await refresh(); });
+  }
+  async function confirmConsumables(lines: Array<{ inventory_item_id: number; quantity: string; reason?: string }>, notApplicable: boolean) {
+    const message = notApplicable ? "Potvrditi da materijal nije korišten?" : "Potvrditi navedeni materijal i skinuti ga sa zalihe?";
+    if (!window.confirm(message)) return;
+    await perform(async () => { await api(`/api/patient-journeys/${id}/consumables/confirm`, { method: "POST", body: JSON.stringify({ lines, not_applicable: notApplicable }) }); await refresh(); });
+  }
+  async function prepareBilling() {
+    if (!window.confirm("Izraditi i izdati račun za ovaj dolazak?")) return;
+    await perform(async () => { await api(`/api/patient-journeys/${id}/billing/prepare`, { method: "POST" }); await refresh(); });
+  }
+  async function pay(amount: string, method: string) {
+    if (!window.confirm(`Evidentirati uplatu od ${amount} EUR?`)) return;
+    await perform(async () => { await api(`/api/patient-journeys/${id}/payments`, { method: "POST", body: JSON.stringify({ amount, method }) }); await refresh(); });
+  }
+  async function defer() {
+    const reason = window.prompt("Upišite razlog odgode plaćanja");
+    if (reason?.trim()) await perform(async () => { await api(`/api/patient-journeys/${id}/payments/defer`, { method: "POST", body: JSON.stringify({ reason: reason.trim() }) }); await refresh(); });
+  }
+  async function close() {
+    if (!window.confirm("Završiti tijek pacijenta?")) return;
+    await perform(async () => { await api(`/api/patient-journeys/${id}/close`, { method: "POST" }); await refresh(); });
+  }
+
   return <section className="page journey-workspace">
-    <header className="journey-workspace-header"><div><span>TIJEK PACIJENTA · #{j.id}</span><h1>{j.patient.first_name} {j.patient.last_name}</h1><p>Rođen/a: {j.patient.date_of_birth ?? "nije upisano"} · termin {j.appointment.date} u {j.appointment.start_time.slice(0, 5)}</p></div><div><strong>{journeyStageLabel(j.current_stage)}</strong><Link to={`/appointments/${j.appointment_id}`}>Termin #{j.appointment_id}</Link></div></header>
-    <div className="journey-safety-strip"><span>Dokumenti: {journeyStatusLabel(j.document_status)}</span><span>Priprema: {journeyStatusLabel(j.preparation_status)}</span><span>Check-in: {journeyStatusLabel(j.check_in_status)}</span><span>Pregled: {journeyStatusLabel(j.encounter_status)}</span></div>
-    <div className="journey-columns"><aside><PatientTimeline items={timeline.data}/><SourceDocumentViewer documents={documents.data}/><AISummaryPanel summary={summary.data}/></aside><main id="journey-encounter" tabIndex={-1}><EncounterPanel draft={draft} setDraft={setDraft} status={encounter.data?.status} onOpen={open} onSave={save} onComplete={complete}/></main><aside><BlockerPanel items={j.blockers}/><div id="journey-check-in" tabIndex={-1}><CheckInChecklist data={checkin.data}/></div><DocumentReadinessPanel status={j.document_status}/><PreparationPanel status={j.preparation_status}/><ConsumablesPanel status={j.consumables_status} onConfirmNone={confirmNone}/><BillingPanel status={j.billing_status} invoice={closure.data?.invoice} onPrepare={prepare}/><PaymentPanel status={j.payment_status} invoice={closure.data?.invoice} onPay={pay} onDefer={defer} onClose={close}/></aside></div>
+    <header className="journey-workspace-header"><div><span>TIJEK PACIJENTA · #{j.id}</span><h1>{j.patient.first_name} {j.patient.last_name}</h1><p>Rođen/a: {formatDate(j.patient.date_of_birth)} · termin {formatDate(j.appointment.date)} u {j.appointment.start_time.slice(0, 5)}</p></div><div><strong>{journeyStageLabel(j.current_stage)}</strong><Link to={`/appointments/${j.appointment_id}`}>Termin #{j.appointment_id}</Link></div></header>
+    {actionError && <p className="inline-error" role="alert">{actionError}</p>}
+    <div className="journey-safety-strip"><span>Dokumenti: {journeyStatusLabel(j.document_status)}</span><span>Priprema: {journeyStatusLabel(j.preparation_status)}</span><span>Prijem: {journeyStatusLabel(j.check_in_status)}</span><span>Pregled: {journeyStatusLabel(j.encounter_status)}</span></div>
+    <div className="journey-columns">
+      <aside><PatientTimeline items={timeline.data}/><SourceDocumentViewer documents={documents.data} onReview={reviewDocument}/><AISummaryPanel summary={summary.data} onGenerate={generateSummary} onReview={reviewSummaryFact}/></aside>
+      <main id="journey-encounter" tabIndex={-1}><EncounterPanel draft={draft} setDraft={setDraft} status={encounter.data?.status} onOpen={open} onSave={save} onComplete={complete}/></main>
+      <aside><BlockerPanel items={j.blockers} onResolve={resolveBlocker}/><div id="journey-check-in" tabIndex={-1}><CheckInChecklist data={checkin.data} onUpdate={updateCheckIn}/></div><DocumentReadinessPanel status={j.document_status}/><PreparationPanel status={j.preparation_status} data={preparation.data} onUpdate={updatePreparation}/><ConsumablesPanel status={j.consumables_status} canConfirm={j.current_stage === "procedure_completed"} items={inventory.data} onConfirm={confirmConsumables}/><BillingPanel status={j.billing_status} invoice={closure.data?.invoice} onPrepare={prepareBilling}/><PaymentPanel status={j.payment_status} invoice={closure.data?.invoice} onPay={pay} onDefer={defer} onClose={close}/></aside>
+    </div>
   </section>;
 }

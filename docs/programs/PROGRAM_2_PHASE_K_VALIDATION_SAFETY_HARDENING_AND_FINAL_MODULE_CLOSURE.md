@@ -11,6 +11,7 @@ Phase K validates the additive Program 2 implementation from canonical intake th
 | Backend suite | PASS | 472 passed, 9 skipped; skipped tests require an explicit PostgreSQL integration URL |
 | Program 2 closure tests | PASS | Journey closure, payment, billing, consumables and dashboard targets pass |
 | Frontend contract tests | PASS | 3/3 route, panel and explicit-financial-action contracts |
+| Frontend interaction tests | PASS | 15/15 dashboard and workspace tests, including check-in, preparation, AI fact review, blockers and consumables |
 | Frontend typecheck | PASS | `npm run typecheck` |
 | Frontend production build | PASS | `npm run build` |
 | Frontend smoke | PASS | `npm run smoke` |
@@ -22,7 +23,7 @@ The frontend build reports non-blocking warnings for a large JavaScript chunk an
 
 ## Synthetic scenarios
 
-Backend tests cover the three canonical intake channels, valid and invalid transitions, document lifecycle/OCR failure boundaries, reminders, preparation and clinical-review blockers, reception check-in, encounter completion, consumables, invoice/payment, cancellation and no-show rules. The demo seed adds 12 clearly synthetic journeys across all three intake channels and mixed operational states for dashboard inspection.
+Backend tests cover the three canonical intake channels, valid and invalid transitions, document lifecycle/OCR failure boundaries, reminders, preparation and clinical-review blockers, reception check-in, encounter completion, consumables, invoice/payment, cancellation and no-show rules. Frontend interaction tests exercise the daily dashboard and the principal workspace mutations. The demo seed adds 12 clearly synthetic journeys across all three intake channels and mixed operational states for dashboard inspection.
 
 The demo status rows are presentation fixtures. API/service tests remain the source of evidence for relational end-to-end mutations.
 

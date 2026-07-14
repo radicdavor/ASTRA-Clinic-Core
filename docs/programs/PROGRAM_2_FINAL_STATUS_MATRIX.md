@@ -7,7 +7,7 @@
 | Web intake | Implemented, tested | Shared orchestration; never grants clinical readiness |
 | AI secretary intake | Contract/stub, tested | Scoped canonical intake boundary; no live AI vendor |
 | Manual intake | Implemented, tested | Same orchestration as other channels |
-| Preparation plans and forms | Implemented, tested | Versioned templates and completed-version records |
+| Preparation plans and forms | Implemented, tested | Versioned templates, completed-version records and editable requirement review in the workspace |
 | Reminders and communication | Implemented with stub delivery, tested | Queued/sent/delivered remain distinct |
 | Document ingestion/source storage | Implemented, tested | Original source preserved with checksum and provenance |
 | OCR | Provider boundary/stub, tested | Failure states explicit; no external vendor |
@@ -15,8 +15,8 @@
 | Patient timeline | Implemented, tested | Unified projection with provenance/source links |
 | Daily clinic dashboard | Implemented, tested, browser-validated | Date/filter/search and role-aware status projection |
 | Reception check-in | Implemented, tested | Clinical-review items cannot be auto-cleared |
-| Unified encounter workspace | Implemented, tested, browser-validated | Timeline, sources, summary, encounter and right-side operations |
-| Consumables | Implemented, tested | FEFO inventory ledger; explicit confirmation |
+| Unified encounter workspace | Implemented, tested, browser-validated | Interactive check-in, preparation, source review, AI fact review, blocker resolution, encounter and closure operations |
+| Consumables | Implemented, tested | FEFO inventory ledger; explicit item/quantity or not-used confirmation |
 | Billing/invoice | Implemented, tested | Existing invoice source of truth reused |
 | Payment tracking/deferment | Implemented, tested | Explicit record/defer operations and audit |
 | Journey closure | Implemented, tested | Preconditions enforced; blockers documented |
@@ -34,7 +34,7 @@
 ## Validation summary
 
 - Backend: 472 passed, 9 environment-dependent PostgreSQL tests skipped in the full invocation.
-- Frontend: 3 contract tests passed; typecheck, production build and smoke passed.
+- Frontend: 3 contract tests and 15 DOM interaction tests passed; typecheck and production build passed.
 - PostgreSQL/Alembic: head `0045_program2_closure` validated in Docker.
 - Browser: daily dashboard and unified workspace validated using synthetic data.
 
