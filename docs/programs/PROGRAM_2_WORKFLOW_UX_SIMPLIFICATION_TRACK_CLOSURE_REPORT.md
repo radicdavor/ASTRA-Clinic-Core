@@ -18,4 +18,8 @@ Nijedna postojeća jezgrena funkcija nije uklonjena. Backend workflow model nije
 - dashboard: četiri stupca, sažeti filtri, bez navigacijskih mutacija
 - workspace: jedna aktivna faza, jedna sljedeća radnja, sekundarni klinički kontekst
 
-Implementacija je na holdu **STOP AND EVALUATE WITH USERS**. Formalno zatvaranje nije proglašeno dok korisnik ne završi vizualnu evaluaciju sintetičkih scenarija. Daljnji razvoj zahtijeva izričitu autorizaciju.
+Vizualna evaluacija sintetičkih administratorskih i liječničkih scenarija provedena je 15. srpnja 2026. na standardnom i 1024 px prikazu. Provjera obuhvaća role-aware navigaciju i scope, dnevne filtre, fokusirani tijek, prebacivanje faza, klinički kontekst, izvorne dokumente i konzolu preglednika.
+
+Tijekom evaluacije ispravljeni su provider API za legacy demo `.local` adresu, prikaz naziva povijesne/deaktivirane usluge iz kanonskog termina te 1024 px raspored sva četiri dashboard stupca. Ponovna provjera prošla je bez konzolnih grešaka.
+
+Program 2 Workflow UX Simplification Track je formalno zatvoren. Završno stanje je **STOP AND HOLD**; daljnji razvoj zahtijeva novu izričitu autorizaciju.

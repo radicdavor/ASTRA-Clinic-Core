@@ -11,7 +11,10 @@ export type PatientJourneyDetail = {
   document_status: string; preparation_status: string; check_in_status: string; encounter_status: string;
   consumables_status: string; billing_status: string; payment_status: string; closed_at: string | null;
   patient: { id: number; first_name: string; last_name: string; date_of_birth: string | null; oib: string | null };
-  appointment: { id: number; service_id: number; provider_id: number; room_id: number; date: string; start_time: string; end_time: string; status: string; source: string };
+  appointment: {
+    id: number; service_id: number; provider_id: number; room_id: number; date: string; start_time: string; end_time: string; status: string; source: string;
+    service: { id: number; name: string }; provider: { id: number; full_name: string }; room: { id: number; name: string };
+  };
   blockers: JourneyBlocker[];
 };
 

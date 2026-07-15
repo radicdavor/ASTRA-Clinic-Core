@@ -1209,7 +1209,10 @@ class ProviderOut(ORMModel):
     id: int
     full_name: str
     specialty: str | None = None
-    email: EmailStr | None = None
+    # Output must remain readable for legacy/demo providers that use the
+    # reserved `.local` domain. New provider input stays strictly validated by
+    # ProviderCreate.email below.
+    email: str | None = None
     work_start: TimeType
     work_end: TimeType
     weekly_working_hours: dict[str, dict] = {}

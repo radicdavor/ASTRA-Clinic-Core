@@ -10,7 +10,10 @@ const journey = {
   document_status: "complete", preparation_status: "complete", check_in_status: "ready", encounter_status: "not_started",
   consumables_status: "not_ready", billing_status: "not_ready", payment_status: "not_due", closed_at: null,
   patient: { id: 19, first_name: "Sintetički", last_name: "Pacijent", date_of_birth: "1980-01-01", oib: null },
-  appointment: { id: 32, service_id: 1, provider_id: 1, room_id: 1, date: "2026-07-15", start_time: "10:00:00", end_time: "10:30:00", status: "scheduled", source: "manual" },
+  appointment: {
+    id: 32, service_id: 1, provider_id: 1, room_id: 1, date: "2026-07-15", start_time: "10:00:00", end_time: "10:30:00", status: "scheduled", source: "manual",
+    service: { id: 1, name: "Povijesna usluga" }, provider: { id: 1, full_name: "dr. Kanonski" }, room: { id: 1, name: "Ordinacija 1" },
+  },
   blockers: [], events: [], created_at: "2026-07-15T08:00:00Z", updated_at: "2026-07-15T08:00:00Z",
 };
 
@@ -22,8 +25,7 @@ function installFetch() {
     if (url.endsWith("/timeline")) return response([{ date: "2026-07-15T08:00:00Z", event_type: "booked", title: "Termin potvrđen", summary: null, source_url: null, provenance: {}, review_state: null, journey_id: 32 }]);
     if (url.endsWith("/summary") || url.endsWith("/check-in") || url.endsWith("/preparation") || url.endsWith("/encounter")) return response(null);
     if (url.endsWith("/closure")) return response({ journey_id: 32, stage: "ready_for_clinician", consumables_status: "not_ready", billing_status: "not_ready", payment_status: "not_due", invoice: null, consumables: [] });
-    if (url.endsWith("/api/services")) return response([{ id: 1, name: "Prvi pregled" }]);
-    if (url.endsWith("/api/providers")) return response([{ id: 1, full_name: "dr. Test" }]);
+    if (url.endsWith("/api/services") || url.endsWith("/api/providers")) return response([]);
     return response([]);
   });
 }
@@ -35,6 +37,7 @@ describe("fokusirani radni prostor tijeka pacijenta", () => {
   test("prikazuje sljedeću radnju i samo trenutačnu fazu", async () => {
     render(<MemoryRouter initialEntries={["/journeys/32"]}><Routes><Route path="/journeys/:id" element={<PatientJourneyWorkspace/>}/></Routes></MemoryRouter>);
     expect(await screen.findByText("Pacijent čeka liječnika")).toBeTruthy();
+    expect(await screen.findByText(/Povijesna usluga · dr. Kanonski/)).toBeTruthy();
     expect(await screen.findByText("Pregled pacijenta")).toBeTruthy();
     expect(screen.queryByText("Prijemna provjera")).toBeNull();
   });

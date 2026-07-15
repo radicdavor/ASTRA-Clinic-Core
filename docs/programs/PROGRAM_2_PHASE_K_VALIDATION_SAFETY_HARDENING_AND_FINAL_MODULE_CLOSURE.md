@@ -8,7 +8,7 @@ Phase K validates the additive Program 2 implementation from canonical intake th
 
 | Gate | Result | Evidence |
 |---|---|---|
-| Backend suite | PASS | 476 passed, 9 skipped; skipped tests require an explicit PostgreSQL integration URL |
+| Backend suite | PASS | 477 passed, 9 skipped; skipped tests require an explicit PostgreSQL integration URL |
 | Program 2 closure tests | PASS | Journey closure, payment, billing, consumables and dashboard targets pass |
 | Frontend contract tests | PASS | 3/3 route, panel and explicit-financial-action contracts |
 | Frontend interaction tests | PASS | 29/29 current DOM tests; Program 2 coverage includes role navigation, dashboard, focused workspace, check-in, preparation, AI fact review, blockers and consumables |

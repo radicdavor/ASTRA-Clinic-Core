@@ -12,8 +12,8 @@
 | Klinički kontekst i AI sažetak | Dovršeno | details/tabs i ograničene sekcije |
 | Fokusirani TypeScript tipovi | Dovršeno | `types/program2.ts` |
 | Typecheck / test / build | Dovršeno | 29 testova + 3 contract testa, typecheck, build i smoke prolaze |
-| Backend regression suite | Dovršeno | 476 testova prolazi; 9 PostgreSQL testova preskočeno bez `TEST_DATABASE_URL` |
+| Backend regression suite | Dovršeno | 477 testova prolazi; 9 PostgreSQL testova preskočeno bez `TEST_DATABASE_URL` |
 | Alembic prazna baza | Dovršeno | upgrade do `0046`, downgrade na `0045` i ponovni upgrade prolaze |
 | Lokalni startup | Dovršeno | backend health, frontend 4178, demo login |
-| Vizualni browser review | Na čekanju | browser runtime se nije inicijalizirao; potrebna korisnička evaluacija |
-| Formalno zatvaranje | Na čekanju | STOP AND EVALUATE WITH USERS |
+| Vizualni browser review | Dovršeno | administrator i liječnik; standardni i 1024 px prikaz; bez konzolnih grešaka |
+| Formalno zatvaranje | Dovršeno | track zatvoren; `STOP AND HOLD` vraćen |

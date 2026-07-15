@@ -37,9 +37,22 @@ class JourneyBlockerOut(BaseModel):
     model_config=ConfigDict(from_attributes=True)
     id:int;blocker_key:str;category:str;title:str;details:str|None;is_clinical:bool;status:str;resolved_at:datetime|None;resolution_note:str|None;created_at:datetime
 
+class JourneyServiceBrief(BaseModel):
+    model_config=ConfigDict(from_attributes=True)
+    id:int;name:str
+
+class JourneyProviderBrief(BaseModel):
+    model_config=ConfigDict(from_attributes=True)
+    id:int;full_name:str
+
+class JourneyRoomBrief(BaseModel):
+    model_config=ConfigDict(from_attributes=True)
+    id:int;name:str
+
 class JourneyAppointmentBrief(BaseModel):
     model_config=ConfigDict(from_attributes=True)
     id:int;service_id:int;provider_id:int;room_id:int;episode_id:int|None;date:date;start_time:time;end_time:time;status:str;source:str
+    service:JourneyServiceBrief;provider:JourneyProviderBrief;room:JourneyRoomBrief
 
 class PatientBrief(BaseModel):
     model_config=ConfigDict(from_attributes=True)

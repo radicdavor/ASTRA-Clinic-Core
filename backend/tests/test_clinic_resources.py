@@ -36,6 +36,18 @@ def test_create_clinic_room_and_provider(client, auth_setup):
     assert provider.json()["weekly_working_hours"]["6"]["enabled"] is False
 
 
+def test_list_providers_keeps_legacy_demo_local_email_readable(client, db, auth_setup):
+    provider = Provider(full_name="dr. Demo Local", email="demo.physician@astra.local", staff_role="physician")
+    db.add(provider)
+    db.commit()
+    headers = {"Authorization": f"Bearer {login_token(client, 'admin@test.local')}"}
+
+    response = client.get("/api/providers", headers=headers)
+
+    assert response.status_code == 200
+    assert any(item["id"] == provider.id and item["email"] == "demo.physician@astra.local" for item in response.json())
+
+
 def test_reject_appointment_outside_provider_working_hours(db):
     provider = Provider(full_name="dr. Morning", specialty="test", email="morning@example.hr", work_start=time(8, 0), work_end=time(12, 0))
     db.add(provider)

@@ -531,3 +531,17 @@ th { color: #667085; font-size: 0.78rem; text-transform: uppercase; letter-spaci
 
 .clinic-day-page .clinic-day-table-wrap{border-color:#cbd9e3;background:#f4f7f9;padding:0 8px 8px;box-shadow:0 10px 30px rgba(39,64,82,.07)}.clinic-day-table-simple{border-collapse:separate;border-spacing:0 7px}.clinic-day-table-simple thead th{border:0;background:#f4f7f9;padding:13px 12px 7px;color:#526276;letter-spacing:.065em}.clinic-day-table-simple tbody td{border-top:1px solid #dce5eb;border-bottom:1px solid #dce5eb;background:#fff;padding:14px 12px;vertical-align:middle;transition:background-color .12s ease,border-color .12s ease}.clinic-day-table-simple tbody td:first-child{border-left:3px solid #cbd5e1;border-radius:9px 0 0 9px;padding-left:10px}.clinic-day-table-simple tbody td:last-child{border-right:1px solid #dce5eb;border-radius:0 9px 9px 0}.clinic-day-table-simple tbody tr:hover td{background:#fbfefd;border-color:#b9d5d0}.clinic-day-table-simple tbody tr.active-row td:first-child{border-left-color:#eab308}.clinic-day-table-simple tbody tr.problem-row td:first-child{border-left-color:#dc2626}.clinic-day-table-simple tbody tr.resolved-row td:first-child{border-left-color:#22a447}.clinic-day-table-simple tbody tr.unresolved-row td:first-child{border-left-color:#94a3b8}.clinic-day-table-simple .patient-time{align-self:start;border-radius:6px;background:#e6f4f2;padding:3px 6px;font-size:.78rem;line-height:1.1}.clinic-day-table-simple td:first-child>a{align-self:end;color:#0a6f68;font-size:.91rem;font-weight:850}.clinic-day-table-simple td:first-child>small{margin-top:3px}.clinic-day-table-simple td:nth-child(2)>strong{font-size:.88rem}.clinic-day-table-simple .operational-state strong{color:#26374a;font-size:.84rem}.clinic-day-table-simple .operational-state small{margin-top:2px;color:#68778a}.clinic-day-table-simple .clinic-day-actions button{min-height:36px;border-color:#9bc5bf;background:#f7fcfb;box-shadow:0 2px 5px rgba(15,118,110,.06)}.clinic-day-table-simple .clinic-day-actions button:hover{border-color:#0f766e;background:#e8f6f3;transform:translateY(-1px)}
 .clinic-day-scope{display:inline-flex;margin-top:7px;border:1px solid #b8ded9;border-radius:999px;background:#edf9f7;color:#0f766e;padding:4px 9px;font-size:.74rem;font-weight:800}
+
+@media (min-width:721px) and (max-width:1100px){
+  .clinic-day-table-simple{min-width:0;width:100%}
+  .clinic-day-table-simple th:nth-child(1){width:26%}
+  .clinic-day-table-simple th:nth-child(2){width:22%}
+  .clinic-day-table-simple th:nth-child(3){width:34%}
+  .clinic-day-table-simple th:nth-child(4){width:18%}
+  .clinic-day-table-simple th,.clinic-day-table-simple tbody td{padding-left:8px;padding-right:8px}
+  .clinic-day-table-simple tbody td:first-child{min-width:0;grid-template-columns:auto minmax(0,1fr)}
+  .clinic-day-table-simple td:first-child>a,.clinic-day-table-simple td:first-child>small,.clinic-day-table-simple td:nth-child(2)>strong,.clinic-day-table-simple td:nth-child(2)>small{min-width:0;overflow-wrap:anywhere}
+  .clinic-day-table-simple .clinic-day-actions{min-width:0}
+  .clinic-day-table-simple .clinic-day-actions button{width:100%;min-width:0;padding:7px 5px;white-space:normal}
+  .clinic-day-table-simple .operational-state{gap:6px}
+}

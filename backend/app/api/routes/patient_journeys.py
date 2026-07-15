@@ -11,7 +11,15 @@ from app.services.patient_journeys import add_blocker,create_journey,resolve_blo
 
 router=APIRouter(prefix="/api/patient-journeys",tags=["patient-journeys"])
 
-def query(): return select(PatientJourney).options(joinedload(PatientJourney.patient),joinedload(PatientJourney.appointment),selectinload(PatientJourney.events),selectinload(PatientJourney.blockers))
+def query():
+ return select(PatientJourney).options(
+  joinedload(PatientJourney.patient),
+  joinedload(PatientJourney.appointment).joinedload(Appointment.service),
+  joinedload(PatientJourney.appointment).joinedload(Appointment.provider),
+  joinedload(PatientJourney.appointment).joinedload(Appointment.room),
+  selectinload(PatientJourney.events),
+  selectinload(PatientJourney.blockers),
+ )
 def get_journey(db:Session,journey_id:int):
  item=db.scalar(query().where(PatientJourney.id==journey_id))
  if not item: raise HTTPException(404,detail="Tijek pacijenta nije pronađen")

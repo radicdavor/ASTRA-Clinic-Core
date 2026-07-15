@@ -33,7 +33,7 @@
 
 ## Validation summary
 
-- Backend: 476 passed, 9 environment-dependent PostgreSQL tests skipped in the full invocation.
+- Backend: 477 passed, 9 environment-dependent PostgreSQL tests skipped in the full invocation.
 - Frontend: 3 contract tests and 29 DOM interaction tests passed; typecheck, production build and smoke passed.
 - PostgreSQL/Alembic: empty database upgraded to head `0046_encounter_findings_opinion`; downgrade to `0045` and re-upgrade validated in Docker.
 - Browser: daily dashboard and unified workspace validated using synthetic data.

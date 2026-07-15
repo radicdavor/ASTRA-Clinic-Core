@@ -47,8 +47,8 @@ export function PatientJourneyWorkspace() {
   if (!journey.data) return <section className="page"><p>Učitavanje tijeka pacijenta...</p></section>;
   const j = journey.data;
   const currentStage = stageForJourney(j.current_stage);
-  const serviceName = services.data.find(item => item.id === j.appointment.service_id)?.name;
-  const clinicianName = providers.data.find(item => item.id === j.appointment.provider_id)?.full_name;
+  const serviceName = j.appointment.service?.name ?? services.data.find(item => item.id === j.appointment.service_id)?.name;
+  const clinicianName = j.appointment.provider?.full_name ?? providers.data.find(item => item.id === j.appointment.provider_id)?.full_name;
   const openBlockers = j.blockers.filter(item => item.status === "open");
   const criticalFacts = openBlockers.slice(0, 2).map(item => `Problem: ${item.title}`);
   if (["partial", "review_required", "blocked"].includes(j.document_status)) criticalFacts.push(`Dokumenti: ${journeyStatusLabel(j.document_status)}`);

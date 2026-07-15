@@ -10,6 +10,8 @@ def test_all_intake_channels_create_same_canonical_contract(client,db,auth_setup
         response=client.post("/api/patient-journeys",headers=headers(client),json={"appointment_id":appt.id,"intake_channel":channel,"initial_stage":"requested" if channel!="manual" else "booked"})
         assert response.status_code==200
         body=response.json();assert body["appointment_id"]==appt.id and body["patient_id"]==appt.patient_id and body["intake_channel"]==channel
+        assert body["appointment"]["service"]["name"] == appt.service.name
+        assert body["appointment"]["provider"]["full_name"] == appt.provider.full_name
         assert set(("document_status","preparation_status","check_in_status","encounter_status","billing_status","payment_status")).issubset(body)
     assert db.query(JourneyEvent).filter(JourneyEvent.event_type=="journey_created").count()==3
 

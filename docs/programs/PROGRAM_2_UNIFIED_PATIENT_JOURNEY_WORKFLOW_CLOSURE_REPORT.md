@@ -31,7 +31,7 @@ The three intake sources — WEB, AI_SECRETARY and MANUAL — converge through o
 
 ## Validation and limitations
 
-The current backend suite completed with 476 passed and 9 PostgreSQL tests skipped because the full invocation did not supply `TEST_DATABASE_URL`. An empty PostgreSQL database was separately upgraded to head `0046_encounter_findings_opinion`, downgraded to `0045`, and upgraded to head again. Three frontend contract tests and 29 DOM interaction tests passed, together with typecheck, production build and smoke. The original Program 2 daily dashboard and journey workspace browser validation remains recorded; the later UX simplification track keeps its separate visual-evaluation hold.
+The current backend suite and exact counts are recorded in the Phase K validation document and final status matrix. An empty PostgreSQL database was separately upgraded to head `0046_encounter_findings_opinion`, downgraded to `0045`, and upgraded to head again. Three frontend contract tests and 29 DOM interaction tests passed, together with typecheck, production build and smoke. The later UX simplification track also passed its synthetic administrator/physician browser evaluation at standard and 1024 px widths and is formally closed.
 
 Frontend interaction tests cover dashboard status behavior and the principal workspace mutations: check-in, preparation, source-linked AI fact review, blocker resolution and consumable confirmation. Backend API/service tests remain the authoritative coverage for workflow transitions, RBAC, audit and stock/billing invariants. Build warnings for bundle size and Tailwind content configuration are non-blocking follow-up items.
 
