@@ -6,7 +6,8 @@ from app.audit.service import audit,snapshot
 from app.auth.dependencies import Actor,require_permission
 from app.core.database import get_db
 from app.models.domain import JourneyEncounter,PatientJourney
-from app.schemas.journey_encounter import EncounterOut,EncounterUpdate
+from app.schemas.journey_encounter import DiagnosisSuggestionRequest,DiagnosisSuggestionsOut,EncounterOut,EncounterUpdate
+from app.services.encounter_diagnosis import DiagnosisSuggestionUnavailable,suggest_icd10_diagnoses
 from app.services.patient_journeys import transition
 router=APIRouter(prefix="/api/patient-journeys",tags=["journey-encounter"])
 def get_journey(db,id):
@@ -31,9 +32,17 @@ def update_encounter(journey_id:int,payload:EncounterUpdate,request:Request,db:S
  before=snapshot(item)
  for key,value in payload.model_dump(exclude_unset=True).items(): setattr(item,key,value)
  audit(db,"encounter_updated","JourneyEncounter",item.id,"Ažurirana bilješka kliničkog susreta",actor.user_id,actor.actor_type,actor.api_key_id,before,snapshot(item),request);db.commit();db.refresh(item);return item
+@router.post("/{journey_id}/encounter/diagnosis-suggestions",response_model=DiagnosisSuggestionsOut)
+def suggest_diagnoses(journey_id:int,payload:DiagnosisSuggestionRequest,request:Request,db:Session=Depends(get_db),actor:Actor=Depends(require_permission("encounter.write"))):
+ item=get_encounter(db,journey_id)
+ if item.status!="in_progress": raise HTTPException(409,detail="AI prijedlog nije dostupan za dovršeni pregled")
+ try: result=suggest_icd10_diagnoses(payload)
+ except ValueError as exc: raise HTTPException(422,detail=str(exc)) from exc
+ except DiagnosisSuggestionUnavailable as exc: raise HTTPException(503,detail=str(exc)) from exc
+ audit(db,"ai_diagnosis_suggestions_generated","JourneyEncounter",item.id,"Stvoreni AI prijedlozi WHO ICD-10 dijagnoza",actor.user_id,actor.actor_type,actor.api_key_id,None,{"provider":result.provider,"model":result.model,"count":len(result.diagnoses)},request);db.commit();return result
 @router.post("/{journey_id}/encounter/complete",response_model=EncounterOut)
 def complete_encounter(journey_id:int,request:Request,db:Session=Depends(get_db),actor:Actor=Depends(require_permission("encounter.complete"))):
  journey=get_journey(db,journey_id);item=get_encounter(db,journey_id)
  if item.status!="in_progress": raise HTTPException(409,detail="Klinički susret je već dovršen")
- if not any((item.anamnesis,item.examination,item.procedure_findings,item.diagnosis,item.recommendations)): raise HTTPException(422,detail="Prije završetka upišite nalaz kliničkog susreta")
+ if not any((item.anamnesis,item.examination,item.patient_findings,item.opinion,item.procedure_findings,item.diagnosis,item.recommendations)): raise HTTPException(422,detail="Prije završetka upišite nalaz kliničkog susreta")
  item.status="completed";item.completed_by=actor.user_id;item.completed_at=datetime.now(timezone.utc);journey.encounter_status="completed";transition(db,journey,"procedure_completed",actor,request,"Liječnik dovršio postupak");audit(db,"encounter_completed","JourneyEncounter",item.id,"Dovršen klinički susret",actor.user_id,actor.actor_type,actor.api_key_id,None,snapshot(item),request);db.commit();db.refresh(item);return item

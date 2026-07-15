@@ -70,9 +70,22 @@ export function AISummaryPanel({ summary, onGenerate, onReview }: { summary: any
   </Panel>;
 }
 
-export function EncounterPanel({ draft, setDraft, status, onOpen, onSave, onComplete }: { draft: any; setDraft: (value: any) => void; status?: string; onOpen: () => void; onSave: () => void; onComplete: () => void }) {
-  const fields = [["anamnesis", "Anamneza"], ["examination", "Pregled"], ["procedure_findings", "Nalaz postupka"], ["diagnosis", "Dijagnoza liječnika"], ["treatment", "Terapija"], ["recommendations", "Preporuke"], ["follow_up_plan", "Plan kontrole"]];
-  return <Panel title="Trenutačni klinički susret"><div className="encounter-status">Status: <strong>{status ? journeyStatusLabel(status) : "nije otvoren"}</strong></div>{status ? fields.map(([key, label]) => <label className="encounter-field" key={key}>{label}<textarea disabled={status === "completed"} value={draft[key] ?? ""} onChange={event => setDraft({ ...draft, [key]: event.target.value })}/></label>) : <button className="primary" onClick={onOpen}>Otvori susret</button>}{status === "in_progress" && <div className="form-actions"><button onClick={onSave}>Spremi bilješku</button><button className="primary" onClick={onComplete}>Dovrši postupak</button></div>}</Panel>;
+type AIDiagnosis = { code: string; title: string };
+
+export function EncounterPanel({ draft, setDraft, status, aiDiagnoses = [], diagnosisBusy = false, onOpen, onSave, onComplete, onSuggestDiagnoses, onRemoveDiagnosis }: { draft: any; setDraft: (value: any) => void; status?: string; aiDiagnoses?: AIDiagnosis[]; diagnosisBusy?: boolean; onOpen: () => void; onSave: () => void; onComplete: () => void; onSuggestDiagnoses?: () => void; onRemoveDiagnosis?: (diagnosis: AIDiagnosis) => void }) {
+  const fields = [
+    ["anamnesis", "Anamneza", "Glavna tegoba, tijek bolesti, ranije bolesti, terapija i alergije."],
+    ["examination", "Status", "Objektivni status utvrđen tijekom pregleda."],
+    ["patient_findings", "Nalazi koje pacijent donosi", "Sažeto navedite vrstu, datum i važan sadržaj donesenih nalaza."],
+    ["opinion", "Mišljenje", "Kliničko mišljenje liječnika."],
+    ["recommendations", "Preporuke", "Dogovorene preporuke i sljedeći koraci."],
+    ["diagnosis", "Dijagnoze (WHO ICD-10)", "Jedna dijagnoza po retku, npr. K21.9 — Gastroezofagealna refluksna bolest."],
+  ];
+  return <Panel title="Pregled pacijenta">
+    <div className="encounter-note-heading"><span>Status pregleda: <strong>{status ? journeyStatusLabel(status) : "nije otvoren"}</strong></span><small>Sadržaj unosi i potvrđuje liječnik.</small></div>
+    {status ? <div className="encounter-note-grid">{fields.map(([key, label, placeholder]) => <label className={`encounter-field encounter-field-${key}`} key={key}><span className="encounter-field-title"><span>{label}</span>{key === "diagnosis" && status === "in_progress" && onSuggestDiagnoses && <button type="button" className="ai-diagnosis-button" aria-label="AI predloži" disabled={diagnosisBusy} onClick={onSuggestDiagnoses}>{diagnosisBusy ? "AI obrađuje…" : "AI predloži"}</button>}</span><textarea aria-label={label} disabled={status === "completed"} value={draft[key] ?? ""} placeholder={placeholder} onChange={event => setDraft({ ...draft, [key]: event.target.value })}/>{key === "diagnosis" && <><small>AI prijedlog nije dijagnoza. Šifru i naziv prije završetka provjerava liječnik.</small>{aiDiagnoses.length > 0 && <div className="ai-diagnosis-list" aria-label="AI prijedlozi dijagnoza">{aiDiagnoses.map(item => <div key={`${item.code}-${item.title}`}><span><small>AI prijedlog</small><strong>{item.code} — {item.title}</strong></span><button type="button" aria-label={`Ukloni AI prijedlog ${item.code}`} onClick={() => onRemoveDiagnosis?.(item)}><Trash2 size={15}/></button></div>)}</div>}</>}</label>)}</div> : <div className="encounter-empty"><p>Pregled još nije započet.</p><button className="primary" onClick={onOpen}>Započni pregled</button></div>}
+    {status === "in_progress" && <div className="form-actions encounter-note-actions"><button onClick={onSave}>Spremi pregled</button><button className="primary" onClick={onComplete}>Dovrši pregled</button></div>}
+  </Panel>;
 }
 
 type ConsumableDraft = { inventory_item_id: string; quantity: string; reason: string };

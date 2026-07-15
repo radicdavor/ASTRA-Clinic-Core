@@ -408,6 +408,8 @@ class JourneyEncounter(TimestampMixin, Base):
     status: Mapped[str] = mapped_column(String(40), default="in_progress", index=True)
     anamnesis: Mapped[str | None] = mapped_column(Text)
     examination: Mapped[str | None] = mapped_column(Text)
+    patient_findings: Mapped[str | None] = mapped_column(Text)
+    opinion: Mapped[str | None] = mapped_column(Text)
     procedure_findings: Mapped[str | None] = mapped_column(Text)
     diagnosis: Mapped[str | None] = mapped_column(Text)
     treatment: Mapped[str | None] = mapped_column(Text)

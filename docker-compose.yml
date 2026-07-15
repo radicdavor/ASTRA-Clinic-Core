@@ -27,6 +27,8 @@ services:
       DEMO_MODE: ${DEMO_MODE:-true}
       REAL_DATA_ALLOWED: ${REAL_DATA_ALLOWED:-false}
       FISCALIZATION_MODE: ${FISCALIZATION_MODE:-noop}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4.1-mini}
     ports:
       - "0.0.0.0:8000:8000"
     depends_on:

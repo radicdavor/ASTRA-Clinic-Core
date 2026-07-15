@@ -1,6 +1,7 @@
 from functools import lru_cache
 from typing import Literal
 
+from pydantic import SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -19,6 +20,8 @@ class Settings(BaseSettings):
     fiscalization_mode: str = "noop"
     document_storage_path: str = "/app/data/documents"
     document_max_upload_bytes: int = 15 * 1024 * 1024
+    openai_api_key: SecretStr | None = None
+    openai_model: str = "gpt-4.1-mini"
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 

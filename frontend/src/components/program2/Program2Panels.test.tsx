@@ -1,11 +1,37 @@
 import { afterEach, describe, expect, test, vi } from "vitest";
 import { cleanup, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { AISummaryPanel, BlockerPanel, CheckInChecklist, ConsumablesPanel, PreparationPanel } from "./Program2Panels";
+import { AISummaryPanel, BlockerPanel, CheckInChecklist, ConsumablesPanel, EncounterPanel, PreparationPanel } from "./Program2Panels";
 
 afterEach(() => cleanup());
 
 describe("radnje u radnom prostoru tijeka pacijenta", () => {
+  test("pregled prikazuje samo šest jasnih kliničkih cjelina", async () => {
+    const user = userEvent.setup();
+    const setDraft = vi.fn();
+    render(<EncounterPanel draft={{}} setDraft={setDraft} status="in_progress" onOpen={vi.fn()} onSave={vi.fn()} onComplete={vi.fn()}/>);
+
+    for (const label of ["Anamneza", "Status", "Nalazi koje pacijent donosi", "Mišljenje", "Preporuke", "Dijagnoze (WHO ICD-10)"]) {
+      expect(screen.getByLabelText(label)).toBeTruthy();
+    }
+    expect(screen.queryByLabelText("Terapija")).toBeNull();
+    await user.type(screen.getByLabelText("Mišljenje"), "Mišljenje liječnika");
+    expect(setDraft).toHaveBeenLastCalledWith({ opinion: "a" });
+  });
+
+  test("AI prijedlog dijagnoze može se ukloniti jednim klikom", async () => {
+    const user = userEvent.setup();
+    const onSuggestDiagnoses = vi.fn();
+    const onRemoveDiagnosis = vi.fn();
+    const diagnosis = { code: "K21.9", title: "Gastroezofagealna refluksna bolest" };
+    render(<EncounterPanel draft={{ diagnosis: "K21.9 — Gastroezofagealna refluksna bolest" }} setDraft={vi.fn()} status="in_progress" aiDiagnoses={[diagnosis]} onOpen={vi.fn()} onSave={vi.fn()} onComplete={vi.fn()} onSuggestDiagnoses={onSuggestDiagnoses} onRemoveDiagnosis={onRemoveDiagnosis}/>);
+
+    await user.click(screen.getByRole("button", { name: "AI predloži" }));
+    expect(onSuggestDiagnoses).toHaveBeenCalledOnce();
+    await user.click(screen.getByRole("button", { name: "Ukloni AI prijedlog K21.9" }));
+    expect(onRemoveDiagnosis).toHaveBeenCalledWith(diagnosis);
+  });
+
   test("sprema izmijenjenu stavku prijemne provjere", async () => {
     const user = userEvent.setup();
     const onUpdate = vi.fn().mockResolvedValue(undefined);

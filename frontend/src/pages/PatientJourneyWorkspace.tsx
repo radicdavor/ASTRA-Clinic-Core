@@ -25,6 +25,8 @@ export function PatientJourneyWorkspace() {
   const inventory = useApi<InventoryItem[]>("/api/inventory/items", []);
   const documents = useApi<any[]>(`/api/clinical-documents?patient_id=${journey.data?.patient_id ?? 0}`, []);
   const [draft, setDraft] = useState<any>({});
+  const [aiDiagnoses, setAiDiagnoses] = useState<Array<{ code: string; title: string }>>([]);
+  const [diagnosisBusy, setDiagnosisBusy] = useState(false);
   const [actionError, setActionError] = useState("");
 
   useEffect(() => { if (encounter.data) setDraft(encounter.data); }, [encounter.data]);
@@ -47,6 +49,23 @@ export function PatientJourneyWorkspace() {
   }
   async function open() { await perform(async () => { encounter.setData(await api(`/api/patient-journeys/${id}/encounter`, { method: "POST" })); await refresh(); }); }
   async function save() { await perform(async () => { encounter.setData(await api(`/api/patient-journeys/${id}/encounter`, { method: "PATCH", body: JSON.stringify(draft) })); }); }
+  async function suggestDiagnoses() {
+    setDiagnosisBusy(true);
+    await perform(async () => {
+      const result = await api<{ diagnoses: Array<{ code: string; title: string }> }>(`/api/patient-journeys/${id}/encounter/diagnosis-suggestions`, { method: "POST", body: JSON.stringify({ anamnesis: draft.anamnesis, examination: draft.examination, patient_findings: draft.patient_findings, opinion: draft.opinion }) });
+      const previousSuggestions = new Set(aiDiagnoses.map(item => `${item.code} — ${item.title}`));
+      const existing = String(draft.diagnosis ?? "").split("\n").map(line => line.trim()).filter(line => line && !previousSuggestions.has(line));
+      const suggested = result.diagnoses.map(item => `${item.code} — ${item.title}`);
+      setDraft({ ...draft, diagnosis: [...new Set([...existing, ...suggested])].join("\n") });
+      setAiDiagnoses(result.diagnoses);
+    });
+    setDiagnosisBusy(false);
+  }
+  function removeDiagnosis(item: { code: string; title: string }) {
+    const line = `${item.code} — ${item.title}`;
+    setDraft({ ...draft, diagnosis: String(draft.diagnosis ?? "").split("\n").filter(value => value.trim() !== line).join("\n") });
+    setAiDiagnoses(current => current.filter(value => value.code !== item.code || value.title !== item.title));
+  }
   async function complete() {
     if (!window.confirm("Dovršiti klinički susret? Nakon toga bilješka više nije dostupna za redovno uređivanje.")) return;
     await perform(async () => { encounter.setData(await api(`/api/patient-journeys/${id}/encounter/complete`, { method: "POST" })); await refresh(); });
@@ -100,7 +119,7 @@ export function PatientJourneyWorkspace() {
     <div className="journey-safety-strip"><span>Dokumenti: {journeyStatusLabel(j.document_status)}</span><span>Priprema: {journeyStatusLabel(j.preparation_status)}</span><span>Prijem: {journeyStatusLabel(j.check_in_status)}</span><span>Pregled: {journeyStatusLabel(j.encounter_status)}</span></div>
     <div className="journey-columns">
       <aside><PatientTimeline items={timeline.data}/><SourceDocumentViewer documents={documents.data} onReview={reviewDocument}/><AISummaryPanel summary={summary.data} onGenerate={generateSummary} onReview={reviewSummaryFact}/></aside>
-      <main id="journey-encounter" tabIndex={-1}><EncounterPanel draft={draft} setDraft={setDraft} status={encounter.data?.status} onOpen={open} onSave={save} onComplete={complete}/></main>
+      <main id="journey-encounter" tabIndex={-1}><EncounterPanel draft={draft} setDraft={setDraft} status={encounter.data?.status} aiDiagnoses={aiDiagnoses} diagnosisBusy={diagnosisBusy} onOpen={open} onSave={save} onComplete={complete} onSuggestDiagnoses={suggestDiagnoses} onRemoveDiagnosis={removeDiagnosis}/></main>
       <aside><div id="journey-attention" tabIndex={-1}><BlockerPanel items={j.blockers} onResolve={resolveBlocker}/></div><div id="journey-check-in" tabIndex={-1}><CheckInChecklist data={checkin.data} onUpdate={updateCheckIn} onConfirmAdministrative={confirmAdministrativeCheckIn}/></div><DocumentReadinessPanel status={j.document_status}/><PreparationPanel status={j.preparation_status} data={preparation.data} onUpdate={updatePreparation}/><div id="journey-consumables" tabIndex={-1}><ConsumablesPanel status={j.consumables_status} canConfirm={j.current_stage === "procedure_completed"} items={inventory.data} onConfirm={confirmConsumables}/></div><div id="journey-billing" tabIndex={-1}><BillingPanel status={j.billing_status} invoice={closure.data?.invoice} onPrepare={prepareBilling}/></div><div id="journey-payment" tabIndex={-1}><PaymentPanel status={j.payment_status} invoice={closure.data?.invoice} stage={j.current_stage} onPay={pay} onDefer={defer} onClose={close}/></div></aside>
     </div>
   </section>;
