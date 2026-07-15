@@ -8,14 +8,14 @@ Phase K validates the additive Program 2 implementation from canonical intake th
 
 | Gate | Result | Evidence |
 |---|---|---|
-| Backend suite | PASS | 473 passed, 9 skipped; skipped tests require an explicit PostgreSQL integration URL |
+| Backend suite | PASS | 476 passed, 9 skipped; skipped tests require an explicit PostgreSQL integration URL |
 | Program 2 closure tests | PASS | Journey closure, payment, billing, consumables and dashboard targets pass |
 | Frontend contract tests | PASS | 3/3 route, panel and explicit-financial-action contracts |
-| Frontend interaction tests | PASS | 14/14 dashboard and workspace tests, including simplified next actions, check-in, preparation, AI fact review, blockers and consumables |
+| Frontend interaction tests | PASS | 29/29 current DOM tests; Program 2 coverage includes role navigation, dashboard, focused workspace, check-in, preparation, AI fact review, blockers and consumables |
 | Frontend typecheck | PASS | `npm run typecheck` |
 | Frontend production build | PASS | `npm run build` |
 | Frontend smoke | PASS | `npm run smoke` |
-| Alembic | PASS | PostgreSQL upgraded through `0045_program2_closure` |
+| Alembic | PASS | Empty PostgreSQL database upgraded through `0046_encounter_findings_opinion`; downgrade to `0045` and re-upgrade passed |
 | Docker | PASS | Database and backend built and started; health endpoint returned `ok` |
 | Browser | PASS | 12 synthetic dashboard rows and unified journey workspace inspected without browser errors |
 

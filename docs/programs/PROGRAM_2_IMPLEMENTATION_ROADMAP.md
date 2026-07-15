@@ -1,5 +1,9 @@
 # Program 2 — Implementation Roadmap
 
+## Workflow UX Simplification Track
+
+Postojeći Program 2 workflow dobio je task-centered navigaciju, fokusiranu dnevnu ploču i stage-focused radni prostor bez zamjene backend modela ili uklanjanja ruta. Sekundarni alati sada su grupirani prema ulozi, a vremenska crta, dokumenti i AI sažetak koriste progresivno otkrivanje. Implementacija je na `STOP AND EVALUATE WITH USERS` holdu do završne vizualne korisničke provjere. Detalji su u zasebnim dokumentima `PROGRAM_2_WORKFLOW_UX_SIMPLIFICATION_TRACK_*`.
+
 ## Mission
 
 One canonical workflow: `Prijava → dokumenti → priprema → dolazak → provjera → pregled → potrošni materijal → račun → plaćanje → završetak`.

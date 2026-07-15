@@ -61,11 +61,25 @@ export function SourceDocumentViewer({ documents, onReview }: { documents: any[]
   return <Panel title="Izvorni dokumenti">{documents.map(item => <div className="journey-source" key={item.id}><a href={`/api/clinical-documents/${item.id}/source`} target="_blank" rel="noreferrer"><span><strong>{item.title}</strong><small>{journeyStatusLabel(item.review_status)}</small></span><ExternalLink size={15}/></a>{item.review_status !== "reviewed" && onReview && <button type="button" onClick={() => onReview(item.id)}>Označi pregledanim</button>}</div>)}{!documents.length && <p>Nema povezanih dokumenata.</p>}</Panel>;
 }
 
+function AISummaryFact({ summaryId, fact, onReview }: { summaryId: number; fact: any; onReview?: (summaryId: number, factId: number, action: "accept" | "reject") => Promise<void> }) {
+  return <article className="journey-ai-fact"><strong>{fact.statement}</strong><small>{fact.fact_type} · {journeyStatusLabel(fact.review_status)}</small>{fact.source_document_id && <a href={`/api/clinical-documents/${fact.source_document_id}/source`} target="_blank" rel="noreferrer">Otvori izvor #{fact.source_document_id}</a>}{fact.review_status === "pending_review" && onReview && <div className="fact-review-actions"><button type="button" onClick={() => onReview(summaryId, fact.id, "reject")}>Odbaci</button><button type="button" className="primary" onClick={() => onReview(summaryId, fact.id, "accept")}>Prihvati činjenicu</button></div>}</article>;
+}
+
 export function AISummaryPanel({ summary, onGenerate, onReview }: { summary: any; onGenerate?: () => Promise<void>; onReview?: (summaryId: number, factId: number, action: "accept" | "reject") => Promise<void> }) {
+  const facts = summary?.facts ?? [];
+  const risks = facts.filter((fact: any) => /risk|rizik/i.test(fact.fact_type)).slice(0, 3);
+  const missing = facts.filter((fact: any) => /missing|nedost/i.test(fact.fact_type)).slice(0, 3);
+  const highlightedIds = new Set([...risks, ...missing].map((fact: any) => fact.id));
+  const important = facts.filter((fact: any) => !highlightedIds.has(fact.id)).slice(0, 5);
+  const shownIds = new Set([...important, ...risks, ...missing].map((fact: any) => fact.id));
+  const remaining = facts.filter((fact: any) => !shownIds.has(fact.id));
   return <Panel title="AI prijedlog — pregled obavezan">
     {summary && <p className="journey-panel-context"><strong>{journeyStatusLabel(summary.status)}</strong><small>{summary.model_name} · {new Date(summary.generated_at).toLocaleString("hr-HR")}</small></p>}
-    {summary?.limitations_json?.map((item: string) => <small className="journey-limitation" key={item}>{item}</small>)}
-    {summary?.facts?.map((fact: any) => <article className="journey-ai-fact" key={fact.id}><strong>{fact.statement}</strong><small>{fact.fact_type} · {journeyStatusLabel(fact.review_status)}</small>{fact.source_document_id && <a href={`/api/clinical-documents/${fact.source_document_id}/source`} target="_blank" rel="noreferrer">Otvori izvor #{fact.source_document_id}</a>}{fact.review_status === "pending_review" && onReview && <div className="fact-review-actions"><button type="button" onClick={() => onReview(summary.id, fact.id, "reject")}>Odbaci</button><button type="button" className="primary" onClick={() => onReview(summary.id, fact.id, "accept")}>Prihvati činjenicu</button></div>}</article>)}
+    {summary?.limitations_json?.slice(0, 3).map((item: string) => <small className="journey-limitation" key={item}>{item}</small>)}
+    {important.length > 0 && <section className="ai-summary-section"><h3>Najvažnije</h3>{important.map((fact: any) => <AISummaryFact summaryId={summary.id} fact={fact} onReview={onReview} key={fact.id}/>)}</section>}
+    {risks.length > 0 && <section className="ai-summary-section"><h3>Rizici za današnji pregled</h3>{risks.map((fact: any) => <AISummaryFact summaryId={summary.id} fact={fact} onReview={onReview} key={fact.id}/>)}</section>}
+    {missing.length > 0 && <section className="ai-summary-section"><h3>Što nedostaje</h3>{missing.map((fact: any) => <AISummaryFact summaryId={summary.id} fact={fact} onReview={onReview} key={fact.id}/>)}</section>}
+    {remaining.length > 0 && <details className="ai-summary-full"><summary>Prikaži cijeli AI sažetak</summary>{remaining.map((fact: any) => <AISummaryFact summaryId={summary.id} fact={fact} onReview={onReview} key={fact.id}/>)}</details>}
     {!summary && <><p>Sažetak nije generiran.</p>{onGenerate && <button type="button" onClick={onGenerate}>Generiraj iz izvornih dokumenata</button>}</>}
   </Panel>;
 }

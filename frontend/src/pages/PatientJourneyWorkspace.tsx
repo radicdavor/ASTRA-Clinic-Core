@@ -1,10 +1,13 @@
 import { useEffect, useState } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
-import { api } from "../api/client";
+import { api, getSessionUser } from "../api/client";
 import { useApi } from "../hooks/useApi";
-import type { InventoryItem } from "../types";
+import type { ClinicalDocument, InventoryItem, Provider, Service } from "../types";
+import type { CheckInState, EncounterDraft, JourneyClosure, JourneyStageKey, PatientJourneyDetail, PatientJourneySummary, PatientJourneyTimelineItem, PreparationState } from "../types/program2";
 import { AISummaryPanel, BillingPanel, BlockerPanel, CheckInChecklist, ConsumablesPanel, DocumentReadinessPanel, EncounterPanel, PatientTimeline, PaymentPanel, PreparationPanel, SourceDocumentViewer } from "../components/program2/Program2Panels";
-import { journeyStageLabel, journeyStatusLabel } from "../components/program2/journeyStatus";
+import { journeyStatusLabel } from "../components/program2/journeyStatus";
+import { focusToStage, JourneyHeader, JourneyNextAction, JourneyStageStepper, stageForJourney } from "../components/program2/journey/JourneyChrome";
+import { JourneyClinicalContext } from "../components/program2/journey/JourneyClinicalContext";
 
 function formatDate(value?: string | null) {
   if (!value) return "nije upisano";
@@ -15,28 +18,41 @@ function formatDate(value?: string | null) {
 export function PatientJourneyWorkspace() {
   const { id } = useParams();
   const [searchParams] = useSearchParams();
-  const journey = useApi<any>(`/api/patient-journeys/${id}`, null);
-  const timeline = useApi<any[]>(`/api/patient-journeys/${id}/timeline`, []);
-  const summary = useApi<any>(`/api/patient-journeys/${id}/summary`, null);
-  const checkin = useApi<any>(`/api/patient-journeys/${id}/check-in`, null);
-  const preparation = useApi<any>(`/api/patient-journeys/${id}/preparation`, null);
-  const encounter = useApi<any>(`/api/patient-journeys/${id}/encounter`, null);
-  const closure = useApi<any>(`/api/patient-journeys/${id}/closure`, null);
+  const journey = useApi<PatientJourneyDetail | null>(`/api/patient-journeys/${id}`, null);
+  const timeline = useApi<PatientJourneyTimelineItem[]>(`/api/patient-journeys/${id}/timeline`, []);
+  const summary = useApi<PatientJourneySummary | null>(`/api/patient-journeys/${id}/summary`, null);
+  const checkin = useApi<CheckInState | null>(`/api/patient-journeys/${id}/check-in`, null);
+  const preparation = useApi<PreparationState | null>(`/api/patient-journeys/${id}/preparation`, null);
+  const encounter = useApi<EncounterDraft | null>(`/api/patient-journeys/${id}/encounter`, null);
+  const closure = useApi<JourneyClosure | null>(`/api/patient-journeys/${id}/closure`, null);
   const inventory = useApi<InventoryItem[]>("/api/inventory/items", []);
-  const documents = useApi<any[]>(`/api/clinical-documents?patient_id=${journey.data?.patient_id ?? 0}`, []);
-  const [draft, setDraft] = useState<any>({});
+  const services = useApi<Service[]>("/api/services", []);
+  const providers = useApi<Provider[]>("/api/providers", []);
+  const documents = useApi<ClinicalDocument[]>(`/api/clinical-documents?patient_id=${journey.data?.patient_id ?? 0}`, []);
+  const [draft, setDraft] = useState<EncounterDraft>({});
+  const [activeStage, setActiveStage] = useState<JourneyStageKey>("documents");
   const [aiDiagnoses, setAiDiagnoses] = useState<Array<{ code: string; title: string }>>([]);
   const [diagnosisBusy, setDiagnosisBusy] = useState(false);
   const [actionError, setActionError] = useState("");
 
   useEffect(() => { if (encounter.data) setDraft(encounter.data); }, [encounter.data]);
   useEffect(() => {
-    const focus = searchParams.get("focus");
-    if (journey.data && focus) requestAnimationFrame(() => document.getElementById(`journey-${focus}`)?.scrollIntoView({ behavior: "smooth", block: "start" }));
-  }, [journey.data, searchParams]);
+    if (!journey.data) return;
+    const current = stageForJourney(journey.data.current_stage);
+    const role = (getSessionUser()?.role ?? "").replace(/^demo_/, "");
+    const roleDefault = role === "billing" && ["awaiting_billing", "awaiting_payment"].includes(journey.data.current_stage) ? "billing" : current;
+    setActiveStage(focusToStage(searchParams.get("focus"), roleDefault));
+  }, [journey.data?.id, journey.data?.current_stage, searchParams]);
 
   if (!journey.data) return <section className="page"><p>Učitavanje tijeka pacijenta...</p></section>;
   const j = journey.data;
+  const currentStage = stageForJourney(j.current_stage);
+  const serviceName = services.data.find(item => item.id === j.appointment.service_id)?.name;
+  const clinicianName = providers.data.find(item => item.id === j.appointment.provider_id)?.full_name;
+  const openBlockers = j.blockers.filter(item => item.status === "open");
+  const criticalFacts = openBlockers.slice(0, 2).map(item => `Problem: ${item.title}`);
+  if (["partial", "review_required", "blocked"].includes(j.document_status)) criticalFacts.push(`Dokumenti: ${journeyStatusLabel(j.document_status)}`);
+  if (["review_required", "blocked"].includes(j.preparation_status)) criticalFacts.push(`Priprema: ${journeyStatusLabel(j.preparation_status)}`);
 
   async function perform(action: () => Promise<void>) {
     setActionError("");
@@ -44,9 +60,10 @@ export function PatientJourneyWorkspace() {
     catch (error) { setActionError(error instanceof Error ? error.message : "Radnja nije spremljena."); }
   }
   async function refresh() {
-    journey.setData(await api(`/api/patient-journeys/${id}`));
-    closure.setData(await api(`/api/patient-journeys/${id}/closure`));
+    journey.setData(await api<PatientJourneyDetail>(`/api/patient-journeys/${id}`));
+    closure.setData(await api<JourneyClosure>(`/api/patient-journeys/${id}/closure`));
   }
+  async function startCheckIn() { await perform(async () => { checkin.setData(await api<CheckInState>(`/api/patient-journeys/${id}/check-in`, { method: "POST" })); await refresh(); }); }
   async function open() { await perform(async () => { encounter.setData(await api(`/api/patient-journeys/${id}/encounter`, { method: "POST" })); await refresh(); }); }
   async function save() { await perform(async () => { encounter.setData(await api(`/api/patient-journeys/${id}/encounter`, { method: "PATCH", body: JSON.stringify(draft) })); }); }
   async function suggestDiagnoses() {
@@ -113,14 +130,20 @@ export function PatientJourneyWorkspace() {
     await perform(async () => { await api(`/api/patient-journeys/${id}/close`, { method: "POST" }); await refresh(); });
   }
 
-  return <section className="page journey-workspace">
-    <header className="journey-workspace-header"><div><span>TIJEK PACIJENTA · #{j.id}</span><h1>{j.patient.first_name} {j.patient.last_name}</h1><p>Rođen/a: {formatDate(j.patient.date_of_birth)} · termin {formatDate(j.appointment.date)} u {j.appointment.start_time.slice(0, 5)}</p></div><div><strong>{journeyStageLabel(j.current_stage)}</strong><Link to={`/appointments/${j.appointment_id}`}>Termin #{j.appointment_id}</Link></div></header>
+  return <section className="page journey-workspace journey-workspace-focused">
+    <JourneyHeader journey={j} service={serviceName} clinician={clinicianName} formatDate={formatDate}/>
     {actionError && <p className="inline-error" role="alert">{actionError}</p>}
-    <div className="journey-safety-strip"><span>Dokumenti: {journeyStatusLabel(j.document_status)}</span><span>Priprema: {journeyStatusLabel(j.preparation_status)}</span><span>Prijem: {journeyStatusLabel(j.check_in_status)}</span><span>Pregled: {journeyStatusLabel(j.encounter_status)}</span></div>
-    <div className="journey-columns">
-      <aside><PatientTimeline items={timeline.data}/><SourceDocumentViewer documents={documents.data} onReview={reviewDocument}/><AISummaryPanel summary={summary.data} onGenerate={generateSummary} onReview={reviewSummaryFact}/></aside>
-      <main id="journey-encounter" tabIndex={-1}><EncounterPanel draft={draft} setDraft={setDraft} status={encounter.data?.status} aiDiagnoses={aiDiagnoses} diagnosisBusy={diagnosisBusy} onOpen={open} onSave={save} onComplete={complete} onSuggestDiagnoses={suggestDiagnoses} onRemoveDiagnosis={removeDiagnosis}/></main>
-      <aside><div id="journey-attention" tabIndex={-1}><BlockerPanel items={j.blockers} onResolve={resolveBlocker}/></div><div id="journey-check-in" tabIndex={-1}><CheckInChecklist data={checkin.data} onUpdate={updateCheckIn} onConfirmAdministrative={confirmAdministrativeCheckIn}/></div><DocumentReadinessPanel status={j.document_status}/><PreparationPanel status={j.preparation_status} data={preparation.data} onUpdate={updatePreparation}/><div id="journey-consumables" tabIndex={-1}><ConsumablesPanel status={j.consumables_status} canConfirm={j.current_stage === "procedure_completed"} items={inventory.data} onConfirm={confirmConsumables}/></div><div id="journey-billing" tabIndex={-1}><BillingPanel status={j.billing_status} invoice={closure.data?.invoice} onPrepare={prepareBilling}/></div><div id="journey-payment" tabIndex={-1}><PaymentPanel status={j.payment_status} invoice={closure.data?.invoice} stage={j.current_stage} onPay={pay} onDefer={defer} onClose={close}/></div></aside>
-    </div>
+    {criticalFacts.length > 0 && <aside className="journey-critical-facts" aria-label="Važno sada">{criticalFacts.map(item => <span key={item}>{item}</span>)}</aside>}
+    <JourneyNextAction journey={j} stage={currentStage} onSelect={setActiveStage}/>
+    <JourneyStageStepper active={activeStage} current={currentStage} onSelect={setActiveStage}/>
+    <main className="journey-active-stage" id={`journey-${activeStage}`} tabIndex={-1} aria-live="polite">
+      {activeStage === "documents" && <><BlockerPanel items={j.blockers} onResolve={resolveBlocker}/><div className="journey-stage-pair"><DocumentReadinessPanel status={j.document_status}/><PreparationPanel status={j.preparation_status} data={preparation.data ?? undefined} onUpdate={updatePreparation}/></div></>}
+      {activeStage === "arrival" && <><BlockerPanel items={j.blockers} onResolve={resolveBlocker}/>{!checkin.data && <section className="journey-panel journey-start-panel"><h2>Dolazak i prijem</h2><p>Prijem još nije započet. Ova radnja evidentira dolazak i otvara prijemnu provjeru.</p><button type="button" className="primary" onClick={startCheckIn}>Započni prijem</button></section>}<CheckInChecklist data={checkin.data} onUpdate={updateCheckIn} onConfirmAdministrative={confirmAdministrativeCheckIn}/></>}
+      {activeStage === "encounter" && <><BlockerPanel items={j.blockers} onResolve={resolveBlocker}/><EncounterPanel draft={draft} setDraft={setDraft} status={encounter.data?.status} aiDiagnoses={aiDiagnoses} diagnosisBusy={diagnosisBusy} onOpen={open} onSave={save} onComplete={complete} onSuggestDiagnoses={suggestDiagnoses} onRemoveDiagnosis={removeDiagnosis}/></>}
+      {activeStage === "consumables" && <ConsumablesPanel status={j.consumables_status} canConfirm={j.current_stage === "procedure_completed"} items={inventory.data} onConfirm={confirmConsumables}/>}
+      {activeStage === "billing" && <div className="journey-stage-pair"><BillingPanel status={j.billing_status} invoice={closure.data?.invoice ?? undefined} onPrepare={prepareBilling}/><PaymentPanel status={j.payment_status} invoice={closure.data?.invoice ?? undefined} stage={j.current_stage} onPay={pay} onDefer={defer} onClose={close}/></div>}
+      {activeStage === "completed" && <section className="journey-panel journey-completed"><h2>Dolazak je završen</h2><p>Pregled, materijal i naplata nemaju otvorenu operativnu radnju.</p><Link to={`/patients/${j.patient_id}`}>Otvori longitudinalni zapis pacijenta</Link></section>}
+    </main>
+    <JourneyClinicalContext summary={<AISummaryPanel summary={summary.data} onGenerate={generateSummary} onReview={reviewSummaryFact}/>} timeline={<PatientTimeline items={timeline.data}/>} documents={<SourceDocumentViewer documents={documents.data} onReview={reviewDocument}/>}/>
   </section>;
 }

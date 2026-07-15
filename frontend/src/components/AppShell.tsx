@@ -1,36 +1,51 @@
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
-import { BookOpenCheck, Boxes, Building2, CalendarCheck, CalendarDays, CheckSquare2, ClipboardCheck, ClipboardList, FileSearch, FileText, KeyRound, LayoutDashboard, LogOut, PackageSearch, Pill, Search, Settings, ShieldCheck, Stethoscope, TestTube, Users } from "lucide-react";
-import { clearToken } from "../api/client";
+import { BookOpenCheck, Boxes, Building2, CalendarDays, CheckSquare2, ChevronDown, ClipboardCheck, ClipboardList, FileSearch, FileText, KeyRound, LayoutDashboard, LogOut, MoreHorizontal, PackageSearch, Pill, Settings, ShieldCheck, Stethoscope, TestTube, Users } from "lucide-react";
+import { clearToken, getSessionUser } from "../api/client";
 import { useApi } from "../hooks/useApi";
 import { ToastHost } from "./ToastHost";
 
-const nav = [
-  { to: "/", label: "Danas u poliklinici", icon: LayoutDashboard },
-  { to: "/patients", label: "Pacijenti", icon: Users },
-  { to: "/reception", label: "Prijem", icon: CalendarCheck },
-  { to: "/clinical-documents", label: "Dokumenti", icon: FileSearch },
-  { to: "/laboratory", label: "Laboratorij", icon: TestTube },
-  { to: "/therapies", label: "Terapije", icon: Pill },
-  { to: "/appointments", label: "Termini", icon: CalendarDays },
-  { to: "/workflow", label: "Zadaci", icon: CheckSquare2 },
-  { to: "/knowledge", label: "Klinicka knjiznica", icon: BookOpenCheck },
-  { to: "/gastroenterology", label: "Gastroenterologija", icon: Stethoscope },
-  { to: "/services", label: "Usluge", icon: Stethoscope },
-  { to: "/clinics", label: "Klinike", icon: Building2 },
-  { to: "/modules", label: "Moduli", icon: Settings },
-  { to: "/inventory", label: "Inventar", icon: Boxes },
-  { to: "/suppliers", label: "Dobavljaci", icon: PackageSearch },
-  { to: "/purchase-orders", label: "Narudzbenice", icon: ClipboardList },
-  { to: "/invoices", label: "Racuni", icon: FileText },
-  { to: "/audit-log", label: "Audit log", icon: ShieldCheck },
-  { to: "/api-keys", label: "API kljucevi", icon: KeyRound },
-  { to: "/readiness", label: "Spremnost", icon: ClipboardCheck }
+type NavItem = { to: string; label: string; icon: typeof LayoutDashboard; roles?: string[] };
+type NavGroup = { label: string; items: NavItem[] };
+const all = ["admin"];
+const clinical = ["admin", "physician", "nurse", "document_reviewer"];
+const patientRoles = ["admin", "physician", "nurse", "receptionist", "billing", "document_reviewer"];
+const schedulingRoles = ["admin", "physician", "nurse", "receptionist"];
+
+const primaryNav: NavItem[] = [
+  { to: "/", label: "Danas", icon: LayoutDashboard, roles: patientRoles },
+  { to: "/patients", label: "Pacijenti", icon: Users, roles: patientRoles },
+  { to: "/appointments", label: "Naručivanje", icon: CalendarDays, roles: schedulingRoles },
+  { to: "/knowledge", label: "Znanje", icon: BookOpenCheck, roles: ["admin", "physician"] },
 ];
 
-const program1DemoNav = [
-  { to: "/program1/synthetic-review", label: "Program 1 Demo", icon: TestTube },
-  { to: "/program1/synthetic-evaluation", label: "Program 1 Evaluacija", icon: ClipboardCheck }
+const secondaryGroups: NavGroup[] = [
+  { label: "Klinički alati", items: [
+    { to: "/clinical-documents", label: "Dokumenti", icon: FileSearch, roles: clinical.concat("receptionist") },
+    { to: "/laboratory", label: "Laboratorij", icon: TestTube, roles: clinical },
+    { to: "/therapies", label: "Terapije", icon: Pill, roles: clinical },
+    { to: "/gastroenterology", label: "Gastroenterologija", icon: Stethoscope, roles: ["admin", "physician"] },
+  ]},
+  { label: "Organizacija rada", items: [
+    { to: "/reception", label: "Prijem", icon: ClipboardCheck, roles: ["admin", "receptionist", "nurse"] },
+    { to: "/workflow", label: "Zadaci", icon: CheckSquare2, roles: ["admin", "physician", "nurse", "receptionist"] },
+  ]},
+  { label: "Nabava i zalihe", items: [
+    { to: "/inventory", label: "Inventar", icon: Boxes, roles: ["admin", "nurse", "inventory_manager"] },
+    { to: "/suppliers", label: "Dobavljači", icon: PackageSearch, roles: ["admin", "inventory_manager"] },
+    { to: "/purchase-orders", label: "Narudžbenice", icon: ClipboardList, roles: ["admin", "inventory_manager"] },
+  ]},
+  { label: "Financije", items: [{ to: "/invoices", label: "Računi", icon: FileText, roles: ["admin", "billing", "receptionist", "physician"] }] },
+  { label: "Administracija", items: [
+    { to: "/services", label: "Usluge", icon: Stethoscope, roles: all },
+    { to: "/clinics", label: "Klinike i osoblje", icon: Building2, roles: all },
+    { to: "/modules", label: "Moduli", icon: Settings, roles: all },
+    { to: "/audit-log", label: "Evidencija aktivnosti", icon: ShieldCheck, roles: all },
+    { to: "/api-keys", label: "API ključevi", icon: KeyRound, roles: all },
+    { to: "/readiness", label: "Spremnost sustava", icon: ClipboardCheck, roles: all },
+  ]},
 ];
+
+function visible(item: NavItem, role: string) { return !item.roles || item.roles.includes(role); }
 
 export function AppShell() {
   const navigate = useNavigate();
@@ -38,6 +53,12 @@ export function AppShell() {
   const fallbackDemoMode = import.meta.env.VITE_APP_ENV !== "production";
   const showDemoBanner = publicConfig.data ? publicConfig.data.demo_mode || !publicConfig.data.real_data_allowed : fallbackDemoMode;
   const warningText = publicConfig.data?.warnings?.join(" ") || "Demo/development okruzenje - ne unositi stvarne podatke pacijenata.";
+  const role = (getSessionUser()?.role ?? "").replace(/^demo_/, "") || "receptionist";
+  const groups = secondaryGroups.map(group => ({ ...group, items: group.items.filter(item => visible(item, role)) })).filter(group => group.items.length);
+  if (showDemoBanner && role === "admin") groups.push({ label: "Demo", items: [
+    { to: "/program1/synthetic-review", label: "Program 1 Demo", icon: TestTube },
+    { to: "/program1/synthetic-evaluation", label: "Program 1 Evaluacija", icon: ClipboardCheck },
+  ]});
 
   return (
     <div className="shell">
@@ -49,8 +70,8 @@ export function AppShell() {
             <span>Clinic Core</span>
           </div>
         </div>
-        <nav>
-          {[...nav, ...(showDemoBanner ? program1DemoNav : [])].map((item) => {
+        <nav aria-label="Glavna navigacija">
+          {primaryNav.filter(item => visible(item, role)).map((item) => {
             const Icon = item.icon;
             return (
               <NavLink key={item.to} to={item.to} className={({ isActive }) => (isActive ? "nav-link active" : "nav-link")}>
@@ -59,6 +80,10 @@ export function AppShell() {
               </NavLink>
             );
           })}
+          {groups.length > 0 && <details className="nav-more">
+            <summary><MoreHorizontal size={18}/><span>Više</span><ChevronDown size={15}/></summary>
+            <div className="nav-more-groups">{groups.map(group => <section key={group.label}><h2>{group.label}</h2>{group.items.map(item => { const Icon = item.icon; return <NavLink key={item.to} to={item.to} className={({ isActive }) => (isActive ? "nav-link active" : "nav-link")}><Icon size={17}/>{item.label}</NavLink>; })}</section>)}</div>
+          </details>}
         </nav>
       </aside>
       <main>
@@ -68,10 +93,7 @@ export function AppShell() {
           </div>
         )}
         <header className="topbar">
-          <div className="search">
-            <Search size={18} />
-            <input placeholder="Pretrazi pacijenta, uslugu, status..." />
-          </div>
+          <span className="topbar-context">{role === "admin" ? "Administratorski prikaz" : "Operativni prikaz"}</span>
           <button
             className="icon-button"
             title="Odjava"

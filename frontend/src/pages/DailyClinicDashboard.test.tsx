@@ -127,12 +127,12 @@ describe("pojednostavljeni dnevni tijek pacijenata", () => {
     expect(within(row).queryByRole("button")).toBeNull();
   });
 
-  test("jednim klikom započinje prijem i evidentira dolazak", async () => {
+  test("otvaranje prijema samo navigira i ne mijenja stanje", async () => {
     const user = userEvent.setup(); renderDashboard();
     const row = (await screen.findByText("Sintetički Čeka")).closest("tr") as HTMLTableRowElement;
     await user.click(within(row).getByRole("button", { name: "Započni prijem" }));
-    await waitFor(() => expect(fetch).toHaveBeenCalledWith(expect.stringContaining("/api/patient-journeys/16/check-in"), expect.objectContaining({ method: "POST" })));
     expect(await screen.findByText("Otvoren radni prostor")).toBeTruthy();
+    expect(fetch).not.toHaveBeenCalledWith(expect.stringContaining("/api/patient-journeys/16/check-in"), expect.objectContaining({ method: "POST" }));
   });
 
   test("za prijem u tijeku prikazuje samo Nastavi prijem", async () => {
@@ -167,6 +167,10 @@ describe("pojednostavljeni dnevni tijek pacijenata", () => {
     const user = userEvent.setup(); renderDashboard();
     expect(await screen.findByText("Prikaz: Svi liječnici")).toBeTruthy();
     expect(screen.getByRole("combobox", { name: "Liječnik" })).toBeTruthy();
+    const advanced = screen.getByText("Dodatni filtri").closest("details") as HTMLDetailsElement;
+    expect(advanced.open).toBe(false);
+    await user.click(advanced.querySelector("summary") as HTMLElement);
+    expect(advanced.open).toBe(true);
     const clinic = screen.getByRole("combobox", { name: "Klinika" });
     await user.selectOptions(clinic, "2");
     await waitFor(() => expect(fetch).toHaveBeenCalledWith(expect.stringMatching(/dashboard\/day\?.*clinic_id=2/), expect.anything()));
@@ -178,5 +182,17 @@ describe("pojednostavljeni dnevni tijek pacijenata", () => {
     expect(await screen.findByText("Prikaz: dr. Test")).toBeTruthy();
     expect(screen.queryByRole("combobox", { name: "Liječnik" })).toBeNull();
     expect(screen.queryByRole("combobox", { name: "Klinika" })).toBeNull();
+  });
+
+  test("zadano prikazuje samo pretragu, problem i liječnika, a ostalo skriva", async () => {
+    const user = userEvent.setup(); renderDashboard();
+    await screen.findByText("Sintetički Dolazak");
+    expect(screen.getByRole("textbox", { name: "Pretraži pacijenta" })).toBeTruthy();
+    expect(screen.getByRole("combobox", { name: "Problem" })).toBeTruthy();
+    const advanced = screen.getByText("Dodatni filtri").closest("details") as HTMLDetailsElement;
+    expect(advanced.open).toBe(false);
+    await user.click(advanced.querySelector("summary") as HTMLElement);
+    expect(advanced.open).toBe(true);
+    expect(screen.getByRole("combobox", { name: "Prostorija" })).toBeTruthy();
   });
 });

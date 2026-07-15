@@ -82,8 +82,33 @@ export function setToken(token: string) {
   localStorage.setItem("astra_token", token);
 }
 
+export type SessionUser = { id: number; name: string; email: string; role: string };
+
+export function setSessionUser(user: SessionUser) {
+  localStorage.setItem("astra_user", JSON.stringify(user));
+}
+
+export function getSessionUser(): SessionUser | null {
+  try {
+    const value = localStorage.getItem("astra_user");
+    if (value) return JSON.parse(value) as SessionUser;
+
+    // Existing sessions created before role-aware navigation do not have
+    // astra_user yet. The decoded role is presentation-only; API RBAC remains
+    // authoritative for every protected operation.
+    const token = localStorage.getItem("astra_token");
+    if (!token) return null;
+    const payload = JSON.parse(atob(token.split(".")[1].replace(/-/g, "+").replace(/_/g, "/"))) as { sub?: string; role?: string };
+    if (!payload.role) return null;
+    return { id: Number(payload.sub) || 0, name: "", email: "", role: payload.role };
+  } catch {
+    return null;
+  }
+}
+
 export function clearToken() {
   localStorage.removeItem("astra_token");
+  localStorage.removeItem("astra_user");
 }
 
 function handleUnauthorized() {
@@ -125,8 +150,9 @@ export async function login(email: string, password: string) {
     const error = await response.json().catch(() => ({ detail: "Prijava nije uspjela" }));
     throw new Error(error.detail ?? "Prijava nije uspjela");
   }
-  const result = await response.json() as { access_token: string; user: unknown };
+  const result = await response.json() as { access_token: string; user: SessionUser };
   setToken(result.access_token);
+  setSessionUser(result.user);
   return result;
 }
 

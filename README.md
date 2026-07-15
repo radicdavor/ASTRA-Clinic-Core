@@ -1,5 +1,9 @@
 # ASTRA Clinic Core
 
+## Pojednostavljeni Program 2 operativni UX
+
+Glavna navigacija organizirana je oko zadataka **Danas**, **Pacijenti**, **Naručivanje** i **Znanje**, dok su ostali postojeći moduli grupirani pod **Više** prema ulozi. Dnevna ploča zadržava četiri operativna stupca i vodi u jednu fokusiranu fazu tijeka pacijenta. Vremenska crta, dokumenti i AI sažetak dostupni su kroz sekundarni Klinički kontekst. Sve postojeće rute i backend workflow ostaju očuvani; nije uvedena nova autonomna klinička odluka.
+
 Workflow Engine MVP is documented in [`docs/WORKFLOW_ENGINE_MVP.md`](docs/WORKFLOW_ENGINE_MVP.md). It adds audited patient/episode tasks, responsibility, due dates, templates, and completion checklists without automated clinical decision-making.
 
 > Sigurnosna napomena: zadani korisnik, lozinka i lokalne Docker postavke su samo za razvoj. Prije stvarne uporabe promijenite admin lozinku, postavite jak `JWT_SECRET`, ogranicite CORS, koristite HTTPS, podesite backup PostgreSQL baze i napravite GDPR/access-control provjeru. ASTRA Clinic Core nije certificirani EMR i nije certificirani medicinski uredaj.
