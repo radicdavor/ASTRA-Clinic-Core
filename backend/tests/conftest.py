@@ -44,11 +44,13 @@ def client(db: Session) -> Generator[TestClient, None, None]:
 def pg_db() -> Generator[Session, None, None]:
     database_url = os.getenv("TEST_DATABASE_URL")
     if not database_url:
+        if os.getenv("ASTRA_REQUIRE_TEST_DATABASE", "").lower() in {"1", "true", "yes"}:
+            pytest.fail("TEST_DATABASE_URL je obavezan za PostgreSQL pilot-readiness gate.")
         pytest.skip("TEST_DATABASE_URL nije postavljen; PostgreSQL integration testovi se preskacu lokalno.")
     engine = create_engine(database_url, pool_pre_ping=True)
     with engine.begin() as connection:
-        for table in reversed(Base.metadata.sorted_tables):
-            connection.execute(text(f'TRUNCATE TABLE "{table.name}" RESTART IDENTITY CASCADE'))
+        table_names = ", ".join(f'"{table.name}"' for table in reversed(Base.metadata.sorted_tables))
+        connection.execute(text(f"TRUNCATE TABLE {table_names} RESTART IDENTITY CASCADE"))
     SessionLocal = sessionmaker(bind=engine, expire_on_commit=False)
     with SessionLocal() as session:
         yield session

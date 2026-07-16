@@ -13,3 +13,8 @@ test:
 
 lint:
 	cd backend && python -m compileall app
+
+test-backup-restore:
+	@test -n "$(SOURCE_DATABASE_URL)" || (echo "SOURCE_DATABASE_URL is required" && exit 1)
+	@test -n "$(TARGET_DATABASE_URL)" || (echo "TARGET_DATABASE_URL is required" && exit 1)
+	SOURCE_DATABASE_URL="$(SOURCE_DATABASE_URL)" TARGET_DATABASE_URL="$(TARGET_DATABASE_URL)" sh scripts/validate_test_backup_restore.sh

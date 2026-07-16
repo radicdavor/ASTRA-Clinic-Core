@@ -224,8 +224,8 @@ def seed(db: Session) -> None:
     db.add_all(roles.values())
     db.flush()
 
-    gastro_clinic = Clinic(name="Gastroenterologija")
-    aesthetic_clinic = Clinic(name="Estetika")
+    gastro_clinic = db.scalar(select(Clinic).where(Clinic.name == "Gastroenterologija")) or Clinic(name="Gastroenterologija")
+    aesthetic_clinic = db.scalar(select(Clinic).where(Clinic.name == "Estetika")) or Clinic(name="Estetika")
     db.add_all([gastro_clinic, aesthetic_clinic])
     db.flush()
 

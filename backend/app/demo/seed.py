@@ -35,6 +35,8 @@ DEMO_EMAILS = {
     "admin": "demo.admin@astra.local",
     "physician": "demo.physician@astra.local",
     "receptionist": "demo.reception@astra.local",
+    "nurse": "demo.nurse@astra.local",
+    "billing": "demo.billing@astra.local",
     "inventory_manager": "demo.inventory@astra.local",
 }
 

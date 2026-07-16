@@ -24,6 +24,7 @@ jobs:
     env:
       DATABASE_URL: postgresql+psycopg://astra:astra@localhost:5432/astra_ci
       TEST_DATABASE_URL: postgresql+psycopg://astra:astra@localhost:5432/astra_ci
+      ASTRA_REQUIRE_TEST_DATABASE: "true"
       JWT_SECRET: ci-secret-key-for-quality-gate-tests
       JWT_SECRET_KEY: ci-secret-key
       DOCUMENT_STORAGE_PATH: /tmp/astra-documents
@@ -39,8 +40,9 @@ jobs:
       - name: Run database migrations
         working-directory: backend
         run: |
+          test "$(alembic heads | wc -l)" -eq 1
           alembic upgrade head
-          alembic downgrade base
+          alembic downgrade -1
           alembic upgrade head
       - name: Run snapshot regression gate
         working-directory: backend
@@ -51,6 +53,14 @@ jobs:
       - name: Run backend tests
         working-directory: backend
         run: python -m pytest
+      - name: Run explicit PostgreSQL integration gate
+        working-directory: backend
+        run: python -m pytest tests/integration -q -rs
+      - name: Validate synthetic test backup and restore
+        env:
+          SOURCE_DATABASE_URL: postgresql://astra:astra@localhost:5432/astra_ci
+          TARGET_DATABASE_URL: postgresql://astra:astra@localhost:5432/astra_restore_test
+        run: docker run --rm --network host -v "$PWD:/workspace:ro" -w /workspace -e SOURCE_DATABASE_URL -e TARGET_DATABASE_URL postgres:16-alpine sh scripts/validate_test_backup_restore.sh
 
   frontend:
     runs-on: ubuntu-latest
