@@ -71,10 +71,13 @@ def test_pathology_result_requires_same_patient_and_human_review(client, db, aut
     assert reviewed.json()["status"] == "clinician_reviewed"
     assert reviewed.json()["reviewed_by"] == auth_setup["admin"].id
     assert reviewed.json()["patient_notified_at"] is None
-    ready = client.post(f"/api/pathology-cases/{case['id']}/transition", headers=headers(client), json={"target_status": "patient_notification_ready"})
-    assert ready.status_code == 200
-    notified = client.post(f"/api/pathology-cases/{case['id']}/transition", headers=headers(client), json={"target_status": "patient_notified"})
-    assert notified.status_code == 409
+    assert client.post(f"/api/pathology-cases/{case['id']}/transition", headers=headers(client), json={"target_status": "closed"}).status_code == 409
+    decision = client.post(f"/api/pathology-cases/{case['id']}/communication-decision", headers=headers(client), json={"disposition": "direct_contact", "note": "Sintetički telefonski razgovor evidentirao liječnik.", "contact_attempts": 1})
+    assert decision.status_code == 200
+    closed = client.post(f"/api/pathology-cases/{case['id']}/transition", headers=headers(client), json={"target_status": "closed"})
+    assert closed.status_code == 200
+    assert closed.json()["communication_disposition"] == "direct_contact"
+    assert closed.json()["closed_at"] is not None
 
 
 def test_non_specimen_intervention_cannot_create_pathology_case(client, db, auth_setup):

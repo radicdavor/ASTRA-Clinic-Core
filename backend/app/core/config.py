@@ -27,6 +27,7 @@ class Settings(BaseSettings):
     openai_model: str = "gpt-4.1-mini"
     ai_diagnosis_suggestions_enabled: bool = False
     ai_diagnosis_suggestions_production_authorized: bool = False
+    clinical_activity_forms_required: bool = True
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 

@@ -20,6 +20,9 @@ from app.models.domain import (
     Room,
     Service,
     ServiceFormBinding,
+    ServicePackage,
+    ServicePackageItem,
+    ServicePackageVersion,
     ServiceMaterialTemplate,
     StockLocation,
     Supplier,
@@ -94,17 +97,35 @@ PERMISSIONS = [
     "clinical_forms.read",
     "clinical_forms.manage",
     "clinical_forms.sign",
+    "service_packages.read",
+    "service_packages.schedule",
+    "service_packages.manage",
+    "activity_preparation.read",
+    "activity_preparation.update",
+    "activity_preparation.clinical_review",
+    "procedure_interventions.read",
+    "procedure_interventions.write",
+    "pathology_cases.read",
+    "pathology_cases.update",
+    "pathology_results.receive",
+    "pathology_results.review",
+    "pathology_communication.decide",
+    "reports.read",
+    "reports.print",
+    "reports.send",
+    "reports.send_alternate_recipient",
+    "reports.delivery_history",
 ]
 
 ROLE_PERMISSIONS = {
     "admin": PERMISSIONS,
-    "physician": ["patients.read", "patients.write", "appointments.read", "appointments.write", "episodes.read", "episodes.write", "clinical_plans.read", "clinical_plans.write", "clinical_documents.read", "clinical_documents.write", "clinical_documents.review", "services.read", "inventory.read", "billing.read", "clinical_readiness.snapshots.read", "clinical_readiness.snapshots.write", "clinical_readiness.snapshots.supersede", "clinical_readiness.acknowledgments.read", "clinical_findings.read", "clinical_open_questions.read", "clinical_evidence_timeline.read", "workflow_tasks.read", "workflow_tasks.write", "knowledge_protocols.read", "knowledge_protocols.write", "knowledge_protocols.review", "journey.read", "journey.transition", "preparation.assign", "preparation.review", "documents.request", "documents.upload", "documents.view_source", "documents.review", "checkin.clinical_review", "encounter.read", "encounter.write", "encounter.complete", "summary.generate", "summary.review", "clinical_forms.read", "clinical_forms.sign"],
-    "nurse": ["patients.read", "appointments.read", "appointments.write", "episodes.read", "clinical_plans.read", "clinical_documents.read", "clinical_documents.write", "clinical_documents.review", "inventory.read", "inventory.write", "clinical_readiness.snapshots.read", "workflow_tasks.read", "workflow_tasks.write", "journey.read", "journey.transition", "preparation.assign", "documents.request", "documents.upload", "documents.scan", "documents.view_source", "documents.review", "checkin.update", "encounter.read", "consumables.record"],
-    "receptionist": ["patients.read", "patients.write", "appointments.read", "appointments.write", "episodes.read", "clinical_plans.read", "clinical_documents.read", "services.read", "billing.read", "workflow_tasks.read", "workflow_tasks.write", "journey.read", "journey.create", "journey.transition", "preparation.assign", "documents.request", "documents.upload", "documents.scan", "documents.view_source", "checkin.update"],
+    "physician": ["patients.read", "patients.write", "appointments.read", "appointments.write", "episodes.read", "episodes.write", "clinical_plans.read", "clinical_plans.write", "clinical_documents.read", "clinical_documents.write", "clinical_documents.review", "services.read", "inventory.read", "billing.read", "clinical_readiness.snapshots.read", "clinical_readiness.snapshots.write", "clinical_readiness.snapshots.supersede", "clinical_readiness.acknowledgments.read", "clinical_findings.read", "clinical_open_questions.read", "clinical_evidence_timeline.read", "workflow_tasks.read", "workflow_tasks.write", "knowledge_protocols.read", "knowledge_protocols.write", "knowledge_protocols.review", "journey.read", "journey.transition", "preparation.assign", "preparation.review", "documents.request", "documents.upload", "documents.view_source", "documents.review", "checkin.clinical_review", "encounter.read", "encounter.write", "encounter.complete", "summary.generate", "summary.review", "clinical_forms.read", "clinical_forms.sign", "activity_preparation.read", "activity_preparation.update", "activity_preparation.clinical_review", "procedure_interventions.read", "procedure_interventions.write", "pathology_cases.read", "pathology_cases.update", "pathology_results.receive", "pathology_results.review", "pathology_communication.decide", "reports.read", "reports.print", "reports.send", "reports.delivery_history"],
+    "nurse": ["patients.read", "appointments.read", "appointments.write", "episodes.read", "clinical_plans.read", "clinical_documents.read", "clinical_documents.write", "clinical_documents.review", "inventory.read", "inventory.write", "clinical_readiness.snapshots.read", "workflow_tasks.read", "workflow_tasks.write", "journey.read", "journey.transition", "preparation.assign", "documents.request", "documents.upload", "documents.scan", "documents.view_source", "documents.review", "checkin.update", "encounter.read", "consumables.record", "activity_preparation.read", "activity_preparation.update", "procedure_interventions.read", "pathology_cases.read", "reports.read"],
+    "receptionist": ["patients.read", "patients.write", "appointments.read", "appointments.write", "episodes.read", "clinical_plans.read", "clinical_documents.read", "services.read", "billing.read", "workflow_tasks.read", "workflow_tasks.write", "journey.read", "journey.create", "journey.transition", "preparation.assign", "documents.request", "documents.upload", "documents.scan", "documents.view_source", "checkin.update", "service_packages.read", "service_packages.schedule", "activity_preparation.read", "activity_preparation.update"],
     "inventory_manager": ["inventory.read", "inventory.write", "inventory.adjust", "inventory.write_off", "inventory.transfer", "procurement.read", "procurement.write"],
     "billing": ["billing.read", "billing.write", "billing.mark_paid", "patients.read", "appointments.read", "journey.read", "journey.transition", "payment.record"],
     "ai_agent": ["ai.appointments.create", "ai.patients.create", "ai.free_slots.read", "journey.read", "journey.create"],
-    "document_reviewer": ["patients.read", "clinical_documents.read", "clinical_documents.review", "journey.read", "documents.view_source", "documents.review"],
+    "document_reviewer": ["patients.read", "clinical_documents.read", "clinical_documents.review", "journey.read", "documents.view_source", "documents.review", "pathology_cases.read", "pathology_results.receive", "reports.read"],
 }
 
 MODULE_SEEDS = [
@@ -244,6 +265,57 @@ def seed_clinical_forms(db: Session) -> None:
         service = db.scalar(select(Service).where(Service.code == code))
         if service and not db.scalar(select(ServiceFormBinding).where(ServiceFormBinding.service_id == service.id, ServiceFormBinding.clinic_id.is_(None))):
             db.add(ServiceFormBinding(service_id=service.id, form_version_id=versions[form_key].id, active=True))
+
+    structured_catalog = {
+        "gastroscopy-report": [
+            *fields(["indication", "preparation", "sedation", "instrument", "extent_of_examination", "esophagus_findings", "stomach_findings", "duodenum_findings", "overall_findings"], required={"indication", "extent_of_examination", "overall_findings"}),
+            {"field_key": "biopsies", "label": "Biopsije", "type": "structured_biopsy_list", "required": False, "item_fields": [{"field_key": "site", "label": "Mjesto", "type": "short_text", "required": True}, {"field_key": "description", "label": "Opis", "type": "short_text", "required": True}, {"field_key": "specimen_label", "label": "Oznaka uzorka", "type": "short_text", "required": True}], "max_items": 20},
+            {"field_key": "interventions", "label": "Intervencije", "type": "structured_intervention_list", "required": False, "item_fields": [{"field_key": "type", "label": "Vrsta", "type": "select", "required": True, "options": ["biopsy", "clip_placement", "hemostasis", "other"]}, {"field_key": "site", "label": "Mjesto", "type": "short_text", "required": True}, {"field_key": "technique", "label": "Tehnika", "type": "short_text"}], "max_items": 20},
+            *fields(["complications", "diagnoses", "recommendations", "follow_up"], required={"complications", "recommendations"}),
+        ],
+        "colonoscopy-report": [
+            *fields(["indication", "bowel_preparation_quality", "sedation", "instrument", "extent_of_examination", "terminal_ileum"], required={"indication", "bowel_preparation_quality", "extent_of_examination"}),
+            {"field_key": "segment_findings", "label": "Nalazi po segmentima", "type": "structured_segment_findings", "required": True, "item_fields": [{"field_key": "segment", "label": "Segment", "type": "select", "required": True, "options": ["rektum", "sigmoidni kolon", "descendentni kolon", "transverzum", "ascendentni kolon", "cekum", "terminalni ileum"]}, {"field_key": "finding", "label": "Nalaz", "type": "short_text", "required": True}], "max_items": 20},
+            {"field_key": "polyps", "label": "Polipi", "type": "structured_polyp_list", "required": False, "item_fields": [{"field_key": "site", "label": "Mjesto", "type": "short_text", "required": True}, {"field_key": "size_mm", "label": "Veličina mm", "type": "decimal", "required": True}, {"field_key": "morphology", "label": "Morfologija", "type": "short_text"}, {"field_key": "removal", "label": "Postupak", "type": "select", "required": True, "options": ["biopsija", "hladna omča", "vruća omča", "nije uklonjen"]}, {"field_key": "retrieved", "label": "Dohvaćen", "type": "select", "required": True, "options": ["da", "ne"]}, {"field_key": "specimen_label", "label": "Oznaka uzorka", "type": "short_text"}], "max_items": 30},
+            {"field_key": "clips", "label": "Klipovi", "type": "repeatable_group", "required": False, "item_fields": [{"field_key": "site", "label": "Mjesto", "type": "short_text", "required": True}, {"field_key": "count", "label": "Broj", "type": "integer", "required": True}, {"field_key": "reason", "label": "Razlog", "type": "short_text", "required": True}], "max_items": 20},
+            *fields(["overall_findings", "withdrawal_time", "complications", "diagnoses", "recommendations", "follow_up"], required={"overall_findings", "withdrawal_time", "complications", "recommendations"}),
+        ],
+    }
+    for form_key, structured_fields in structured_catalog.items():
+        definition = db.scalar(select(ClinicalFormDefinition).where(ClinicalFormDefinition.form_key == form_key))
+        version = db.scalar(select(ClinicalFormVersion).where(ClinicalFormVersion.definition_id == definition.id, ClinicalFormVersion.version == 2))
+        if not version:
+            version = ClinicalFormVersion(definition_id=definition.id, version=2, status="published", sections_json=[{"section_key": "clinical", "title": definition.name, "fields": structured_fields}], validation_schema_json={"structured": True}, print_layout_json={"layout": "clinical_report"}, output_document_type="gastroscopy_report" if form_key == "gastroscopy-report" else "colonoscopy_report", approved_by=approver.id if approver else None, approved_at=published_at, published_at=published_at, supersedes_version_id=versions[form_key].id)
+            db.add(version); db.flush()
+        versions[form_key] = version
+    for binding in db.scalars(select(ServiceFormBinding).where(ServiceFormBinding.active.is_(True))).all():
+        form_key = binding.form_version.definition.form_key
+        if form_key in structured_catalog and binding.form_version_id != versions[form_key].id:
+            binding.active = False
+            db.add(ServiceFormBinding(service_id=binding.service_id, clinic_id=binding.clinic_id, specialty_key=binding.specialty_key, activity_kind=binding.activity_kind, form_version_id=versions[form_key].id, active=True))
+    db.flush()
+
+
+def seed_gastro_package(db: Session) -> None:
+    package = db.scalar(select(ServicePackage).where(ServicePackage.package_key == "gastro-consult-gastroscopy-colonoscopy"))
+    if not package:
+        package = ServicePackage(package_key="gastro-consult-gastroscopy-colonoscopy", name="Gastro pregled + gastroskopija + kolonoskopija", description="Jedan dolazak s tri odvojene kliničke aktivnosti.", specialty_key="gastroenterology", active=True)
+        db.add(package); db.flush()
+    version = db.scalar(select(ServicePackageVersion).where(ServicePackageVersion.package_id == package.id, ServicePackageVersion.version == 1))
+    if not version:
+        version = ServicePackageVersion(package_id=package.id, version=1, status="published", published_at=datetime.now(timezone.utc))
+        db.add(version); db.flush()
+    if not db.scalar(select(ServicePackageItem.id).where(ServicePackageItem.package_version_id == version.id).limit(1)):
+        services = {service.code: service for service in db.scalars(select(Service).where(Service.code.in_(["GASTRO-FIRST-EXAM", "GASTRO-GASTRO", "GASTRO-COL-SED"]))).all()}
+        specifications = [
+            ("consultation", "GASTRO-FIRST-EXAM", "specialist_consultation", 1, 0, 30, [{"requirement_key": "medication_review", "label": "Pregled terapije", "patient_instruction": "Ponijeti popis aktualne terapije.", "category": "medication_review"}]),
+            ("gastroscopy", "GASTRO-GASTRO", "gastroscopy", 2, 40, 30, [{"requirement_key": "fasting", "label": "Natašte", "patient_instruction": "Slijediti odobrene upute klinike za dolazak natašte.", "category": "fasting"}]),
+            ("colonoscopy", "GASTRO-COL-SED", "colonoscopy", 3, 80, 45, [{"requirement_key": "bowel_preparation", "label": "Priprema crijeva", "patient_instruction": "Slijediti odobreni plan pripreme crijeva.", "category": "bowel_preparation"}, {"requirement_key": "escort", "label": "Pratnja", "patient_instruction": "Osigurati pratnju nakon sedacije.", "category": "escort"}]),
+        ]
+        for key, code, kind, sequence, offset, duration, preparation in specifications:
+            service = services.get(code)
+            if service:
+                db.add(ServicePackageItem(package_version_id=version.id, service_id=service.id, activity_key=key, activity_kind=kind, specialty_key="gastroenterology", sequence=sequence, required=True, relative_start_offset_minutes=offset, default_duration_minutes=duration, preparation_requirements_json=preparation, billing_inclusion_rule="include"))
     db.flush()
 
 
@@ -272,6 +344,7 @@ def seed(db: Session) -> None:
         seed_security(db)
         seed_catalog(db)
         seed_clinical_forms(db)
+        seed_gastro_package(db)
         db.commit()
         return
 
@@ -338,6 +411,7 @@ def seed(db: Session) -> None:
     room.allowed_services = services
     seed_catalog(db)
     seed_clinical_forms(db)
+    seed_gastro_package(db)
 
     patient = Patient(first_name="Ivana", last_name="Horvat", date_of_birth=date(1984, 5, 12), phone="+385 91 234 5678", email="ivana.horvat@example.com")
     db.add(patient)

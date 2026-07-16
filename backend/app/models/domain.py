@@ -99,6 +99,7 @@ class Patient(TimestampMixin, Base):
     date_of_birth: Mapped[date | None] = mapped_column(Date)
     oib: Mapped[str | None] = mapped_column(String(11), unique=True, index=True)
     email: Mapped[str | None] = mapped_column(String(255))
+    email_verified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     phone: Mapped[str | None] = mapped_column(String(80))
     notes: Mapped[str | None] = mapped_column(Text)
 
@@ -541,6 +542,8 @@ class PatientJourney(TimestampMixin, Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     patient_id: Mapped[int] = mapped_column(ForeignKey("patients.id"), index=True)
     appointment_id: Mapped[int] = mapped_column(ForeignKey("appointments.id"), unique=True, index=True)
+    package_version_id: Mapped[int | None] = mapped_column(ForeignKey("service_package_versions.id"), index=True)
+    package_booking_key: Mapped[str | None] = mapped_column(String(160), unique=True, index=True)
     intake_channel: Mapped[str] = mapped_column(String(30), index=True)
     current_stage: Mapped[str] = mapped_column(String(50), default="requested", index=True)
     document_status: Mapped[str] = mapped_column(String(40), default="not_requested", index=True)
@@ -619,6 +622,25 @@ class JourneyActivityParticipant(Base):
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     activity: Mapped[JourneyActivity] = relationship(back_populates="participants")
     provider: Mapped[Provider] = relationship()
+
+
+class ActivityPreparationRequirement(TimestampMixin, Base):
+    __tablename__ = "activity_preparation_requirements"
+    __table_args__ = (UniqueConstraint("activity_id", "requirement_key", name="uq_activity_preparation_requirement"),)
+    id: Mapped[int] = mapped_column(primary_key=True)
+    activity_id: Mapped[int] = mapped_column(ForeignKey("journey_activities.id", ondelete="CASCADE"), index=True)
+    requirement_key: Mapped[str] = mapped_column(String(100), index=True)
+    label: Mapped[str] = mapped_column(String(220))
+    patient_instruction: Mapped[str] = mapped_column(Text)
+    category: Mapped[str] = mapped_column(String(60))
+    required: Mapped[bool] = mapped_column(Boolean, default=True)
+    state: Mapped[str] = mapped_column(String(40), default="assigned")
+    source_template_key: Mapped[str] = mapped_column(String(120))
+    source_template_version: Mapped[str] = mapped_column(String(40))
+    reviewed_by: Mapped[int | None] = mapped_column(ForeignKey("users.id"))
+    reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    note: Mapped[str | None] = mapped_column(Text)
+    activity: Mapped[JourneyActivity] = relationship()
 
 
 class ServicePackage(TimestampMixin, Base):
@@ -789,6 +811,8 @@ class SignedClinicalReport(Base):
     signed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
     supersedes_report_id: Mapped[int | None] = mapped_column(ForeignKey("signed_clinical_reports.id", ondelete="SET NULL"))
     superseded_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    content_hash: Mapped[str] = mapped_column(String(128))
+    hash_algorithm: Mapped[str] = mapped_column(String(30), default="sha256")
     form_instance: Mapped[ClinicalFormInstance] = relationship()
     form_version: Mapped[ClinicalFormVersion] = relationship()
     clinical_document: Mapped[ClinicalDocument] = relationship()
@@ -820,6 +844,9 @@ class ReportDeliveryEvent(Base):
     delivered_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     failure_reason: Mapped[str | None] = mapped_column(Text)
     correlation_id: Mapped[str] = mapped_column(String(120), unique=True)
+    recipient_source: Mapped[str] = mapped_column(String(40), default="patient_verified")
+    alternate_recipient_reason: Mapped[str | None] = mapped_column(Text)
+    idempotency_key: Mapped[str | None] = mapped_column(String(160), unique=True, index=True)
 
 
 class ProcedureIntervention(Base):
@@ -862,6 +889,11 @@ class PathologyCase(TimestampMixin, Base):
     reviewed_by: Mapped[int | None] = mapped_column(ForeignKey("users.id"))
     patient_notified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     closed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    communication_disposition: Mapped[str | None] = mapped_column(String(80))
+    communication_note: Mapped[str | None] = mapped_column(Text)
+    communication_attempts: Mapped[int] = mapped_column(Integer, default=0)
+    communication_decided_by: Mapped[int | None] = mapped_column(ForeignKey("users.id"))
+    communication_decided_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     specimens: Mapped[list[PathologySpecimen]] = relationship(back_populates="case", cascade="all, delete-orphan", order_by="PathologySpecimen.id")
     reports: Mapped[list[PathologyReportLink]] = relationship(back_populates="case", cascade="all, delete-orphan", order_by="PathologyReportLink.id")
 

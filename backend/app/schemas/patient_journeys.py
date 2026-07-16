@@ -1,5 +1,6 @@
 from datetime import date, datetime, time
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
+from app.core.clinical_registries import ACTIVITY_KINDS, SPECIALTY_KEYS
 
 class JourneyCreate(BaseModel):
     appointment_id:int
@@ -67,6 +68,8 @@ class JourneyActivityCreate(BaseModel):
     required:bool=True
     depends_on_activity_id:int|None=None
     notes:str|None=Field(default=None,max_length=2000)
+    _activity = field_validator("activity_kind")(lambda value: value if value in ACTIVITY_KINDS else (_ for _ in ()).throw(ValueError("Nepoznata vrsta aktivnosti")))
+    _specialty = field_validator("specialty_key")(lambda value: value if value in SPECIALTY_KEYS else (_ for _ in ()).throw(ValueError("Nepoznata specijalnost")))
 
 class JourneyActivityStatusUpdate(BaseModel):
     target_status:str=Field(pattern="^(ready|in_progress|completed|not_performed|cancelled)$")
@@ -78,7 +81,7 @@ class JourneyActivityOut(BaseModel):
 
 class PatientBrief(BaseModel):
     model_config=ConfigDict(from_attributes=True)
-    id:int;first_name:str;last_name:str;date_of_birth:date|None=None;oib:str|None=None
+    id:int;first_name:str;last_name:str;date_of_birth:date|None=None;oib:str|None=None;email:str|None=None;email_verified_at:datetime|None=None
 
 class JourneyOut(BaseModel):
     model_config=ConfigDict(from_attributes=True)

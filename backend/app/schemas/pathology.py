@@ -1,6 +1,7 @@
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
+from app.core.clinical_registries import INTERVENTION_TYPES, RETRIEVAL_STATUSES, SPECIMEN_TYPES
 
 
 class InterventionCreate(BaseModel):
@@ -13,6 +14,8 @@ class InterventionCreate(BaseModel):
     count: int = Field(default=1, ge=1)
     retrieval_status: str | None = Field(default=None, max_length=60)
     complication: str | None = Field(default=None, max_length=4000)
+    _intervention = field_validator("intervention_type")(lambda value: value if value in INTERVENTION_TYPES else (_ for _ in ()).throw(ValueError("Nepoznata intervencija")))
+    _retrieval = field_validator("retrieval_status")(lambda value: value if value is None or value in RETRIEVAL_STATUSES else (_ for _ in ()).throw(ValueError("Nepoznat status dohvaćanja")))
 
 
 class InterventionOut(InterventionCreate):
@@ -32,6 +35,7 @@ class SpecimenCreate(BaseModel):
     fixation: str | None = Field(default=None, max_length=120)
     collection_time: datetime
     notes: str | None = Field(default=None, max_length=2000)
+    _specimen = field_validator("specimen_type")(lambda value: value if value in SPECIMEN_TYPES else (_ for _ in ()).throw(ValueError("Nepoznata vrsta uzorka")))
 
 
 class PathologyCaseCreate(BaseModel):
@@ -56,6 +60,12 @@ class PathologyStatusUpdate(BaseModel):
     reason: str | None = Field(default=None, max_length=2000)
 
 
+class PathologyCommunicationDecision(BaseModel):
+    disposition: str = Field(pattern="^(delivered_approved_report|direct_contact|reviewed_at_follow_up_visit|no_notification_required|patient_declined|unable_to_contact|transferred_to_external_care|cancelled_as_duplicate)$")
+    note: str | None = Field(default=None, max_length=4000)
+    contact_attempts: int = Field(default=0, ge=0, le=20)
+
+
 class PathologyCaseOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: int
@@ -73,4 +83,9 @@ class PathologyCaseOut(BaseModel):
     reviewed_by: int | None
     patient_notified_at: datetime | None
     closed_at: datetime | None
+    communication_disposition: str | None
+    communication_note: str | None
+    communication_attempts: int
+    communication_decided_by: int | None
+    communication_decided_at: datetime | None
     specimens: list[SpecimenOut]

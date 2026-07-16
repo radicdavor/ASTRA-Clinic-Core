@@ -81,6 +81,7 @@ def main() -> None:
         db.flush()
         patient = db.scalar(select(Patient).where(Patient.email.in_([DEMO_PATIENT_EMAIL, LEGACY_DEMO_PATIENT_EMAIL]))) or Patient(first_name="Demo", last_name="Pacijent", email=DEMO_PATIENT_EMAIL)
         patient.email = DEMO_PATIENT_EMAIL
+        patient.email_verified_at = patient.email_verified_at or datetime.now(timezone.utc)
         provider = db.scalar(select(Provider).where(Provider.full_name == "dr. Demo Gastro")) or Provider(full_name="dr. Demo Gastro", specialty="Gastroenterologija")
         provider.clinic_id = provider.clinic_id or gastro_clinic.id
         provider.email = DEMO_EMAILS["physician"]
@@ -184,6 +185,7 @@ def main() -> None:
             multi_patient = Patient(first_name="Sintetički", last_name="Višestruki dolazak", email=multi_patient_email)
             db.add(multi_patient)
             db.flush()
+        multi_patient.email_verified_at = multi_patient.email_verified_at or datetime.now(timezone.utc)
 
         consultation_service = db.scalar(select(Service).where(Service.code == "GASTRO-FIRST-EXAM"))
         gastroscopy_service = db.scalar(select(Service).where(Service.code == "GASTRO-GASTRO"))

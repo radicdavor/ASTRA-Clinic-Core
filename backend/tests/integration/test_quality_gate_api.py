@@ -1,11 +1,14 @@
 from decimal import Decimal
+from datetime import date, datetime, time, timedelta, timezone
 
 import pytest
-from sqlalchemy import inspect, select
+from sqlalchemy import inspect, select, text
+from sqlalchemy.exc import DBAPIError
 
 from app.auth.dependencies import hash_api_key
 from app.core.security import hash_password
-from app.models.domain import ApiKey, AuditLog, Invoice, InvoiceLine, JourneyCheckIn, Patient, PatientJourney, Permission, Provider, Role, Room, Service, User
+from app.models.domain import ApiKey, Appointment, AuditLog, ClinicalDocument, ClinicalFormDefinition, ClinicalFormInstance, ClinicalFormVersion, Invoice, InvoiceLine, JourneyActivity, JourneyCheckIn, Patient, PatientJourney, Permission, Provider, Role, Room, Service, SignedClinicalReport, User
+from app.services.reports import report_digest
 
 
 pytestmark = pytest.mark.integration
@@ -56,6 +59,35 @@ def test_postgresql_migrations_created_key_tables(pg_db):
 
     assert REQUIRED_TABLES.issubset(table_names)
     assert pg_db.scalar(select(JourneyCheckIn).limit(1)) is None
+
+
+def test_postgresql_rejects_signed_report_content_update_and_delete(pg_db):
+    signer = create_user_with_permissions(pg_db, "report-signer-pg@test.local", ["reports.read"])
+    patient, provider, room, service = seed_clinic_objects(pg_db)
+    appointment = Appointment(patient_id=patient.id, provider_id=provider.id, room_id=room.id, service_id=service.id, date=date(2026, 7, 16), start_time=time(8), end_time=time(8, 30), duration_minutes=30, status="scheduled", source="manual")
+    pg_db.add(appointment); pg_db.flush()
+    journey = PatientJourney(patient_id=patient.id, appointment_id=appointment.id, intake_channel="manual", current_stage="procedure_completed")
+    pg_db.add(journey); pg_db.flush()
+    now = datetime.now(timezone.utc)
+    activity = JourneyActivity(journey_id=journey.id, appointment_id=appointment.id, service_id=service.id, activity_key="primary", activity_kind="gastroscopy", specialty_key="gastroenterology", primary_provider_id=provider.id, room_id=room.id, sequence=1, planned_start=now, planned_end=now + timedelta(minutes=30), status="completed", form_resolution_status="resolved")
+    definition = ClinicalFormDefinition(form_key="pg-report-integrity", name="PG nalaz", specialty_key="gastroenterology", activity_kind="gastroscopy", active=True)
+    pg_db.add_all([activity, definition]); pg_db.flush()
+    version = ClinicalFormVersion(definition_id=definition.id, version=1, status="published", sections_json=[{"section_key": "main", "fields": [{"field_key": "finding", "label": "Nalaz", "type": "long_text"}]}], validation_schema_json={}, print_layout_json={}, output_document_type="gastroscopy_report")
+    pg_db.add(version); pg_db.flush()
+    instance = ClinicalFormInstance(activity_id=activity.id, form_version_id=version.id, purpose="clinical_report", status="signed", data_json={"finding": "Sintetički nalaz"}, rendered_summary="Nalaz: Sintetički nalaz", created_by=signer.id, last_edited_by=signer.id, completed_by=signer.id, signed_by=signer.id, completed_at=now, signed_at=now, binding_source="test", resolved_at=now)
+    document = ClinicalDocument(patient_id=patient.id, source_type="generated_signed_report", document_type="gastroscopy_report", title="PG nalaz", raw_text="Nalaz: Sintetički nalaz", review_status="signed", physician_reviewed=True, reviewed_by=signer.id, reviewed_at=now, appointment_id=appointment.id, journey_id=journey.id, upload_channel="generated", lifecycle_status="reviewed", received_at=now)
+    pg_db.add_all([instance, document]); pg_db.flush()
+    report = SignedClinicalReport(form_instance_id=instance.id, form_version_id=version.id, clinical_document_id=document.id, activity_id=activity.id, journey_id=journey.id, patient_id=patient.id, document_type="gastroscopy_report", title="PG nalaz", structured_data_json=instance.data_json, rendered_content=instance.rendered_summary, version_number=1, signer_user_id=signer.id, signer_name=signer.full_name, signed_at=now, content_hash=report_digest(instance.rendered_summary, instance.data_json), hash_algorithm="sha256")
+    pg_db.add(report); pg_db.flush()
+
+    with pytest.raises(DBAPIError):
+        with pg_db.begin_nested():
+            pg_db.execute(text("UPDATE signed_clinical_reports SET rendered_content = 'nedopuštena izmjena' WHERE id = :id"), {"id": report.id})
+    with pytest.raises(DBAPIError):
+        with pg_db.begin_nested():
+            pg_db.execute(text("DELETE FROM signed_clinical_reports WHERE id = :id"), {"id": report.id})
+    pg_db.refresh(report)
+    assert report.rendered_content == "Nalaz: Sintetički nalaz"
 
 
 def test_api_permission_boundaries_and_api_key_actor(pg_client, pg_db):

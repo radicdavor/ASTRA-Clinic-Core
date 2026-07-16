@@ -5,9 +5,10 @@ from sqlalchemy.orm import Session,joinedload
 from app.audit.service import audit,snapshot
 from app.auth.dependencies import Actor,require_permission
 from app.core.database import get_db
-from app.models.domain import DocumentRequest,JourneyForm,JourneyPreparation,JourneyReminder,PatientFormTemplate,PatientJourney,PreparationPlanTemplate
-from app.schemas.journey_preparation import CommunicationOut,DocumentRequestCreate,FormAnswer,FormRequest,FormTemplateCreate,FormTemplateOut,PreparationAssign,PreparationOut,PreparationTemplateCreate,PreparationTemplateOut,ReminderOut,RequirementUpdate
+from app.models.domain import ActivityPreparationRequirement,DocumentRequest,JourneyForm,JourneyPreparation,JourneyReminder,PatientFormTemplate,PatientJourney,PreparationPlanTemplate
+from app.schemas.journey_preparation import ActivityRequirementUpdate,CommunicationOut,DocumentRequestCreate,FormAnswer,FormRequest,FormTemplateCreate,FormTemplateOut,PreparationAssign,PreparationOut,PreparationTemplateCreate,PreparationTemplateOut,ReminderOut,RequirementUpdate
 from app.services.journey_preparation import assign_preparation,dispatch_reminder
+from app.services.activity_preparation import aggregate_requirements,update_requirement
 
 router=APIRouter(prefix="/api",tags=["journey-preparation"])
 def journey(db,id):
@@ -40,6 +41,15 @@ def requirement(journey_id:int,payload:RequirementUpdate,request:Request,db:Sess
  elif states and all(value in {"confirmed","not_applicable"} for value in states.values()): item.status="complete";item.completed_at=datetime.now(timezone.utc);j.preparation_status="complete"
  else: item.status="in_progress";j.preparation_status="in_progress"
  audit(db,"preparation_review","PatientJourney",j.id,f"Stavka pripreme: {payload.requirement_key}",actor.user_id,actor.actor_type,actor.api_key_id,None,{"state":payload.state},request);db.commit();return item
+@router.get("/patient-journeys/{journey_id}/activity-preparation")
+def activity_preparation(journey_id:int,db:Session=Depends(get_db),actor:Actor=Depends(require_permission("activity_preparation.read"))):
+ j=journey(db,journey_id);return aggregate_requirements(db,j)
+@router.patch("/patient-journeys/{journey_id}/activity-preparation/{requirement_id}")
+def activity_preparation_update(journey_id:int,requirement_id:int,payload:ActivityRequirementUpdate,request:Request,db:Session=Depends(get_db),actor:Actor=Depends(require_permission("activity_preparation.update"))):
+ j=journey(db,journey_id);item=db.get(ActivityPreparationRequirement,requirement_id)
+ if not item or item.activity.journey_id!=j.id: raise HTTPException(404,detail="Stavka pripreme nije pronađena")
+ update_requirement(db,item,payload.state,payload.note,actor.user_id,"activity_preparation.clinical_review" in actor.permissions)
+ audit(db,"activity_preparation_updated","ActivityPreparationRequirement",item.id,"Ažurirana je aktivnost-specifična priprema",actor.user_id,actor.actor_type,actor.api_key_id,None,{"state":item.state,"activity_id":item.activity_id},request);db.commit();return aggregate_requirements(db,j)
 @router.get("/patient-journeys/{journey_id}/reminders",response_model=list[ReminderOut])
 def reminders(journey_id:int,db:Session=Depends(get_db),actor:Actor=Depends(require_permission("journey.read"))): return db.scalars(select(JourneyReminder).where(JourneyReminder.journey_id==journey_id).order_by(JourneyReminder.scheduled_at)).all()
 @router.post("/patient-journeys/{journey_id}/reminders/{reminder_id}/dispatch",response_model=CommunicationOut)

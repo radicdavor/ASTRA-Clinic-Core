@@ -67,14 +67,17 @@ PATHOLOGY_TRANSITIONS = {
     "sent_to_lab": {"received_by_lab", "awaiting_result", "cancelled"},
     "received_by_lab": {"awaiting_result", "cancelled"},
     "awaiting_result": {"cancelled"},
-    "clinician_reviewed": {"patient_notification_ready", "closed"},
-    "patient_notification_ready": {"patient_notified", "closed"},
+    "clinician_reviewed": {"patient_notification_ready"},
+    "patient_notification_ready": {"patient_notified"},
     "patient_notified": {"closed"},
 }
 
 
 def transition_case(db: Session, case: PathologyCase, target: str, external_case_number: str | None, reason: str | None, actor: Actor, request: Request) -> None:
-    if target not in PATHOLOGY_TRANSITIONS.get(case.status, set()):
+    if target == "closed":
+        if case.status not in {"clinician_reviewed", "patient_notification_ready", "patient_notified"} or not case.communication_disposition:
+            raise HTTPException(409, detail="Patološki slučaj zahtijeva dokumentiranu komunikacijsku odluku prije zatvaranja")
+    elif target not in PATHOLOGY_TRANSITIONS.get(case.status, set()):
         raise HTTPException(409, detail=f"Prijelaz patologije {case.status} → {target} nije dopušten")
     if target == "cancelled" and not reason:
         raise HTTPException(422, detail="Otkazivanje patološkog slučaja zahtijeva razlog")
@@ -91,6 +94,25 @@ def transition_case(db: Session, case: PathologyCase, target: str, external_case
     elif target == "patient_notified": case.patient_notified_at = now
     elif target in {"closed", "cancelled"}: case.closed_at = now
     audit(db, "pathology_status_changed", "PathologyCase", case.id, reason or f"Patologija: {target}", actor.user_id, actor.actor_type, actor.api_key_id, before, snapshot(case), request)
+
+
+def decide_communication(db: Session, case: PathologyCase, disposition: str, note: str | None, attempts: int, actor: Actor, request: Request) -> None:
+    if case.status not in {"clinician_reviewed", "patient_notification_ready", "patient_notified"}:
+        raise HTTPException(409, detail="Komunikacijska odluka moguća je tek nakon liječničkog pregleda")
+    if disposition in {"direct_contact", "reviewed_at_follow_up_visit", "no_notification_required", "patient_declined", "transferred_to_external_care", "cancelled_as_duplicate"} and not note:
+        raise HTTPException(422, detail="Odabrana komunikacijska odluka zahtijeva bilješku")
+    if disposition == "unable_to_contact" and attempts < 3:
+        raise HTTPException(422, detail="Nemoguć kontakt zahtijeva najmanje tri dokumentirana pokušaja")
+    if disposition == "delivered_approved_report":
+        delivered = db.scalar(select(ReportDeliveryEvent.id).join(SignedClinicalReport).join(PathologyReportLink, PathologyReportLink.clinical_document_id == SignedClinicalReport.clinical_document_id).where(PathologyReportLink.case_id == case.id, ReportDeliveryEvent.status == "delivered").limit(1))
+        if not delivered:
+            raise HTTPException(409, detail="Nema potvrđene dostave odobrenog nalaza")
+    case.communication_disposition = disposition
+    case.communication_note = note
+    case.communication_attempts = attempts
+    case.communication_decided_by = actor.user_id
+    case.communication_decided_at = datetime.now(timezone.utc)
+    audit(db, "pathology_communication_disposition", "PathologyCase", case.id, f"Komunikacijska odluka: {disposition}", actor.user_id, actor.actor_type, actor.api_key_id, None, {"disposition": disposition, "attempts": attempts}, request)
 
 
 def review_result(db: Session, case: PathologyCase, actor: Actor, request: Request) -> None:

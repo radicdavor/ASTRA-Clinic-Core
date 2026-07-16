@@ -22,6 +22,8 @@ class SignedReportOut(BaseModel):
     signed_at: datetime
     supersedes_report_id: int | None
     superseded_at: datetime | None
+    content_hash: str
+    hash_algorithm: str
 
 
 class ReportDeliveryRequest(BaseModel):
@@ -29,6 +31,9 @@ class ReportDeliveryRequest(BaseModel):
     recipient: str = Field(min_length=5, max_length=255, pattern=r"^[^\s@]+@[^\s@]+\.[^\s@]+$")
     channel: str = Field(default="email", pattern="^email$")
     acknowledge_superseded: bool = False
+    recipient_source: str = Field(default="patient_verified", pattern="^(patient_verified|alternate)$")
+    alternate_recipient_reason: str | None = Field(default=None, max_length=1000)
+    idempotency_key: str | None = Field(default=None, min_length=8, max_length=120)
 
 
 class ReportDeliveryOut(BaseModel):
@@ -46,6 +51,8 @@ class ReportDeliveryOut(BaseModel):
     delivered_at: datetime | None
     failure_reason: str | None
     correlation_id: str
+    recipient_source: str
+    alternate_recipient_reason: str | None
 
 
 class ReportPrintOut(BaseModel):

@@ -1,5 +1,5 @@
 from app.models.domain import ClinicalFormDefinition, ClinicalFormInstance, ClinicalFormVersion, ServiceFormBinding
-from app.services.clinical_forms import validate_sections
+from app.services.clinical_forms import validate_data, validate_sections
 from tests.conftest import login_token
 from tests.factories import appointment
 
@@ -86,6 +86,34 @@ def test_controlled_registry_rejects_duplicate_and_executable_fields():
         assert False, "Executable field type must be rejected"
     except Exception as exc:
         assert getattr(exc, "status_code", None) == 422
+
+
+def test_repeatable_structured_group_requires_stable_ids_required_fields_and_unique_specimen_labels():
+    sections = [{"section_key": "specimens", "fields": [{
+        "field_key": "specimens", "label": "Uzorci", "type": "structured_specimen_list", "required": True, "max_items": 3,
+        "item_fields": [
+            {"field_key": "specimen_label", "label": "Oznaka", "type": "short_text", "required": True},
+            {"field_key": "site", "label": "Mjesto", "type": "short_text", "required": True},
+        ],
+    }]}]
+    validate_sections(sections)
+    version = ClinicalFormVersion(sections_json=sections)
+    valid = {"specimens": [
+        {"item_id": "s1", "specimen_label": "A1", "site": "Antrum"},
+        {"item_id": "s2", "specimen_label": "C1", "site": "Corpus"},
+    ]}
+    validate_data(version, valid)
+    for invalid in [
+        {"specimens": [{"specimen_label": "A1", "site": "Antrum"}]},
+        {"specimens": [{"item_id": "same", "specimen_label": "A1", "site": "Antrum"}, {"item_id": "same", "specimen_label": "A2", "site": "Corpus"}]},
+        {"specimens": [{"item_id": "s1", "specimen_label": "A1", "site": ""}]},
+        {"specimens": [{"item_id": "s1", "specimen_label": "A1", "site": "Antrum"}, {"item_id": "s2", "specimen_label": "A1", "site": "Corpus"}]},
+    ]:
+        try:
+            validate_data(version, invalid)
+            assert False, f"Neispravan strukturirani unos mora biti odbijen: {invalid}"
+        except Exception as exc:
+            assert getattr(exc, "status_code", None) == 422
 
     duplicate = [{"section_key": "x", "fields": [
         {"field_key": "same", "label": "One", "type": "short_text"},

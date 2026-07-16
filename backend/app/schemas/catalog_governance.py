@@ -1,6 +1,7 @@
 from datetime import date, time
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
+from app.core.clinical_registries import ACTIVITY_KINDS, PREPARATION_REQUIREMENT_KEYS, REPORT_DOCUMENT_TYPES, SPECIALTY_KEYS
 
 
 class PackageCreate(BaseModel):
@@ -8,6 +9,19 @@ class PackageCreate(BaseModel):
     name: str = Field(min_length=3, max_length=180)
     description: str | None = Field(default=None, max_length=2000)
     specialty_key: str = Field(min_length=2, max_length=80)
+    _specialty = field_validator("specialty_key")(lambda value: value if value in SPECIALTY_KEYS else (_ for _ in ()).throw(ValueError("Nepoznata specijalnost")))
+
+
+class PreparationRequirementCreate(BaseModel):
+    requirement_key: str
+    label: str = Field(min_length=2, max_length=220)
+    patient_instruction: str = Field(min_length=2, max_length=4000)
+    category: str
+    required: bool = True
+    source_template_key: str = Field(default="service-package", min_length=2, max_length=120)
+    source_template_version: str = Field(default="1", min_length=1, max_length=40)
+    _requirement = field_validator("requirement_key")(lambda value: value if value in PREPARATION_REQUIREMENT_KEYS else (_ for _ in ()).throw(ValueError("Nepoznata stavka pripreme")))
+    _category = field_validator("category")(lambda value: value if value in PREPARATION_REQUIREMENT_KEYS else (_ for _ in ()).throw(ValueError("Nepoznata kategorija pripreme")))
 
 
 class PackageItemCreate(BaseModel):
@@ -22,8 +36,10 @@ class PackageItemCreate(BaseModel):
     preferred_clinic_id: int | None = None
     preferred_room_type: str | None = Field(default=None, max_length=80)
     form_binding_override_version_id: int | None = None
-    preparation_requirements_json: list = Field(default_factory=list)
+    preparation_requirements_json: list[PreparationRequirementCreate] = Field(default_factory=list)
     billing_inclusion_rule: str = Field(default="include", pattern="^(include|exclude)$")
+    _activity = field_validator("activity_kind")(lambda value: value if value in ACTIVITY_KINDS else (_ for _ in ()).throw(ValueError("Nepoznata vrsta aktivnosti")))
+    _specialty = field_validator("specialty_key")(lambda value: value if value in SPECIALTY_KEYS else (_ for _ in ()).throw(ValueError("Nepoznata specijalnost")))
 
 
 class PackageVersionCreate(BaseModel):
@@ -43,6 +59,16 @@ class PackageMaterializeRequest(BaseModel):
     assignments: list[PackageActivityAssignment] = Field(min_length=1)
 
 
+class PackageSchedulePreviewRequest(BaseModel):
+    patient_id: int
+    assignments: list[PackageActivityAssignment] = Field(min_length=1)
+
+
+class PackageBookRequest(PackageSchedulePreviewRequest):
+    episode_id: int | None = None
+    idempotency_key: str = Field(min_length=8, max_length=160)
+
+
 class FormDefinitionCreate(BaseModel):
     form_key: str = Field(min_length=3, max_length=100, pattern=r"^[a-z0-9_-]+$")
     name: str = Field(min_length=3, max_length=180)
@@ -53,6 +79,9 @@ class FormDefinitionCreate(BaseModel):
     validation_schema_json: dict = Field(default_factory=dict)
     print_layout_json: dict = Field(default_factory=dict)
     output_document_type: str = Field(min_length=3, max_length=80)
+    _activity = field_validator("activity_kind")(lambda value: value if value in ACTIVITY_KINDS else (_ for _ in ()).throw(ValueError("Nepoznata vrsta aktivnosti")))
+    _specialty = field_validator("specialty_key")(lambda value: value if value in SPECIALTY_KEYS else (_ for _ in ()).throw(ValueError("Nepoznata specijalnost")))
+    _document = field_validator("output_document_type")(lambda value: value if value in REPORT_DOCUMENT_TYPES else (_ for _ in ()).throw(ValueError("Nepoznata vrsta izvještaja")))
 
 
 class FormVersionDraftCreate(BaseModel):

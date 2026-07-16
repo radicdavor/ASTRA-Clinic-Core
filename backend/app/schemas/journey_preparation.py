@@ -28,6 +28,9 @@ class PreparationOut(BaseModel):
  model_config=ConfigDict(from_attributes=True)
  id:int;journey_id:int;template_id:int;status:str;assigned_at:datetime;acknowledged_at:datetime|None;completed_at:datetime|None;requirement_states_json:dict;template:PreparationTemplateOut
 class RequirementUpdate(BaseModel): requirement_key:str;state:str=Field(pattern="^(confirmed|not_confirmed|not_applicable|requires_clinician_review|blocked)$")
+class ActivityRequirementUpdate(BaseModel):
+ state:str=Field(pattern="^(assigned|in_progress|confirmed|not_confirmed|not_applicable|requires_clinician_review|blocked)$")
+ note:str|None=Field(default=None,max_length=2000)
 class FormTemplateCreate(BaseModel):
     template_key: str
     name: str

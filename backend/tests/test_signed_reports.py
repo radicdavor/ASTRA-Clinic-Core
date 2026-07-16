@@ -1,4 +1,6 @@
-from app.models.domain import ClinicalFormDefinition, ClinicalFormVersion, ServiceFormBinding, SignedClinicalReport
+from datetime import datetime, timezone
+
+from app.models.domain import ClinicalFormDefinition, ClinicalFormVersion, Patient, ServiceFormBinding, SignedClinicalReport
 from tests.conftest import login_token
 from tests.factories import appointment
 
@@ -9,6 +11,10 @@ def headers(client):
 
 def setup_signed_report(client, db):
     appt = appointment(db)
+    patient = db.get(Patient, appt.patient_id)
+    patient.email = "synthetic.patient@example.test"
+    patient.email_verified_at = datetime.now(timezone.utc)
+    db.flush()
     visit = client.post("/api/patient-journeys", headers=headers(client), json={"appointment_id": appt.id, "intake_channel": "manual", "initial_stage": "booked"}).json()
     activity = visit["activities"][0]
     definition = ClinicalFormDefinition(form_key="signed-report-test", name="Sintetički pregled", specialty_key="general", activity_kind="specialist_consultation", active=True)
