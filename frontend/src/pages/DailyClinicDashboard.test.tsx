@@ -29,6 +29,10 @@ const rows = [
     document_status: "complete", preparation_status: "complete", arrival_status: "arrived",
     check_in_status: "ready", encounter_status: "in_progress", consumables_status: "not_ready",
     billing_status: "not_ready", payment_status: "not_due", blocker_status: "clear", blocker_labels: [], blockers: [], allowed_actions: ["open_encounter"],
+    activity_count: 2, current_activity_id: 132, next_activity_id: null, activities: [
+      { id: 131, sequence: 1, time: "10:00:00", service_name: "Gastro pregled", clinician_name: "dr. Test", room_name: "Ordinacija 1", status: "completed" },
+      { id: 132, sequence: 2, time: "10:30:00", service_name: "Gastroskopija", clinician_name: "dr. Test", room_name: "Endoskopija 1", status: "in_progress" },
+    ],
   },
   {
     journey_id: 14, appointment_id: 104, time: "11:00:00", patient_name: "Sintetički Materijal",
@@ -147,6 +151,14 @@ describe("pojednostavljeni dnevni tijek pacijenata", () => {
     expect(await screen.findByRole("button", { name: "Otvori pregled" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Evidentiraj materijal" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Naplati" })).toBeTruthy();
+  });
+
+  test("više usluga ostaje u jednom retku s jasnom tračnicom aktivnosti", async () => {
+    renderDashboard();
+    const row = (await screen.findByText("2 aktivnosti")).closest("tr") as HTMLTableRowElement;
+    expect(within(row).getByText(/10:00 Gastro pregled/)).toBeTruthy();
+    expect(within(row).getByText(/10:30 Gastroskopija/)).toBeTruthy();
+    expect(within(row).getByLabelText(/Gastroskopija. U tijeku/).classList.contains("active")).toBe(true);
   });
 
   test("naplata otvara postojeći račun bez dodatne mutacije", async () => {

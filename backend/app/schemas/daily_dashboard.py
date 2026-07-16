@@ -14,6 +14,16 @@ class DailyDashboardClinic(BaseModel):
     name: str
 
 
+class DailyDashboardActivity(BaseModel):
+    id: int
+    sequence: int
+    time: time
+    service_name: str
+    clinician_name: str | None = None
+    room_name: str | None = None
+    status: str
+
+
 class DailyDashboardRow(BaseModel):
     journey_id: int
     appointment_id: int
@@ -43,6 +53,10 @@ class DailyDashboardRow(BaseModel):
     blocker_labels: list[str] = Field(default_factory=list)
     blockers: list[DailyDashboardBlocker] = Field(default_factory=list)
     allowed_actions: list[str] = Field(default_factory=list)
+    activity_count: int = 1
+    current_activity_id: int | None = None
+    next_activity_id: int | None = None
+    activities: list[DailyDashboardActivity] = Field(default_factory=list)
 
 
 class DailyDashboardResponse(BaseModel):

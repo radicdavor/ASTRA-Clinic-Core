@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session, joinedload, selectinload
 
 from app.auth.dependencies import Actor, require_permission
 from app.core.database import get_db
-from app.models.domain import Appointment, Clinic, Patient, PatientJourney, Provider, Room
+from app.models.domain import Appointment, Clinic, JourneyActivity, Patient, PatientJourney, Provider, Room
 from app.schemas.daily_dashboard import DailyDashboardResponse, DailyDashboardRow
 
 
@@ -45,15 +45,15 @@ def daily_dashboard(
 
     clinic_stmt = (
         select(Clinic.id, Clinic.name)
-        .join(Room, Room.clinic_id == Clinic.id)
-        .join(Appointment, Appointment.room_id == Room.id)
-        .join(PatientJourney, PatientJourney.appointment_id == Appointment.id)
+        .join(JourneyActivity, JourneyActivity.clinic_id == Clinic.id)
+        .join(PatientJourney, PatientJourney.id == JourneyActivity.journey_id)
+        .join(Appointment, Appointment.id == PatientJourney.appointment_id)
         .where(Appointment.date == selected_date)
         .distinct()
         .order_by(Clinic.name)
     )
     if clinician_id:
-        clinic_stmt = clinic_stmt.where(Appointment.provider_id == clinician_id)
+        clinic_stmt = clinic_stmt.where(JourneyActivity.primary_provider_id == clinician_id)
     available_clinics = [{"id": item.id, "name": item.name} for item in db.execute(clinic_stmt).all()]
 
     stmt = (
@@ -66,18 +66,21 @@ def daily_dashboard(
             joinedload(PatientJourney.appointment).joinedload(Appointment.provider),
             joinedload(PatientJourney.appointment).joinedload(Appointment.room).joinedload(Room.clinic),
             selectinload(PatientJourney.blockers),
+            selectinload(PatientJourney.activities).joinedload(JourneyActivity.service),
+            selectinload(PatientJourney.activities).joinedload(JourneyActivity.primary_provider),
+            selectinload(PatientJourney.activities).joinedload(JourneyActivity.room),
         )
         .where(Appointment.date == selected_date)
         .order_by(Appointment.start_time, Patient.last_name, Patient.first_name)
     )
     if clinician_id:
-        stmt = stmt.where(Appointment.provider_id == clinician_id)
+        stmt = stmt.where(PatientJourney.activities.any(JourneyActivity.primary_provider_id == clinician_id))
     if clinic_id:
-        stmt = stmt.join(Room, Appointment.room_id == Room.id).where(Room.clinic_id == clinic_id)
+        stmt = stmt.where(PatientJourney.activities.any(JourneyActivity.clinic_id == clinic_id))
     if room_id:
-        stmt = stmt.where(Appointment.room_id == room_id)
+        stmt = stmt.where(PatientJourney.activities.any(JourneyActivity.room_id == room_id))
     if service_id:
-        stmt = stmt.where(Appointment.service_id == service_id)
+        stmt = stmt.where(PatientJourney.activities.any(JourneyActivity.service_id == service_id))
     if status:
         stmt = stmt.where(PatientJourney.current_stage == status)
     if q:
@@ -92,6 +95,12 @@ def daily_dashboard(
         if blocker is False and open_blockers:
             continue
         appointment = journey.appointment
+        activities = sorted(journey.activities, key=lambda item: item.sequence)
+        current_activity = next((item for item in activities if item.status == "in_progress"), None) or next((item for item in activities if item.status == "ready"), None)
+        remaining = [item for item in activities if item.status not in {"completed", "not_performed", "cancelled"}]
+        if current_activity is None and remaining:
+            current_activity = remaining[0]
+        next_activity = next((item for item in remaining if current_activity and item.sequence > current_activity.sequence), None)
         allowed_actions = []
         if "checkin.update" in actor.permissions and journey.current_stage in {"ready_for_arrival", "arrived", "check_in_review"}:
             allowed_actions.append("open_check_in")
@@ -123,6 +132,18 @@ def daily_dashboard(
             blocker_labels=[item.title for item in open_blockers],
             blockers=[{"id": item.id, "title": item.title, "details": item.details, "is_clinical": item.is_clinical} for item in open_blockers],
             allowed_actions=allowed_actions,
+            activity_count=len(activities),
+            current_activity_id=current_activity.id if current_activity else None,
+            next_activity_id=next_activity.id if next_activity else None,
+            activities=[{
+                "id": item.id,
+                "sequence": item.sequence,
+                "time": item.planned_start.time(),
+                "service_name": item.service.name,
+                "clinician_name": item.primary_provider.full_name if item.primary_provider else None,
+                "room_name": item.room.name if item.room else None,
+                "status": item.status,
+            } for item in activities],
         ))
     sections = ["operations", "documents", "preparation", "check_in"]
     if "encounter.read" in actor.permissions:

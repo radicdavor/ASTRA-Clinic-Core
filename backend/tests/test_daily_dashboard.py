@@ -31,6 +31,8 @@ def test_daily_dashboard_returns_one_aggregated_row_per_journey(client, db, auth
     assert body["can_filter_clinician"] is True
     assert set(("document_status", "preparation_status", "check_in_status", "billing_status", "payment_status", "blocker_status")).issubset(body["rows"][0])
     assert isinstance(body["rows"][0]["allowed_actions"], list)
+    assert body["rows"][0]["activity_count"] == 1
+    assert body["rows"][0]["activities"][0]["service_name"] == appt.service.name
 
 
 def test_daily_dashboard_filters_server_side_and_exposes_blockers(client, db, auth_setup):

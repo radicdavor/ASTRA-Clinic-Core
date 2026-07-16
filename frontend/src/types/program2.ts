@@ -16,6 +16,24 @@ export type PatientJourneyDetail = {
     service: { id: number; name: string }; provider: { id: number; full_name: string }; room: { id: number; name: string };
   };
   blockers: JourneyBlocker[];
+  activities: JourneyActivity[];
+};
+
+export type JourneyActivity = {
+  id: number; journey_id: number; appointment_id: number | null; service_id: number; activity_key: string;
+  activity_kind: string; specialty_key: string; clinic_id: number | null; primary_provider_id: number | null;
+  room_id: number | null; sequence: number; depends_on_activity_id: number | null; required: boolean;
+  planned_start: string; planned_end: string; actual_start: string | null; actual_end: string | null; status: string;
+  not_performed_reason: string | null; form_resolution_status: string; billing_status: string; consumables_status: string;
+};
+
+export type ClinicalFormField = { field_key: string; label: string; type: string; required?: boolean; help_text?: string | null; options?: Array<string | { value: string; label: string }> };
+export type ClinicalFormSection = { section_key: string; title?: string; fields: ClinicalFormField[] };
+export type ClinicalFormInstance = {
+  id: number; activity_id: number; form_version_id: number; purpose: string; status: string; data_json: Record<string, unknown>;
+  rendered_summary: string | null; completed_by: number | null; signed_by: number | null; completed_at: string | null;
+  signed_at: string | null; amended_from_instance_id: number | null; binding_source: string; resolved_at: string;
+  form_version: { id: number; definition_id: number; version: number; status: string; sections_json: ClinicalFormSection[]; output_document_type: string };
 };
 
 export type PatientJourneyTimelineItem = {
