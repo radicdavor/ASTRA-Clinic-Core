@@ -545,3 +545,8 @@ th { color: #667085; font-size: 0.78rem; text-transform: uppercase; letter-spaci
   .clinic-day-table-simple .clinic-day-actions button{width:100%;min-width:0;padding:7px 5px;white-space:normal}
   .clinic-day-table-simple .operational-state{gap:6px}
 }
+
+.ai-diagnosis-disabled{display:block;margin-top:6px;border-left:3px solid #d97706;background:#fff7e6;color:#8a4b08;padding:7px 9px}
+.ai-diagnosis-panel{display:grid;gap:8px;border:1px solid #a9cfc9;border-radius:9px;background:#f5fbfa;padding:12px}
+.ai-diagnosis-panel>header{display:grid;gap:3px}.ai-diagnosis-panel>header small{color:#5d6b7c}.ai-diagnosis-panel article{display:flex;align-items:center;justify-content:space-between;gap:12px;border-top:1px solid #dce9e7;padding-top:9px}.ai-diagnosis-panel article>span{display:grid;gap:2px}.ai-diagnosis-panel article>span small{color:#68778a}.ai-diagnosis-panel article>div{display:flex;gap:7px;flex-wrap:wrap}
+@media(max-width:720px){.ai-diagnosis-panel article{align-items:stretch;flex-direction:column}.ai-diagnosis-panel article>div button{flex:1}}

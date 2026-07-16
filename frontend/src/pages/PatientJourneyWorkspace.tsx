@@ -3,7 +3,7 @@ import { Link, useParams, useSearchParams } from "react-router-dom";
 import { api, getSessionUser } from "../api/client";
 import { useApi } from "../hooks/useApi";
 import type { ClinicalDocument, InventoryItem, Provider, Service } from "../types";
-import type { CheckInState, EncounterDraft, JourneyClosure, JourneyStageKey, PatientJourneyDetail, PatientJourneySummary, PatientJourneyTimelineItem, PreparationState } from "../types/program2";
+import type { AIDiagnosisSuggestion, CheckInState, EncounterDraft, JourneyClosure, JourneyStageKey, PatientJourneyDetail, PatientJourneySummary, PatientJourneyTimelineItem, PreparationState, PublicPilotConfig } from "../types/program2";
 import { AISummaryPanel, BillingPanel, BlockerPanel, CheckInChecklist, ConsumablesPanel, DocumentReadinessPanel, EncounterPanel, PatientTimeline, PaymentPanel, PreparationPanel, SourceDocumentViewer } from "../components/program2/Program2Panels";
 import { journeyStatusLabel } from "../components/program2/journeyStatus";
 import { focusToStage, JourneyHeader, JourneyNextAction, JourneyStageStepper, stageForJourney } from "../components/program2/journey/JourneyChrome";
@@ -28,10 +28,11 @@ export function PatientJourneyWorkspace() {
   const inventory = useApi<InventoryItem[]>("/api/inventory/items", []);
   const services = useApi<Service[]>("/api/services", []);
   const providers = useApi<Provider[]>("/api/providers", []);
+  const publicConfig = useApi<PublicPilotConfig>("/api/public-config", {});
   const documents = useApi<ClinicalDocument[]>(`/api/clinical-documents?patient_id=${journey.data?.patient_id ?? 0}`, []);
   const [draft, setDraft] = useState<EncounterDraft>({});
   const [activeStage, setActiveStage] = useState<JourneyStageKey>("documents");
-  const [aiDiagnoses, setAiDiagnoses] = useState<Array<{ code: string; title: string }>>([]);
+  const [aiDiagnoses, setAiDiagnoses] = useState<AIDiagnosisSuggestion[]>([]);
   const [diagnosisBusy, setDiagnosisBusy] = useState(false);
   const [actionError, setActionError] = useState("");
 
@@ -69,19 +70,18 @@ export function PatientJourneyWorkspace() {
   async function suggestDiagnoses() {
     setDiagnosisBusy(true);
     await perform(async () => {
-      const result = await api<{ diagnoses: Array<{ code: string; title: string }> }>(`/api/patient-journeys/${id}/encounter/diagnosis-suggestions`, { method: "POST", body: JSON.stringify({ anamnesis: draft.anamnesis, examination: draft.examination, patient_findings: draft.patient_findings, opinion: draft.opinion }) });
-      const previousSuggestions = new Set(aiDiagnoses.map(item => `${item.code} — ${item.title}`));
-      const existing = String(draft.diagnosis ?? "").split("\n").map(line => line.trim()).filter(line => line && !previousSuggestions.has(line));
-      const suggested = result.diagnoses.map(item => `${item.code} — ${item.title}`);
-      setDraft({ ...draft, diagnosis: [...new Set([...existing, ...suggested])].join("\n") });
-      setAiDiagnoses(result.diagnoses);
+      const result = await api<{ diagnoses: Array<{ code: string; title: string }>; provider: "openai"; model: string; request_id: string }>(`/api/patient-journeys/${id}/encounter/diagnosis-suggestions`, { method: "POST", body: JSON.stringify({ anamnesis: draft.anamnesis, examination: draft.examination, patient_findings: draft.patient_findings, opinion: draft.opinion }) });
+      setAiDiagnoses(result.diagnoses.map(item => ({ ...item, provider: result.provider, model: result.model, request_id: result.request_id })));
     });
     setDiagnosisBusy(false);
   }
-  function removeDiagnosis(item: { code: string; title: string }) {
-    const line = `${item.code} — ${item.title}`;
-    setDraft({ ...draft, diagnosis: String(draft.diagnosis ?? "").split("\n").filter(value => value.trim() !== line).join("\n") });
-    setAiDiagnoses(current => current.filter(value => value.code !== item.code || value.title !== item.title));
+  async function decideDiagnosis(item: AIDiagnosisSuggestion, action: "accept" | "reject") {
+    await perform(async () => {
+      const updated = await api<EncounterDraft>(`/api/patient-journeys/${id}/encounter/diagnosis-suggestions/decision`, { method: "POST", body: JSON.stringify({ action, code: item.code, title: item.title, provider: item.provider, model: item.model, request_id: item.request_id }) });
+      setDraft(updated);
+      encounter.setData(updated);
+      setAiDiagnoses(current => current.filter(value => value.code !== item.code || value.title !== item.title));
+    });
   }
   async function complete() {
     if (!window.confirm("Dovršiti klinički susret? Nakon toga bilješka više nije dostupna za redovno uređivanje.")) return;
@@ -139,7 +139,7 @@ export function PatientJourneyWorkspace() {
     <main className="journey-active-stage" id={`journey-${activeStage}`} tabIndex={-1} aria-live="polite">
       {activeStage === "documents" && <><BlockerPanel items={j.blockers} onResolve={resolveBlocker}/><div className="journey-stage-pair"><DocumentReadinessPanel status={j.document_status}/><PreparationPanel status={j.preparation_status} data={preparation.data ?? undefined} onUpdate={updatePreparation}/></div></>}
       {activeStage === "arrival" && <><BlockerPanel items={j.blockers} onResolve={resolveBlocker}/>{!checkin.data && <section className="journey-panel journey-start-panel"><h2>Dolazak i prijem</h2><p>Prijem još nije započet. Ova radnja evidentira dolazak i otvara prijemnu provjeru.</p><button type="button" className="primary" onClick={startCheckIn}>Započni prijem</button></section>}<CheckInChecklist data={checkin.data} onUpdate={updateCheckIn} onConfirmAdministrative={confirmAdministrativeCheckIn}/></>}
-      {activeStage === "encounter" && <><BlockerPanel items={j.blockers} onResolve={resolveBlocker}/><EncounterPanel draft={draft} setDraft={setDraft} status={encounter.data?.status} aiDiagnoses={aiDiagnoses} diagnosisBusy={diagnosisBusy} onOpen={open} onSave={save} onComplete={complete} onSuggestDiagnoses={suggestDiagnoses} onRemoveDiagnosis={removeDiagnosis}/></>}
+      {activeStage === "encounter" && <><BlockerPanel items={j.blockers} onResolve={resolveBlocker}/><EncounterPanel draft={draft} setDraft={setDraft} status={encounter.data?.status} aiDiagnoses={aiDiagnoses} aiDiagnosisCapability={publicConfig.data.ai_diagnosis_suggestions} diagnosisBusy={diagnosisBusy} onOpen={open} onSave={save} onComplete={complete} onSuggestDiagnoses={suggestDiagnoses} onDecideDiagnosis={decideDiagnosis}/></>}
       {activeStage === "consumables" && <ConsumablesPanel status={j.consumables_status} canConfirm={j.current_stage === "procedure_completed"} items={inventory.data} onConfirm={confirmConsumables}/>}
       {activeStage === "billing" && <div className="journey-stage-pair"><BillingPanel status={j.billing_status} invoice={closure.data?.invoice ?? undefined} onPrepare={prepareBilling}/><PaymentPanel status={j.payment_status} invoice={closure.data?.invoice ?? undefined} stage={j.current_stage} onPay={pay} onDefer={defer} onClose={close}/></div>}
       {activeStage === "completed" && <section className="journey-panel journey-completed"><h2>Dolazak je završen</h2><p>Pregled, materijal i naplata nemaju otvorenu operativnu radnju.</p><Link to={`/patients/${j.patient_id}`}>Otvori longitudinalni zapis pacijenta</Link></section>}

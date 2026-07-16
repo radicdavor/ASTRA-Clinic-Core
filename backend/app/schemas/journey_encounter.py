@@ -11,4 +11,6 @@ class DiagnosisSuggestionRequest(BaseModel):
 class DiagnosisSuggestion(BaseModel):
  code:str=Field(min_length=3,max_length=12);title:str=Field(min_length=2,max_length=240)
 class DiagnosisSuggestionsOut(BaseModel):
- diagnoses:list[DiagnosisSuggestion]=Field(max_length=5);provider:Literal["openai"]="openai";model:str;generated_at:datetime;disclaimer:str="AI prijedlog. Dijagnozu i WHO ICD-10 šifru provjerava i potvrđuje liječnik."
+ diagnoses:list[DiagnosisSuggestion]=Field(max_length=5);provider:Literal["openai"]="openai";model:str;generated_at:datetime;request_id:str;disclaimer:str="AI prijedlog. Dijagnozu i WHO ICD-10 šifru provjerava i potvrđuje liječnik."
+class DiagnosisSuggestionDecision(BaseModel):
+ action:Literal["accept","reject"];code:str=Field(min_length=3,max_length=12);title:str=Field(min_length=2,max_length=240);provider:Literal["openai"]="openai";model:str=Field(min_length=1,max_length=120);request_id:str=Field(min_length=8,max_length=80)

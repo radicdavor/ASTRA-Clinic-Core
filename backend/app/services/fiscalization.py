@@ -2,6 +2,9 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Protocol
 
+from fastapi import HTTPException
+
+from app.core.config import get_settings
 from app.models.domain import Invoice
 
 
@@ -56,7 +59,20 @@ class CroatiaFiscalizationProviderStub:
         )
 
 
+class DisabledFiscalizationProvider:
+    name = "disabled"
+
+    def fiscalize(self, invoice: Invoice) -> FiscalizationResult:
+        return self.fiscalize_invoice(invoice)
+
+    def fiscalize_invoice(self, invoice: Invoice) -> FiscalizationResult:
+        raise HTTPException(status_code=503, detail="Izdavanje računa je blokirano jer fiskalizacijski provider nije aktivan")
+
+
 def get_fiscalization_provider(provider_name: str | None = None) -> FiscalizationProvider:
+    provider_name = provider_name or get_settings().fiscalization_mode
     if provider_name == "croatia_stub":
         return CroatiaFiscalizationProviderStub()
+    if provider_name == "disabled":
+        return DisabledFiscalizationProvider()
     return NoopFiscalizationProvider()

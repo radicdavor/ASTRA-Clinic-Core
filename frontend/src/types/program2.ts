@@ -49,6 +49,14 @@ export type EncounterDraft = {
   opinion?: string | null; diagnosis?: string | null; recommendations?: string | null; completed_at?: string | null;
 };
 
+export type AIDiagnosisSuggestion = {
+  code: string; title: string; provider: "openai"; model: string; request_id: string;
+};
+
+export type PublicPilotConfig = {
+  ai_diagnosis_suggestions?: { enabled: boolean; configured: boolean; catalog_available: boolean; reason: string | null };
+};
+
 export type JourneyClosure = {
   journey_id: number; stage: string; consumables_status: string; billing_status: string; payment_status: string;
   invoice: { id?: number; number?: string; total?: string; status?: string } | null; consumables: Array<Record<string, unknown>>;

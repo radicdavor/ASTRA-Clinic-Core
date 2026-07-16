@@ -19,17 +19,28 @@ describe("radnje u radnom prostoru tijeka pacijenta", () => {
     expect(setDraft).toHaveBeenLastCalledWith({ opinion: "a" });
   });
 
-  test("AI prijedlog dijagnoze može se ukloniti jednim klikom", async () => {
+  test("AI prijedlozi ostaju odvojeni i prihvaćaju se ili odbijaju pojedinačno", async () => {
     const user = userEvent.setup();
     const onSuggestDiagnoses = vi.fn();
-    const onRemoveDiagnosis = vi.fn();
-    const diagnosis = { code: "K21.9", title: "Gastroezofagealna refluksna bolest" };
-    render(<EncounterPanel draft={{ diagnosis: "K21.9 — Gastroezofagealna refluksna bolest" }} setDraft={vi.fn()} status="in_progress" aiDiagnoses={[diagnosis]} onOpen={vi.fn()} onSave={vi.fn()} onComplete={vi.fn()} onSuggestDiagnoses={onSuggestDiagnoses} onRemoveDiagnosis={onRemoveDiagnosis}/>);
+    const onDecideDiagnosis = vi.fn();
+    const diagnosis = { code: "K21.9", title: "Gastroezofagealna refluksna bolest", provider: "openai" as const, model: "test-model", request_id: "synthetic-request" };
+    render(<EncounterPanel draft={{ diagnosis: "" }} setDraft={vi.fn()} status="in_progress" aiDiagnoses={[diagnosis]} aiDiagnosisCapability={{ enabled: true, reason: null }} onOpen={vi.fn()} onSave={vi.fn()} onComplete={vi.fn()} onSuggestDiagnoses={onSuggestDiagnoses} onDecideDiagnosis={onDecideDiagnosis}/>);
 
     await user.click(screen.getByRole("button", { name: "AI predloži" }));
     expect(onSuggestDiagnoses).toHaveBeenCalledOnce();
-    await user.click(screen.getByRole("button", { name: "Ukloni AI prijedlog K21.9" }));
-    expect(onRemoveDiagnosis).toHaveBeenCalledWith(diagnosis);
+    expect(screen.getByText("Nisu dio kliničkog nalaza dok ih liječnik pojedinačno ne prihvati.")).toBeTruthy();
+    expect((screen.getByLabelText("Dijagnoze (WHO ICD-10)") as HTMLTextAreaElement).value).toBe("");
+    expect(screen.queryByRole("button", { name: /prihvati sve/i })).toBeNull();
+    await user.click(screen.getByRole("button", { name: "Dodaj u dijagnoze" }));
+    expect(onDecideDiagnosis).toHaveBeenCalledWith(diagnosis, "accept");
+    await user.click(screen.getByRole("button", { name: "Odbaci" }));
+    expect(onDecideDiagnosis).toHaveBeenCalledWith(diagnosis, "reject");
+  });
+
+  test("jasno prikazuje da su AI prijedlozi dijagnoza isključeni", () => {
+    render(<EncounterPanel draft={{}} setDraft={vi.fn()} status="in_progress" aiDiagnosisCapability={{ enabled: false, reason: "Kanonski WHO ICD-10 katalog nije dostupan." }} onOpen={vi.fn()} onSave={vi.fn()} onComplete={vi.fn()} onSuggestDiagnoses={vi.fn()}/>);
+    expect(screen.queryByRole("button", { name: "AI predloži" })).toBeNull();
+    expect(screen.getByText("Kanonski WHO ICD-10 katalog nije dostupan.")).toBeTruthy();
   });
 
   test("sprema izmijenjenu stavku prijemne provjere", async () => {

@@ -4,8 +4,11 @@ from datetime import datetime, timezone
 from decimal import Decimal
 from zoneinfo import ZoneInfo
 
+from fastapi import HTTPException
 from sqlalchemy import select
 from sqlalchemy.orm import Session, joinedload, selectinload
+
+from app.core.config import get_settings
 
 from app.models.domain import (
     ClinicalDocument,
@@ -95,6 +98,8 @@ def build_timeline(db: Session, journey: PatientJourney) -> list[dict]:
 
 
 def generate_local_summary(db: Session, journey: PatientJourney) -> JourneyAISummary:
+    if get_settings().ai_summary_provider_mode != "local_deterministic":
+        raise HTTPException(503, detail="Lokalni AI sažetak je isključen u ovom okruženju")
     documents = db.scalars(select(ClinicalDocument).where(ClinicalDocument.journey_id == journey.id).order_by(ClinicalDocument.id)).all()
     missing_requests = db.scalars(
         select(DocumentRequest).where(

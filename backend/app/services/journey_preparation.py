@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 from app.auth.dependencies import Actor
 from app.models.domain import CommunicationEvent,JourneyEvent,JourneyPreparation,JourneyReminder,PatientJourney,PreparationPlanTemplate
 from app.services.patient_journeys import add_event
+from app.core.config import get_settings
 
 class DemoDeliveryProvider:
  """Local/demo boundary. Sending never implies delivery."""
@@ -23,6 +24,7 @@ def assign_preparation(db:Session,journey:PatientJourney,template:PreparationPla
  add_event(db,journey,"preparation_assigned",f"Dodijeljen plan pripreme {template.name} v{template.version}",actor,request,journey.current_stage,journey.current_stage,{"template_id":template.id});return assignment
 
 def dispatch_reminder(db:Session,reminder:JourneyReminder,actor:Actor,request:Request):
+ if get_settings().reminder_provider_mode=="disabled": raise HTTPException(503,detail="Slanje podsjetnika je isključeno u ovom okruženju")
  if reminder.status not in {"scheduled","failed"}: raise HTTPException(409,detail="Podsjetnik nije spreman za slanje")
  event=CommunicationEvent(journey_id=reminder.journey_id,channel=reminder.channel,template_key=reminder.reminder_type,status="queued",scheduled_at=reminder.scheduled_at,correlation_id=str(uuid4()));db.add(event);db.flush()
  try: event.status=DemoDeliveryProvider().send(event);event.sent_at=datetime.now(timezone.utc);reminder.status="sent"

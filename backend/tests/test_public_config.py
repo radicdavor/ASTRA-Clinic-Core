@@ -7,5 +7,7 @@ def test_public_config_exposes_demo_guardrails(client):
     assert payload["demo_mode"] is True
     assert payload["real_data_allowed"] is False
     assert payload["fiscalization_mode"] == "noop"
+    assert payload["ai_diagnosis_suggestions"]["enabled"] is False
+    assert payload["ai_diagnosis_suggestions"]["catalog_available"] is False
     assert "jwt" not in str(payload).lower()
     assert response.headers["X-ASTRA-REAL-DATA-ALLOWED"] == "false"

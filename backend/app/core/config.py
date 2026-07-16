@@ -18,10 +18,15 @@ class Settings(BaseSettings):
     demo_mode: bool = True
     real_data_allowed: bool = False
     fiscalization_mode: str = "noop"
+    ocr_provider_mode: str = "local_demo"
+    reminder_provider_mode: str = "local_demo"
+    ai_summary_provider_mode: str = "local_deterministic"
     document_storage_path: str = "/app/data/documents"
     document_max_upload_bytes: int = 15 * 1024 * 1024
     openai_api_key: SecretStr | None = None
     openai_model: str = "gpt-4.1-mini"
+    ai_diagnosis_suggestions_enabled: bool = False
+    ai_diagnosis_suggestions_production_authorized: bool = False
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 
@@ -39,6 +44,17 @@ class Settings(BaseSettings):
             raise RuntimeError("Production APP_ENV requires explicit non-local CORS_ORIGINS.")
         if self.cors_origin_regex:
             raise RuntimeError("Production APP_ENV requires CORS_ORIGIN_REGEX to be empty and CORS_ORIGINS to list explicit domains.")
+        if self.ai_diagnosis_suggestions_enabled and not self.ai_diagnosis_suggestions_production_authorized:
+            raise RuntimeError("AI diagnosis suggestions require separate explicit production authorization.")
+        unsafe_stub_modes = {
+            "FISCALIZATION_MODE": self.fiscalization_mode in {"noop", "croatia_stub"},
+            "OCR_PROVIDER_MODE": self.ocr_provider_mode == "local_demo",
+            "REMINDER_PROVIDER_MODE": self.reminder_provider_mode == "local_demo",
+            "AI_SUMMARY_PROVIDER_MODE": self.ai_summary_provider_mode == "local_deterministic",
+        }
+        configured_stubs = [name for name, unsafe in unsafe_stub_modes.items() if unsafe]
+        if configured_stubs:
+            raise RuntimeError(f"Production cannot start with demo/stub providers: {', '.join(configured_stubs)}.")
 
     @property
     def public_warnings(self) -> list[str]:

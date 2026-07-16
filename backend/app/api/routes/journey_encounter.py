@@ -6,8 +6,8 @@ from app.audit.service import audit,snapshot
 from app.auth.dependencies import Actor,require_permission
 from app.core.database import get_db
 from app.models.domain import JourneyEncounter,PatientJourney
-from app.schemas.journey_encounter import DiagnosisSuggestionRequest,DiagnosisSuggestionsOut,EncounterOut,EncounterUpdate
-from app.services.encounter_diagnosis import DiagnosisSuggestionUnavailable,suggest_icd10_diagnoses
+from app.schemas.journey_encounter import DiagnosisSuggestionDecision,DiagnosisSuggestionRequest,DiagnosisSuggestionsOut,EncounterOut,EncounterUpdate
+from app.services.encounter_diagnosis import DiagnosisSuggestionUnavailable,ensure_diagnosis_suggestions_enabled,normalize_icd_code,suggest_icd10_diagnoses
 from app.services.patient_journeys import transition
 router=APIRouter(prefix="/api/patient-journeys",tags=["journey-encounter"])
 def get_journey(db,id):
@@ -36,10 +36,33 @@ def update_encounter(journey_id:int,payload:EncounterUpdate,request:Request,db:S
 def suggest_diagnoses(journey_id:int,payload:DiagnosisSuggestionRequest,request:Request,db:Session=Depends(get_db),actor:Actor=Depends(require_permission("encounter.write"))):
  item=get_encounter(db,journey_id)
  if item.status!="in_progress": raise HTTPException(409,detail="AI prijedlog nije dostupan za dovršeni pregled")
- try: result=suggest_icd10_diagnoses(payload)
+ try:
+  ensure_diagnosis_suggestions_enabled()
+  result=suggest_icd10_diagnoses(payload)
  except ValueError as exc: raise HTTPException(422,detail=str(exc)) from exc
  except DiagnosisSuggestionUnavailable as exc: raise HTTPException(503,detail=str(exc)) from exc
- audit(db,"ai_diagnosis_suggestions_generated","JourneyEncounter",item.id,"Stvoreni AI prijedlozi WHO ICD-10 dijagnoza",actor.user_id,actor.actor_type,actor.api_key_id,None,{"provider":result.provider,"model":result.model,"count":len(result.diagnoses)},request);db.commit();return result
+ audit(db,"ai_diagnosis_suggestions_requested","JourneyEncounter",item.id,"Stvoreni AI prijedlozi WHO ICD-10 dijagnoza",actor.user_id,actor.actor_type,actor.api_key_id,None,{"provider":result.provider,"model":result.model,"count":len(result.diagnoses),"suggestion_request_id":result.request_id},request);db.commit();return result
+@router.post("/{journey_id}/encounter/diagnosis-suggestions/decision",response_model=EncounterOut)
+def decide_diagnosis_suggestion(journey_id:int,payload:DiagnosisSuggestionDecision,request:Request,db:Session=Depends(get_db),actor:Actor=Depends(require_permission("encounter.write"))):
+ item=get_encounter(db,journey_id)
+ if item.status!="in_progress": raise HTTPException(409,detail="AI prijedlog nije dostupan za dovršeni pregled")
+ try: catalog=ensure_diagnosis_suggestions_enabled()
+ except DiagnosisSuggestionUnavailable as exc: raise HTTPException(503,detail=str(exc)) from exc
+ code=normalize_icd_code(payload.code)
+ canonical_title=catalog.get(code)
+ if not canonical_title: raise HTTPException(422,detail="WHO ICD-10 šifra nije pronađena u kanonskom katalogu")
+ event="ai_diagnosis_suggestion_rejected"
+ after={"provider":payload.provider,"model":payload.model,"suggestion_request_id":payload.request_id,"code":code}
+ if payload.action=="accept":
+  line=f"{code} — {canonical_title}"
+  lines=[value.strip() for value in (item.diagnosis or "").splitlines() if value.strip()]
+  if line not in lines: lines.append(line)
+  item.diagnosis="\n".join(lines)
+  event="ai_diagnosis_suggestion_accepted"
+  after["canonical_title"]=canonical_title
+  after["final_code_added"]=code
+ audit(db,event,"JourneyEncounter",item.id,"Liječnik je pojedinačno prihvatio AI prijedlog dijagnoze" if payload.action=="accept" else "Liječnik je pojedinačno odbio AI prijedlog dijagnoze",actor.user_id,actor.actor_type,actor.api_key_id,None,after,request)
+ db.commit();db.refresh(item);return item
 @router.post("/{journey_id}/encounter/complete",response_model=EncounterOut)
 def complete_encounter(journey_id:int,request:Request,db:Session=Depends(get_db),actor:Actor=Depends(require_permission("encounter.complete"))):
  journey=get_journey(db,journey_id);item=get_encounter(db,journey_id)

@@ -2,6 +2,7 @@ from fastapi import APIRouter
 
 from app.core.config import get_settings
 from app.schemas.common import ErrorResponse
+from app.services.encounter_diagnosis import diagnosis_suggestions_capability
 
 ERROR_RESPONSES = {400: {"model": ErrorResponse}, 401: {"model": ErrorResponse}, 403: {"model": ErrorResponse}, 404: {"model": ErrorResponse}, 409: {"model": ErrorResponse}, 422: {"model": ErrorResponse}}
 
@@ -17,5 +18,6 @@ def public_config():
         "demo_mode": settings.demo_mode,
         "real_data_allowed": settings.real_data_allowed,
         "fiscalization_mode": settings.fiscalization_mode,
+        "ai_diagnosis_suggestions": diagnosis_suggestions_capability(settings),
         "warnings": settings.public_warnings,
     }

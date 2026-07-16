@@ -32,6 +32,22 @@ def test_production_rejects_local_cors():
         settings.validate_production_safety()
 
 
+def test_production_rejects_demo_and_stub_providers():
+    settings = Settings(
+        app_env="production",
+        jwt_secret="x" * 40,
+        cors_origins="https://clinic.example.com",
+        cors_origin_regex=None,
+        fiscalization_mode="noop",
+        ocr_provider_mode="local_demo",
+        reminder_provider_mode="local_demo",
+        ai_summary_provider_mode="local_deterministic",
+    )
+
+    with pytest.raises(RuntimeError, match="demo/stub providers"):
+        settings.validate_production_safety()
+
+
 def test_openapi_does_not_publish_sensitive_hash_fields(client):
     schema = client.get("/openapi.json").json()
     serialized = str(schema)

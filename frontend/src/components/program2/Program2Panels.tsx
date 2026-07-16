@@ -1,6 +1,7 @@
 import { ExternalLink, Plus, ShieldAlert, Trash2 } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
 import type { InventoryItem } from "../../types";
+import type { AIDiagnosisSuggestion } from "../../types/program2";
 import { journeyStatusLabel } from "./journeyStatus";
 
 export function Panel({ title, children }: { title: string; children: ReactNode }) {
@@ -84,9 +85,7 @@ export function AISummaryPanel({ summary, onGenerate, onReview }: { summary: any
   </Panel>;
 }
 
-type AIDiagnosis = { code: string; title: string };
-
-export function EncounterPanel({ draft, setDraft, status, aiDiagnoses = [], diagnosisBusy = false, onOpen, onSave, onComplete, onSuggestDiagnoses, onRemoveDiagnosis }: { draft: any; setDraft: (value: any) => void; status?: string; aiDiagnoses?: AIDiagnosis[]; diagnosisBusy?: boolean; onOpen: () => void; onSave: () => void; onComplete: () => void; onSuggestDiagnoses?: () => void; onRemoveDiagnosis?: (diagnosis: AIDiagnosis) => void }) {
+export function EncounterPanel({ draft, setDraft, status, aiDiagnoses = [], aiDiagnosisCapability, diagnosisBusy = false, onOpen, onSave, onComplete, onSuggestDiagnoses, onDecideDiagnosis }: { draft: any; setDraft: (value: any) => void; status?: string; aiDiagnoses?: AIDiagnosisSuggestion[]; aiDiagnosisCapability?: { enabled: boolean; reason: string | null }; diagnosisBusy?: boolean; onOpen: () => void; onSave: () => void; onComplete: () => void; onSuggestDiagnoses?: () => void; onDecideDiagnosis?: (diagnosis: AIDiagnosisSuggestion, action: "accept" | "reject") => void }) {
   const fields = [
     ["anamnesis", "Anamneza", "Glavna tegoba, tijek bolesti, ranije bolesti, terapija i alergije."],
     ["examination", "Status", "Objektivni status utvrđen tijekom pregleda."],
@@ -97,7 +96,8 @@ export function EncounterPanel({ draft, setDraft, status, aiDiagnoses = [], diag
   ];
   return <Panel title="Pregled pacijenta">
     <div className="encounter-note-heading"><span>Status pregleda: <strong>{status ? journeyStatusLabel(status) : "nije otvoren"}</strong></span><small>Sadržaj unosi i potvrđuje liječnik.</small></div>
-    {status ? <div className="encounter-note-grid">{fields.map(([key, label, placeholder]) => <label className={`encounter-field encounter-field-${key}`} key={key}><span className="encounter-field-title"><span>{label}</span>{key === "diagnosis" && status === "in_progress" && onSuggestDiagnoses && <button type="button" className="ai-diagnosis-button" aria-label="AI predloži" disabled={diagnosisBusy} onClick={onSuggestDiagnoses}>{diagnosisBusy ? "AI obrađuje…" : "AI predloži"}</button>}</span><textarea aria-label={label} disabled={status === "completed"} value={draft[key] ?? ""} placeholder={placeholder} onChange={event => setDraft({ ...draft, [key]: event.target.value })}/>{key === "diagnosis" && <><small>AI prijedlog nije dijagnoza. Šifru i naziv prije završetka provjerava liječnik.</small>{aiDiagnoses.length > 0 && <div className="ai-diagnosis-list" aria-label="AI prijedlozi dijagnoza">{aiDiagnoses.map(item => <div key={`${item.code}-${item.title}`}><span><small>AI prijedlog</small><strong>{item.code} — {item.title}</strong></span><button type="button" aria-label={`Ukloni AI prijedlog ${item.code}`} onClick={() => onRemoveDiagnosis?.(item)}><Trash2 size={15}/></button></div>)}</div>}</>}</label>)}</div> : <div className="encounter-empty"><p>Pregled još nije započet.</p><button className="primary" onClick={onOpen}>Započni pregled</button></div>}
+    {status ? <div className="encounter-note-grid">{fields.map(([key, label, placeholder]) => <label className={`encounter-field encounter-field-${key}`} key={key}><span className="encounter-field-title"><span>{label}</span>{key === "diagnosis" && status === "in_progress" && aiDiagnosisCapability?.enabled && onSuggestDiagnoses && <button type="button" className="ai-diagnosis-button" aria-label="AI predloži" disabled={diagnosisBusy} onClick={onSuggestDiagnoses}>{diagnosisBusy ? "AI obrađuje…" : "AI predloži"}</button>}</span><textarea aria-label={label} disabled={status === "completed"} value={draft[key] ?? ""} placeholder={placeholder} onChange={event => setDraft({ ...draft, [key]: event.target.value })}/>{key === "diagnosis" && <><small>Formalnu dijagnozu unosi i potvrđuje liječnik.</small>{status === "in_progress" && aiDiagnosisCapability && !aiDiagnosisCapability.enabled && <small className="ai-diagnosis-disabled">{aiDiagnosisCapability.reason ?? "AI prijedlozi dijagnoza su isključeni."}</small>}</>}</label>)}</div> : <div className="encounter-empty"><p>Pregled još nije započet.</p><button className="primary" onClick={onOpen}>Započni pregled</button></div>}
+    {status === "in_progress" && aiDiagnoses.length > 0 && <section className="ai-diagnosis-panel" aria-label="AI prijedlozi dijagnoza"><header><strong>AI prijedlozi dijagnoza</strong><small>Nisu dio kliničkog nalaza dok ih liječnik pojedinačno ne prihvati.</small></header>{aiDiagnoses.map(item => <article key={`${item.request_id}-${item.code}`}><span><strong>{item.code} — {item.title}</strong><small>{item.provider} · {item.model}</small></span><div><button type="button" onClick={() => onDecideDiagnosis?.(item, "reject")}>Odbaci</button><button type="button" className="primary" onClick={() => onDecideDiagnosis?.(item, "accept")}>Dodaj u dijagnoze</button></div></article>)}</section>}
     {status === "in_progress" && <div className="form-actions encounter-note-actions"><button onClick={onSave}>Spremi pregled</button><button className="primary" onClick={onComplete}>Dovrši pregled</button></div>}
   </Panel>;
 }

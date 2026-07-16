@@ -173,6 +173,8 @@ def ingest_source_document(
 
 
 def queue_ocr(db: Session, document: ClinicalDocument) -> DocumentProcessingJob:
+    if get_settings().ocr_provider_mode == "disabled":
+        raise HTTPException(503, detail="OCR je isključen u ovom okruženju")
     if not document.attachment_path:
         raise HTTPException(409, detail="OCR zahtijeva pohranjeni izvorni dokument")
     if document.lifecycle_status not in {"stored", "ocr_failed"}:
@@ -190,6 +192,8 @@ def queue_ocr(db: Session, document: ClinicalDocument) -> DocumentProcessingJob:
 
 
 def process_ocr_job(db: Session, job: DocumentProcessingJob) -> DocumentProcessingJob:
+    if get_settings().ocr_provider_mode != "local_demo":
+        raise HTTPException(503, detail="Demo OCR provider nije aktivan")
     if job.job_type != "ocr" or job.status not in {"pending", "failed"}:
         raise HTTPException(409, detail="OCR posao nije spreman za obradu")
     document = job.document
