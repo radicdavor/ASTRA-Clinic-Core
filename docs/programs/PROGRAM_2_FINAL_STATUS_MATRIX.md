@@ -1,5 +1,7 @@
 # Program 2 — Final Status Matrix
 
+> Historical record. It is not the current product-state source; see the canonical documents in `docs/`.
+
 | Capability | Status | Boundary / evidence |
 |---|---|---|
 | Canonical PatientJourney aggregate | Implemented, tested | One journey per appointment; additive migrations |

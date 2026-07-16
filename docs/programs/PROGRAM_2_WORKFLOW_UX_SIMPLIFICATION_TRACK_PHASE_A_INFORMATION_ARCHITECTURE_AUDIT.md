@@ -1,5 +1,7 @@
 # Program 2 Workflow UX Simplification Track — Phase A
 
+> Historical record. It is not the current product-state source; see the canonical documents in `docs/`.
+
 ## Polazište
 
 - Repozitorij: `radicdavor/ASTRA-Clinic-Core`

@@ -1,5 +1,7 @@
 # Program 2 Phase B — Unified Patient Journey State Machine
 
+> Historical phase record. It is not the current product-state source; see the canonical documents in `docs/`.
+
 ## Workflow stages
 
 `requested`, `booked`, `awaiting_forms`, `awaiting_documents`, `preparation_in_progress`, `ready_for_arrival`, `arrived`, `check_in_review`, `ready_for_clinician`, `in_encounter`, `procedure_completed`, `awaiting_billing`, `awaiting_payment`, `completed`, `cancelled`, `no_show`, `blocked`.

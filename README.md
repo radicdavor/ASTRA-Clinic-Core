@@ -1,5 +1,11 @@
 # ASTRA Clinic Core
 
+Canonical current-state sources:
+
+- [Current product state](docs/CURRENT_PRODUCT_STATE.md)
+- [Current architecture](docs/CURRENT_ARCHITECTURE.md)
+- [Current operational limitations](docs/CURRENT_OPERATIONAL_LIMITATIONS.md)
+
 ## Pojednostavljeni Program 2 operativni UX
 
 Glavna navigacija organizirana je oko zadataka **Danas**, **Pacijenti**, **Naručivanje** i **Znanje**, dok su ostali postojeći moduli grupirani pod **Više** prema ulozi. Dnevna ploča zadržava četiri operativna stupca i vodi u jednu fokusiranu fazu tijeka pacijenta. Vremenska crta, dokumenti i AI sažetak dostupni su kroz sekundarni Klinički kontekst. Sve postojeće rute i backend workflow ostaju očuvani; nije uvedena nova autonomna klinička odluka.

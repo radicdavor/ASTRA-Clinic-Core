@@ -1,5 +1,7 @@
 # Program 2 — Phase G: Daily Clinic Dashboard
 
+> Historical phase record. It is not the current product-state source; see the canonical documents in `docs/`.
+
 ## Status
 
 Phase G implements the shared operational surface **Danas u poliklinici** and a backend-aggregated day endpoint.

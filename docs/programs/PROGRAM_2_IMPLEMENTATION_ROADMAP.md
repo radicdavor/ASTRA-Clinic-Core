@@ -1,5 +1,7 @@
 # Program 2 — Implementation Roadmap
 
+> Historical implementation record. Current state: [`CURRENT_PRODUCT_STATE.md`](../CURRENT_PRODUCT_STATE.md), [`CURRENT_ARCHITECTURE.md`](../CURRENT_ARCHITECTURE.md), and [`CURRENT_OPERATIONAL_LIMITATIONS.md`](../CURRENT_OPERATIONAL_LIMITATIONS.md).
+
 ## Workflow UX Simplification Track
 
 Postojeći Program 2 workflow dobio je task-centered navigaciju, fokusiranu dnevnu ploču i stage-focused radni prostor bez zamjene backend modela ili uklanjanja ruta. Sekundarni alati sada su grupirani prema ulozi, a vremenska crta, dokumenti i AI sažetak koriste progresivno otkrivanje. Završna vizualna provjera sintetičkih administratorskih i liječničkih scenarija provedena je 15. srpnja 2026. na standardnom i 1024 px prikazu; track je formalno zatvoren i vraćen u `STOP AND HOLD`. Detalji su u zasebnim dokumentima `PROGRAM_2_WORKFLOW_UX_SIMPLIFICATION_TRACK_*`.

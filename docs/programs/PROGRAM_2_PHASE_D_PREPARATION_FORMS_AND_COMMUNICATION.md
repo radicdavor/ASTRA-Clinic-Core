@@ -1,5 +1,7 @@
 # Program 2 — Phase D: Preparation, Forms and Communication
 
+> Historical phase record. It is not the current product-state source; see the canonical documents in `docs/`.
+
 ## Status
 
 Phase D is implemented as an additive backend contract. It does not connect live email or SMS providers and it does not make clinical decisions.

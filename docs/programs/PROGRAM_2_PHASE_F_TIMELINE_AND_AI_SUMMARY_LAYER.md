@@ -1,5 +1,7 @@
 # Program 2 — Phase F: Timeline and AI Summary Layer
 
+> Historical phase record. It is not the current product-state source; see the canonical documents in `docs/`.
+
 ## Status
 
 Phase F implements a journey timeline projection and a deterministic, source-linked local summary stub. No live AI provider was added.

@@ -1,5 +1,7 @@
 # Phase H — Closure and hold
 
+> Historical record. It is not the current product-state source; see the canonical documents in `docs/`.
+
 Implementacija i vizualna evaluacija završene su. Track je formalno zatvoren.
 
 Informacijska arhitektura, navigacija, dnevna ploča, progresivno otkrivanje i fokus faze implementirani su. Nije uveden novi backend workflow, klinička automatizacija niti produkcijska autorizacija.

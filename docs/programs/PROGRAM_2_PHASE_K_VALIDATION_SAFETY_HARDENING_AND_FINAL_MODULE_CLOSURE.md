@@ -1,5 +1,7 @@
 # Program 2 — Phase K: Validation, Safety Hardening and Final Module Closure
 
+> Historical phase record. It is not the current product-state source; see the canonical documents in `docs/`.
+
 ## Scope
 
 Phase K validates the additive Program 2 implementation from canonical intake through administrative closure. Validation uses synthetic data only. It does not authorize real patient data, live communication, external AI/OCR, fiscalization, payment terminals, or production deployment.

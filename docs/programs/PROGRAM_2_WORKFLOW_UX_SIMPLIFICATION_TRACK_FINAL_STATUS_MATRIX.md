@@ -1,5 +1,7 @@
 # Program 2 Workflow UX Simplification — status matrix
 
+> Historical record. It is not the current product-state source; see the canonical documents in `docs/`.
+
 | Područje | Status | Dokaz / ograničenje |
 | --- | --- | --- |
 | IA audit | Dovršeno | Phase A |

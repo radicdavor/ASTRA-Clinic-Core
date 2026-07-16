@@ -1,5 +1,7 @@
 # Program 2 — Unified Patient Journey Workflow Closure Report
 
+> Historical closure record. Current state is defined by the canonical documents in `docs/`.
+
 ## Decision
 
 Program 2 Unified Patient Journey Workflow is implemented and closed within the authorized clinic-operations scope.

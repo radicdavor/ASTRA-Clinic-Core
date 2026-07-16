@@ -1,5 +1,7 @@
 # Phase G — Testovi i usability review
 
+> Historical record. It is not the current product-state source; see the canonical documents in `docs/`.
+
 Automatski su provjereni role-aware navigacija, najviše četiri primarne stavke prije izbornika Više, uklonjena lažna pretraga, četiri dashboard stupca, zatvoreni dodatni filtri, zabrana POST mutacije pri navigaciji, jedna aktivna faza te klinički kontekst i dokumenti dostupni jednim otvaranjem.
 
 Frontend rezultat nakon implementacije: 5 testnih datoteka i 29 testova prolaze, uz 3 Program 2 contract testa. Dodatni regression test potvrđuje da role-aware navigacija radi i za postojeću prijavu nastalu prije spremanja novog zapisa korisničke uloge.

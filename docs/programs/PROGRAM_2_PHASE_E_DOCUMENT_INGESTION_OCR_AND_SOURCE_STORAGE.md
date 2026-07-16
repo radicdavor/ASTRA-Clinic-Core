@@ -1,5 +1,7 @@
 # Program 2 — Phase E: Document Ingestion, OCR and Source Storage
 
+> Historical phase record. It is not the current product-state source; see the canonical documents in `docs/`.
+
 ## Status
 
 Phase E provides one canonical ingestion contract for journey documents, immutable local source storage, processing jobs, a deterministic text-only OCR stub, a metadata-only classification candidate and an email-ingestion review boundary.

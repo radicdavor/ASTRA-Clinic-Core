@@ -1,5 +1,7 @@
 # Program 2 Workflow UX Simplification Track — closure report
 
+> Historical record. It is not the current product-state source; see the canonical documents in `docs/`.
+
 Navigacija je reorganizirana oko korisničkih zadataka, dnevna ploča naglašava trenutačno stanje i sljedeću radnju, a radni prostor samo aktualnu fazu. Pozadinske informacije dostupne su progresivnim otkrivanjem. Administrativni alati ostaju dostupni prema ulozi.
 
 Nijedna postojeća jezgrena funkcija nije uklonjena. Backend workflow model nije zamijenjen. Nije dodano autonomno kliničko ponašanje, dijagnoza, terapijska preporuka ili trijaža.

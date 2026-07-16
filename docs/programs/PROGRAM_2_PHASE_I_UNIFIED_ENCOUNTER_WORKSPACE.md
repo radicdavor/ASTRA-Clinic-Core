@@ -1,5 +1,7 @@
 # Program 2 — Phase I: Unified Encounter Workspace
 
+> Historical phase record. It is not the current product-state source; see the canonical documents in `docs/`.
+
 ## Canonical contract
 
 `JourneyEncounter` is a one-to-one clinical note for `PatientJourney`. It links the existing clinical episode when present and never duplicates patient, appointment, source document, inventory or invoice data.

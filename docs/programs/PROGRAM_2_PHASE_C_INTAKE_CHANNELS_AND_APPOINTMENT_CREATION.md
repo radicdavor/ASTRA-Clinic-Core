@@ -1,5 +1,7 @@
 # Program 2 Phase C — Intake Channels and Appointment Creation
 
+> Historical phase record. It is not the current product-state source; see the canonical documents in `docs/`.
+
 ## Canonical rule
 
 Manual staff entry, web booking and AI secretary intake all call `create_appointment_with_journey`. The service applies the same patient/episode validation, provider/room/service scheduling rules, conflict checks, appointment audit and one-to-one journey creation.

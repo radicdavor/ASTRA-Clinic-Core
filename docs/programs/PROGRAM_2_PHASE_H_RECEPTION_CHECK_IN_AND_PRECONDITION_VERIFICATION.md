@@ -1,5 +1,7 @@
 # Program 2 — Phase H: Reception Check-In and Precondition Verification
 
+> Historical phase record. It is not the current product-state source; see the canonical documents in `docs/`.
+
 ## Status
 
 Phase H implements a structured check-in aggregate and permission-protected API. Arrival advances the canonical journey through `ARRIVED` to `CHECK_IN_REVIEW` using the Phase B transition service.

@@ -1,5 +1,7 @@
 # Program 2 Phase A — Domain Model and Canonical Workflow Contract
 
+> Historical phase record. It is not the current product-state source; see the canonical documents in `docs/`.
+
 ## Decision
 
 `PatientJourney` is the single operational aggregate for one visit and has a one-to-one relationship with `Appointment`. It coordinates existing sources of truth; it does not replace them.
