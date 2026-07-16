@@ -6,16 +6,18 @@ from sqlalchemy.orm import Session
 
 from app.audit.service import audit, snapshot
 from app.auth.dependencies import Actor
-from app.models.domain import Appointment, ClinicalFormInstance, JourneyActivity, PatientJourney, Room
+from app.models.domain import Appointment, ClinicalFormInstance, JourneyActivity, PathologyCase, PathologySpecimen, PatientJourney, ProcedureIntervention, Room
 from app.services.appointments import validate_appointment_payload
 from app.services.patient_journeys import add_event, transition
 
 
 TERMINAL_ACTIVITY_STATUSES = {"completed", "not_performed", "cancelled"}
 ALLOWED_ACTIVITY_TRANSITIONS = {
-    "planned": {"ready", "not_performed", "cancelled"},
-    "ready": {"in_progress", "not_performed", "cancelled"},
-    "in_progress": {"completed", "not_performed"},
+    "planned": {"waiting", "ready", "blocked", "not_performed", "cancelled"},
+    "waiting": {"ready", "blocked", "not_performed", "cancelled"},
+    "ready": {"in_progress", "blocked", "not_performed", "cancelled"},
+    "in_progress": {"completed", "blocked", "not_performed"},
+    "blocked": {"waiting", "ready", "in_progress", "not_performed", "cancelled"},
     "completed": set(),
     "not_performed": set(),
     "cancelled": set(),
@@ -153,7 +155,13 @@ def transition_activity(
         )
         if activity.form_resolution_status != "not_required" and (not form or form.status not in {"completed", "signed"}):
             raise HTTPException(409, detail="Klinički obrazac aktivnosti mora biti dovršen prije završetka aktivnosti")
-    if target in {"not_performed", "cancelled"} and not reason:
+        interventions = db.scalars(select(ProcedureIntervention).where(ProcedureIntervention.activity_id == activity.id)).all()
+        if any(item.complication is None for item in interventions):
+            raise HTTPException(409, detail="Za svaku intervenciju izričito razriješite komplikacije, uključujući odgovor 'nema'")
+        specimen_intervention_ids = set(db.scalars(select(PathologySpecimen.source_intervention_id).join(PathologyCase, PathologyCase.id == PathologySpecimen.case_id).where(PathologyCase.source_activity_id == activity.id)).all())
+        if any(item.intervention_type == "biopsy" and item.id not in specimen_intervention_ids for item in interventions):
+            raise HTTPException(409, detail="Svaka biopsija mora imati označen patološki uzorak")
+    if target in {"blocked", "not_performed", "cancelled"} and not reason:
         raise HTTPException(422, detail="Razlog je obvezan kada aktivnost nije obavljena")
 
     before = snapshot(activity)

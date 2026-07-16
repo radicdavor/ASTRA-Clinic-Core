@@ -1,6 +1,6 @@
 from datetime import date, time
 
-from app.models.domain import JourneyActivity
+from app.models.domain import JourneyActivity, PatientJourney, ProcedureIntervention
 from tests.conftest import login_token
 from tests.factories import appointment, provider, room, service
 
@@ -116,3 +116,26 @@ def test_activity_transition_is_explicit_and_audited(client, db, auth_setup):
     )
     assert ready.status_code == 200
     assert ready.json()["status"] == "ready"
+
+
+def test_biopsy_activity_requires_resolved_complication_and_labeled_specimen(client, db, auth_setup):
+    journey, _ = canonical_journey(client, db)
+    activity = db.get(JourneyActivity, journey["activities"][0]["id"])
+    activity.form_resolution_status = "not_required"
+    visit = db.get(PatientJourney, journey["id"])
+    visit.check_in_status = "ready"; visit.current_stage = "ready_for_clinician"
+    db.commit()
+    url = f"/api/patient-journeys/{journey['id']}/activities/{activity.id}"
+    assert client.post(f"{url}/transition", headers=headers(client), json={"target_status": "ready"}).status_code == 200
+    assert client.post(f"{url}/transition", headers=headers(client), json={"target_status": "in_progress"}).status_code == 200
+    intervention = client.post(f"{url}/interventions", headers=headers(client), json={"intervention_type": "biopsy", "anatomical_site": "Sintetičko mjesto", "count": 1, "retrieval_status": "collected"}).json()
+    unresolved = client.post(f"{url}/transition", headers=headers(client), json={"target_status": "completed"})
+    assert unresolved.status_code == 409 and "komplikacije" in unresolved.json()["detail"]
+    db.get(ProcedureIntervention, intervention["id"]).complication = "Nema"
+    db.commit()
+    missing = client.post(f"{url}/transition", headers=headers(client), json={"target_status": "completed"})
+    assert missing.status_code == 409 and "uzorak" in missing.json()["detail"]
+    case = client.post(f"{url}/pathology-case", headers=headers(client), json={"specimens": [{"specimen_label": "A1", "anatomical_site": "Sintetičko mjesto", "specimen_type": "biopsy", "source_intervention_id": intervention["id"], "collection_time": "2026-07-06T09:20:00Z"}]})
+    assert case.status_code == 201
+    completed = client.post(f"{url}/transition", headers=headers(client), json={"target_status": "completed"})
+    assert completed.status_code == 200 and completed.json()["status"] == "completed"

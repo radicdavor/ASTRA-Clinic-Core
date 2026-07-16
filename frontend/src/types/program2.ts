@@ -46,6 +46,7 @@ export type ReportDelivery = { id: number; report_id: number; channel: string; r
 export type VisitDocument = { report: SignedClinicalReport; print_count: number; latest_delivery: ReportDelivery | null };
 export type PathologySpecimen = { id: number; specimen_label: string; anatomical_site: string; specimen_type: string; container: string | null; fixation: string | null };
 export type PathologyCase = { id: number; source_activity_id: number; status: string; external_lab: string | null; external_case_number: string | null; sent_at: string | null; lab_received_at: string | null; result_received_at: string | null; reviewed_at: string | null; patient_notified_at: string | null; specimens: PathologySpecimen[] };
+export type ProcedureIntervention = { id: number; activity_id: number; intervention_type: string; anatomical_site: string | null; description: string | null; count: number; retrieval_status: string | null; complication: string | null };
 
 export type PatientJourneyTimelineItem = {
   date: string; event_type: string; title: string; summary: string | null; source_url: string | null;
