@@ -42,3 +42,7 @@ One canonical workflow: `Prijava → dokumenti → priprema → dolazak → prov
 - [x] K — full validation and formal closure
 
 No later phase may bypass the Phase B transition service.
+
+## Gastroenterology hardening track
+
+The generic multi-activity architecture is deepened by the dedicated phase documents `GASTRO_MULTI_ACTIVITY_HARDENING_PHASE_A...K`. This track does not create a new top-level module: it hardens package scheduling, activity preparation, repeatable clinical forms, endoscopy documentation, specimen/pathology traceability, signed-report integrity, secure delivery, and the legacy encounter boundary inside Program 2.

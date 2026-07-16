@@ -344,3 +344,6 @@ Bit će uspješna ako liječnik nakon radnog dana kaže:
 
 Ako ASTRA postigne taj cilj, ispunila je svoju svrhu.
 
+## Pravilo koordiniranog kliničkog dolaska
+
+Jedan fizički dolazak ostaje jedan `PatientJourney`, bez obzira na broj pregleda ili postupaka. Svaki pregled ili postupak je zaseban `JourneyActivity` sa svojim vremenom, prostorijom, liječnikom, pripremom, obrascem, nalazom, materijalom i uzorcima. Zajednički prijem, račun i plaćanje ostaju na razini dolaska. Potpisani klinički sadržaj je nepromjenjiv; ispravak uvijek stvara novu verziju.

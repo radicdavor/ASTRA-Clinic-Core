@@ -15,6 +15,7 @@ This is the canonical limitation register.
 - Usability evidence is Codex/browser and automated only. No actual clinic participant thresholds have been measured.
 - Universal idempotency keys, distributed job queues, high availability and disaster recovery are not implemented.
 - Report e-mail remains a visible local-demo queued stub. External pathology-laboratory exchange and a dedicated visual form-template editor are not implemented.
+- Gastroenterology package, preparation, report, and pathology flows are technically synthetic; no receptionist, nurse, gastroenterologist, billing, or administrator usability session has yet been completed.
 - The legacy in-place demo reset is not validated as a Program 2 recovery mechanism; the synthetic runbook rebuilds a separately named test database instead.
 - The product is not a certified EMR, medical device, clinical decision system or GDPR-certified solution.
 

@@ -24,3 +24,5 @@ Primary routes: `/`, `/patients`, `/appointments`, `/journeys/:id`, `/reception`
 The technical candidate may be prepared only for **human synthetic usability evaluation** after all repository gates pass. Human evidence has not been claimed. Pilot readiness does not authorize pilot execution. Deployment status remains local/controlled demo only.
 
 The current demo includes a synthetic one-arrival example with a first gastroenterology consultation at 15:00 followed by gastroscopy at 15:30.
+
+The gastroenterology hardening track adds user-facing package booking with non-mutating conflict preview, activity-specific combined preparation, repeatable endoscopy findings, structured interventions/specimens, separate signed activity reports, secure demo delivery, and communication-gated pathology closure. The daily board keeps one row per physical arrival and includes patient and room views.

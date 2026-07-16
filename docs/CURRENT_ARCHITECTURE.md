@@ -8,6 +8,8 @@ React/TypeScript/Vite calls a FastAPI REST backend. FastAPI uses SQLAlchemy 2 an
 
 The current operational spine is `Patient → PatientJourney → JourneyActivity`. `PatientJourney.appointment_id` remains the backward-compatible anchor appointment; each activity may reference its own appointment, service, room, clinician, form, signed report, interventions and consumables. One journey still owns one check-in, coordinated invoice and payment.
 
+Published `ServicePackageVersion` rows materialize ordered activities transactionally. `PatientJourney.package_booking_key` provides database-backed retry idempotency. `ActivityPreparationRequirement` adds activity provenance without replacing journey preparation. `ClinicalFormInstance` is the new clinical write source for package activities. `SignedClinicalReport` content is SHA-256 verified and protected by a PostgreSQL immutability trigger.
+
 `Patient → Appointment → PatientJourney` is the operational spine. A journey references preparation, document requests/submissions, timeline events, check-in, encounter, consumable usage, invoice and payment. The daily dashboard is an aggregate read view; the Patient Journey Workspace mutates existing domain objects through explicit APIs.
 
 ## Source-of-truth hierarchy

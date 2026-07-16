@@ -1253,3 +1253,9 @@ Za produkciju postavite `APP_ENV=production`, jak `JWT_SECRET`, kraći `ACCESS_T
 - Klinička knjižnica s draft protokolom "Priprema za gastroskopiju" za obvezni liječnički pregled
 - Sedam dodatnih gastroenteroloških operativnih draft protokola za pripremu, uzorke, oporavak, dekontaminaciju i sigurnost terapije
 - JWT prijava i osnovna kontrola uloga
+
+## Gastroenterološki koordinirani dolazak
+
+Program 2 podržava jedan dolazak s više odvojenih aktivnosti, uključujući prvi gastroenterološki pregled, gastroskopiju i kolonoskopiju. Recepcija može otvoriti **Naručivanje → Naruči paket**, provjeriti raspored bez spremanja te transakcijski stvoriti jedan dolazak s odvojenim prostorijama i liječnicima. Klinički obrasci podržavaju ponovljive polipe, biopsije, intervencije i uzorke; svaki potpisani nalaz čuva SHA-256 integritet.
+
+Sve je i dalje synthetic/demo-only. Dostava nalaza je lokalni stub, a ljudska klinička odluka, potpis i komunikacijska odluka ostaju obvezni.
