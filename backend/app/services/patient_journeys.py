@@ -3,7 +3,7 @@ from fastapi import HTTPException, Request
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 from app.auth.dependencies import Actor
-from app.models.domain import Appointment, JourneyActivity, JourneyBlocker, JourneyEvent, PatientJourney, Room, Service
+from app.models.domain import Appointment, JourneyActivity, JourneyBlocker, JourneyEvent, PatientJourney, Room, Service, SignedClinicalReport
 
 INTAKE_CHANNELS={"web","ai_secretary","manual"}
 STAGES={"requested","booked","awaiting_forms","awaiting_documents","preparation_in_progress","ready_for_arrival","arrived","check_in_review","ready_for_clinician","in_encounter","procedure_completed","awaiting_billing","awaiting_payment","completed","cancelled","no_show","blocked"}
@@ -69,6 +69,11 @@ def transition(db:Session,journey:PatientJourney,target:str,actor:Actor,request:
  if target=="awaiting_payment" and journey.billing_status!="invoice_created": raise HTTPException(409,detail="Račun mora biti izrađen prije naplate")
  if target=="completed":
   if journey.encounter_status!="completed" or journey.consumables_status not in {"confirmed","not_applicable"} or journey.billing_status!="closed" or journey.payment_status not in {"paid","refunded","cancelled","deferred"}: raise HTTPException(409,detail="Susret, potrošni materijal, račun i plaćanje moraju biti razriješeni")
+ if target=="completed":
+  unresolved_activity=db.scalar(select(JourneyActivity.id).where(JourneyActivity.journey_id==journey.id,JourneyActivity.required.is_(True),JourneyActivity.status.notin_({"completed","not_performed","cancelled"})).limit(1))
+  if unresolved_activity: raise HTTPException(409,detail="Sve obvezne aktivnosti moraju biti dovršene ili završene s razlogom")
+  unsigned_activity=db.scalar(select(JourneyActivity.id).where(JourneyActivity.journey_id==journey.id,JourneyActivity.required.is_(True),JourneyActivity.status=="completed",JourneyActivity.form_resolution_status.notin_({"not_required","legacy"}),~JourneyActivity.id.in_(select(SignedClinicalReport.activity_id))).limit(1))
+  if unsigned_activity: raise HTTPException(409,detail="Potrebni nalazi aktivnosti moraju biti potpisani prije završetka dolaska")
  before=journey.current_stage;journey.current_stage=target;journey.updated_by=actor.user_id
  if target=="arrived": journey.check_in_status="arrived"
  elif target=="check_in_review": journey.check_in_status="in_review"

@@ -8,7 +8,7 @@ from app.audit.service import audit, snapshot
 from app.auth.dependencies import Actor
 from app.models.domain import Appointment, ClinicalFormInstance, JourneyActivity, PatientJourney, Room
 from app.services.appointments import validate_appointment_payload
-from app.services.patient_journeys import add_event
+from app.services.patient_journeys import add_event, transition
 
 
 TERMINAL_ACTIVITY_STATUSES = {"completed", "not_performed", "cancelled"}
@@ -139,6 +139,8 @@ def transition_activity(
             dependency = get_activity(db, journey.id, activity.depends_on_activity_id)
             if dependency.status != "completed":
                 raise HTTPException(409, detail="Prethodna obvezna aktivnost još nije dovršena")
+        if journey.current_stage == "ready_for_clinician":
+            transition(db, journey, "in_encounter", actor, request, "Započela je prva klinička aktivnost dolaska")
     if target == "completed":
         form = db.scalar(
             select(ClinicalFormInstance)
@@ -168,5 +170,10 @@ def transition_activity(
         if target != "completed":
             activity.not_performed_reason = reason
     db.flush()
+    if target in TERMINAL_ACTIVITY_STATUSES:
+        remaining = db.scalar(select(func.count(JourneyActivity.id)).where(JourneyActivity.journey_id == journey.id, JourneyActivity.required.is_(True), JourneyActivity.status.notin_(TERMINAL_ACTIVITY_STATUSES))) or 0
+        if remaining == 0 and journey.current_stage == "in_encounter":
+            journey.encounter_status = "completed"
+            transition(db, journey, "procedure_completed", actor, request, "Sve obvezne aktivnosti dolaska su razriješene")
     audit(db, "activity_transition", "JourneyActivity", activity.id, reason or f"Aktivnost: {target}", actor.user_id, actor.actor_type, actor.api_key_id, before, snapshot(activity), request)
     add_event(db, journey, "activity_transition", reason or f"Aktivnost {activity.activity_key}: {target}", actor, request, journey.current_stage, journey.current_stage, {"activity_id": activity.id, "activity_status": target})

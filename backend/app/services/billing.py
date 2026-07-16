@@ -6,7 +6,7 @@ from fastapi import HTTPException
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
-from app.models.domain import Appointment, Invoice, InvoiceLine, InvoiceNumberSequence, PaymentTransaction, Service
+from app.models.domain import Appointment, Invoice, InvoiceLine, InvoiceNumberSequence, JourneyActivity, PatientJourney, PaymentTransaction, Service
 from app.schemas.common import InvoiceLineCreate, InvoiceLineUpdate, PaymentTransactionCreate
 from app.services.fiscalization import FiscalizationProvider, get_fiscalization_provider
 from app.services.inventory import ensure_positive
@@ -104,6 +104,26 @@ def draft_invoice_from_appointment(db: Session, appointment_id: int) -> tuple[In
     db.add(line)
     db.flush()
     return invoice, line, True
+
+
+def draft_invoice_from_journey(db: Session, journey: PatientJourney) -> tuple[Invoice, bool]:
+    existing = db.scalar(select(Invoice).options(selectinload(Invoice.lines), selectinload(Invoice.payments)).where(Invoice.journey_id == journey.id))
+    if existing:
+        return existing, False
+    activities = db.scalars(select(JourneyActivity).where(JourneyActivity.journey_id == journey.id, JourneyActivity.status == "completed").order_by(JourneyActivity.sequence)).all()
+    if not activities:
+        raise HTTPException(409, detail="Dolazak nema dovršenu aktivnost za naplatu")
+    invoice = Invoice(patient_id=journey.patient_id, appointment_id=journey.appointment_id, journey_id=journey.id, invoice_number=draft_invoice_number(), status="draft", payment_status="unpaid", total_amount=Decimal("0"))
+    db.add(invoice)
+    db.flush()
+    for activity in activities:
+        service = db.get(Service, activity.service_id)
+        if not service:
+            raise HTTPException(409, detail=f"Aktivnost {activity.id} nema valjanu uslugu")
+        invoice.lines.append(InvoiceLine(activity_id=activity.id, source_key=f"activity:{activity.id}:service", service_id=service.id, description=service.name, quantity=Decimal("1"), unit_price=service.price, vat_rate=Decimal("25"), total=service.price))
+    recalculate_invoice_total(invoice)
+    db.flush()
+    return invoice, True
 
 
 def apply_fiscalization_result(invoice: Invoice, provider: FiscalizationProvider | None = None) -> None:

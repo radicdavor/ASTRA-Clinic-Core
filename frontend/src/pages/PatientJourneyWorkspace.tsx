@@ -124,7 +124,8 @@ export function PatientJourneyWorkspace() {
   async function confirmConsumables(lines: Array<{ inventory_item_id: number; quantity: string; reason?: string }>, notApplicable: boolean) {
     const message = notApplicable ? "Potvrditi da materijal nije korišten?" : "Potvrditi navedeni materijal i skinuti ga sa zalihe?";
     if (!window.confirm(message)) return;
-    await perform(async () => { await api(`/api/patient-journeys/${id}/consumables/confirm`, { method: "POST", body: JSON.stringify({ lines, not_applicable: notApplicable }) }); await refresh(); });
+    const endpoint = selectedActivity ? `/api/patient-journeys/${id}/activities/${selectedActivity.id}/consumables/confirm` : `/api/patient-journeys/${id}/consumables/confirm`;
+    await perform(async () => { await api(endpoint, { method: "POST", body: JSON.stringify({ lines, not_applicable: notApplicable }) }); await refresh(); });
   }
   async function prepareBilling() {
     if (!window.confirm("Izraditi i izdati račun za ovaj dolazak?")) return;
@@ -154,7 +155,7 @@ export function PatientJourneyWorkspace() {
       {activeStage === "documents" && <><BlockerPanel items={j.blockers} onResolve={resolveBlocker}/><div className="journey-stage-pair"><DocumentReadinessPanel status={j.document_status}/><PreparationPanel status={j.preparation_status} data={preparation.data ?? undefined} onUpdate={updatePreparation}/></div><VisitDocumentCenter journeyId={j.id} items={visitDocuments.data} onChanged={refresh}/></>}
       {activeStage === "arrival" && <><BlockerPanel items={j.blockers} onResolve={resolveBlocker}/>{!checkin.data && <section className="journey-panel journey-start-panel"><h2>Dolazak i prijem</h2><p>Prijem još nije započet. Ova radnja evidentira dolazak i otvara prijemnu provjeru.</p><button type="button" className="primary" onClick={startCheckIn}>Započni prijem</button></section>}<CheckInChecklist data={checkin.data} onUpdate={updateCheckIn} onConfirmAdministrative={confirmAdministrativeCheckIn}/></>}
       {activeStage === "encounter" && <><BlockerPanel items={j.blockers} onResolve={resolveBlocker}/>{selectedActivity ? <ClinicalActivityForm journeyId={j.id} activity={selectedActivity} serviceName={services.data.find(item => item.id === selectedActivity.service_id)?.name ?? selectedActivity.activity_key} onChanged={refresh}/> : <EncounterPanel draft={draft} setDraft={setDraft} status={encounter.data?.status} aiDiagnoses={aiDiagnoses} aiDiagnosisCapability={publicConfig.data.ai_diagnosis_suggestions} diagnosisBusy={diagnosisBusy} onOpen={open} onSave={save} onComplete={complete} onSuggestDiagnoses={suggestDiagnoses} onDecideDiagnosis={decideDiagnosis}/>}</>}
-      {activeStage === "consumables" && <ConsumablesPanel status={j.consumables_status} canConfirm={j.current_stage === "procedure_completed"} items={inventory.data} onConfirm={confirmConsumables}/>}
+      {activeStage === "consumables" && <ConsumablesPanel status={selectedActivity?.consumables_status ?? j.consumables_status} canConfirm={j.current_stage === "procedure_completed"} items={inventory.data} onConfirm={confirmConsumables}/>}
       {activeStage === "billing" && <div className="journey-stage-pair"><BillingPanel status={j.billing_status} invoice={closure.data?.invoice ?? undefined} onPrepare={prepareBilling}/><PaymentPanel status={j.payment_status} invoice={closure.data?.invoice ?? undefined} stage={j.current_stage} onPay={pay} onDefer={defer} onClose={close}/></div>}
       {activeStage === "completed" && <section className="journey-panel journey-completed"><h2>Dolazak je završen</h2><p>Pregled, materijal i naplata nemaju otvorenu operativnu radnju.</p><Link to={`/patients/${j.patient_id}`}>Otvori longitudinalni zapis pacijenta</Link></section>}
     </main>

@@ -1,5 +1,7 @@
 from tests.conftest import login_token
 from tests.factories import appointment
+from datetime import datetime, timedelta
+from app.models.domain import JourneyActivity, PatientJourney
 
 def headers(client): return {"Authorization": f"Bearer {login_token(client, 'admin@test.local')}"}
 
@@ -33,3 +35,21 @@ def test_payment_may_be_explicitly_deferred_with_reason(client,db,auth_setup):
     client.post(f"{url}/consumables/confirm",headers=h,json={"not_applicable":True});client.post(f"{url}/billing/prepare",headers=h)
     response=client.post(f"{url}/payments/defer",headers=h,json={"reason":"Sintetički ugovorni platitelj"})
     assert response.status_code==200 and response.json()["stage"]=="completed"
+
+def test_multi_activity_consumables_and_invoice_are_activity_linked_and_idempotent(client,db,auth_setup):
+    journey,h=completed_encounter(client,db);url=f"/api/patient-journeys/{journey['id']}"
+    visit=db.get(PatientJourney,journey["id"])
+    primary=visit.activities[0]
+    primary.status="completed"
+    second=JourneyActivity(journey_id=visit.id,service_id=primary.service_id,activity_key="second",activity_kind=primary.activity_kind,specialty_key=primary.specialty_key,clinic_id=primary.clinic_id,primary_provider_id=primary.primary_provider_id,room_id=primary.room_id,sequence=2,required=True,planned_start=primary.planned_end,planned_end=primary.planned_end+timedelta(minutes=30),status="completed",form_resolution_status="not_required")
+    db.add(second);db.commit();db.refresh(second)
+    first=client.post(f"{url}/activities/{primary.id}/consumables/confirm",headers=h,json={"not_applicable":True})
+    assert first.status_code==200 and first.json()["stage"]=="procedure_completed"
+    second_response=client.post(f"{url}/activities/{second.id}/consumables/confirm",headers=h,json={"not_applicable":True})
+    assert second_response.status_code==200 and second_response.json()["stage"]=="awaiting_billing"
+    invoice=client.post(f"{url}/billing/prepare",headers=h)
+    assert invoice.status_code==200
+    lines=invoice.json()["invoice"]["lines"]
+    assert {line["activity_id"] for line in lines}=={primary.id,second.id}
+    retry=client.post(f"{url}/billing/prepare",headers=h)
+    assert retry.status_code==200 and len(retry.json()["invoice"]["lines"])==2
