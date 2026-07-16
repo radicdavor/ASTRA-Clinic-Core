@@ -375,13 +375,15 @@ class JourneyAISummaryFact(TimestampMixin, Base):
 class JourneyCheckIn(TimestampMixin, Base):
     __tablename__ = "journey_check_ins"
     id: Mapped[int] = mapped_column(primary_key=True)
-    journey_id: Mapped[int] = mapped_column(ForeignKey("patient_journeys.id", ondelete="CASCADE"), unique=True, index=True)
+    journey_id: Mapped[int] = mapped_column(ForeignKey("patient_journeys.id", ondelete="CASCADE"), index=True)
+    activity_id: Mapped[int | None] = mapped_column(ForeignKey("journey_activities.id", ondelete="SET NULL"), unique=True, index=True)
     status: Mapped[str] = mapped_column(String(40), default="in_review", index=True)
     arrived_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     started_by: Mapped[int | None] = mapped_column(ForeignKey("users.id"))
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     completed_by: Mapped[int | None] = mapped_column(ForeignKey("users.id"))
     journey: Mapped[PatientJourney] = relationship()
+    activity: Mapped[JourneyActivity | None] = relationship()
     items: Mapped[list["JourneyCheckInItem"]] = relationship(back_populates="check_in", cascade="all, delete-orphan", order_by="JourneyCheckInItem.position")
 
 
@@ -555,8 +557,123 @@ class PatientJourney(TimestampMixin, Base):
     updated_by: Mapped[int | None] = mapped_column(ForeignKey("users.id"))
     patient: Mapped[Patient] = relationship()
     appointment: Mapped[Appointment] = relationship()
+    activities: Mapped[list["JourneyActivity"]] = relationship(back_populates="journey", cascade="all, delete-orphan", order_by="JourneyActivity.sequence")
     events: Mapped[list["JourneyEvent"]] = relationship(back_populates="journey", cascade="all, delete-orphan", order_by="JourneyEvent.created_at")
     blockers: Mapped[list["JourneyBlocker"]] = relationship(back_populates="journey", cascade="all, delete-orphan", order_by="JourneyBlocker.created_at")
+
+
+class JourneyActivity(TimestampMixin, Base):
+    __tablename__ = "journey_activities"
+    __table_args__ = (
+        CheckConstraint("sequence > 0", name="ck_journey_activities_sequence_positive"),
+        CheckConstraint("planned_end > planned_start", name="ck_journey_activities_planned_range"),
+        UniqueConstraint("appointment_id", name="uq_journey_activities_appointment_id"),
+        UniqueConstraint("journey_id", "activity_key", name="uq_journey_activities_key"),
+        UniqueConstraint("journey_id", "sequence", name="uq_journey_activities_sequence"),
+    )
+    id: Mapped[int] = mapped_column(primary_key=True)
+    journey_id: Mapped[int] = mapped_column(ForeignKey("patient_journeys.id", ondelete="CASCADE"), index=True)
+    appointment_id: Mapped[int | None] = mapped_column(ForeignKey("appointments.id", ondelete="SET NULL"), unique=True)
+    service_id: Mapped[int] = mapped_column(ForeignKey("services.id"), index=True)
+    activity_key: Mapped[str] = mapped_column(String(120))
+    activity_kind: Mapped[str] = mapped_column(String(60), index=True)
+    specialty_key: Mapped[str] = mapped_column(String(80), index=True)
+    clinic_id: Mapped[int | None] = mapped_column(ForeignKey("clinics.id"), index=True)
+    primary_provider_id: Mapped[int | None] = mapped_column(ForeignKey("providers.id"), index=True)
+    room_id: Mapped[int | None] = mapped_column(ForeignKey("rooms.id"), index=True)
+    sequence: Mapped[int] = mapped_column(Integer)
+    depends_on_activity_id: Mapped[int | None] = mapped_column(ForeignKey("journey_activities.id", ondelete="SET NULL"))
+    required: Mapped[bool] = mapped_column(Boolean, default=True)
+    planned_start: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
+    planned_end: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    actual_start: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    actual_end: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    status: Mapped[str] = mapped_column(String(40), default="planned", index=True)
+    not_performed_reason: Mapped[str | None] = mapped_column(Text)
+    form_resolution_status: Mapped[str] = mapped_column(String(40), default="unresolved")
+    billing_status: Mapped[str] = mapped_column(String(40), default="not_ready")
+    consumables_status: Mapped[str] = mapped_column(String(40), default="not_ready")
+    created_by: Mapped[int | None] = mapped_column(ForeignKey("users.id"))
+    started_by: Mapped[int | None] = mapped_column(ForeignKey("users.id"))
+    completed_by: Mapped[int | None] = mapped_column(ForeignKey("users.id"))
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    journey: Mapped[PatientJourney] = relationship(back_populates="activities")
+    appointment: Mapped[Appointment | None] = relationship()
+    service: Mapped[Service] = relationship()
+    clinic: Mapped[Clinic | None] = relationship()
+    primary_provider: Mapped[Provider | None] = relationship(foreign_keys=[primary_provider_id])
+    room: Mapped[Room | None] = relationship()
+    participants: Mapped[list["JourneyActivityParticipant"]] = relationship(back_populates="activity", cascade="all, delete-orphan")
+
+
+class JourneyActivityParticipant(Base):
+    __tablename__ = "journey_activity_participants"
+    __table_args__ = (UniqueConstraint("activity_id", "provider_id", "role_key", name="uq_journey_activity_participant_role"),)
+    id: Mapped[int] = mapped_column(primary_key=True)
+    activity_id: Mapped[int] = mapped_column(ForeignKey("journey_activities.id", ondelete="CASCADE"), index=True)
+    provider_id: Mapped[int] = mapped_column(ForeignKey("providers.id"), index=True)
+    role_key: Mapped[str] = mapped_column(String(60))
+    required: Mapped[bool] = mapped_column(Boolean, default=True)
+    status: Mapped[str] = mapped_column(String(40), default="assigned")
+    joined_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    activity: Mapped[JourneyActivity] = relationship(back_populates="participants")
+    provider: Mapped[Provider] = relationship()
+
+
+class ServicePackage(TimestampMixin, Base):
+    __tablename__ = "service_packages"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    package_key: Mapped[str] = mapped_column(String(100), unique=True)
+    name: Mapped[str] = mapped_column(String(180))
+    description: Mapped[str | None] = mapped_column(Text)
+    specialty_key: Mapped[str] = mapped_column(String(80), index=True)
+    active: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_by: Mapped[int | None] = mapped_column(ForeignKey("users.id"))
+    versions: Mapped[list["ServicePackageVersion"]] = relationship(back_populates="package", cascade="all, delete-orphan")
+
+
+class ServicePackageVersion(Base):
+    __tablename__ = "service_package_versions"
+    __table_args__ = (UniqueConstraint("package_id", "version", name="uq_service_package_version"),)
+    id: Mapped[int] = mapped_column(primary_key=True)
+    package_id: Mapped[int] = mapped_column(ForeignKey("service_packages.id", ondelete="CASCADE"), index=True)
+    version: Mapped[int] = mapped_column(Integer)
+    status: Mapped[str] = mapped_column(String(30), default="draft", index=True)
+    approved_by: Mapped[int | None] = mapped_column(ForeignKey("users.id"))
+    approved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    published_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    package: Mapped[ServicePackage] = relationship(back_populates="versions")
+    items: Mapped[list["ServicePackageItem"]] = relationship(back_populates="package_version", cascade="all, delete-orphan", order_by="ServicePackageItem.sequence")
+
+
+class ServicePackageItem(Base):
+    __tablename__ = "service_package_items"
+    __table_args__ = (
+        CheckConstraint("sequence > 0", name="ck_service_package_items_sequence_positive"),
+        CheckConstraint("default_duration_minutes > 0", name="ck_service_package_items_duration_positive"),
+        UniqueConstraint("package_version_id", "sequence", name="uq_service_package_item_sequence"),
+        UniqueConstraint("package_version_id", "activity_key", name="uq_service_package_item_key"),
+    )
+    id: Mapped[int] = mapped_column(primary_key=True)
+    package_version_id: Mapped[int] = mapped_column(ForeignKey("service_package_versions.id", ondelete="CASCADE"), index=True)
+    service_id: Mapped[int] = mapped_column(ForeignKey("services.id"), index=True)
+    activity_key: Mapped[str] = mapped_column(String(120))
+    activity_kind: Mapped[str] = mapped_column(String(60))
+    specialty_key: Mapped[str] = mapped_column(String(80))
+    sequence: Mapped[int] = mapped_column(Integer)
+    required: Mapped[bool] = mapped_column(Boolean, default=True)
+    relative_start_offset_minutes: Mapped[int] = mapped_column(Integer, default=0)
+    default_duration_minutes: Mapped[int] = mapped_column(Integer)
+    preferred_clinic_id: Mapped[int | None] = mapped_column(ForeignKey("clinics.id"))
+    preferred_room_type: Mapped[str | None] = mapped_column(String(80))
+    depends_on_item_id: Mapped[int | None] = mapped_column(ForeignKey("service_package_items.id", ondelete="SET NULL"))
+    preparation_requirements_json: Mapped[list] = mapped_column(JSON, default=list)
+    billing_inclusion_rule: Mapped[str] = mapped_column(String(40), default="include")
+    package_version: Mapped[ServicePackageVersion] = relationship(back_populates="items")
+    service: Mapped[Service] = relationship()
 
 
 class JourneyEvent(Base):

@@ -54,10 +54,32 @@ class JourneyAppointmentBrief(BaseModel):
     id:int;service_id:int;provider_id:int;room_id:int;episode_id:int|None;date:date;start_time:time;end_time:time;status:str;source:str
     service:JourneyServiceBrief;provider:JourneyProviderBrief;room:JourneyRoomBrief
 
+class JourneyActivityCreate(BaseModel):
+    service_id:int
+    provider_id:int
+    room_id:int
+    date:date
+    start_time:time
+    end_time:time
+    activity_key:str=Field(min_length=2,max_length=120,pattern=r"^[a-z0-9][a-z0-9_-]*$")
+    activity_kind:str=Field(default="specialist_consultation",min_length=2,max_length=60)
+    specialty_key:str=Field(default="general",min_length=2,max_length=80)
+    required:bool=True
+    depends_on_activity_id:int|None=None
+    notes:str|None=Field(default=None,max_length=2000)
+
+class JourneyActivityStatusUpdate(BaseModel):
+    target_status:str=Field(pattern="^(ready|in_progress|completed|not_performed|cancelled)$")
+    reason:str|None=Field(default=None,max_length=2000)
+
+class JourneyActivityOut(BaseModel):
+    model_config=ConfigDict(from_attributes=True)
+    id:int;journey_id:int;appointment_id:int|None;service_id:int;activity_key:str;activity_kind:str;specialty_key:str;clinic_id:int|None;primary_provider_id:int|None;room_id:int|None;sequence:int;depends_on_activity_id:int|None;required:bool;planned_start:datetime;planned_end:datetime;actual_start:datetime|None;actual_end:datetime|None;status:str;not_performed_reason:str|None;form_resolution_status:str;billing_status:str;consumables_status:str;created_at:datetime;updated_at:datetime
+
 class PatientBrief(BaseModel):
     model_config=ConfigDict(from_attributes=True)
     id:int;first_name:str;last_name:str;date_of_birth:date|None=None;oib:str|None=None
 
 class JourneyOut(BaseModel):
     model_config=ConfigDict(from_attributes=True)
-    id:int;patient_id:int;appointment_id:int;intake_channel:str;current_stage:str;document_status:str;preparation_status:str;check_in_status:str;encounter_status:str;consumables_status:str;billing_status:str;payment_status:str;closed_at:datetime|None;created_at:datetime;updated_at:datetime;patient:PatientBrief;appointment:JourneyAppointmentBrief;events:list[JourneyEventOut]=[];blockers:list[JourneyBlockerOut]=[]
+    id:int;patient_id:int;appointment_id:int;intake_channel:str;current_stage:str;document_status:str;preparation_status:str;check_in_status:str;encounter_status:str;consumables_status:str;billing_status:str;payment_status:str;closed_at:datetime|None;created_at:datetime;updated_at:datetime;patient:PatientBrief;appointment:JourneyAppointmentBrief;activities:list[JourneyActivityOut]=[];events:list[JourneyEventOut]=[];blockers:list[JourneyBlockerOut]=[]

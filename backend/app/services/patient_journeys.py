@@ -3,7 +3,7 @@ from fastapi import HTTPException, Request
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 from app.auth.dependencies import Actor
-from app.models.domain import Appointment, JourneyBlocker, JourneyEvent, PatientJourney
+from app.models.domain import Appointment, JourneyActivity, JourneyBlocker, JourneyEvent, PatientJourney, Room, Service
 
 INTAKE_CHANNELS={"web","ai_secretary","manual"}
 STAGES={"requested","booked","awaiting_forms","awaiting_documents","preparation_in_progress","ready_for_arrival","arrived","check_in_review","ready_for_clinician","in_encounter","procedure_completed","awaiting_billing","awaiting_payment","completed","cancelled","no_show","blocked"}
@@ -35,7 +35,19 @@ def create_journey(db:Session,appointment:Appointment,intake_channel:str,initial
  existing=db.scalar(select(PatientJourney).where(PatientJourney.appointment_id==appointment.id))
  if existing: raise HTTPException(409,detail="Termin već ima kanonski tijek pacijenta")
  journey=PatientJourney(patient_id=appointment.patient_id,appointment_id=appointment.id,intake_channel=intake_channel,current_stage=initial_stage,created_by=actor.user_id,updated_by=actor.user_id)
- db.add(journey);db.flush();add_event(db,journey,"journey_created",f"Tijek pacijenta stvoren iz kanala {intake_channel}",actor,request,None,initial_stage)
+ db.add(journey);db.flush()
+ service=db.get(Service,appointment.service_id)
+ room=db.get(Room,appointment.room_id)
+ activity=JourneyActivity(
+  journey_id=journey.id,appointment_id=appointment.id,service_id=appointment.service_id,
+  activity_key="primary",activity_kind="specialist_consultation",
+  specialty_key=service.module.key if service and service.module else "general",
+  clinic_id=room.clinic_id if room else None,primary_provider_id=appointment.provider_id,
+  room_id=appointment.room_id,sequence=1,planned_start=datetime.combine(appointment.date,appointment.start_time),
+  planned_end=datetime.combine(appointment.date,appointment.end_time),form_resolution_status="not_required",created_by=actor.user_id,
+ )
+ db.add(activity);db.flush()
+ add_event(db,journey,"journey_created",f"Tijek pacijenta stvoren iz kanala {intake_channel}",actor,request,None,initial_stage,{"primary_activity_id":activity.id})
  return journey
 
 def update_substatuses(db:Session,journey:PatientJourney,updates:dict,actor:Actor,request:Request):

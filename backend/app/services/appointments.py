@@ -29,7 +29,7 @@ def create_appointment_with_journey(db:Session,data:dict,actor:Actor,request:Req
         episode=db.get(ClinicalEpisode,episode_id)
         if not episode: raise HTTPException(404,detail="Klinička epizoda nije pronađena")
         if episode.patient_id!=patient_id: raise HTTPException(422,detail="Klinička epizoda mora pripadati istom pacijentu kao termin")
-    data["duration_minutes"]=validate_appointment_payload(db,data["date"],data["start_time"],data["end_time"],data["provider_id"],data["room_id"],data["status"],data["source"],service_id=data["service_id"])
+    data["duration_minutes"]=validate_appointment_payload(db,data["date"],data["start_time"],data["end_time"],data["provider_id"],data["room_id"],data["status"],data["source"],service_id=data["service_id"],patient_id=patient_id)
     appointment=Appointment(**data,created_by=actor.user_id);db.add(appointment);db.flush()
     audit(db,"create","Appointment",appointment.id,f"Termin {appointment.date}",actor.user_id,actor.actor_type,actor.api_key_id,None,snapshot(appointment),request)
     channel=SOURCE_TO_INTAKE.get(appointment.source,"manual")
@@ -66,6 +66,7 @@ def validate_appointment_payload(
     service_id: int | None = None,
     appointment_id: int | None = None,
     allow_override: bool = False,
+    patient_id: int | None = None,
 ) -> int:
     validate_status_and_source(status_value, source_value)
     if appointment_date.weekday() == 6:
@@ -118,11 +119,14 @@ def validate_appointment_payload(
 
     provider_conflict = db.scalar(select(Appointment.id).where(and_(*base, Appointment.provider_id == provider_id)).limit(1))
     room_conflict = db.scalar(select(Appointment.id).where(and_(*base, Appointment.room_id == room_id)).limit(1))
-    if (provider_conflict or room_conflict) and not allow_override:
+    patient_conflict = db.scalar(select(Appointment.id).where(and_(*base, Appointment.patient_id == patient_id)).limit(1)) if patient_id is not None else None
+    if (provider_conflict or room_conflict or patient_conflict) and not allow_override:
         detail = []
         if provider_conflict:
             detail.append("liječnik je već zauzet")
         if room_conflict:
             detail.append("soba je već zauzeta")
+        if patient_conflict:
+            detail.append("pacijent već ima termin u tom vremenu")
         raise HTTPException(status_code=409, detail="Preklapanje termina: " + ", ".join(detail))
     return duration_minutes

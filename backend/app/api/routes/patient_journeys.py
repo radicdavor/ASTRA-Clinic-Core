@@ -17,6 +17,7 @@ def query():
   joinedload(PatientJourney.appointment).joinedload(Appointment.service),
   joinedload(PatientJourney.appointment).joinedload(Appointment.provider),
   joinedload(PatientJourney.appointment).joinedload(Appointment.room),
+  selectinload(PatientJourney.activities),
   selectinload(PatientJourney.events),
   selectinload(PatientJourney.blockers),
  )

@@ -565,6 +565,7 @@ def update_appointment(
         appointment.status,
         appointment.source,
         service_id=appointment.service_id,
+        patient_id=appointment.patient_id,
         appointment_id=appointment.id,
     )
     db.flush()
