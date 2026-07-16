@@ -768,6 +768,62 @@ class ClinicalFormRevision(Base):
     instance: Mapped[ClinicalFormInstance] = relationship(back_populates="revisions")
 
 
+class SignedClinicalReport(Base):
+    __tablename__ = "signed_clinical_reports"
+    __table_args__ = (
+        UniqueConstraint("form_instance_id", name="uq_signed_clinical_reports_form_instance"),
+        UniqueConstraint("clinical_document_id", name="uq_signed_clinical_reports_document"),
+    )
+    id: Mapped[int] = mapped_column(primary_key=True)
+    form_instance_id: Mapped[int] = mapped_column(ForeignKey("clinical_form_instances.id"), index=True)
+    form_version_id: Mapped[int] = mapped_column(ForeignKey("clinical_form_versions.id"))
+    clinical_document_id: Mapped[int] = mapped_column(ForeignKey("clinical_documents.id"), index=True)
+    activity_id: Mapped[int] = mapped_column(ForeignKey("journey_activities.id", ondelete="CASCADE"), index=True)
+    journey_id: Mapped[int] = mapped_column(ForeignKey("patient_journeys.id", ondelete="CASCADE"), index=True)
+    patient_id: Mapped[int] = mapped_column(ForeignKey("patients.id"), index=True)
+    document_type: Mapped[str] = mapped_column(String(80), index=True)
+    title: Mapped[str] = mapped_column(String(220))
+    structured_data_json: Mapped[dict] = mapped_column(JSON)
+    rendered_content: Mapped[str] = mapped_column(Text)
+    version_number: Mapped[int] = mapped_column(Integer, default=1)
+    signer_user_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
+    signer_name: Mapped[str] = mapped_column(String(160))
+    signed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
+    supersedes_report_id: Mapped[int | None] = mapped_column(ForeignKey("signed_clinical_reports.id", ondelete="SET NULL"))
+    superseded_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    form_instance: Mapped[ClinicalFormInstance] = relationship()
+    form_version: Mapped[ClinicalFormVersion] = relationship()
+    clinical_document: Mapped[ClinicalDocument] = relationship()
+    activity: Mapped[JourneyActivity] = relationship()
+
+
+class ReportPrintEvent(Base):
+    __tablename__ = "report_print_events"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    report_id: Mapped[int] = mapped_column(ForeignKey("signed_clinical_reports.id", ondelete="CASCADE"), index=True)
+    printed_by: Mapped[int] = mapped_column(ForeignKey("users.id"))
+    printed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    request_id: Mapped[str | None] = mapped_column(String(120))
+
+
+class ReportDeliveryEvent(Base):
+    __tablename__ = "report_delivery_events"
+    __table_args__ = (CheckConstraint("status in ('queued_stub','sent','delivered','failed','cancelled')", name="ck_report_delivery_status"),)
+    id: Mapped[int] = mapped_column(primary_key=True)
+    report_id: Mapped[int] = mapped_column(ForeignKey("signed_clinical_reports.id", ondelete="CASCADE"), index=True)
+    channel: Mapped[str] = mapped_column(String(40))
+    recipient: Mapped[str] = mapped_column(String(255))
+    status: Mapped[str] = mapped_column(String(40), default="queued_stub", index=True)
+    provider_mode: Mapped[str] = mapped_column(String(60), default="local_demo")
+    initiated_by: Mapped[int] = mapped_column(ForeignKey("users.id"))
+    approved_by: Mapped[int] = mapped_column(ForeignKey("users.id"))
+    queued_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    delivered_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    failure_reason: Mapped[str | None] = mapped_column(Text)
+    correlation_id: Mapped[str] = mapped_column(String(120), unique=True)
+
+
 class ProcedureIntervention(Base):
     __tablename__ = "procedure_interventions"
     __table_args__ = (

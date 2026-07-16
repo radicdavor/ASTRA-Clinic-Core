@@ -36,6 +36,15 @@ export type ClinicalFormInstance = {
   form_version: { id: number; definition_id: number; version: number; status: string; sections_json: ClinicalFormSection[]; output_document_type: string };
 };
 
+export type SignedClinicalReport = {
+  id: number; form_instance_id: number; form_version_id: number; clinical_document_id: number;
+  activity_id: number; journey_id: number; patient_id: number; document_type: string; title: string;
+  structured_data_json: Record<string, unknown>; rendered_content: string; version_number: number;
+  signer_user_id: number; signer_name: string; signed_at: string; supersedes_report_id: number | null; superseded_at: string | null;
+};
+export type ReportDelivery = { id: number; report_id: number; channel: string; recipient: string; status: string; provider_mode: string; queued_at: string; sent_at: string | null; delivered_at: string | null; failure_reason: string | null; correlation_id: string };
+export type VisitDocument = { report: SignedClinicalReport; print_count: number; latest_delivery: ReportDelivery | null };
+
 export type PatientJourneyTimelineItem = {
   date: string; event_type: string; title: string; summary: string | null; source_url: string | null;
   provenance: Record<string, unknown>; review_state: string | null; journey_id: number;

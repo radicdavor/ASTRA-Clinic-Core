@@ -10,6 +10,7 @@ from app.schemas.clinical_forms import ClinicalFormDataUpdate, ClinicalFormDefin
 from app.services.clinical_forms import amend_instance, complete_instance, resolve_instance, sign_instance, update_instance
 from app.services.journey_activities import get_activity
 from app.services.patient_journeys import add_event
+from app.services.reports import create_signed_report
 
 
 router = APIRouter(prefix="/api", tags=["clinical-forms"])
@@ -81,9 +82,13 @@ def complete_activity_form(journey_id: int, activity_id: int, request: Request, 
 
 @router.post("/patient-journeys/{journey_id}/activities/{activity_id}/form/sign", response_model=ClinicalFormInstanceOut)
 def sign_activity_form(journey_id: int, activity_id: int, request: Request, db: Session = Depends(get_db), actor: Actor = Depends(require_permission("clinical_forms.sign"))):
+    visit = journey(db, journey_id)
     item = instance(db, journey_id, activity_id)
     sign_instance(db, item, actor.user_id)
+    report = create_signed_report(db, item, actor.user_id)
     audit(db, "form_signed", "ClinicalFormInstance", item.id, "Klinički obrazac je potpisan", actor.user_id, actor.actor_type, actor.api_key_id, None, snapshot(item), request)
+    audit(db, "signed_report_created", "SignedClinicalReport", report.id, "Stvorena je nepromjenjiva potpisana verzija nalaza", actor.user_id, actor.actor_type, actor.api_key_id, None, snapshot(report), request)
+    add_event(db, visit, "signed_report_created", "Potpisani nalaz dodan je dokumentima dolaska", actor, request, visit.current_stage, visit.current_stage, {"activity_id": activity_id, "report_id": report.id, "clinical_document_id": report.clinical_document_id})
     db.commit()
     return instance(db, journey_id, activity_id, item.id)
 

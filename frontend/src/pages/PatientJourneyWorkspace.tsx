@@ -3,12 +3,13 @@ import { Link, useParams, useSearchParams } from "react-router-dom";
 import { api, getSessionUser } from "../api/client";
 import { useApi } from "../hooks/useApi";
 import type { ClinicalDocument, InventoryItem, Provider, Service } from "../types";
-import type { AIDiagnosisSuggestion, CheckInState, EncounterDraft, JourneyClosure, JourneyStageKey, PatientJourneyDetail, PatientJourneySummary, PatientJourneyTimelineItem, PreparationState, PublicPilotConfig } from "../types/program2";
+import type { AIDiagnosisSuggestion, CheckInState, EncounterDraft, JourneyClosure, JourneyStageKey, PatientJourneyDetail, PatientJourneySummary, PatientJourneyTimelineItem, PreparationState, PublicPilotConfig, VisitDocument } from "../types/program2";
 import { AISummaryPanel, BillingPanel, BlockerPanel, CheckInChecklist, ConsumablesPanel, DocumentReadinessPanel, EncounterPanel, PatientTimeline, PaymentPanel, PreparationPanel, SourceDocumentViewer } from "../components/program2/Program2Panels";
 import { journeyStatusLabel } from "../components/program2/journeyStatus";
 import { focusToStage, JourneyHeader, JourneyNextAction, JourneyStageStepper, stageForJourney } from "../components/program2/journey/JourneyChrome";
 import { JourneyClinicalContext } from "../components/program2/journey/JourneyClinicalContext";
 import { ClinicalActivityForm } from "../components/program2/ClinicalActivityForm";
+import { VisitDocumentCenter } from "../components/program2/VisitDocumentCenter";
 
 function formatDate(value?: string | null) {
   if (!value) return "nije upisano";
@@ -31,6 +32,7 @@ export function PatientJourneyWorkspace() {
   const providers = useApi<Provider[]>("/api/providers", []);
   const publicConfig = useApi<PublicPilotConfig>("/api/public-config", {});
   const documents = useApi<ClinicalDocument[]>(`/api/clinical-documents?patient_id=${journey.data?.patient_id ?? 0}`, []);
+  const visitDocuments = useApi<VisitDocument[]>(`/api/patient-journeys/${id}/visit-documents`, []);
   const [draft, setDraft] = useState<EncounterDraft>({});
   const [activeStage, setActiveStage] = useState<JourneyStageKey>("documents");
   const [aiDiagnoses, setAiDiagnoses] = useState<AIDiagnosisSuggestion[]>([]);
@@ -67,6 +69,7 @@ export function PatientJourneyWorkspace() {
   async function refresh() {
     journey.setData(await api<PatientJourneyDetail>(`/api/patient-journeys/${id}`));
     closure.setData(await api<JourneyClosure>(`/api/patient-journeys/${id}/closure`));
+    visitDocuments.setData(await api<VisitDocument[]>(`/api/patient-journeys/${id}/visit-documents`));
   }
   function selectActivity(activityId: number) {
     const next = new URLSearchParams(searchParams);
@@ -148,7 +151,7 @@ export function PatientJourneyWorkspace() {
     {activities.length > 0 && <nav className="journey-activity-selector" aria-label="Aktivnosti dolaska"><span>{activities.length} {activities.length === 1 ? "aktivnost" : "aktivnosti"}</span>{activities.map(activity => { const activityService = services.data.find(item => item.id === activity.service_id)?.name ?? activity.activity_key; return <button type="button" key={activity.id} className={selectedActivity?.id === activity.id ? "active" : ""} onClick={() => selectActivity(activity.id)}><i className={`activity-dot ${activity.status}`} aria-hidden="true"/><span><b>{activity.sequence}. {activityService}</b><small>{new Date(activity.planned_start).toLocaleTimeString("hr-HR", { hour: "2-digit", minute: "2-digit" })} · {activity.status === "in_progress" ? "u tijeku" : activity.status === "completed" ? "završeno" : "čeka"}</small></span></button>; })}</nav>}
     <JourneyStageStepper active={activeStage} current={currentStage} onSelect={setActiveStage}/>
     <main className="journey-active-stage" id={`journey-${activeStage}`} tabIndex={-1} aria-live="polite">
-      {activeStage === "documents" && <><BlockerPanel items={j.blockers} onResolve={resolveBlocker}/><div className="journey-stage-pair"><DocumentReadinessPanel status={j.document_status}/><PreparationPanel status={j.preparation_status} data={preparation.data ?? undefined} onUpdate={updatePreparation}/></div></>}
+      {activeStage === "documents" && <><BlockerPanel items={j.blockers} onResolve={resolveBlocker}/><div className="journey-stage-pair"><DocumentReadinessPanel status={j.document_status}/><PreparationPanel status={j.preparation_status} data={preparation.data ?? undefined} onUpdate={updatePreparation}/></div><VisitDocumentCenter journeyId={j.id} items={visitDocuments.data} onChanged={refresh}/></>}
       {activeStage === "arrival" && <><BlockerPanel items={j.blockers} onResolve={resolveBlocker}/>{!checkin.data && <section className="journey-panel journey-start-panel"><h2>Dolazak i prijem</h2><p>Prijem još nije započet. Ova radnja evidentira dolazak i otvara prijemnu provjeru.</p><button type="button" className="primary" onClick={startCheckIn}>Započni prijem</button></section>}<CheckInChecklist data={checkin.data} onUpdate={updateCheckIn} onConfirmAdministrative={confirmAdministrativeCheckIn}/></>}
       {activeStage === "encounter" && <><BlockerPanel items={j.blockers} onResolve={resolveBlocker}/>{selectedActivity ? <ClinicalActivityForm journeyId={j.id} activity={selectedActivity} serviceName={services.data.find(item => item.id === selectedActivity.service_id)?.name ?? selectedActivity.activity_key} onChanged={refresh}/> : <EncounterPanel draft={draft} setDraft={setDraft} status={encounter.data?.status} aiDiagnoses={aiDiagnoses} aiDiagnosisCapability={publicConfig.data.ai_diagnosis_suggestions} diagnosisBusy={diagnosisBusy} onOpen={open} onSave={save} onComplete={complete} onSuggestDiagnoses={suggestDiagnoses} onDecideDiagnosis={decideDiagnosis}/>}</>}
       {activeStage === "consumables" && <ConsumablesPanel status={j.consumables_status} canConfirm={j.current_stage === "procedure_completed"} items={inventory.data} onConfirm={confirmConsumables}/>}
