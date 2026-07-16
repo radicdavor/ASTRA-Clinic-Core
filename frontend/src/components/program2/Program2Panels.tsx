@@ -20,14 +20,19 @@ const reviewStates = [
   ["blocked", "Blokirano"],
 ];
 
-export function PreparationPanel({ status, data, onUpdate }: { status: string; data?: any; onUpdate?: (key: string, state: string) => Promise<void> }) {
+export function PreparationPanel({ status, data, activityData, onUpdate, onActivityUpdate }: { status: string; data?: any; activityData?: any; onUpdate?: (key: string, state: string) => Promise<void>; onActivityUpdate?: (id: number, state: string) => Promise<void> }) {
   const requirements = Object.entries(data?.requirement_states_json ?? {}) as Array<[string, string]>;
   const labels = new Map<string, string>((data?.template?.requirements_json ?? []).map((item: any) => [item.key, item.label]));
   return <Panel title="Priprema">
     <p>Status: <strong>{journeyStatusLabel(status)}</strong></p>
+    {activityData?.requirements?.map((item: any) => <article className={`journey-review-row activity-preparation-row ${item.contradictory ? "blocked" : ""}`} key={item.requirement_key}>
+      <span><strong>{item.label}</strong><small>{item.patient_instruction}</small><small>Odnosi se na: {item.activities.map((activity: any) => activity.service_name).join(", ")}</small></span>
+      {item.activities.map((activity: any) => <label key={activity.requirement_id}>{activity.service_name}<select aria-label={`${item.label} — ${activity.service_name}`} value={activity.state ?? item.state} onChange={event => onActivityUpdate?.(activity.requirement_id, event.target.value)}>{reviewStates.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>)}
+      {item.contradictory && <small className="inline-error">Upute su protuslovne i zahtijevaju kliničku provjeru.</small>}
+    </article>)}
     {data?.template && <p className="journey-panel-context"><strong>{data.template.name}</strong><small>Verzija {data.template.version}</small></p>}
     {requirements.map(([key, state]) => <label className="journey-review-row" key={key}><span>{labels.get(key) ?? key}</span><select value={state} onChange={event => onUpdate?.(key, event.target.value)}>{reviewStates.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>)}
-    {!data && <p>Priprema nije dodijeljena.</p>}
+    {!data && !activityData?.requirements?.length && <p>Priprema nije dodijeljena.</p>}
   </Panel>;
 }
 

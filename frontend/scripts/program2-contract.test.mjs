@@ -18,5 +18,18 @@ test("Journey workspace exposes all operational panels", async () => {
 test("Financial actions remain explicit user actions", async () => {
   const source = await read("src/pages/PatientJourneyWorkspace.tsx");
   for (const endpoint of ["consumables/confirm", "billing/prepare", "/payments", "/close"]) assert.ok(source.includes(endpoint));
-  assert.ok(source.includes("window.prompt"), "payment deferral requires a human-entered reason");
+  assert.ok(source.includes('reasonLabel: "Razlog odgode"'), "payment deferral requires a human-entered reason");
+  assert.ok(!source.includes("window.prompt"), "clinical workflow must not use browser-native prompts");
+  assert.ok(!source.includes("window.confirm"), "clinical workflow must not use browser-native confirmations");
+});
+
+test("Package booking previews and books one coordinated arrival without browser-native confirmation", async () => {
+  const [routes, source] = await Promise.all([read("src/routes/AppRoutes.tsx"), read("src/pages/PackageBooking.tsx")]);
+  assert.match(routes, /appointments\/package/);
+  assert.ok(source.includes("/schedule-preview"));
+  assert.ok(source.includes("/book"));
+  assert.ok(source.includes("idempotency_key"));
+  assert.ok(source.includes("Potvrdi koordinirani dolazak"));
+  assert.ok(!source.includes("window.confirm"));
+  assert.ok(!source.includes("window.prompt"));
 });

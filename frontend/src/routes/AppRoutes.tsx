@@ -4,6 +4,7 @@ import { AppShell } from "../components/AppShell";
 import { RouteModal } from "../components/RouteModal";
 import { getToken } from "../api/client";
 import { AppointmentForm } from "../pages/AppointmentForm";
+import { PackageBooking } from "../pages/PackageBooking";
 import { AppointmentDetail } from "../pages/AppointmentDetail";
 import { Appointments } from "../pages/Appointments";
 import { AuditLog } from "../pages/AuditLog";
@@ -66,6 +67,7 @@ export function AppRoutes() {
           <Route path="/clinical-documents/:id" element={<ClinicalDocumentDetail />} />
           <Route path="/appointments" element={<Appointments />} />
           <Route path="/appointments/new" element={<AppointmentForm />} />
+          <Route path="/appointments/package" element={<PackageBooking />} />
           <Route path="/appointments/:id" element={<AppointmentDetail />} />
           <Route path="/journeys/:id" element={<PatientJourneyWorkspace />} />
           <Route path="/workflow" element={<WorkflowTasks />} />

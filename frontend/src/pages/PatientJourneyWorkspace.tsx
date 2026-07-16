@@ -3,7 +3,7 @@ import { Link, useParams, useSearchParams } from "react-router-dom";
 import { api, getSessionUser } from "../api/client";
 import { useApi } from "../hooks/useApi";
 import type { ClinicalDocument, InventoryItem, Provider, Service } from "../types";
-import type { AIDiagnosisSuggestion, CheckInState, EncounterDraft, JourneyClosure, JourneyStageKey, PathologyCase, PatientJourneyDetail, PatientJourneySummary, PatientJourneyTimelineItem, PreparationState, PublicPilotConfig, VisitDocument } from "../types/program2";
+import type { ActivityPreparationState, AIDiagnosisSuggestion, CheckInState, EncounterDraft, JourneyClosure, JourneyStageKey, PathologyCase, PatientJourneyDetail, PatientJourneySummary, PatientJourneyTimelineItem, PreparationState, PublicPilotConfig, VisitDocument } from "../types/program2";
 import { AISummaryPanel, BillingPanel, BlockerPanel, CheckInChecklist, ConsumablesPanel, DocumentReadinessPanel, EncounterPanel, PatientTimeline, PaymentPanel, PreparationPanel, SourceDocumentViewer } from "../components/program2/Program2Panels";
 import { activityClockTime, journeyStatusLabel } from "../components/program2/journeyStatus";
 import { focusToStage, JourneyHeader, JourneyNextAction, JourneyStageStepper, stageForJourney } from "../components/program2/journey/JourneyChrome";
@@ -19,6 +19,15 @@ function formatDate(value?: string | null) {
   return Number.isNaN(date.getTime()) ? value : date.toLocaleDateString("hr-HR");
 }
 
+type WorkspaceConfirmation = {
+  title: string;
+  text: string;
+  confirmLabel: string;
+  reasonLabel?: string;
+  reason?: string;
+  action: (reason?: string) => Promise<void>;
+};
+
 export function PatientJourneyWorkspace() {
   const { id } = useParams();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -27,6 +36,7 @@ export function PatientJourneyWorkspace() {
   const summary = useApi<PatientJourneySummary | null>(`/api/patient-journeys/${id}/summary`, null);
   const checkin = useApi<CheckInState | null>(`/api/patient-journeys/${id}/check-in`, null);
   const preparation = useApi<PreparationState | null>(`/api/patient-journeys/${id}/preparation`, null);
+  const activityPreparation = useApi<ActivityPreparationState | null>(`/api/patient-journeys/${id}/activity-preparation`, null);
   const encounter = useApi<EncounterDraft | null>(`/api/patient-journeys/${id}/encounter`, null);
   const closure = useApi<JourneyClosure | null>(`/api/patient-journeys/${id}/closure`, null);
   const inventory = useApi<InventoryItem[]>("/api/inventory/items", []);
@@ -41,6 +51,7 @@ export function PatientJourneyWorkspace() {
   const [aiDiagnoses, setAiDiagnoses] = useState<AIDiagnosisSuggestion[]>([]);
   const [diagnosisBusy, setDiagnosisBusy] = useState(false);
   const [actionError, setActionError] = useState("");
+  const [confirmation, setConfirmation] = useState<WorkspaceConfirmation | null>(null);
 
   useEffect(() => { if (encounter.data) setDraft(encounter.data); }, [encounter.data]);
   useEffect(() => {
@@ -101,8 +112,12 @@ export function PatientJourneyWorkspace() {
     });
   }
   async function complete() {
-    if (!window.confirm("Dovršiti klinički susret? Nakon toga bilješka više nije dostupna za redovno uređivanje.")) return;
-    await perform(async () => { encounter.setData(await api(`/api/patient-journeys/${id}/encounter/complete`, { method: "POST" })); await refresh(); });
+    setConfirmation({
+      title: "Dovrši klinički susret",
+      text: "Nakon dovršetka bilješka više nije dostupna za redovno uređivanje.",
+      confirmLabel: "Dovrši susret",
+      action: async () => { await perform(async () => { encounter.setData(await api(`/api/patient-journeys/${id}/encounter/complete`, { method: "POST" })); await refresh(); }); },
+    });
   }
   async function updateCheckIn(itemId: number, state: string, note: string) {
     await perform(async () => { checkin.setData(await api(`/api/patient-journeys/${id}/check-in/items/${itemId}`, { method: "PATCH", body: JSON.stringify({ state, note: note || null }) })); await refresh(); });
@@ -112,6 +127,9 @@ export function PatientJourneyWorkspace() {
   }
   async function updatePreparation(requirementKey: string, state: string) {
     await perform(async () => { preparation.setData(await api(`/api/patient-journeys/${id}/preparation/requirements`, { method: "PATCH", body: JSON.stringify({ requirement_key: requirementKey, state }) })); await refresh(); });
+  }
+  async function updateActivityPreparation(requirementId: number, state: string) {
+    await perform(async () => { activityPreparation.setData(await api(`/api/patient-journeys/${id}/activity-preparation/${requirementId}`, { method: "PATCH", body: JSON.stringify({ state }) })); await refresh(); });
   }
   async function generateSummary() {
     await perform(async () => { summary.setData(await api(`/api/patient-journeys/${id}/summary`, { method: "POST" })); timeline.setData(await api(`/api/patient-journeys/${id}/timeline`)); });
@@ -126,26 +144,47 @@ export function PatientJourneyWorkspace() {
     await perform(async () => { await api(`/api/patient-journeys/${id}/blockers/${blockerId}/resolve`, { method: "POST", body: JSON.stringify({ resolution_note: resolutionNote }) }); await refresh(); });
   }
   async function confirmConsumables(lines: Array<{ inventory_item_id: number; quantity: string; reason?: string }>, notApplicable: boolean) {
-    const message = notApplicable ? "Potvrditi da materijal nije korišten?" : "Potvrditi navedeni materijal i skinuti ga sa zalihe?";
-    if (!window.confirm(message)) return;
     const endpoint = selectedActivity ? `/api/patient-journeys/${id}/activities/${selectedActivity.id}/consumables/confirm` : `/api/patient-journeys/${id}/consumables/confirm`;
-    await perform(async () => { await api(endpoint, { method: "POST", body: JSON.stringify({ lines, not_applicable: notApplicable }) }); await refresh(); });
+    setConfirmation({
+      title: notApplicable ? "Materijal nije korišten" : "Potvrdi potrošni materijal",
+      text: notApplicable ? "Potvrdite da za ovu aktivnost nije korišten potrošni materijal." : "Navedene količine bit će evidentirane uz aktivnost i skinute sa zalihe.",
+      confirmLabel: "Potvrdi",
+      action: async () => { await perform(async () => { await api(endpoint, { method: "POST", body: JSON.stringify({ lines, not_applicable: notApplicable }) }); await refresh(); }); },
+    });
   }
   async function prepareBilling() {
-    if (!window.confirm("Izraditi i izdati račun za ovaj dolazak?")) return;
-    await perform(async () => { await api(`/api/patient-journeys/${id}/billing/prepare`, { method: "POST" }); await refresh(); });
+    setConfirmation({
+      title: "Izradi račun",
+      text: "Račun će obuhvatiti potvrđene aktivnosti i potrošni materijal ovog dolaska.",
+      confirmLabel: "Izradi račun",
+      action: async () => { await perform(async () => { await api(`/api/patient-journeys/${id}/billing/prepare`, { method: "POST" }); await refresh(); }); },
+    });
   }
   async function pay(amount: string, method: string) {
-    if (!window.confirm(`Evidentirati uplatu od ${amount} EUR?`)) return;
-    await perform(async () => { await api(`/api/patient-journeys/${id}/payments`, { method: "POST", body: JSON.stringify({ amount, method }) }); await refresh(); });
+    setConfirmation({
+      title: "Evidentiraj uplatu",
+      text: `Evidentirat će se uplata od ${amount} EUR.`,
+      confirmLabel: "Evidentiraj uplatu",
+      action: async () => { await perform(async () => { await api(`/api/patient-journeys/${id}/payments`, { method: "POST", body: JSON.stringify({ amount, method }) }); await refresh(); }); },
+    });
   }
   async function defer() {
-    const reason = window.prompt("Upišite razlog odgode plaćanja");
-    if (reason?.trim()) await perform(async () => { await api(`/api/patient-journeys/${id}/payments/defer`, { method: "POST", body: JSON.stringify({ reason: reason.trim() }) }); await refresh(); });
+    setConfirmation({
+      title: "Odgodi plaćanje",
+      text: "Upišite razlog zbog kojeg plaćanje ostaje otvoreno.",
+      confirmLabel: "Spremi odgodu",
+      reasonLabel: "Razlog odgode",
+      reason: "",
+      action: async reason => { await perform(async () => { await api(`/api/patient-journeys/${id}/payments/defer`, { method: "POST", body: JSON.stringify({ reason: reason?.trim() }) }); await refresh(); }); },
+    });
   }
   async function close() {
-    if (!window.confirm("Završiti tijek pacijenta?")) return;
-    await perform(async () => { await api(`/api/patient-journeys/${id}/close`, { method: "POST" }); await refresh(); });
+    setConfirmation({
+      title: "Završi dolazak",
+      text: "Dolazak se može završiti samo ako su pregled, materijal, račun i plaćanje administrativno razriješeni.",
+      confirmLabel: "Završi dolazak",
+      action: async () => { await perform(async () => { await api(`/api/patient-journeys/${id}/close`, { method: "POST" }); await refresh(); }); },
+    });
   }
 
   return <section className="page journey-workspace journey-workspace-focused">
@@ -156,7 +195,7 @@ export function PatientJourneyWorkspace() {
     {activities.length > 0 && <nav className="journey-activity-selector" aria-label="Aktivnosti dolaska"><span>{activities.length} {activities.length === 1 ? "aktivnost" : "aktivnosti"}</span>{activities.map(activity => { const activityService = services.data.find(item => item.id === activity.service_id)?.name ?? activity.activity_key; return <button type="button" key={activity.id} className={selectedActivity?.id === activity.id ? "active" : ""} onClick={() => selectActivity(activity.id)}><i className={`activity-dot ${activity.status}`} aria-hidden="true"/><span><b>{activity.sequence}. {activityService}</b><small>{activityClockTime(activity.planned_start)} · {activity.status === "in_progress" ? "u tijeku" : activity.status === "completed" ? "završeno" : "čeka"}</small></span></button>; })}</nav>}
     <JourneyStageStepper active={activeStage} current={currentStage} onSelect={setActiveStage}/>
     <main className="journey-active-stage" id={`journey-${activeStage}`} tabIndex={-1} aria-live="polite">
-      {activeStage === "documents" && <><BlockerPanel items={j.blockers} onResolve={resolveBlocker}/><div className="journey-stage-pair"><DocumentReadinessPanel status={j.document_status}/><PreparationPanel status={j.preparation_status} data={preparation.data ?? undefined} onUpdate={updatePreparation}/></div><PathologyFollowUpPanel items={pathologyCases.data} onChanged={refresh}/><VisitDocumentCenter journeyId={j.id} items={visitDocuments.data} onChanged={refresh}/></>}
+      {activeStage === "documents" && <><BlockerPanel items={j.blockers} onResolve={resolveBlocker}/><div className="journey-stage-pair"><DocumentReadinessPanel status={j.document_status}/><PreparationPanel status={j.preparation_status} data={preparation.data ?? undefined} activityData={activityPreparation.data ?? undefined} onUpdate={updatePreparation} onActivityUpdate={updateActivityPreparation}/></div><PathologyFollowUpPanel items={pathologyCases.data} onChanged={refresh}/><VisitDocumentCenter journeyId={j.id} items={visitDocuments.data} patientEmail={j.patient.email} emailVerified={Boolean(j.patient.email_verified_at)} onChanged={refresh}/></>}
       {activeStage === "arrival" && <><BlockerPanel items={j.blockers} onResolve={resolveBlocker}/>{!checkin.data && <section className="journey-panel journey-start-panel"><h2>Dolazak i prijem</h2><p>Prijem još nije započet. Ova radnja evidentira dolazak i otvara prijemnu provjeru.</p><button type="button" className="primary" onClick={startCheckIn}>Započni prijem</button></section>}<CheckInChecklist data={checkin.data} onUpdate={updateCheckIn} onConfirmAdministrative={confirmAdministrativeCheckIn}/></>}
       {activeStage === "encounter" && <><BlockerPanel items={j.blockers} onResolve={resolveBlocker}/>{selectedActivity ? <><ClinicalActivityForm journeyId={j.id} activity={selectedActivity} serviceName={services.data.find(item => item.id === selectedActivity.service_id)?.name ?? selectedActivity.activity_key} onChanged={refresh}/><ActivityInterventionsPanel journeyId={j.id} activity={selectedActivity} onChanged={refresh}/></> : <EncounterPanel draft={draft} setDraft={setDraft} status={encounter.data?.status} aiDiagnoses={aiDiagnoses} aiDiagnosisCapability={publicConfig.data.ai_diagnosis_suggestions} diagnosisBusy={diagnosisBusy} onOpen={open} onSave={save} onComplete={complete} onSuggestDiagnoses={suggestDiagnoses} onDecideDiagnosis={decideDiagnosis}/>}</>}
       {activeStage === "consumables" && <ConsumablesPanel status={selectedActivity?.consumables_status ?? j.consumables_status} canConfirm={j.current_stage === "procedure_completed"} items={inventory.data} onConfirm={confirmConsumables}/>}
@@ -164,5 +203,13 @@ export function PatientJourneyWorkspace() {
       {activeStage === "completed" && <section className="journey-panel journey-completed"><h2>Dolazak je završen</h2><p>Pregled, materijal i naplata nemaju otvorenu operativnu radnju.</p><Link to={`/patients/${j.patient_id}`}>Otvori longitudinalni zapis pacijenta</Link></section>}
     </main>
     <JourneyClinicalContext summary={<AISummaryPanel summary={summary.data} onGenerate={generateSummary} onReview={reviewSummaryFact}/>} timeline={<PatientTimeline items={timeline.data}/>} documents={<SourceDocumentViewer documents={documents.data} onReview={reviewDocument}/>}/>
+    {confirmation && <div className="modal-backdrop" onMouseDown={event => event.target === event.currentTarget && setConfirmation(null)}>
+      <section className="modal-panel" role="dialog" aria-modal="true" aria-labelledby="workspace-confirmation-title">
+        <header><div><span className="eyebrow">Potvrda radnje</span><h2 id="workspace-confirmation-title">{confirmation.title}</h2></div></header>
+        <p>{confirmation.text}</p>
+        {confirmation.reasonLabel && <label>{confirmation.reasonLabel}<textarea autoFocus rows={3} value={confirmation.reason ?? ""} onChange={event => setConfirmation(current => current ? { ...current, reason: event.target.value } : current)}/></label>}
+        <footer><button type="button" onClick={() => setConfirmation(null)}>Odustani</button><button type="button" className="primary" disabled={Boolean(confirmation.reasonLabel && !confirmation.reason?.trim())} onClick={async () => { const current = confirmation; setConfirmation(null); await current.action(current.reason); }}>{confirmation.confirmLabel}</button></footer>
+      </section>
+    </div>}
   </section>;
 }

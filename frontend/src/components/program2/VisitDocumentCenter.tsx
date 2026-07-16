@@ -2,35 +2,19 @@ import { useState } from "react";
 import { api } from "../../api/client";
 import type { SignedClinicalReport, VisitDocument } from "../../types/program2";
 
-export function VisitDocumentCenter({ journeyId, items, onChanged }: { journeyId: number; items: VisitDocument[]; onChanged: () => Promise<void> }) {
-  const [selected, setSelected] = useState<number[]>([]);
-  const [preview, setPreview] = useState<SignedClinicalReport | null>(null);
-  const [message, setMessage] = useState("");
+export function VisitDocumentCenter({ journeyId, items, patientEmail, emailVerified, onChanged }: { journeyId: number; items: VisitDocument[]; patientEmail: string | null; emailVerified: boolean; onChanged: () => Promise<void> }) {
+  const [selected, setSelected] = useState<number[]>([]); const [preview, setPreview] = useState<SignedClinicalReport | null>(null); const [message, setMessage] = useState(""); const [deliveryOpen, setDeliveryOpen] = useState(false);
+  const [source, setSource] = useState<"patient_verified" | "alternate">("patient_verified"); const [recipient, setRecipient] = useState(patientEmail ?? ""); const [reason, setReason] = useState(""); const [acknowledge, setAcknowledge] = useState(false);
   function toggle(id: number) { setSelected(value => value.includes(id) ? value.filter(item => item !== id) : [...value, id]); }
-  async function print(report: SignedClinicalReport) {
-    await api(`/api/signed-reports/${report.id}/print`, { method: "POST" });
-    setPreview(report); setMessage("Ispis koristi točno ovu potpisanu verziju.");
-    window.setTimeout(() => window.print(), 0);
-    await onChanged();
-  }
-  async function deliver() {
-    const recipient = window.prompt("E-mail pacijenta za demo/stub dostavu");
-    if (!recipient?.trim() || selected.length === 0) return;
-    const hasSuperseded = items.some(item => selected.includes(item.report.id) && item.report.superseded_at);
-    const acknowledge = !hasSuperseded || window.confirm("Odabrana je starija verzija nalaza. Svejedno evidentirati dostavu?");
-    if (!acknowledge) return;
-    await api(`/api/patient-journeys/${journeyId}/visit-documents/deliver`, { method: "POST", body: JSON.stringify({ report_ids: selected, recipient: recipient.trim(), acknowledge_superseded: hasSuperseded }) });
-    setMessage("Dostava je evidentirana samo u demo/stub redu. Slanje pacijentu nije potvrđeno.");
-    await onChanged();
-  }
-  return <section className="journey-panel visit-document-center">
-    <header><div><span className="eyebrow">Dokumenti ovog dolaska</span><h2>Potpisani nalazi</h2></div>{selected.length > 0 && <button type="button" onClick={deliver}>Pošalji odabrano ({selected.length})</button>}</header>
+  async function print(report: SignedClinicalReport) { await api(`/api/signed-reports/${report.id}/print`, { method: "POST" }); setPreview(report); window.setTimeout(() => window.print(), 0); await onChanged(); }
+  async function deliver() { await api(`/api/patient-journeys/${journeyId}/visit-documents/deliver`, { method: "POST", body: JSON.stringify({ report_ids: selected, recipient, recipient_source: source, alternate_recipient_reason: source === "alternate" ? reason : null, acknowledge_superseded: acknowledge, idempotency_key: crypto.randomUUID() }) }); setDeliveryOpen(false); setMessage("Dostava je evidentirana samo u demo/stub redu. Slanje nije potvrđeno."); await onChanged(); }
+  const hasSuperseded = items.some(item => selected.includes(item.report.id) && item.report.superseded_at);
+  const canDeliver = selected.length > 0 && recipient.includes("@") && (source === "alternate" ? reason.trim().length >= 3 : emailVerified && recipient === patientEmail) && (!hasSuperseded || acknowledge);
+  const deliveryLabel = (status?: string | null) => ({ queued_stub: "evidentirano za demo dostavu", sent: "poslano", delivered: "dostavljeno", failed: "neuspjelo", cancelled: "otkazano" }[status ?? ""] ?? "nije zatražena");
+  return <section className="journey-panel visit-document-center"><header><div><span className="eyebrow">Dokumenti ovog dolaska</span><h2>Potpisani nalazi</h2></div>{selected.length > 0 && <button type="button" onClick={() => { setRecipient(patientEmail ?? ""); setSource("patient_verified"); setDeliveryOpen(true); }}>Pošalji odabrano ({selected.length})</button>}</header>
     {message && <p className="document-center-message" role="status">{message}</p>}
-    {items.length === 0 ? <p>Još nema potpisanih nalaza. Potpisani obrazac automatski će se pojaviti ovdje.</p> : <div className="visit-document-list">{items.map(item => <article key={item.report.id} className={item.report.superseded_at ? "superseded" : ""}>
-      <input aria-label={`Odaberi ${item.report.title}`} type="checkbox" checked={selected.includes(item.report.id)} onChange={() => toggle(item.report.id)}/>
-      <div><b>{item.report.title}</b><small>Aktivnost {item.report.activity_id} · verzija {item.report.version_number} · {item.report.signer_name} · {new Date(item.report.signed_at).toLocaleDateString("hr-HR")}</small><small>{item.report.superseded_at ? "Zamijenjena novijom verzijom" : "Važeća potpisana verzija"} · ispisa: {item.print_count} · dostava: {item.latest_delivery?.status === "queued_stub" ? "demo/stub red" : item.latest_delivery?.status ?? "nije zatražena"}</small></div>
-      <div className="row-actions"><button type="button" onClick={() => setPreview(item.report)}>Pregled</button><button type="button" onClick={() => print(item.report)}>Ispis</button></div>
-    </article>)}</div>}
-    {preview && <div className="modal-backdrop" role="presentation" onMouseDown={() => setPreview(null)}><section className="modal-card signed-report-preview" role="dialog" aria-modal="true" aria-label={preview.title} onMouseDown={event => event.stopPropagation()}><header><div><span className="eyebrow">Potpisana verzija {preview.version_number}</span><h2>{preview.title}</h2><p>{preview.signer_name} · {new Date(preview.signed_at).toLocaleString("hr-HR")}</p></div><button type="button" aria-label="Zatvori" onClick={() => setPreview(null)}>×</button></header><pre>{preview.rendered_content}</pre></section></div>}
+    {items.length === 0 ? <p>Još nema potpisanih nalaza.</p> : <div className="visit-document-list">{items.map(item => <article key={item.report.id} className={item.report.superseded_at ? "superseded" : ""}><input aria-label={`Odaberi ${item.report.title}`} type="checkbox" checked={selected.includes(item.report.id)} onChange={() => toggle(item.report.id)}/><div><b>{item.report.title}</b><small>Verzija {item.report.version_number} · {item.report.signer_name} · integritet: {item.report.hash_algorithm.toUpperCase()}</small><small>{item.report.superseded_at ? "Zamijenjena verzija" : "Važeća verzija"} · ispisa: {item.print_count} · dostava: {deliveryLabel(item.latest_delivery?.status)}</small></div><div className="row-actions"><button type="button" onClick={() => setPreview(item.report)}>Pregled</button><button type="button" onClick={() => print(item.report)}>Ispis</button></div></article>)}</div>}
+    {deliveryOpen && <div className="modal-backdrop" onMouseDown={event => event.target === event.currentTarget && setDeliveryOpen(false)}><section className="modal-panel report-delivery-modal" role="dialog" aria-modal="true" aria-labelledby="delivery-title"><header><div><span className="eyebrow">Sigurna dostava</span><h2 id="delivery-title">Primatelj nalaza</h2></div></header><label><input type="radio" checked={source === "patient_verified"} onChange={() => { setSource("patient_verified"); setRecipient(patientEmail ?? ""); }}/> Potvrđena e-pošta pacijenta</label><input type="email" value={recipient} readOnly={source === "patient_verified"} onChange={event => setRecipient(event.target.value)}/>{source === "patient_verified" && !emailVerified && <p className="inline-error">Pacijent nema potvrđenu e-poštu.</p>}<label><input type="radio" checked={source === "alternate"} onChange={() => { setSource("alternate"); setRecipient(""); }}/> Alternativni primatelj</label>{source === "alternate" && <><input type="email" value={recipient} onChange={event => setRecipient(event.target.value)} placeholder="Alternativna e-pošta"/><label>Razlog<textarea value={reason} onChange={event => setReason(event.target.value)}/></label></>}{hasSuperseded && <label><input type="checkbox" checked={acknowledge} onChange={event => setAcknowledge(event.target.checked)}/> Potvrđujem zamijenjenu verziju.</label>}<p>Dostava ostaje demo/stub i nije stvarno poslana.</p><footer><button type="button" onClick={() => setDeliveryOpen(false)}>Odustani</button><button type="button" className="primary" disabled={!canDeliver} onClick={deliver}>Evidentiraj</button></footer></section></div>}
+    {preview && <div className="modal-backdrop" onMouseDown={() => setPreview(null)}><section className="modal-card signed-report-preview" role="dialog" aria-modal="true" aria-label={preview.title} onMouseDown={event => event.stopPropagation()}><header><div><span className="eyebrow">Potpisana verzija {preview.version_number}</span><h2>{preview.title}</h2></div><button type="button" aria-label="Zatvori" onClick={() => setPreview(null)}>×</button></header><pre>{preview.rendered_content}</pre></section></div>}
   </section>;
 }

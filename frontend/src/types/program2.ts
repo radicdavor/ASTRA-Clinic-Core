@@ -10,7 +10,7 @@ export type PatientJourneyDetail = {
   id: number; patient_id: number; appointment_id: number; intake_channel: string; current_stage: JourneyStage;
   document_status: string; preparation_status: string; check_in_status: string; encounter_status: string;
   consumables_status: string; billing_status: string; payment_status: string; closed_at: string | null;
-  patient: { id: number; first_name: string; last_name: string; date_of_birth: string | null; oib: string | null };
+  patient: { id: number; first_name: string; last_name: string; date_of_birth: string | null; oib: string | null; email: string | null; email_verified_at: string | null };
   appointment: {
     id: number; service_id: number; provider_id: number; room_id: number; date: string; start_time: string; end_time: string; status: string; source: string;
     service: { id: number; name: string }; provider: { id: number; full_name: string }; room: { id: number; name: string };
@@ -27,7 +27,7 @@ export type JourneyActivity = {
   not_performed_reason: string | null; form_resolution_status: string; billing_status: string; consumables_status: string;
 };
 
-export type ClinicalFormField = { field_key: string; label: string; type: string; required?: boolean; help_text?: string | null; options?: Array<string | { value: string; label: string }> };
+export type ClinicalFormField = { field_key: string; label: string; type: string; required?: boolean; help_text?: string | null; options?: Array<string | { value: string; label: string }>; item_fields?: ClinicalFormField[]; max_items?: number };
 export type ClinicalFormSection = { section_key: string; title?: string; fields: ClinicalFormField[] };
 export type ClinicalFormInstance = {
   id: number; activity_id: number; form_version_id: number; purpose: string; status: string; data_json: Record<string, unknown>;
@@ -40,13 +40,13 @@ export type SignedClinicalReport = {
   id: number; form_instance_id: number; form_version_id: number; clinical_document_id: number;
   activity_id: number; journey_id: number; patient_id: number; document_type: string; title: string;
   structured_data_json: Record<string, unknown>; rendered_content: string; version_number: number;
-  signer_user_id: number; signer_name: string; signed_at: string; supersedes_report_id: number | null; superseded_at: string | null;
+  signer_user_id: number; signer_name: string; signed_at: string; supersedes_report_id: number | null; superseded_at: string | null; content_hash: string; hash_algorithm: string;
 };
-export type ReportDelivery = { id: number; report_id: number; channel: string; recipient: string; status: string; provider_mode: string; queued_at: string; sent_at: string | null; delivered_at: string | null; failure_reason: string | null; correlation_id: string };
+export type ReportDelivery = { id: number; report_id: number; channel: string; recipient: string; status: string; provider_mode: string; queued_at: string; sent_at: string | null; delivered_at: string | null; failure_reason: string | null; correlation_id: string; recipient_source: string; alternate_recipient_reason: string | null };
 export type VisitDocument = { report: SignedClinicalReport; print_count: number; latest_delivery: ReportDelivery | null };
 export type PathologySpecimen = { id: number; specimen_label: string; anatomical_site: string; specimen_type: string; container: string | null; fixation: string | null };
-export type PathologyCase = { id: number; source_activity_id: number; status: string; external_lab: string | null; external_case_number: string | null; sent_at: string | null; lab_received_at: string | null; result_received_at: string | null; reviewed_at: string | null; patient_notified_at: string | null; specimens: PathologySpecimen[] };
-export type ProcedureIntervention = { id: number; activity_id: number; intervention_type: string; anatomical_site: string | null; description: string | null; count: number; retrieval_status: string | null; complication: string | null };
+export type PathologyCase = { id: number; source_activity_id: number; status: string; external_lab: string | null; external_case_number: string | null; sent_at: string | null; lab_received_at: string | null; result_received_at: string | null; reviewed_at: string | null; patient_notified_at: string | null; communication_disposition: string | null; communication_note: string | null; communication_attempts: number; specimens: PathologySpecimen[] };
+export type ProcedureIntervention = { id: number; activity_id: number; intervention_type: string; anatomical_site: string | null; description: string | null; technique: string | null; size: string | null; count: number; retrieval_status: string | null; complication: string | null };
 
 export type PatientJourneyTimelineItem = {
   date: string; event_type: string; title: string; summary: string | null; source_url: string | null;
@@ -72,6 +72,16 @@ export type CheckInState = {
 export type PreparationState = {
   id: number; journey_id: number; template_id: number; status: string; requirement_states_json: Record<string, string>;
   template: { id: number; name: string; version: string; requirements_json: Array<{ key: string; label: string }> };
+};
+
+export type ActivityPreparationState = {
+  journey_id: number;
+  contradictions: string[];
+  requirements: Array<{
+    requirement_key: string; label: string; patient_instruction: string; category: string; required: boolean;
+    state: string; contradictory: boolean;
+    activities: Array<{ activity_id: number; sequence: number; activity_key: string; service_name: string; requirement_id: number; state: string }>;
+  }>;
 };
 
 export type EncounterDraft = {

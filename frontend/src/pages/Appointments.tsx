@@ -23,7 +23,7 @@ export function Appointments() {
     <section className="page">
       <div className="page-header">
         <h1>Termini</h1>
-        <span className="action-with-help">
+        <span className="action-with-help"><Link className="link-button" to="/appointments/package">Naruči paket</Link>
           <Link className="primary link-button" to="/appointments/new" state={{ backgroundLocation: location }}>Novi termin</Link>
           <HelpHint title="Novi termin">Termin povezuje pacijenta, uslugu, lijecnika, sobu i vrijeme.</HelpHint>
         </span>
