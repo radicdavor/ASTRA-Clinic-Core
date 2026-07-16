@@ -42,6 +42,12 @@ def test_biopsy_pathology_case_is_structured_and_idempotent(client, db, auth_set
     assert repeated.json()["id"] == created.json()["id"]
     assert created.json()["status"] == "specimens_ready"
     assert created.json()["specimens"][0]["specimen_label"] == "A1"
+    sent = client.post(f"/api/pathology-cases/{created.json()['id']}/transition", headers=headers(client), json={"target_status": "sent_to_lab", "external_case_number": "SYN-001"})
+    assert sent.status_code == 200 and sent.json()["sent_at"] is not None
+    received = client.post(f"/api/pathology-cases/{created.json()['id']}/transition", headers=headers(client), json={"target_status": "received_by_lab"})
+    assert received.status_code == 200 and received.json()["lab_received_at"] is not None
+    awaiting = client.post(f"/api/pathology-cases/{created.json()['id']}/transition", headers=headers(client), json={"target_status": "awaiting_result"})
+    assert awaiting.status_code == 200 and awaiting.json()["status"] == "awaiting_result"
 
 
 def test_pathology_result_requires_same_patient_and_human_review(client, db, auth_setup):
@@ -65,6 +71,10 @@ def test_pathology_result_requires_same_patient_and_human_review(client, db, aut
     assert reviewed.json()["status"] == "clinician_reviewed"
     assert reviewed.json()["reviewed_by"] == auth_setup["admin"].id
     assert reviewed.json()["patient_notified_at"] is None
+    ready = client.post(f"/api/pathology-cases/{case['id']}/transition", headers=headers(client), json={"target_status": "patient_notification_ready"})
+    assert ready.status_code == 200
+    notified = client.post(f"/api/pathology-cases/{case['id']}/transition", headers=headers(client), json={"target_status": "patient_notified"})
+    assert notified.status_code == 409
 
 
 def test_non_specimen_intervention_cannot_create_pathology_case(client, db, auth_setup):

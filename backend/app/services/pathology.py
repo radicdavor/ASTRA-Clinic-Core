@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 
 from app.audit.service import audit, snapshot
 from app.auth.dependencies import Actor
-from app.models.domain import ClinicalDocument, JourneyActivity, PathologyCase, PathologyReportLink, PathologySpecimen, ProcedureIntervention
+from app.models.domain import ClinicalDocument, JourneyActivity, PathologyCase, PathologyReportLink, PathologySpecimen, ProcedureIntervention, ReportDeliveryEvent, SignedClinicalReport
 from app.services.patient_journeys import add_event
 
 
@@ -60,6 +60,37 @@ def link_result(db: Session, case: PathologyCase, document_id: int, actor: Actor
     case.result_received_at = case.result_received_at or now
     case.status = "clinician_review_required"
     audit(db, "pathology_result_linked", "PathologyCase", case.id, "Izvorni patološki nalaz povezan; potreban pregled liječnika", actor.user_id, actor.actor_type, actor.api_key_id, None, {"clinical_document_id": document.id, "status": case.status}, request)
+
+
+PATHOLOGY_TRANSITIONS = {
+    "specimens_ready": {"sent_to_lab", "cancelled"},
+    "sent_to_lab": {"received_by_lab", "awaiting_result", "cancelled"},
+    "received_by_lab": {"awaiting_result", "cancelled"},
+    "awaiting_result": {"cancelled"},
+    "clinician_reviewed": {"patient_notification_ready", "closed"},
+    "patient_notification_ready": {"patient_notified", "closed"},
+    "patient_notified": {"closed"},
+}
+
+
+def transition_case(db: Session, case: PathologyCase, target: str, external_case_number: str | None, reason: str | None, actor: Actor, request: Request) -> None:
+    if target not in PATHOLOGY_TRANSITIONS.get(case.status, set()):
+        raise HTTPException(409, detail=f"Prijelaz patologije {case.status} → {target} nije dopušten")
+    if target == "cancelled" and not reason:
+        raise HTTPException(422, detail="Otkazivanje patološkog slučaja zahtijeva razlog")
+    if target == "patient_notified":
+        delivered = db.scalar(select(ReportDeliveryEvent.id).join(SignedClinicalReport, SignedClinicalReport.id == ReportDeliveryEvent.report_id).join(PathologyReportLink, PathologyReportLink.clinical_document_id == SignedClinicalReport.clinical_document_id).where(PathologyReportLink.case_id == case.id, ReportDeliveryEvent.status == "delivered").limit(1))
+        if not delivered:
+            raise HTTPException(409, detail="Pacijent se može označiti obaviještenim tek nakon potvrđene dostave odobrene verzije nalaza")
+    now = datetime.now(timezone.utc)
+    before = snapshot(case)
+    case.status = target
+    if external_case_number: case.external_case_number = external_case_number
+    if target == "sent_to_lab": case.sent_at = now
+    elif target == "received_by_lab": case.lab_received_at = now
+    elif target == "patient_notified": case.patient_notified_at = now
+    elif target in {"closed", "cancelled"}: case.closed_at = now
+    audit(db, "pathology_status_changed", "PathologyCase", case.id, reason or f"Patologija: {target}", actor.user_id, actor.actor_type, actor.api_key_id, before, snapshot(case), request)
 
 
 def review_result(db: Session, case: PathologyCase, actor: Actor, request: Request) -> None:

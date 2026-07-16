@@ -44,6 +44,8 @@ export type SignedClinicalReport = {
 };
 export type ReportDelivery = { id: number; report_id: number; channel: string; recipient: string; status: string; provider_mode: string; queued_at: string; sent_at: string | null; delivered_at: string | null; failure_reason: string | null; correlation_id: string };
 export type VisitDocument = { report: SignedClinicalReport; print_count: number; latest_delivery: ReportDelivery | null };
+export type PathologySpecimen = { id: number; specimen_label: string; anatomical_site: string; specimen_type: string; container: string | null; fixation: string | null };
+export type PathologyCase = { id: number; source_activity_id: number; status: string; external_lab: string | null; external_case_number: string | null; sent_at: string | null; lab_received_at: string | null; result_received_at: string | null; reviewed_at: string | null; patient_notified_at: string | null; specimens: PathologySpecimen[] };
 
 export type PatientJourneyTimelineItem = {
   date: string; event_type: string; title: string; summary: string | null; source_url: string | null;

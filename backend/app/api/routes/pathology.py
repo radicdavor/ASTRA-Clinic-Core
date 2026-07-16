@@ -6,9 +6,9 @@ from app.audit.service import audit, snapshot
 from app.auth.dependencies import Actor, require_permission
 from app.core.database import get_db
 from app.models.domain import PathologyCase, PatientJourney, ProcedureIntervention
-from app.schemas.pathology import InterventionCreate, InterventionOut, PathologyCaseCreate, PathologyCaseOut, ReportLinkCreate
+from app.schemas.pathology import InterventionCreate, InterventionOut, PathologyCaseCreate, PathologyCaseOut, PathologyStatusUpdate, ReportLinkCreate
 from app.services.journey_activities import get_activity
-from app.services.pathology import create_case, link_result, review_result
+from app.services.pathology import create_case, link_result, review_result, transition_case
 from app.services.patient_journeys import add_event
 
 
@@ -61,6 +61,17 @@ def get_case(case_id: int, db: Session = Depends(get_db), actor: Actor = Depends
 @router.post("/pathology-cases/{case_id}/result-link", response_model=PathologyCaseOut)
 def add_result_link(case_id: int, payload: ReportLinkCreate, request: Request, db: Session = Depends(get_db), actor: Actor = Depends(require_permission("documents.review"))):
     item = pathology_case(db, case_id); link_result(db, item, payload.clinical_document_id, actor, request); db.commit(); return pathology_case(db, item.id)
+
+
+@router.get("/patient-journeys/{journey_id}/pathology-cases", response_model=list[PathologyCaseOut])
+def visit_pathology_cases(journey_id: int, db: Session = Depends(get_db), actor: Actor = Depends(require_permission("encounter.read"))):
+    visit(db, journey_id)
+    return db.scalars(select(PathologyCase).options(selectinload(PathologyCase.specimens)).where(PathologyCase.journey_id == journey_id).order_by(PathologyCase.id)).all()
+
+
+@router.post("/pathology-cases/{case_id}/transition", response_model=PathologyCaseOut)
+def change_status(case_id: int, payload: PathologyStatusUpdate, request: Request, db: Session = Depends(get_db), actor: Actor = Depends(require_permission("documents.review"))):
+    item = pathology_case(db, case_id); transition_case(db, item, payload.target_status, payload.external_case_number, payload.reason, actor, request); db.commit(); return pathology_case(db, item.id)
 
 
 @router.post("/pathology-cases/{case_id}/review", response_model=PathologyCaseOut)

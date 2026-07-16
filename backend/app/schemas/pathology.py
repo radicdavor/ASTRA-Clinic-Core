@@ -50,6 +50,12 @@ class ReportLinkCreate(BaseModel):
     clinical_document_id: int
 
 
+class PathologyStatusUpdate(BaseModel):
+    target_status: str = Field(pattern="^(sent_to_lab|received_by_lab|awaiting_result|patient_notification_ready|patient_notified|closed|cancelled)$")
+    external_case_number: str | None = Field(default=None, max_length=160)
+    reason: str | None = Field(default=None, max_length=2000)
+
+
 class PathologyCaseOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: int
