@@ -583,6 +583,7 @@ class JourneyActivity(TimestampMixin, Base):
     room_id: Mapped[int | None] = mapped_column(ForeignKey("rooms.id"), index=True)
     sequence: Mapped[int] = mapped_column(Integer)
     depends_on_activity_id: Mapped[int | None] = mapped_column(ForeignKey("journey_activities.id", ondelete="SET NULL"))
+    package_item_id: Mapped[int | None] = mapped_column(ForeignKey("service_package_items.id", ondelete="SET NULL"), index=True)
     required: Mapped[bool] = mapped_column(Boolean, default=True)
     planned_start: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
     planned_end: Mapped[datetime] = mapped_column(DateTime(timezone=True))
@@ -670,10 +671,101 @@ class ServicePackageItem(Base):
     preferred_clinic_id: Mapped[int | None] = mapped_column(ForeignKey("clinics.id"))
     preferred_room_type: Mapped[str | None] = mapped_column(String(80))
     depends_on_item_id: Mapped[int | None] = mapped_column(ForeignKey("service_package_items.id", ondelete="SET NULL"))
+    form_binding_override_version_id: Mapped[int | None] = mapped_column(ForeignKey("clinical_form_versions.id", ondelete="SET NULL"))
     preparation_requirements_json: Mapped[list] = mapped_column(JSON, default=list)
     billing_inclusion_rule: Mapped[str] = mapped_column(String(40), default="include")
     package_version: Mapped[ServicePackageVersion] = relationship(back_populates="items")
     service: Mapped[Service] = relationship()
+
+
+class ClinicalFormDefinition(TimestampMixin, Base):
+    __tablename__ = "clinical_form_definitions"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    form_key: Mapped[str] = mapped_column(String(120), unique=True)
+    name: Mapped[str] = mapped_column(String(180))
+    specialty_key: Mapped[str] = mapped_column(String(80), index=True)
+    activity_kind: Mapped[str] = mapped_column(String(60), index=True)
+    description: Mapped[str | None] = mapped_column(Text)
+    owner_clinic_id: Mapped[int | None] = mapped_column(ForeignKey("clinics.id"))
+    active: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_by: Mapped[int | None] = mapped_column(ForeignKey("users.id"))
+    versions: Mapped[list[ClinicalFormVersion]] = relationship(back_populates="definition", cascade="all, delete-orphan", order_by="ClinicalFormVersion.version")
+
+
+class ClinicalFormVersion(Base):
+    __tablename__ = "clinical_form_versions"
+    __table_args__ = (
+        UniqueConstraint("definition_id", "version", name="uq_clinical_form_definition_version"),
+        CheckConstraint("status in ('draft','published','retired')", name="ck_clinical_form_versions_status"),
+    )
+    id: Mapped[int] = mapped_column(primary_key=True)
+    definition_id: Mapped[int] = mapped_column(ForeignKey("clinical_form_definitions.id", ondelete="CASCADE"), index=True)
+    version: Mapped[int] = mapped_column(Integer)
+    status: Mapped[str] = mapped_column(String(30), default="draft", index=True)
+    sections_json: Mapped[list] = mapped_column(JSON, default=list)
+    validation_schema_json: Mapped[dict] = mapped_column(JSON, default=dict)
+    print_layout_json: Mapped[dict] = mapped_column(JSON, default=dict)
+    output_document_type: Mapped[str] = mapped_column(String(80))
+    approved_by: Mapped[int | None] = mapped_column(ForeignKey("users.id"))
+    approved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    published_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    supersedes_version_id: Mapped[int | None] = mapped_column(ForeignKey("clinical_form_versions.id", ondelete="SET NULL"))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    definition: Mapped[ClinicalFormDefinition] = relationship(back_populates="versions")
+
+
+class ServiceFormBinding(Base):
+    __tablename__ = "service_form_bindings"
+    __table_args__ = (CheckConstraint("service_id is not null or (specialty_key is not null and activity_kind is not null)", name="ck_service_form_binding_scope"),)
+    id: Mapped[int] = mapped_column(primary_key=True)
+    service_id: Mapped[int | None] = mapped_column(ForeignKey("services.id"), index=True)
+    clinic_id: Mapped[int | None] = mapped_column(ForeignKey("clinics.id"), index=True)
+    specialty_key: Mapped[str | None] = mapped_column(String(80), index=True)
+    activity_kind: Mapped[str | None] = mapped_column(String(60), index=True)
+    form_version_id: Mapped[int] = mapped_column(ForeignKey("clinical_form_versions.id"))
+    active: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_by: Mapped[int | None] = mapped_column(ForeignKey("users.id"))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    form_version: Mapped[ClinicalFormVersion] = relationship()
+
+
+class ClinicalFormInstance(TimestampMixin, Base):
+    __tablename__ = "clinical_form_instances"
+    __table_args__ = (
+        UniqueConstraint("activity_id", "purpose", "amended_from_instance_id", name="uq_clinical_form_instance_lineage"),
+        CheckConstraint("status in ('draft','in_progress','completed','signed','amended','void')", name="ck_clinical_form_instances_status"),
+    )
+    id: Mapped[int] = mapped_column(primary_key=True)
+    activity_id: Mapped[int] = mapped_column(ForeignKey("journey_activities.id", ondelete="CASCADE"), index=True)
+    form_version_id: Mapped[int] = mapped_column(ForeignKey("clinical_form_versions.id"))
+    purpose: Mapped[str] = mapped_column(String(60), default="clinical_report")
+    status: Mapped[str] = mapped_column(String(30), default="draft", index=True)
+    data_json: Mapped[dict] = mapped_column(JSON, default=dict)
+    rendered_summary: Mapped[str | None] = mapped_column(Text)
+    created_by: Mapped[int | None] = mapped_column(ForeignKey("users.id"))
+    last_edited_by: Mapped[int | None] = mapped_column(ForeignKey("users.id"))
+    completed_by: Mapped[int | None] = mapped_column(ForeignKey("users.id"))
+    signed_by: Mapped[int | None] = mapped_column(ForeignKey("users.id"))
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    signed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    amended_from_instance_id: Mapped[int | None] = mapped_column(ForeignKey("clinical_form_instances.id", ondelete="SET NULL"))
+    binding_source: Mapped[str] = mapped_column(String(80))
+    resolved_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    form_version: Mapped[ClinicalFormVersion] = relationship()
+    revisions: Mapped[list[ClinicalFormRevision]] = relationship(back_populates="instance", cascade="all, delete-orphan", order_by="ClinicalFormRevision.revision_number")
+
+
+class ClinicalFormRevision(Base):
+    __tablename__ = "clinical_form_revisions"
+    __table_args__ = (UniqueConstraint("instance_id", "revision_number", name="uq_clinical_form_revision_number"),)
+    id: Mapped[int] = mapped_column(primary_key=True)
+    instance_id: Mapped[int] = mapped_column(ForeignKey("clinical_form_instances.id", ondelete="CASCADE"), index=True)
+    revision_number: Mapped[int] = mapped_column(Integer)
+    data_json: Mapped[dict] = mapped_column(JSON)
+    rendered_summary: Mapped[str | None] = mapped_column(Text)
+    edited_by: Mapped[int | None] = mapped_column(ForeignKey("users.id"))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    instance: Mapped[ClinicalFormInstance] = relationship(back_populates="revisions")
 
 
 class JourneyEvent(Base):

@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 
 from app.audit.service import audit, snapshot
 from app.auth.dependencies import Actor
-from app.models.domain import Appointment, JourneyActivity, PatientJourney, Room
+from app.models.domain import Appointment, ClinicalFormInstance, JourneyActivity, PatientJourney, Room
 from app.services.appointments import validate_appointment_payload
 from app.services.patient_journeys import add_event
 
@@ -139,6 +139,18 @@ def transition_activity(
             dependency = get_activity(db, journey.id, activity.depends_on_activity_id)
             if dependency.status != "completed":
                 raise HTTPException(409, detail="Prethodna obvezna aktivnost još nije dovršena")
+    if target == "completed":
+        form = db.scalar(
+            select(ClinicalFormInstance)
+            .where(
+                ClinicalFormInstance.activity_id == activity.id,
+                ClinicalFormInstance.status.notin_({"amended", "void"}),
+            )
+            .order_by(ClinicalFormInstance.id.desc())
+            .limit(1)
+        )
+        if activity.form_resolution_status != "not_required" and (not form or form.status not in {"completed", "signed"}):
+            raise HTTPException(409, detail="Klinički obrazac aktivnosti mora biti dovršen prije završetka aktivnosti")
     if target in {"not_performed", "cancelled"} and not reason:
         raise HTTPException(422, detail="Razlog je obvezan kada aktivnost nije obavljena")
 

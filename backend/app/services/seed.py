@@ -1,4 +1,4 @@
-from datetime import date, time, timedelta
+from datetime import date, datetime, time, timedelta, timezone
 from decimal import Decimal
 
 from sqlalchemy import select
@@ -7,6 +7,8 @@ from sqlalchemy.orm import Session
 from app.core.security import hash_password
 from app.models.domain import (
     Appointment,
+    ClinicalFormDefinition,
+    ClinicalFormVersion,
     Clinic,
     InventoryBatch,
     InventoryItem,
@@ -17,6 +19,7 @@ from app.models.domain import (
     Role,
     Room,
     Service,
+    ServiceFormBinding,
     ServiceMaterialTemplate,
     StockLocation,
     Supplier,
@@ -88,11 +91,14 @@ PERMISSIONS = [
     "payment.record",
     "summary.generate",
     "summary.review",
+    "clinical_forms.read",
+    "clinical_forms.manage",
+    "clinical_forms.sign",
 ]
 
 ROLE_PERMISSIONS = {
     "admin": PERMISSIONS,
-    "physician": ["patients.read", "patients.write", "appointments.read", "appointments.write", "episodes.read", "episodes.write", "clinical_plans.read", "clinical_plans.write", "clinical_documents.read", "clinical_documents.write", "clinical_documents.review", "services.read", "inventory.read", "billing.read", "clinical_readiness.snapshots.read", "clinical_readiness.snapshots.write", "clinical_readiness.snapshots.supersede", "clinical_readiness.acknowledgments.read", "clinical_findings.read", "clinical_open_questions.read", "clinical_evidence_timeline.read", "workflow_tasks.read", "workflow_tasks.write", "knowledge_protocols.read", "knowledge_protocols.write", "knowledge_protocols.review", "journey.read", "journey.transition", "preparation.assign", "preparation.review", "documents.request", "documents.upload", "documents.view_source", "documents.review", "checkin.clinical_review", "encounter.read", "encounter.write", "encounter.complete", "summary.generate", "summary.review"],
+    "physician": ["patients.read", "patients.write", "appointments.read", "appointments.write", "episodes.read", "episodes.write", "clinical_plans.read", "clinical_plans.write", "clinical_documents.read", "clinical_documents.write", "clinical_documents.review", "services.read", "inventory.read", "billing.read", "clinical_readiness.snapshots.read", "clinical_readiness.snapshots.write", "clinical_readiness.snapshots.supersede", "clinical_readiness.acknowledgments.read", "clinical_findings.read", "clinical_open_questions.read", "clinical_evidence_timeline.read", "workflow_tasks.read", "workflow_tasks.write", "knowledge_protocols.read", "knowledge_protocols.write", "knowledge_protocols.review", "journey.read", "journey.transition", "preparation.assign", "preparation.review", "documents.request", "documents.upload", "documents.view_source", "documents.review", "checkin.clinical_review", "encounter.read", "encounter.write", "encounter.complete", "summary.generate", "summary.review", "clinical_forms.read", "clinical_forms.sign"],
     "nurse": ["patients.read", "appointments.read", "appointments.write", "episodes.read", "clinical_plans.read", "clinical_documents.read", "clinical_documents.write", "clinical_documents.review", "inventory.read", "inventory.write", "clinical_readiness.snapshots.read", "workflow_tasks.read", "workflow_tasks.write", "journey.read", "journey.transition", "preparation.assign", "documents.request", "documents.upload", "documents.scan", "documents.view_source", "documents.review", "checkin.update", "encounter.read", "consumables.record"],
     "receptionist": ["patients.read", "patients.write", "appointments.read", "appointments.write", "episodes.read", "clinical_plans.read", "clinical_documents.read", "services.read", "billing.read", "workflow_tasks.read", "workflow_tasks.write", "journey.read", "journey.create", "journey.transition", "preparation.assign", "documents.request", "documents.upload", "documents.scan", "documents.view_source", "checkin.update"],
     "inventory_manager": ["inventory.read", "inventory.write", "inventory.adjust", "inventory.write_off", "inventory.transfer", "procurement.read", "procurement.write"],
@@ -184,6 +190,63 @@ def seed_catalog(db: Session) -> None:
     db.flush()
 
 
+def seed_clinical_forms(db: Session) -> None:
+    approver = db.scalar(select(User).join(Role).where(Role.name == "admin").limit(1))
+    published_at = datetime.now(timezone.utc)
+    def fields(keys, *, required=()):
+        labels = {key: key.replace("_", " ").capitalize() for key in keys}
+        list_types = {"diagnoses": "diagnosis_list", "therapy": "medication_list", "interventions": "procedure_intervention_list", "biopsy_specimens": "specimen_list", "polypectomies": "procedure_intervention_list", "anatomical_regions": "anatomical_site"}
+        return [{"field_key": key, "label": labels[key], "type": list_types.get(key, "long_text"), "required": key in required, "help_text": None, "default": None, "options": [], "visibility_condition": None, "validation": {}, "print_behavior": "when_present"} for key in keys]
+
+    consultation = ["reason_for_visit", "anamnesis", "examination_status", "opinion_and_recommendations", "diagnoses", "therapy", "follow_up"]
+    catalogs = [
+        ("generic-specialist-consultation", "Specijalistički pregled", "general", "specialist_consultation", consultation, {"reason_for_visit", "anamnesis", "opinion_and_recommendations"}),
+        ("gastroenterology-consultation", "Gastroenterološki pregled", "gastroenterology", "specialist_consultation", consultation, {"reason_for_visit", "anamnesis", "opinion_and_recommendations"}),
+        ("gynecology-consultation", "Ginekološki pregled", "gynecology", "specialist_consultation", consultation, {"reason_for_visit", "anamnesis", "opinion_and_recommendations"}),
+        ("aesthetic-consultation", "Estetski pregled", "aesthetic", "specialist_consultation", ["anamnesis", "examination", "opinion", "proposed_plan", "contraindications_review", "patient_information_given"], {"anamnesis", "opinion"}),
+        ("gastroscopy-report", "Gastroskopija", "gastroenterology", "gastroscopy", ["indication", "preparation", "sedation", "instrument", "extent_of_examination", "esophagus_findings", "stomach_findings", "duodenum_findings", "overall_findings", "interventions", "biopsy_specimens", "complications", "diagnoses", "recommendations", "follow_up"], {"indication", "extent_of_examination", "overall_findings", "complications", "recommendations"}),
+        ("colonoscopy-report", "Kolonoskopija", "gastroenterology", "colonoscopy", ["indication", "bowel_preparation_quality", "sedation", "instrument", "extent_of_examination", "terminal_ileum", "segment_findings", "overall_findings", "polyps", "interventions", "biopsy_specimens", "polypectomies", "clips", "withdrawal_time", "complications", "diagnoses", "recommendations", "follow_up"], {"indication", "bowel_preparation_quality", "extent_of_examination", "overall_findings", "complications", "recommendations"}),
+        ("harmonyca-treatment", "HarmonyCa tretman", "aesthetic", "harmonyca_treatment", ["treatment_indication", "product_name", "quantity", "unit", "lot_number", "expiration_date", "anatomical_regions", "technique", "local_anesthesia", "immediate_tolerance", "complications", "findings", "aftercare_instructions", "clinician_signature"], {"treatment_indication", "product_name", "quantity", "unit", "lot_number", "anatomical_regions", "immediate_tolerance", "complications", "aftercare_instructions"}),
+    ]
+    versions = {}
+    for form_key, name, specialty, kind, keys, required in catalogs:
+        definition = db.scalar(select(ClinicalFormDefinition).where(ClinicalFormDefinition.form_key == form_key))
+        if not definition:
+            definition = ClinicalFormDefinition(form_key=form_key, name=name, specialty_key=specialty, activity_kind=kind, description=f"Kontrolirani klinički obrazac: {name}", active=True)
+            db.add(definition); db.flush()
+        version = db.scalar(select(ClinicalFormVersion).where(ClinicalFormVersion.definition_id == definition.id, ClinicalFormVersion.version == 1))
+        if not version:
+            version = ClinicalFormVersion(definition_id=definition.id, version=1, status="published", sections_json=[{"section_key": "clinical", "title": name, "fields": fields(keys, required=required)}], validation_schema_json={}, print_layout_json={"layout": "clinical_report"}, output_document_type="clinical_report", approved_by=approver.id if approver else None, approved_at=published_at, published_at=published_at)
+            db.add(version); db.flush()
+        versions[form_key] = version
+
+    defaults = [
+        (None, None, "general", "specialist_consultation", "generic-specialist-consultation"),
+        (None, None, "gastroenterology", "specialist_consultation", "gastroenterology-consultation"),
+        (None, None, "gynecology", "specialist_consultation", "gynecology-consultation"),
+        (None, None, "aesthetic", "specialist_consultation", "aesthetic-consultation"),
+        (None, None, "gastroenterology", "gastroscopy", "gastroscopy-report"),
+        (None, None, "gastroenterology", "colonoscopy", "colonoscopy-report"),
+        (None, None, "aesthetic", "harmonyca_treatment", "harmonyca-treatment"),
+    ]
+    for service_id, clinic_id, specialty, kind, form_key in defaults:
+        existing = db.scalar(select(ServiceFormBinding).where(ServiceFormBinding.service_id.is_(None), ServiceFormBinding.clinic_id.is_(None), ServiceFormBinding.specialty_key == specialty, ServiceFormBinding.activity_kind == kind))
+        if not existing:
+            db.add(ServiceFormBinding(service_id=service_id, clinic_id=clinic_id, specialty_key=specialty, activity_kind=kind, form_version_id=versions[form_key].id, active=True))
+
+    service_forms = {
+        "GASTRO-FIRST-EXAM": "gastroenterology-consultation", "GASTRO-CHECK": "gastroenterology-consultation",
+        "GASTRO-EGD": "gastroscopy-report", "GASTRO-EGD-SED": "gastroscopy-report", "GASTRO-GASTRO": "gastroscopy-report",
+        "GASTRO-COL-NO-AN": "colonoscopy-report", "GASTRO-COL-SED": "colonoscopy-report", "GASTRO-COL-ILEO": "colonoscopy-report", "GASTRO-COL-ILEO-SED": "colonoscopy-report",
+        "AEST-HARMONYCA": "harmonyca-treatment",
+    }
+    for code, form_key in service_forms.items():
+        service = db.scalar(select(Service).where(Service.code == code))
+        if service and not db.scalar(select(ServiceFormBinding).where(ServiceFormBinding.service_id == service.id, ServiceFormBinding.clinic_id.is_(None))):
+            db.add(ServiceFormBinding(service_id=service.id, form_version_id=versions[form_key].id, active=True))
+    db.flush()
+
+
 def seed_security(db: Session) -> None:
     permissions = {permission.name: permission for permission in db.scalars(select(Permission)).all()}
     for name in PERMISSIONS:
@@ -208,6 +271,7 @@ def seed(db: Session) -> None:
     if db.scalar(select(User).limit(1)):
         seed_security(db)
         seed_catalog(db)
+        seed_clinical_forms(db)
         db.commit()
         return
 
@@ -273,6 +337,7 @@ def seed(db: Session) -> None:
     db.flush()
     room.allowed_services = services
     seed_catalog(db)
+    seed_clinical_forms(db)
 
     patient = Patient(first_name="Ivana", last_name="Horvat", date_of_birth=date(1984, 5, 12), phone="+385 91 234 5678", email="ivana.horvat@example.com")
     db.add(patient)
