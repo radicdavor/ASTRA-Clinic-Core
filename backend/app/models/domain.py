@@ -768,6 +768,79 @@ class ClinicalFormRevision(Base):
     instance: Mapped[ClinicalFormInstance] = relationship(back_populates="revisions")
 
 
+class ProcedureIntervention(Base):
+    __tablename__ = "procedure_interventions"
+    __table_args__ = (
+        CheckConstraint("intervention_type in ('biopsy','polypectomy','injection','clip_placement','dilation','hemostasis','foreign_body_removal','other')", name="ck_procedure_intervention_type"),
+        CheckConstraint("count > 0", name="ck_procedure_intervention_count"),
+    )
+    id: Mapped[int] = mapped_column(primary_key=True)
+    activity_id: Mapped[int] = mapped_column(ForeignKey("journey_activities.id", ondelete="CASCADE"), index=True)
+    intervention_type: Mapped[str] = mapped_column(String(60))
+    anatomical_site: Mapped[str | None] = mapped_column(String(220))
+    description: Mapped[str | None] = mapped_column(Text)
+    technique: Mapped[str | None] = mapped_column(String(220))
+    device: Mapped[str | None] = mapped_column(String(220))
+    size: Mapped[str | None] = mapped_column(String(80))
+    count: Mapped[int] = mapped_column(Integer, default=1)
+    retrieval_status: Mapped[str | None] = mapped_column(String(60))
+    complication: Mapped[str | None] = mapped_column(Text)
+    created_by: Mapped[int | None] = mapped_column(ForeignKey("users.id"))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class PathologyCase(TimestampMixin, Base):
+    __tablename__ = "pathology_cases"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    patient_id: Mapped[int] = mapped_column(ForeignKey("patients.id"), index=True)
+    journey_id: Mapped[int] = mapped_column(ForeignKey("patient_journeys.id", ondelete="CASCADE"), index=True)
+    source_activity_id: Mapped[int] = mapped_column(ForeignKey("journey_activities.id"), index=True)
+    idempotency_key: Mapped[str] = mapped_column(String(160), unique=True)
+    status: Mapped[str] = mapped_column(String(60), default="draft", index=True)
+    external_lab: Mapped[str | None] = mapped_column(String(220))
+    external_case_number: Mapped[str | None] = mapped_column(String(160))
+    created_by: Mapped[int | None] = mapped_column(ForeignKey("users.id"))
+    collected_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    lab_received_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    result_received_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    reviewed_by: Mapped[int | None] = mapped_column(ForeignKey("users.id"))
+    patient_notified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    closed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    specimens: Mapped[list[PathologySpecimen]] = relationship(back_populates="case", cascade="all, delete-orphan", order_by="PathologySpecimen.id")
+    reports: Mapped[list[PathologyReportLink]] = relationship(back_populates="case", cascade="all, delete-orphan", order_by="PathologyReportLink.id")
+
+
+class PathologySpecimen(Base):
+    __tablename__ = "pathology_specimens"
+    __table_args__ = (UniqueConstraint("case_id", "specimen_label", name="uq_pathology_specimen_label"),)
+    id: Mapped[int] = mapped_column(primary_key=True)
+    case_id: Mapped[int] = mapped_column(ForeignKey("pathology_cases.id", ondelete="CASCADE"), index=True)
+    specimen_label: Mapped[str] = mapped_column(String(160))
+    anatomical_site: Mapped[str] = mapped_column(String(220))
+    specimen_type: Mapped[str] = mapped_column(String(100))
+    source_intervention_id: Mapped[int | None] = mapped_column(ForeignKey("procedure_interventions.id", ondelete="SET NULL"))
+    container: Mapped[str | None] = mapped_column(String(120))
+    fixation: Mapped[str | None] = mapped_column(String(120))
+    collection_time: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    notes: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    case: Mapped[PathologyCase] = relationship(back_populates="specimens")
+
+
+class PathologyReportLink(Base):
+    __tablename__ = "pathology_report_links"
+    __table_args__ = (UniqueConstraint("case_id", "clinical_document_id", name="uq_pathology_report_link"),)
+    id: Mapped[int] = mapped_column(primary_key=True)
+    case_id: Mapped[int] = mapped_column(ForeignKey("pathology_cases.id", ondelete="CASCADE"), index=True)
+    clinical_document_id: Mapped[int] = mapped_column(ForeignKey("clinical_documents.id"))
+    linked_by: Mapped[int | None] = mapped_column(ForeignKey("users.id"))
+    linked_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    case: Mapped[PathologyCase] = relationship(back_populates="reports")
+    document: Mapped[ClinicalDocument] = relationship()
+
+
 class JourneyEvent(Base):
     __tablename__ = "journey_events"
     id: Mapped[int] = mapped_column(primary_key=True)
