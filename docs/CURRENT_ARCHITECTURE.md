@@ -6,6 +6,8 @@ This is the canonical architecture summary. `docs/ASTRA_ARCHITECTURE_BIBLE.md` r
 
 React/TypeScript/Vite calls a FastAPI REST backend. FastAPI uses SQLAlchemy 2 and Alembic against PostgreSQL. JWT/API-key authentication feeds permission-based RBAC. Important mutations call the shared audit service. Local document storage persists generated relative paths and checksums; original documents remain the source of truth.
 
+The current operational spine is `Patient → PatientJourney → JourneyActivity`. `PatientJourney.appointment_id` remains the backward-compatible anchor appointment; each activity may reference its own appointment, service, room, clinician, form, signed report, interventions and consumables. One journey still owns one check-in, coordinated invoice and payment.
+
 `Patient → Appointment → PatientJourney` is the operational spine. A journey references preparation, document requests/submissions, timeline events, check-in, encounter, consumable usage, invoice and payment. The daily dashboard is an aggregate read view; the Patient Journey Workspace mutates existing domain objects through explicit APIs.
 
 ## Source-of-truth hierarchy

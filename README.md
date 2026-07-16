@@ -1,5 +1,9 @@
 # ASTRA Clinic Core
 
+## Multi-service visit
+
+The Program 2 Multi-Service Visit and Specialty Documentation extension preserves one physical arrival as one `PatientJourney` while allowing multiple ordered activities, rooms, clinicians, specialty forms, reports, specimens, consumables and billing lines. The demo seed includes a first gastroenterology consultation followed by gastroscopy in the same arrival. See the [track closure report](docs/programs/PROGRAM_2_MULTI_SERVICE_VISIT_AND_SPECIALTY_DOCUMENTATION_TRACK_CLOSURE_REPORT.md).
+
 Canonical current-state sources:
 
 - [Current product state](docs/CURRENT_PRODUCT_STATE.md)

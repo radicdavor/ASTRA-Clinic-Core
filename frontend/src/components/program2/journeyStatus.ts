@@ -32,3 +32,7 @@ export function journeyStageLabel(value?: string | null) {
   if (value === "requested") return "Zahtjev zaprimljen";
   return journeyStatusLabel(value);
 }
+
+export function activityClockTime(value: string) {
+  return value.slice(11, 16);
+}

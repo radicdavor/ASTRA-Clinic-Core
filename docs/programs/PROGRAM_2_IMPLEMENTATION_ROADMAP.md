@@ -2,7 +2,7 @@
 
 > Historical implementation record. Current state: [`CURRENT_PRODUCT_STATE.md`](../CURRENT_PRODUCT_STATE.md), [`CURRENT_ARCHITECTURE.md`](../CURRENT_ARCHITECTURE.md), and [`CURRENT_OPERATIONAL_LIMITATIONS.md`](../CURRENT_OPERATIONAL_LIMITATIONS.md).
 
-Current separately authorized extension: **Program 2 Multi-Service Visit and Specialty Documentation Track**, opened from commit `48a1d80`. It preserves one `PatientJourney` per physical arrival and adds activity-level scheduling and documentation additively.
+The separately authorized **Program 2 Multi-Service Visit and Specialty Documentation Track** was opened from commit `48a1d80` and is now closed in the authorized local synthetic scope. It preserves one `PatientJourney` per physical arrival and adds activity-level scheduling, specialty documentation, pathology follow-up, consumables and billing additively. Closure evidence is recorded in `PROGRAM_2_MULTI_SERVICE_VISIT_AND_SPECIALTY_DOCUMENTATION_TRACK_*`.
 
 ## Workflow UX Simplification Track
 

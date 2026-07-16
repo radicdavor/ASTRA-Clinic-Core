@@ -13,6 +13,7 @@ from app.models.domain import (
     ClinicalPlan,
     InventoryBatch,
     InventoryItem,
+    JourneyActivity,
     Patient,
     PatientJourney,
     PatientClinicalSummaryRecord,
@@ -176,6 +177,147 @@ def main() -> None:
                 db.add(journey)
             journey.current_stage, journey.document_status, journey.preparation_status, journey.check_in_status, journey.encounter_status, journey.consumables_status, journey.billing_status, journey.payment_status = variant[1:]
             journey.closed_at = datetime.now(timezone.utc) if variant[1] == "cancelled" else None
+
+        multi_patient_email = "synthetic.multi.gastro@example.invalid"
+        multi_patient = db.scalar(select(Patient).where(Patient.email == multi_patient_email))
+        if multi_patient is None:
+            multi_patient = Patient(first_name="Sintetički", last_name="Višestruki dolazak", email=multi_patient_email)
+            db.add(multi_patient)
+            db.flush()
+
+        consultation_service = db.scalar(select(Service).where(Service.code == "GASTRO-FIRST-EXAM"))
+        gastroscopy_service = db.scalar(select(Service).where(Service.code == "GASTRO-GASTRO"))
+        endoscopy_room = db.scalar(select(Room).where(Room.name == "Demo endoskopija 1"))
+        if endoscopy_room is None:
+            endoscopy_room = Room(name="Demo endoskopija 1", type="endoskopija", clinic_id=gastro_clinic.id)
+            db.add(endoscopy_room)
+            db.flush()
+        if consultation_service and consultation_service not in room.allowed_services:
+            room.allowed_services.append(consultation_service)
+        if gastroscopy_service and gastroscopy_service not in endoscopy_room.allowed_services:
+            endoscopy_room.allowed_services.append(gastroscopy_service)
+
+        if consultation_service and gastroscopy_service:
+            consultation_appointment = db.scalar(
+                select(Appointment).where(
+                    Appointment.patient_id == multi_patient.id,
+                    Appointment.date == date.today(),
+                    Appointment.service_id == consultation_service.id,
+                )
+            )
+            if consultation_appointment is None:
+                consultation_appointment = Appointment(
+                    patient_id=multi_patient.id,
+                    provider_id=provider.id,
+                    room_id=room.id,
+                    service_id=consultation_service.id,
+                    date=date.today(),
+                    start_time=time(15, 0),
+                    end_time=time(15, 30),
+                    duration_minutes=30,
+                    status="scheduled",
+                    source="manual",
+                    arrived_at=datetime.now(timezone.utc),
+                )
+                db.add(consultation_appointment)
+                db.flush()
+            else:
+                consultation_appointment.arrived_at = consultation_appointment.arrived_at or datetime.now(timezone.utc)
+
+            gastroscopy_appointment = db.scalar(
+                select(Appointment).where(
+                    Appointment.patient_id == multi_patient.id,
+                    Appointment.date == date.today(),
+                    Appointment.service_id == gastroscopy_service.id,
+                )
+            )
+            if gastroscopy_appointment is None:
+                gastroscopy_appointment = Appointment(
+                    patient_id=multi_patient.id,
+                    provider_id=provider.id,
+                    room_id=endoscopy_room.id,
+                    service_id=gastroscopy_service.id,
+                    date=date.today(),
+                    start_time=time(15, 30),
+                    end_time=time(16, 0),
+                    duration_minutes=30,
+                    status="scheduled",
+                    source="manual",
+                )
+                db.add(gastroscopy_appointment)
+                db.flush()
+
+            multi_journey = db.scalar(
+                select(PatientJourney).where(PatientJourney.appointment_id == consultation_appointment.id)
+            )
+            if multi_journey is None:
+                multi_journey = PatientJourney(
+                    patient_id=multi_patient.id,
+                    appointment_id=consultation_appointment.id,
+                    intake_channel="manual",
+                )
+                db.add(multi_journey)
+                db.flush()
+            multi_journey.current_stage = "ready_for_clinician"
+            multi_journey.document_status = "complete"
+            multi_journey.preparation_status = "complete"
+            multi_journey.check_in_status = "ready"
+            multi_journey.encounter_status = "not_started"
+            multi_journey.consumables_status = "not_ready"
+            multi_journey.billing_status = "not_ready"
+            multi_journey.payment_status = "not_due"
+            multi_journey.closed_at = None
+
+            activity_specs = [
+                (
+                    "first-gastroenterology-consultation",
+                    consultation_appointment,
+                    consultation_service,
+                    room,
+                    1,
+                    "specialist_consultation",
+                    "ready",
+                ),
+                (
+                    "gastroscopy",
+                    gastroscopy_appointment,
+                    gastroscopy_service,
+                    endoscopy_room,
+                    2,
+                    "gastroscopy",
+                    "planned",
+                ),
+            ]
+            for activity_key, activity_appointment, activity_service, activity_room, sequence, activity_kind, activity_status in activity_specs:
+                activity = db.scalar(
+                    select(JourneyActivity).where(
+                        JourneyActivity.journey_id == multi_journey.id,
+                        JourneyActivity.activity_key == activity_key,
+                    )
+                )
+                planned_start = datetime.combine(date.today(), activity_appointment.start_time)
+                planned_end = datetime.combine(date.today(), activity_appointment.end_time)
+                if activity is None:
+                    activity = JourneyActivity(
+                        journey_id=multi_journey.id,
+                        activity_key=activity_key,
+                        sequence=sequence,
+                        required=True,
+                    )
+                    db.add(activity)
+                activity.appointment_id = activity_appointment.id
+                activity.service_id = activity_service.id
+                activity.activity_kind = activity_kind
+                activity.specialty_key = "gastroenterology"
+                activity.clinic_id = gastro_clinic.id
+                activity.primary_provider_id = provider.id
+                activity.room_id = activity_room.id
+                activity.planned_start = planned_start
+                activity.planned_end = planned_end
+                activity.status = activity_status
+                activity.form_resolution_status = "resolved"
+                activity.billing_status = "not_ready"
+                activity.consumables_status = "not_ready"
 
         demo_documents = [
             {

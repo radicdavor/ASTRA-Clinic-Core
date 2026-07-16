@@ -1,11 +1,11 @@
 from decimal import Decimal
 
 import pytest
-from sqlalchemy import inspect
+from sqlalchemy import inspect, select
 
 from app.auth.dependencies import hash_api_key
 from app.core.security import hash_password
-from app.models.domain import ApiKey, AuditLog, Invoice, InvoiceLine, Patient, PatientJourney, Permission, Provider, Role, Room, Service, User
+from app.models.domain import ApiKey, AuditLog, Invoice, InvoiceLine, JourneyCheckIn, Patient, PatientJourney, Permission, Provider, Role, Room, Service, User
 
 
 pytestmark = pytest.mark.integration
@@ -55,6 +55,7 @@ def test_postgresql_migrations_created_key_tables(pg_db):
     table_names = set(inspect(pg_db.bind).get_table_names())
 
     assert REQUIRED_TABLES.issubset(table_names)
+    assert pg_db.scalar(select(JourneyCheckIn).limit(1)) is None
 
 
 def test_api_permission_boundaries_and_api_key_actor(pg_client, pg_db):

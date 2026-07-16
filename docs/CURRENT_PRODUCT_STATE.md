@@ -12,6 +12,7 @@ Primary routes: `/`, `/patients`, `/appointments`, `/journeys/:id`, `/reception`
 
 ## Capability disposition
 
+- Implemented extension: one arrival may contain multiple activity-level appointments, rooms, clinicians, specialty forms, signed reports, interventions, specimens and billing lines while remaining one dashboard row and one check-in.
 - Implemented: canonical journey, role-aware dashboard/workspace, local uploads/source viewing, check-in, encounter, consumables, local invoice/payment records, RBAC and audit.
 - Demo/test: deterministic summary, text-only OCR, metadata classification, reminder sender, synthetic accounts/data and noop fiscalization.
 - Disabled: AI diagnosis suggestions by default; disabled capabilities fail closed.
@@ -21,3 +22,5 @@ Primary routes: `/`, `/patients`, `/appointments`, `/journeys/:id`, `/reception`
 ## Current readiness decision
 
 The technical candidate may be prepared only for **human synthetic usability evaluation** after all repository gates pass. Human evidence has not been claimed. Pilot readiness does not authorize pilot execution. Deployment status remains local/controlled demo only.
+
+The current demo includes a synthetic one-arrival example with a first gastroenterology consultation at 15:00 followed by gastroscopy at 15:30.

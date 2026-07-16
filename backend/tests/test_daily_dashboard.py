@@ -35,6 +35,50 @@ def test_daily_dashboard_returns_one_aggregated_row_per_journey(client, db, auth
     assert body["rows"][0]["activities"][0]["service_name"] == appt.service.name
 
 
+def test_daily_dashboard_shows_consultation_and_gastroscopy_as_one_arrival(client, db, auth_setup):
+    consultation = appointment(
+        db,
+        patient_obj=patient(db, "Sintetički Višestruki"),
+        provider_obj=provider(db, "dr. Demo Gastro"),
+        room_obj=room(db, "Demo ordinacija"),
+        service_obj=service(db, "Prvi gastroenterološki pregled"),
+    )
+    journey = create_journey(client, consultation)
+    gastroscopy = service(db, "Gastroskopija")
+    endoscopy_room = room(db, "Demo endoskopija")
+    second = client.post(
+        f"/api/patient-journeys/{journey['id']}/activities",
+        headers=headers(client),
+        json={
+            "service_id": gastroscopy.id,
+            "provider_id": consultation.provider_id,
+            "room_id": endoscopy_room.id,
+            "date": "2026-07-06",
+            "start_time": "09:30:00",
+            "end_time": "10:00:00",
+            "activity_key": "gastroscopy",
+            "activity_kind": "gastroscopy",
+            "specialty_key": "gastroenterology",
+            "required": True,
+        },
+    )
+    assert second.status_code == 201
+
+    response = client.get("/api/dashboard/day?selected_date=2026-07-06&q=Višestruki", headers=headers(client))
+    assert response.status_code == 200
+    rows = response.json()["rows"]
+    assert len(rows) == 1
+    assert rows[0]["activity_count"] == 2
+    assert [item["service_name"] for item in rows[0]["activities"]] == [
+        "Prvi gastroenterološki pregled",
+        "Gastroskopija",
+    ]
+    assert [item["room_name"] for item in rows[0]["activities"]] == [
+        "Demo ordinacija",
+        "Demo endoskopija",
+    ]
+
+
 def test_daily_dashboard_filters_server_side_and_exposes_blockers(client, db, auth_setup):
     first = appointment(db, patient_obj=patient(db, "SyntheticAlpha"), provider_obj=provider(db, "dr. Alpha"), room_obj=room(db, "Room Alpha"), service_obj=service(db, "Service Alpha"))
     second = appointment(db, patient_obj=patient(db, "SyntheticBeta"), provider_obj=provider(db, "dr. Beta"), room_obj=room(db, "Room Beta"), service_obj=service(db, "Service Beta"))
