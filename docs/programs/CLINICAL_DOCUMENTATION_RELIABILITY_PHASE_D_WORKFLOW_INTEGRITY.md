@@ -15,9 +15,12 @@ The journey-level consumables compatibility endpoint no longer changes `JourneyA
 It verifies:
 
 - every required activity is terminal;
+- every report-required completed activity has a completed clinical form;
 - consumables for completed activities are resolved when required;
 - every non-legacy/non-exempt completed activity has a current signed report;
 - every required report passes integrity verification;
+- every intervention has an explicit complication resolution;
+- every biopsy or retrieved polypectomy has a labelled pathology specimen;
 - no journey blocker remains open.
 
 This prevents payment or a direct close call from bypassing the clinical gates. Pending pathology is intentionally outside physical-visit closure and follows the separate pathology lifecycle.
@@ -25,7 +28,9 @@ This prevents payment or a direct close call from bypassing the clinical gates. 
 ## Regression evidence
 
 - a journey-level consumables call cannot complete a planned activity;
+- an incomplete form-required activity blocks billing;
 - an unsigned report-required activity blocks billing;
+- an unresolved intervention blocks billing;
 - existing explicit activity-level material, invoice, payment and closure paths remain covered;
 - targeted PostgreSQL-backed tests pass.
 

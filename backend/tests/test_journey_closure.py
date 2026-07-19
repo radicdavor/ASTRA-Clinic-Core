@@ -1,7 +1,7 @@
 from tests.conftest import login_token
 from tests.factories import appointment
-from datetime import datetime, timedelta
-from app.models.domain import JourneyActivity, PatientJourney
+from datetime import datetime, timedelta, timezone
+from app.models.domain import ClinicalFormDefinition, ClinicalFormInstance, ClinicalFormVersion, JourneyActivity, PatientJourney, ProcedureIntervention
 
 def headers(client): return {"Authorization": f"Bearer {login_token(client, 'admin@test.local')}"}
 
@@ -47,12 +47,39 @@ def test_cannot_close_with_unresolved_payment(client,db,auth_setup):
 def test_unsigned_required_activity_report_blocks_billing(client,db,auth_setup):
     journey,h=completed_encounter(client,db);url=f"/api/patient-journeys/{journey['id']}"
     visit=db.get(PatientJourney,journey["id"])
-    visit.activities[0].form_resolution_status="resolved"
+    activity=visit.activities[0]
+    definition=ClinicalFormDefinition(form_key="synthetic-unsigned-billing",name="Sintetički nalaz",specialty_key=activity.specialty_key,activity_kind=activity.activity_kind,active=True)
+    db.add(definition);db.flush()
+    version=ClinicalFormVersion(definition_id=definition.id,version=1,status="published",sections_json=[{"section_key":"main","fields":[{"field_key":"finding","label":"Nalaz","type":"long_text","required":True}]}],validation_schema_json={},print_layout_json={},output_document_type="clinical_report")
+    db.add(version);db.flush()
+    db.add(ClinicalFormInstance(activity_id=activity.id,form_version_id=version.id,purpose="clinical_report",status="completed",data_json={"finding":"Sintetički dovršen nalaz"},rendered_summary="Nalaz: Sintetički dovršen nalaz",completed_by=1,completed_at=datetime.now(timezone.utc),binding_source="test",resolved_at=datetime.now(timezone.utc)))
+    activity.form_resolution_status="resolved"
     db.commit()
     assert client.post(f"{url}/consumables/confirm",headers=h,json={"not_applicable":True}).status_code==200
     blocked=client.post(f"{url}/billing/prepare",headers=h)
     assert blocked.status_code==409
     assert "potpisani" in blocked.json()["detail"]
+
+def test_required_activity_form_must_be_completed_before_billing(client,db,auth_setup):
+    journey,h=completed_encounter(client,db);url=f"/api/patient-journeys/{journey['id']}"
+    visit=db.get(PatientJourney,journey["id"])
+    visit.activities[0].form_resolution_status="resolved"
+    db.commit()
+    assert client.post(f"{url}/consumables/confirm",headers=h,json={"not_applicable":True}).status_code==200
+    blocked=client.post(f"{url}/billing/prepare",headers=h)
+    assert blocked.status_code==409
+    assert "obrazac" in blocked.json()["detail"]
+
+def test_unresolved_intervention_blocks_billing_even_if_activity_completed(client,db,auth_setup):
+    journey,h=completed_encounter(client,db);url=f"/api/patient-journeys/{journey['id']}"
+    visit=db.get(PatientJourney,journey["id"])
+    activity=visit.activities[0]
+    db.add(ProcedureIntervention(activity_id=activity.id,intervention_type="biopsy",anatomical_site="Sintetički antrum",count=1,retrieval_status="collected"))
+    db.commit()
+    assert client.post(f"{url}/consumables/confirm",headers=h,json={"not_applicable":True}).status_code==200
+    blocked=client.post(f"{url}/billing/prepare",headers=h)
+    assert blocked.status_code==409
+    assert "komplikacije" in blocked.json()["detail"]
 
 def test_payment_may_be_explicitly_deferred_with_reason(client,db,auth_setup):
     journey,h=completed_encounter(client,db);url=f"/api/patient-journeys/{journey['id']}"
