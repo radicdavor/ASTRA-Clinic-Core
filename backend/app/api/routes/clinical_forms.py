@@ -6,8 +6,8 @@ from app.audit.service import audit, snapshot
 from app.auth.dependencies import Actor, require_permission
 from app.core.database import get_db
 from app.models.domain import ClinicalFormDefinition, ClinicalFormInstance, JourneyActivity, PatientJourney
-from app.schemas.clinical_forms import ClinicalFormDataUpdate, ClinicalFormDefinitionOut, ClinicalFormInstanceOut
-from app.services.clinical_forms import amend_instance, complete_instance, resolve_instance, sign_instance, update_instance
+from app.schemas.clinical_forms import ClinicalFormCompleteRequest, ClinicalFormDataUpdate, ClinicalFormDefinitionOut, ClinicalFormInstanceOut
+from app.services.clinical_forms import amend_instance, resolve_instance, save_and_complete_instance, sign_instance, update_instance
 from app.services.journey_activities import get_activity
 from app.services.patient_journeys import add_event
 from app.services.reports import create_signed_report
@@ -23,17 +23,17 @@ def journey(db: Session, journey_id: int) -> PatientJourney:
     return item
 
 
-def instance(db: Session, journey_id: int, activity_id: int, instance_id: int | None = None) -> ClinicalFormInstance:
+def instance(db: Session, journey_id: int, activity_id: int, instance_id: int | None = None, *, lock_for_update: bool = False) -> ClinicalFormInstance:
     get_activity(db, journey_id, activity_id)
-    stmt = (
-        select(ClinicalFormInstance)
-        .options(joinedload(ClinicalFormInstance.form_version))
-        .where(ClinicalFormInstance.activity_id == activity_id)
-    )
+    stmt = select(ClinicalFormInstance).where(ClinicalFormInstance.activity_id == activity_id)
+    if not lock_for_update:
+        stmt = stmt.options(joinedload(ClinicalFormInstance.form_version))
     if instance_id is not None:
         stmt = stmt.where(ClinicalFormInstance.id == instance_id)
     else:
         stmt = stmt.where(ClinicalFormInstance.status.notin_({"amended", "void"})).order_by(ClinicalFormInstance.id.desc()).limit(1)
+    if lock_for_update:
+        stmt = stmt.with_for_update()
     item = db.scalar(stmt)
     if not item:
         raise HTTPException(404, detail="Klinički obrazac aktivnosti nije pronađen")
@@ -72,10 +72,11 @@ def edit_activity_form(journey_id: int, activity_id: int, payload: ClinicalFormD
 
 
 @router.post("/patient-journeys/{journey_id}/activities/{activity_id}/form/complete", response_model=ClinicalFormInstanceOut)
-def complete_activity_form(journey_id: int, activity_id: int, request: Request, db: Session = Depends(get_db), actor: Actor = Depends(require_permission("encounter.complete"))):
-    item = instance(db, journey_id, activity_id)
-    complete_instance(db, item, actor.user_id)
-    audit(db, "form_completed", "ClinicalFormInstance", item.id, "Klinički obrazac je dovršen", actor.user_id, actor.actor_type, actor.api_key_id, None, snapshot(item), request)
+def complete_activity_form(journey_id: int, activity_id: int, payload: ClinicalFormCompleteRequest, request: Request, db: Session = Depends(get_db), actor: Actor = Depends(require_permission("encounter.complete"))):
+    item = instance(db, journey_id, activity_id, lock_for_update=True)
+    before = snapshot(item)
+    save_and_complete_instance(db, item, payload.data, actor.user_id, payload.expected_revision_number)
+    audit(db, "form_completed", "ClinicalFormInstance", item.id, "Klinički obrazac je spremljen i dovršen", actor.user_id, actor.actor_type, actor.api_key_id, before, snapshot(item), request)
     db.commit()
     return instance(db, journey_id, activity_id, item.id)
 

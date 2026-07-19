@@ -45,8 +45,13 @@ class ClinicalFormInstanceOut(BaseModel):
     amended_from_instance_id: int | None
     binding_source: str
     resolved_at: datetime
+    revision_number: int
     form_version: ClinicalFormVersionOut
 
 
 class ClinicalFormDataUpdate(BaseModel):
     data: dict = Field(default_factory=dict)
+
+
+class ClinicalFormCompleteRequest(ClinicalFormDataUpdate):
+    expected_revision_number: int | None = Field(default=None, ge=0)

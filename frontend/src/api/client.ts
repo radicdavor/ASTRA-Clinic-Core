@@ -11,6 +11,19 @@ const MUTATION_METHODS = new Set(["POST", "PATCH", "PUT", "DELETE"]);
 
 export type ToastTone = "success" | "error";
 
+export type ApiValidationDetail = {
+  code?: string;
+  message?: string;
+  errors?: Array<{ field_key?: string; label?: string; message?: string }>;
+};
+
+export class ApiError extends Error {
+  constructor(message: string, public readonly detail: unknown, public readonly status: number) {
+    super(message);
+    this.name = "ApiError";
+  }
+}
+
 export function notifyUser(message: string, tone: ToastTone = "success", title?: string) {
   if (typeof window === "undefined") return;
   window.dispatchEvent(new CustomEvent("astra:toast", { detail: { message, tone, title } }));
@@ -18,6 +31,8 @@ export function notifyUser(message: string, tone: ToastTone = "success", title?:
 
 function mutationSuccessMessage(path: string, method: string) {
   const normalizedMethod = method.toUpperCase();
+  if (normalizedMethod === "PATCH" && path.endsWith("/form")) return "Skica spremljena";
+  if (normalizedMethod === "POST" && path.endsWith("/form/complete")) return "Obrazac dovršen";
   if (normalizedMethod === "POST" && path === "/api/patients") return "Pacijent je spremljen.";
   if (normalizedMethod === "POST" && path === "/api/appointments") return "Termin je spremljen.";
   if (normalizedMethod === "POST" && path === "/api/workflow-tasks") return "Zadatak je spremljen.";
@@ -62,6 +77,14 @@ function notifyMutation(path: string, method: string, message: string, tone: Toa
 
 function apiErrorMessage(detail: unknown): string {
   if (typeof detail === "string") return detail;
+  if (detail && typeof detail === "object" && !Array.isArray(detail)) {
+    const entry = detail as ApiValidationDetail;
+    const fieldMessages = (entry.errors ?? [])
+      .map(error => error.label && error.message ? `${error.label}: ${error.message}` : error.message ?? null)
+      .filter((message): message is string => Boolean(message));
+    if (fieldMessages.length) return fieldMessages.join(" ");
+    if (entry.message) return entry.message;
+  }
   if (Array.isArray(detail)) {
     const messages = detail.map((item) => {
       if (!item || typeof item !== "object") return null;
@@ -134,7 +157,7 @@ export async function api<T>(path: string, options: RequestInit = {}): Promise<T
     const error = await response.json().catch(() => ({ detail: "Greska u komunikaciji s API-jem" }));
     const message = apiErrorMessage(error.detail);
     notifyMutation(path, method, message, "error");
-    throw new Error(message);
+    throw new ApiError(message, error.detail, response.status);
   }
   notifyMutation(path, method, mutationSuccessMessage(path, method));
   return response.json();

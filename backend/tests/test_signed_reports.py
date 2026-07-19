@@ -28,8 +28,9 @@ def setup_signed_report(client, db):
     db.add(ServiceFormBinding(service_id=activity["service_id"], form_version_id=version.id, active=True)); db.flush()
     base = f"/api/patient-journeys/{visit['id']}/activities/{activity['id']}/form"
     assert client.post(f"{base}/resolve", headers=headers(client)).status_code == 200
-    assert client.patch(base, headers=headers(client), json={"data": {"opinion": "Isključivo ljudski uneseno mišljenje."}}).status_code == 200
-    assert client.post(f"{base}/complete", headers=headers(client)).status_code == 200
+    saved = client.patch(base, headers=headers(client), json={"data": {"opinion": "Isključivo ljudski uneseno mišljenje."}})
+    assert saved.status_code == 200
+    assert client.post(f"{base}/complete", headers=headers(client), json={"data": saved.json()["data_json"], "expected_revision_number": saved.json()["revision_number"]}).status_code == 200
     signed = client.post(f"{base}/sign", headers=headers(client))
     assert signed.status_code == 200
     report = db.query(SignedClinicalReport).filter_by(form_instance_id=signed.json()["id"]).one()
@@ -62,8 +63,9 @@ def test_delivery_is_explicit_stub_and_amendment_preserves_original(client, db, 
     assert delivered.json()[0]["delivered_at"] is None
 
     amendment = client.post(f"{base}/amend", headers=headers(client)).json()
-    assert client.patch(base, headers=headers(client), json={"data": {"opinion": "Kontrolirani ispravak."}}).status_code == 200
-    assert client.post(f"{base}/complete", headers=headers(client)).status_code == 200
+    saved_amendment = client.patch(base, headers=headers(client), json={"data": {"opinion": "Kontrolirani ispravak."}})
+    assert saved_amendment.status_code == 200
+    assert client.post(f"{base}/complete", headers=headers(client), json={"data": saved_amendment.json()["data_json"], "expected_revision_number": saved_amendment.json()["revision_number"]}).status_code == 200
     assert client.post(f"{base}/sign", headers=headers(client)).status_code == 200
     reports = db.query(SignedClinicalReport).filter_by(journey_id=visit["id"]).order_by(SignedClinicalReport.version_number).all()
     assert len(reports) == 2

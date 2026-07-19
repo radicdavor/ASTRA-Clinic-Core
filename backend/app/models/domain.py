@@ -774,6 +774,10 @@ class ClinicalFormInstance(TimestampMixin, Base):
     form_version: Mapped[ClinicalFormVersion] = relationship()
     revisions: Mapped[list[ClinicalFormRevision]] = relationship(back_populates="instance", cascade="all, delete-orphan", order_by="ClinicalFormRevision.revision_number")
 
+    @property
+    def revision_number(self) -> int:
+        return self.revisions[-1].revision_number if self.revisions else 0
+
 
 class ClinicalFormRevision(Base):
     __tablename__ = "clinical_form_revisions"

@@ -1,4 +1,6 @@
-from app.models.domain import ClinicalFormDefinition, ClinicalFormInstance, ClinicalFormVersion, ServiceFormBinding
+from sqlalchemy import func, select
+
+from app.models.domain import ClinicalFormDefinition, ClinicalFormInstance, ClinicalFormRevision, ClinicalFormVersion, ServiceFormBinding
 from app.services.clinical_forms import validate_data, validate_sections
 from tests.conftest import login_token
 from tests.factories import appointment
@@ -60,12 +62,15 @@ def test_form_lifecycle_signing_and_controlled_amendment(client, db, auth_setup)
     assert unknown.status_code == 422
     incomplete = client.patch(base, headers=headers(client), json={"data": {"anamnesis": "Sintetička anamneza"}})
     assert incomplete.status_code == 200
-    assert client.post(f"{base}/complete", headers=headers(client)).status_code == 422
+    incomplete_completion = client.post(f"{base}/complete", headers=headers(client), json={"data": incomplete.json()["data_json"], "expected_revision_number": incomplete.json()["revision_number"]})
+    assert incomplete_completion.status_code == 422
+    assert incomplete_completion.json()["detail"]["errors"][0]["label"] == "Mišljenje"
+    assert "opinion" not in incomplete_completion.json()["detail"]["message"]
 
     saved = client.patch(base, headers=headers(client), json={"data": {"anamnesis": "Sintetička anamneza", "opinion": "Ljudsko mišljenje", "diagnoses": ["Z00.0"]}})
     assert saved.status_code == 200
     assert "Ljudsko mišljenje" in saved.json()["rendered_summary"]
-    completed = client.post(f"{base}/complete", headers=headers(client))
+    completed = client.post(f"{base}/complete", headers=headers(client), json={"data": saved.json()["data_json"], "expected_revision_number": saved.json()["revision_number"]})
     assert completed.status_code == 200 and completed.json()["status"] == "completed"
     signed = client.post(f"{base}/sign", headers=headers(client))
     assert signed.status_code == 200 and signed.json()["status"] == "signed"
@@ -77,6 +82,55 @@ def test_form_lifecycle_signing_and_controlled_amendment(client, db, auth_setup)
     assert amended.json()["data_json"]["opinion"] == "Ljudsko mišljenje"
     original = db.get(ClinicalFormInstance, signed.json()["id"])
     assert original.status == "amended"
+
+
+def test_complete_atomically_persists_current_unsaved_data_and_creates_one_revision(client, db, auth_setup):
+    visit = journey(client, db)
+    activity = visit["activities"][0]
+    published_form(db, activity["service_id"])
+    base = f"/api/patient-journeys/{visit['id']}/activities/{activity['id']}/form"
+    resolved = client.post(f"{base}/resolve", headers=headers(client)).json()
+
+    current_data = {
+        "anamnesis": "Sintetička anamneza unesena neposredno prije dovršavanja",
+        "opinion": "Bez komplikacija.",
+        "diagnoses": ["Z00.0"],
+    }
+    completed = client.post(
+        f"{base}/complete",
+        headers=headers(client),
+        json={"data": current_data, "expected_revision_number": resolved["revision_number"]},
+    )
+
+    assert completed.status_code == 200
+    assert completed.json()["status"] == "completed"
+    assert completed.json()["data_json"] == current_data
+    assert completed.json()["revision_number"] == 1
+    db.expire_all()
+    stored = db.get(ClinicalFormInstance, completed.json()["id"])
+    assert stored.data_json == current_data
+    assert db.scalar(select(func.count(ClinicalFormRevision.id)).where(ClinicalFormRevision.instance_id == stored.id)) == 1
+
+
+def test_complete_rejects_stale_revision_and_duplicate_completion_without_extra_revision(client, db, auth_setup):
+    visit = journey(client, db)
+    activity = visit["activities"][0]
+    published_form(db, activity["service_id"])
+    base = f"/api/patient-journeys/{visit['id']}/activities/{activity['id']}/form"
+    resolved = client.post(f"{base}/resolve", headers=headers(client)).json()
+    data = {"anamnesis": "A", "opinion": "Bez komplikacija."}
+    saved = client.patch(base, headers=headers(client), json={"data": data}).json()
+
+    stale = client.post(f"{base}/complete", headers=headers(client), json={"data": data, "expected_revision_number": resolved["revision_number"]})
+    assert stale.status_code == 409
+    assert stale.json()["detail"]["code"] == "stale_form"
+
+    completed = client.post(f"{base}/complete", headers=headers(client), json={"data": data, "expected_revision_number": saved["revision_number"]})
+    assert completed.status_code == 200
+    duplicate = client.post(f"{base}/complete", headers=headers(client), json={"data": data, "expected_revision_number": completed.json()["revision_number"]})
+    assert duplicate.status_code == 409
+    db.expire_all()
+    assert db.scalar(select(func.count(ClinicalFormRevision.id)).where(ClinicalFormRevision.instance_id == completed.json()["id"])) == 2
 
 
 def test_controlled_registry_rejects_duplicate_and_executable_fields():
