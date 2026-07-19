@@ -59,6 +59,14 @@ const rows = [
     billing_status: "not_ready", payment_status: "not_due", blocker_status: "clear", blocker_labels: [], blockers: [], allowed_actions: ["open_check_in"],
   },
   {
+    journey_id: 18, appointment_id: 108, time: "13:30:00", patient_name: "Sintetički Dokumenti",
+    service_id: 1, service_name: "Gastroskopija", clinician_id: 1, clinician_name: "dr. Test",
+    room_id: 1, room_name: "Ordinacija 1", intake_channel: "manual", workflow_stage: "awaiting_documents",
+    document_status: "requested", preparation_status: "complete", arrival_status: "not_arrived",
+    check_in_status: "not_arrived", encounter_status: "not_started", consumables_status: "not_ready",
+    billing_status: "not_ready", payment_status: "not_due", blocker_status: "clear", blocker_labels: [], blockers: [], allowed_actions: ["open_check_in"],
+  },
+  {
     journey_id: 17, appointment_id: 107, time: "14:00:00", patient_name: "Sintetički Završeno",
     service_id: 1, service_name: "Kontrola", clinician_id: 1, clinician_name: "dr. Test",
     room_id: 1, room_name: "Ordinacija 1", intake_channel: "manual", workflow_stage: "completed",
@@ -144,6 +152,15 @@ describe("pojednostavljeni dnevni tijek pacijenata", () => {
     const row = (await screen.findByText("Sintetički Prijem")).closest("tr") as HTMLTableRowElement;
     expect(within(row).getByRole("button", { name: "Nastavi prijem" })).toBeTruthy();
     expect(within(row).getAllByRole("button")).toHaveLength(1);
+  });
+
+  test("nalaze koje pacijent donosi ne prikazuje kao uvjet za pregled", async () => {
+    renderDashboard();
+    const row = (await screen.findByText("Sintetički Dokumenti")).closest("tr") as HTMLTableRowElement;
+    expect(within(row).getByText("Čeka dolazak")).toBeTruthy();
+    expect(within(row).getAllByText(/to ne blokira početak pregleda/).length).toBeGreaterThan(0);
+    expect(within(row).queryByText("Nalazi za pregled")).toBeNull();
+    expect(within(row).queryByText("Potrebna priprema")).toBeNull();
   });
 
   test("pregled, materijal i naplata dobivaju po jednu kontekstualnu radnju", async () => {

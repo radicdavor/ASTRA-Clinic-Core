@@ -33,9 +33,10 @@ const preparationAttention: Record<string, string> = {
   in_progress: "Priprema još nije dovršena.", review_required: "Pripremu treba provjeriti ovlaštena osoba.",
   blocked: "Priprema je blokirana i treba odluku ovlaštene osobe.",
 };
-const documentAttention: Record<string, string> = {
-  requested: "Dokumentacija je zatražena, ali još nije zaprimljena.", partial: "Nedostaje dio tražene dokumentacije.",
-  review_required: "Dokumentaciju treba pregledati ovlaštena osoba.", blocked: "Dokumentacija blokira nastavak obrade.",
+const documentContext: Record<string, string> = {
+  requested: "Ako pacijent ima ranije nalaze, može ih donijeti na pregled; to ne blokira početak pregleda.",
+  partial: "Dio nalaza je već zaprimljen; ostale nalaze pacijent može donijeti na pregled.",
+  review_required: "Zaprimljeni nalazi čekaju liječnički pregled, ali nisu administrativni uvjet za dolazak.",
 };
 
 function StatusSignal({ tone, description }: { tone: SignalTone; description: string }) {
@@ -58,8 +59,13 @@ function operationalState(row: DashboardRow): OperationalState {
   if (["awaiting_billing", "awaiting_payment"].includes(row.workflow_stage)) { const mayBill = row.allowed_actions.includes("prepare_billing") || row.allowed_actions.includes("open_payment"); return { tone: "active", label: "Čeka naplatu", detail: row.workflow_stage === "awaiting_billing" ? "Materijal je riješen. Račun treba izraditi." : "Račun je izrađen i čeka plaćanje.", action: mayBill ? "billing" : "open", actionLabel: mayBill ? "Naplati" : "Otvori", icon: <CreditCard size={15}/> }; }
   if (["ready_for_clinician", "in_encounter"].includes(row.workflow_stage)) { const mayOpen = row.allowed_actions.includes("open_encounter"); return { tone: "active", label: row.workflow_stage === "in_encounter" ? "Pregled u tijeku" : "Čeka liječnika", detail: row.workflow_stage === "in_encounter" ? "Klinički susret je otvoren." : "Prijem je završen; pacijent je spreman za liječnika.", action: mayOpen ? "encounter" : "open", actionLabel: mayOpen ? (row.workflow_stage === "in_encounter" ? "Nastavi pregled" : "Otvori pregled") : "Otvori", icon: <Stethoscope size={15}/> }; }
   if (["arrived", "check_in_review"].includes(row.workflow_stage)) { const mayOpen = row.allowed_actions.includes("open_check_in"); return { tone: "active", label: "Prijem u tijeku", detail: "Dovršite samo potrebne prijemne provjere.", action: mayOpen ? "reception" : "open", actionLabel: mayOpen ? "Nastavi prijem" : "Otvori", icon: <ClipboardCheck size={15}/> }; }
-  const attention = documentAttention[row.document_status] || preparationAttention[row.preparation_status];
-  if (row.workflow_stage === "ready_for_arrival") { const mayOpen = row.allowed_actions.includes("open_check_in"); return { tone: attention ? "active" : "unresolved", label: attention ? "Čeka dolazak · potrebna provjera" : "Čeka dolazak", detail: attention || "Pacijent još nije započeo prijem.", action: mayOpen ? "reception" : "open", actionLabel: mayOpen ? "Započni prijem" : "Otvori", icon: <ClipboardCheck size={15}/> }; }
+  const preparationDetail = preparationAttention[row.preparation_status];
+  const attention = preparationDetail;
+  if (["requested", "booked", "awaiting_forms", "awaiting_documents", "preparation_in_progress", "ready_for_arrival"].includes(row.workflow_stage)) {
+    const mayOpen = row.allowed_actions.includes("open_check_in");
+    if (attention) return { tone: "active", label: "Potrebna priprema", detail: attention, action: "open", actionLabel: "Otvori" };
+    return { tone: "unresolved", label: "Čeka dolazak", detail: documentContext[row.document_status] || "Pacijent još nije započeo prijem.", action: mayOpen ? "reception" : "open", actionLabel: mayOpen ? "Započni prijem" : "Otvori", icon: <ClipboardCheck size={15}/> };
+  }
   if (attention) return { tone: "active", label: "Potrebna priprema", detail: attention, action: "open", actionLabel: "Otvori" };
   return { tone: "unresolved", label: "Nije započeto", detail: "Tijek još nema operativnu radnju.", action: "open", actionLabel: "Otvori" };
 }
