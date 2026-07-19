@@ -67,6 +67,14 @@ const rows = [
     billing_status: "not_ready", payment_status: "not_due", blocker_status: "clear", blocker_labels: [], blockers: [], allowed_actions: ["open_check_in"],
   },
   {
+    journey_id: 19, appointment_id: 109, time: "13:45:00", patient_name: "Sintetički Priprema",
+    service_id: 1, service_name: "Gastroskopija", clinician_id: 1, clinician_name: "dr. Test",
+    room_id: 1, room_name: "Ordinacija 1", intake_channel: "manual", workflow_stage: "preparation_in_progress",
+    document_status: "complete", preparation_status: "in_progress", arrival_status: "not_arrived",
+    check_in_status: "not_arrived", encounter_status: "not_started", consumables_status: "not_ready",
+    billing_status: "not_ready", payment_status: "not_due", blocker_status: "clear", blocker_labels: [], blockers: [], allowed_actions: ["open_check_in"],
+  },
+  {
     journey_id: 17, appointment_id: 107, time: "14:00:00", patient_name: "Sintetički Završeno",
     service_id: 1, service_name: "Kontrola", clinician_id: 1, clinician_name: "dr. Test",
     room_id: 1, room_name: "Ordinacija 1", intake_channel: "manual", workflow_stage: "completed",
@@ -161,6 +169,14 @@ describe("pojednostavljeni dnevni tijek pacijenata", () => {
     expect(within(row).getByText("Naručen")).toBeTruthy();
     expect(within(row).getAllByText(/to ne blokira početak pregleda/).length).toBeGreaterThan(0);
     expect(within(row).queryByText("Nalazi za pregled")).toBeNull();
+    expect(within(row).queryByText("Potrebna priprema")).toBeNull();
+  });
+
+  test("pripremu prije dolaska ne prikazuje kao dodatni administrativni alarm", async () => {
+    renderDashboard();
+    const row = (await screen.findByText("Sintetički Priprema")).closest("tr") as HTMLTableRowElement;
+    expect(within(row).getByText("Naručen")).toBeTruthy();
+    expect(within(row).getByText("Priprema će se kratko provjeriti u prijemu.")).toBeTruthy();
     expect(within(row).queryByText("Potrebna priprema")).toBeNull();
   });
 

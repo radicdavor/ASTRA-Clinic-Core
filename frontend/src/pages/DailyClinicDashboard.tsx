@@ -63,8 +63,7 @@ function operationalState(row: DashboardRow): OperationalState {
   const attention = preparationDetail;
   if (["requested", "booked", "awaiting_forms", "awaiting_documents", "preparation_in_progress", "ready_for_arrival"].includes(row.workflow_stage)) {
     const mayOpen = row.allowed_actions.includes("open_check_in");
-    if (attention) return { tone: "active", label: "Potrebna priprema", detail: attention, action: "open", actionLabel: "Otvori" };
-    return { tone: "unresolved", label: "Naručen", detail: documentContext[row.document_status] || "Pacijent je naručen, ali još nije evidentirano da je stigao.", action: mayOpen ? "reception" : "open", actionLabel: mayOpen ? "Otvori prijem" : "Otvori", icon: <ClipboardCheck size={15}/> };
+    return { tone: "unresolved", label: "Naručen", detail: documentContext[row.document_status] || (attention ? "Priprema će se kratko provjeriti u prijemu." : "Pacijent je naručen, ali još nije evidentirano da je stigao."), action: mayOpen ? "reception" : "open", actionLabel: mayOpen ? "Otvori prijem" : "Otvori", icon: <ClipboardCheck size={15}/> };
   }
   if (attention) return { tone: "active", label: "Potrebna priprema", detail: attention, action: "open", actionLabel: "Otvori" };
   return { tone: "unresolved", label: "Nije započeto", detail: "Tijek još nema operativnu radnju.", action: "open", actionLabel: "Otvori" };
