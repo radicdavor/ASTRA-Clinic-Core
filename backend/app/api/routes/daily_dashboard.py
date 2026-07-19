@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session, joinedload, selectinload
 
 from app.auth.dependencies import Actor, require_permission
 from app.core.database import get_db
-from app.models.domain import Appointment, Clinic, JourneyActivity, Patient, PatientJourney, Provider, Room
+from app.models.domain import Appointment, Clinic, JourneyActivity, JourneyCheckIn, Patient, PatientJourney, Provider, Room
 from app.schemas.daily_dashboard import DailyDashboardResponse, DailyDashboardRow
 
 
@@ -87,12 +87,25 @@ def daily_dashboard(
         term = f"%{q.strip()}%"
         stmt = stmt.where(or_(Patient.first_name.ilike(term), Patient.last_name.ilike(term)))
     journeys = db.scalars(stmt).unique().all()
+    journey_ids = [item.id for item in journeys]
+    check_ins = db.scalars(
+        select(JourneyCheckIn).options(selectinload(JourneyCheckIn.items)).where(JourneyCheckIn.journey_id.in_(journey_ids))
+    ).all() if journey_ids else []
+    reception_warnings = {
+        check_in.journey_id: [
+            item.note for item in check_in.items
+            if item.note and item.state == "confirmed"
+        ]
+        for check_in in check_ins
+    }
     rows = []
     for journey in journeys:
         open_blockers = [item for item in journey.blockers if item.status == "open"]
-        if blocker is True and not open_blockers:
+        warning_details = reception_warnings.get(journey.id, [])
+        has_problem_signal = bool(open_blockers or warning_details)
+        if blocker is True and not has_problem_signal:
             continue
-        if blocker is False and open_blockers:
+        if blocker is False and has_problem_signal:
             continue
         appointment = journey.appointment
         activities = sorted(journey.activities, key=lambda item: item.sequence)
@@ -131,6 +144,8 @@ def daily_dashboard(
             blocker_status="blocked" if open_blockers else "clear",
             blocker_labels=[item.title for item in open_blockers],
             blockers=[{"id": item.id, "title": item.title, "details": item.details, "is_clinical": item.is_clinical} for item in open_blockers],
+            reception_warning=bool(warning_details),
+            reception_warning_details=warning_details,
             allowed_actions=allowed_actions,
             activity_count=len(activities),
             current_activity_id=current_activity.id if current_activity else None,

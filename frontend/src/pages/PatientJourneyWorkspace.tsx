@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
 import { api, getSessionUser } from "../api/client";
+import { DateInput } from "../components/DateInput";
 import { useApi } from "../hooks/useApi";
 import type { ClinicalDocument, InventoryItem, Provider, Service } from "../types";
 import type { ActivityPreparationState, AIDiagnosisSuggestion, CheckInState, EncounterDraft, JourneyClosure, JourneyStageKey, PathologyCase, PatientJourneyDetail, PatientJourneySummary, PatientJourneyTimelineItem, PreparationState, PublicPilotConfig, VisitDocument } from "../types/program2";
@@ -30,6 +31,38 @@ type WorkspaceConfirmation = {
 
 type PendingFormNavigation = { kind: "activity"; activityId: number } | { kind: "stage"; stage: JourneyStageKey };
 
+type ReceptionModal = "identity" | "checklist" | null;
+type PatientReceptionDraft = { first_name: string; last_name: string; date_of_birth: string; oib: string; phone: string; email: string; notes: string };
+type ReceptionChecklistDraft = {
+  consent_status: boolean; laboratory_results: boolean; anesthesia_questionnaire: boolean; informed_consent: boolean;
+  fasting_6h: boolean; bowel_preparation_clear: boolean; sedation_escort: boolean; pacemaker: boolean;
+  current_medication_text: string; drug_allergy_text: string;
+};
+
+const receptionDefaults: ReceptionChecklistDraft = {
+  consent_status: true,
+  laboratory_results: true,
+  anesthesia_questionnaire: true,
+  informed_consent: true,
+  fasting_6h: true,
+  bowel_preparation_clear: true,
+  sedation_escort: true,
+  pacemaker: false,
+  current_medication_text: "",
+  drug_allergy_text: "",
+};
+
+const receptionChecklist: Array<{ key: keyof Omit<ReceptionChecklistDraft, "current_medication_text" | "drug_allergy_text">; label: string; defaultChecked: boolean; warning: string }> = [
+  { key: "consent_status", label: "Status privole potvrđen", defaultChecked: true, warning: "Status privole nije potvrđen." },
+  { key: "laboratory_results", label: "Potrebni laboratorijski nalazi", defaultChecked: true, warning: "Potrebni laboratorijski nalazi nisu potvrđeni." },
+  { key: "anesthesia_questionnaire", label: "Anesteziološki upitnik", defaultChecked: true, warning: "Anesteziološki upitnik nije potvrđen." },
+  { key: "informed_consent", label: "Informirani pristanak", defaultChecked: true, warning: "Informirani pristanak nije potvrđen." },
+  { key: "fasting_6h", label: "Post (6 sati)", defaultChecked: true, warning: "Post od 6 sati nije potvrđen." },
+  { key: "bowel_preparation_clear", label: "Priprema crijeva (stolica bistra)", defaultChecked: true, warning: "Priprema crijeva nije potvrđena kao uredna." },
+  { key: "sedation_escort", label: "Pratnja nakon sedacije", defaultChecked: true, warning: "Pratnja nakon sedacije nije potvrđena." },
+  { key: "pacemaker", label: "Elektrostimulator", defaultChecked: false, warning: "Pacijent navodi elektrostimulator." },
+];
+
 export function PatientJourneyWorkspace() {
   const { id } = useParams();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -55,9 +88,25 @@ export function PatientJourneyWorkspace() {
   const [actionError, setActionError] = useState("");
   const [confirmation, setConfirmation] = useState<WorkspaceConfirmation | null>(null);
   const [pendingFormNavigation, setPendingFormNavigation] = useState<PendingFormNavigation | null>(null);
+  const [receptionModal, setReceptionModal] = useState<ReceptionModal>(null);
+  const [receptionBusy, setReceptionBusy] = useState(false);
+  const [patientReceptionDraft, setPatientReceptionDraft] = useState<PatientReceptionDraft>({ first_name: "", last_name: "", date_of_birth: "", oib: "", phone: "", email: "", notes: "" });
+  const [receptionDraft, setReceptionDraft] = useState<ReceptionChecklistDraft>(receptionDefaults);
   const clinicalFormRef = useRef<ClinicalActivityFormHandle | null>(null);
 
   useEffect(() => { if (encounter.data) setDraft(encounter.data); }, [encounter.data]);
+  useEffect(() => {
+    if (!journey.data?.patient) return;
+    setPatientReceptionDraft({
+      first_name: journey.data.patient.first_name ?? "",
+      last_name: journey.data.patient.last_name ?? "",
+      date_of_birth: journey.data.patient.date_of_birth ?? "",
+      oib: journey.data.patient.oib ?? "",
+      phone: journey.data.patient.phone ?? "",
+      email: journey.data.patient.email ?? "",
+      notes: journey.data.patient.notes ?? "",
+    });
+  }, [journey.data?.patient]);
   useEffect(() => {
     if (!journey.data) return;
     const current = stageForJourney(journey.data.current_stage);
@@ -104,7 +153,49 @@ export function PatientJourneyWorkspace() {
     applyFormNavigation(target);
   }
   function selectActivity(activityId: number) { requestFormNavigation({ kind: "activity", activityId }); }
-  async function startCheckIn() { await perform(async () => { checkin.setData(await api<CheckInState>(`/api/patient-journeys/${id}/check-in`, { method: "POST" })); await refresh(); }); }
+  async function startCheckIn() { openReception(); }
+  async function openReception() {
+    setReceptionDraft(receptionDefaults);
+    setReceptionModal("identity");
+  }
+  async function confirmPatientReceptionData() {
+    setReceptionBusy(true);
+    await perform(async () => {
+      await api(`/api/patients/${j.patient_id}`, { method: "PATCH", body: JSON.stringify({
+        first_name: patientReceptionDraft.first_name.trim(),
+        last_name: patientReceptionDraft.last_name.trim(),
+        date_of_birth: patientReceptionDraft.date_of_birth || null,
+        oib: patientReceptionDraft.oib.trim() || null,
+        phone: patientReceptionDraft.phone.trim() || null,
+        email: patientReceptionDraft.email.trim() || null,
+        notes: patientReceptionDraft.notes.trim() || null,
+      }) });
+      checkin.setData(await api<CheckInState>(`/api/patient-journeys/${id}/check-in`, { method: "POST" }));
+      await refresh();
+      setReceptionModal("checklist");
+    });
+    setReceptionBusy(false);
+  }
+  function receptionWarnings() {
+    const warnings = receptionChecklist.filter(item => Boolean(receptionDraft[item.key]) !== item.defaultChecked).map(item => item.warning);
+    if (receptionDraft.current_medication_text.trim()) warnings.push(`Lijekovi: ${receptionDraft.current_medication_text.trim()}`);
+    if (receptionDraft.drug_allergy_text.trim()) warnings.push(`Alergije na lijekove: ${receptionDraft.drug_allergy_text.trim()}`);
+    return warnings;
+  }
+  async function completeReception() {
+    setReceptionBusy(true);
+    await perform(async () => {
+      const notes = new Map<string, string>();
+      for (const item of receptionChecklist) if (Boolean(receptionDraft[item.key]) !== item.defaultChecked) notes.set(item.key, item.warning);
+      if (receptionDraft.current_medication_text.trim()) notes.set("current_medication", `Lijekovi: ${receptionDraft.current_medication_text.trim()}`);
+      if (receptionDraft.drug_allergy_text.trim()) notes.set("drug_allergies", `Alergije na lijekove: ${receptionDraft.drug_allergy_text.trim()}`);
+      checkin.setData(await api<CheckInState>(`/api/patient-journeys/${id}/check-in/complete-reception`, { method: "POST", body: JSON.stringify({ items: Array.from(notes.entries()).map(([item_key, note]) => ({ item_key, note })) }) }));
+      await refresh();
+      setActiveStage("encounter");
+      setReceptionModal(null);
+    });
+    setReceptionBusy(false);
+  }
   async function open() { await perform(async () => { encounter.setData(await api(`/api/patient-journeys/${id}/encounter`, { method: "POST" })); await refresh(); }); }
   async function save() { await perform(async () => { encounter.setData(await api(`/api/patient-journeys/${id}/encounter`, { method: "PATCH", body: JSON.stringify(draft) })); }); }
   async function suggestDiagnoses() {
@@ -216,6 +307,37 @@ export function PatientJourneyWorkspace() {
     </main>
     <JourneyClinicalContext summary={<AISummaryPanel summary={summary.data} onGenerate={generateSummary} onReview={reviewSummaryFact}/>} timeline={<PatientTimeline items={timeline.data}/>} documents={<SourceDocumentViewer documents={documents.data} onReview={reviewDocument}/>}/>
     {pendingFormNavigation && <div className="modal-backdrop"><section className="modal-panel clinical-draft-navigation" role="dialog" aria-modal="true" aria-labelledby="draft-navigation-title"><header><div><span className="eyebrow">Nespremljena skica</span><h2 id="draft-navigation-title">Želite li spremiti promjene?</h2></div></header><p>Promjena aktivnosti ili faze ne smije odbaciti uneseni klinički tekst bez vaše odluke.</p><footer><button type="button" onClick={() => setPendingFormNavigation(null)}>Ostani</button><button type="button" onClick={() => { clinicalFormRef.current?.discardLocalChanges(); const target = pendingFormNavigation; setPendingFormNavigation(null); applyFormNavigation(target); }}>Odbaci i nastavi</button><button type="button" className="primary" onClick={async () => { const saved = await clinicalFormRef.current?.saveDraft(); if (saved) { const target = pendingFormNavigation; setPendingFormNavigation(null); applyFormNavigation(target); } }}>Spremi skicu i nastavi</button></footer></section></div>}
+    {receptionModal === "identity" && <div className="modal-backdrop" onMouseDown={event => event.target === event.currentTarget && setReceptionModal(null)}>
+      <section className="modal-panel reception-modal" role="dialog" aria-modal="true" aria-labelledby="reception-identity-title">
+        <header><div><span className="eyebrow">Prijem pacijenta</span><h2 id="reception-identity-title">Opći podaci pacijenta</h2></div></header>
+        <p>Provjerite podatke s pacijentom ili na tabletu. Ako nešto ispravite, spremit će se prije prijemne provjere.</p>
+        <div className="form-grid two">
+          <label>Ime<input value={patientReceptionDraft.first_name} onChange={event => setPatientReceptionDraft(current => ({ ...current, first_name: event.target.value }))}/></label>
+          <label>Prezime<input value={patientReceptionDraft.last_name} onChange={event => setPatientReceptionDraft(current => ({ ...current, last_name: event.target.value }))}/></label>
+          <label>Datum rođenja<DateInput value={patientReceptionDraft.date_of_birth} onChange={value => setPatientReceptionDraft(current => ({ ...current, date_of_birth: value }))}/></label>
+          <label>OIB<input value={patientReceptionDraft.oib} onChange={event => setPatientReceptionDraft(current => ({ ...current, oib: event.target.value }))} placeholder="Demo OIB ili prazno"/></label>
+          <label>Telefon<input value={patientReceptionDraft.phone} onChange={event => setPatientReceptionDraft(current => ({ ...current, phone: event.target.value }))}/></label>
+          <label>E-pošta<input value={patientReceptionDraft.email} onChange={event => setPatientReceptionDraft(current => ({ ...current, email: event.target.value }))}/></label>
+          <label className="span-2">Napomene<input value={patientReceptionDraft.notes} onChange={event => setPatientReceptionDraft(current => ({ ...current, notes: event.target.value }))}/></label>
+        </div>
+        <footer><button type="button" onClick={() => setReceptionModal(null)}>Odustani</button><button type="button" className="primary" disabled={receptionBusy || !patientReceptionDraft.first_name.trim() || !patientReceptionDraft.last_name.trim()} onClick={confirmPatientReceptionData}>{receptionBusy ? "Spremam…" : "Podaci su točni"}</button></footer>
+      </section>
+    </div>}
+    {receptionModal === "checklist" && <div className="modal-backdrop" onMouseDown={event => event.target === event.currentTarget && setReceptionModal(null)}>
+      <section className="modal-panel reception-modal" role="dialog" aria-modal="true" aria-labelledby="reception-checklist-title">
+        <header><div><span className="eyebrow">Prije pregleda/pretrage</span><h2 id="reception-checklist-title">Kratka prijemna provjera</h2></div></header>
+        <p>Ovo nije klinička odluka. Ako nešto odstupa, pacijent svejedno ide liječniku/anesteziologu, a red na ploči postaje crven.</p>
+        <div className="reception-checklist">
+          {receptionChecklist.map(item => <label key={item.key} className={Boolean(receptionDraft[item.key]) !== item.defaultChecked ? "changed" : ""}><input type="checkbox" checked={Boolean(receptionDraft[item.key])} onChange={event => setReceptionDraft(current => ({ ...current, [item.key]: event.target.checked }))}/><span>{item.label}</span></label>)}
+        </div>
+        <div className="form-grid two">
+          <label>Lijekovi koje pacijent uzima<textarea rows={2} value={receptionDraft.current_medication_text} placeholder="Upisati samo kratak navod, detalji idu u anamnezu." onChange={event => setReceptionDraft(current => ({ ...current, current_medication_text: event.target.value }))}/></label>
+          <label>Alergije na lijekove<textarea rows={2} value={receptionDraft.drug_allergy_text} placeholder="Ako navodi alergiju, upisati lijek/reakciju." onChange={event => setReceptionDraft(current => ({ ...current, drug_allergy_text: event.target.value }))}/></label>
+        </div>
+        {receptionWarnings().length > 0 && <div className="reception-warning" role="alert"><strong>Crvena napomena za liječnika/anesteziologa</strong>{receptionWarnings().map(item => <small key={item}>{item}</small>)}</div>}
+        <footer><button type="button" onClick={() => setReceptionModal("identity")}>Natrag</button><button type="button" className="primary" disabled={receptionBusy} onClick={completeReception}>{receptionBusy ? "Spremam…" : "Provjereno"}</button></footer>
+      </section>
+    </div>}
     {confirmation && <div className="modal-backdrop" onMouseDown={event => event.target === event.currentTarget && setConfirmation(null)}>
       <section className="modal-panel" role="dialog" aria-modal="true" aria-labelledby="workspace-confirmation-title">
         <header><div><span className="eyebrow">Potvrda radnje</span><h2 id="workspace-confirmation-title">{confirmation.title}</h2></div></header>

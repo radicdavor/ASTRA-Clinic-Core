@@ -81,7 +81,7 @@ class JourneyActivityOut(BaseModel):
 
 class PatientBrief(BaseModel):
     model_config=ConfigDict(from_attributes=True)
-    id:int;first_name:str;last_name:str;date_of_birth:date|None=None;oib:str|None=None;email:str|None=None;email_verified_at:datetime|None=None
+    id:int;first_name:str;last_name:str;date_of_birth:date|None=None;oib:str|None=None;email:str|None=None;phone:str|None=None;notes:str|None=None;email_verified_at:datetime|None=None
 
 class JourneyOut(BaseModel):
     model_config=ConfigDict(from_attributes=True)

@@ -16,6 +16,7 @@ type DashboardRow = {
   check_in_status: string; encounter_status: string; consumables_status: string;
   billing_status: string; payment_status: string; blocker_status: string;
   blocker_labels: string[]; blockers: DashboardBlocker[]; allowed_actions: string[];
+  reception_warning: boolean; reception_warning_details: string[];
   activity_count: number; current_activity_id: number | null; next_activity_id: number | null; activities: DashboardActivity[];
 };
 type DashboardClinic = { id: number; name: string };
@@ -52,6 +53,7 @@ function activityTone(status: string): SignalTone {
 
 function operationalState(row: DashboardRow): OperationalState {
   const blocker = row.blockers[0];
+  if (row.reception_warning && ["ready_for_clinician", "in_encounter"].includes(row.workflow_stage)) return { tone: "problem", label: "Čeka pregled/pretragu", detail: `Prijem ima crvenu napomenu: ${row.reception_warning_details.join("; ")}`, action: "encounter", actionLabel: row.workflow_stage === "in_encounter" ? "Nastavi pregled" : "Otvori pregled", icon: <Stethoscope size={15}/> };
   if (blocker) return { tone: "problem", label: blocker.title, detail: blocker.details || (blocker.is_clinical ? "Potrebna je odluka ovlaštenog liječnika." : "Stavku treba riješiti prije nastavka."), action: "open", actionLabel: "Otvori" };
   if (["completed", "cancelled"].includes(row.workflow_stage)) return { tone: "resolved", label: row.workflow_stage === "completed" ? "Završeno" : "Otkazano", detail: row.workflow_stage === "completed" ? "Pregled i naplata su završeni." : "Dolazak je otkazan." };
   if (row.workflow_stage === "no_show") return { tone: "problem", label: "Nije došao/la", detail: "Pacijent nije došao na termin." };

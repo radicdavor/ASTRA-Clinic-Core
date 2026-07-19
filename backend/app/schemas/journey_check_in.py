@@ -12,3 +12,10 @@ class CheckInOut(BaseModel):
 class CheckInItemUpdate(BaseModel):
     state: str = Field(pattern="^(confirmed|not_confirmed|not_applicable|requires_clinician_review|blocked)$")
     note: str | None = Field(default=None, max_length=2000)
+
+class ReceptionCheckInItemResult(BaseModel):
+    item_key: str = Field(min_length=2, max_length=100)
+    note: str | None = Field(default=None, max_length=2000)
+
+class ReceptionCheckInComplete(BaseModel):
+    items: list[ReceptionCheckInItemResult] = Field(default_factory=list)

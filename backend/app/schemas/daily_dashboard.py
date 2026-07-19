@@ -52,6 +52,8 @@ class DailyDashboardRow(BaseModel):
     blocker_status: str
     blocker_labels: list[str] = Field(default_factory=list)
     blockers: list[DailyDashboardBlocker] = Field(default_factory=list)
+    reception_warning: bool = False
+    reception_warning_details: list[str] = Field(default_factory=list)
     allowed_actions: list[str] = Field(default_factory=list)
     activity_count: int = 1
     current_activity_id: int | None = None
