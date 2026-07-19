@@ -1,4 +1,6 @@
 from datetime import datetime, timezone
+import hashlib
+import json
 
 from fastapi import HTTPException
 from sqlalchemy import func, select
@@ -82,7 +84,26 @@ def current_revision_number(db: Session, instance_id: int) -> int:
 
 
 def _validation_error(code: str, message: str, errors: list[dict]) -> HTTPException:
-    return HTTPException(422, detail={"code": code, "message": message, "errors": errors})
+    return HTTPException(422, detail={"code": code, "message": message, "fields": errors})
+
+
+def _stale_form_error(instance: ClinicalFormInstance, expected_revision_number: int, actual_revision_number: int) -> HTTPException:
+    return HTTPException(
+        409,
+        detail={
+            "code": "stale_form",
+            "message": "Drugi korisnik je izmijenio ovaj nalaz. Lokalni unos nije prepisan.",
+            "expected_revision_number": expected_revision_number,
+            "actual_revision_number": actual_revision_number,
+            "current_updated_at": instance.updated_at.isoformat() if instance.updated_at else None,
+            "server_data": instance.data_json,
+        },
+    )
+
+
+def _completion_payload_hash(data: dict) -> str:
+    canonical = json.dumps(data, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
 
 def validate_submission(version: ClinicalFormVersion, data: dict, *, require_complete: bool) -> None:
@@ -234,15 +255,18 @@ def resolve_instance(db: Session, activity: JourneyActivity, actor_user_id: int 
     return instance
 
 
-def update_instance(db: Session, instance: ClinicalFormInstance, data: dict, actor_user_id: int | None) -> None:
+def update_instance(db: Session, instance: ClinicalFormInstance, data: dict, actor_user_id: int | None, expected_revision_number: int) -> None:
     if instance.status in {"completed", "signed", "amended", "void"}:
         raise HTTPException(409, detail="Dovršen ili potpisan obrazac nije moguće tiho mijenjati")
+    actual_revision_number = current_revision_number(db, instance.id)
+    if expected_revision_number != actual_revision_number:
+        raise _stale_form_error(instance, expected_revision_number, actual_revision_number)
     validate_submission(instance.form_version, data, require_complete=False)
     instance.data_json = dict(data)
     instance.rendered_summary = render_summary(instance.form_version, data)
     instance.status = "in_progress"
     instance.last_edited_by = actor_user_id
-    revision_number = current_revision_number(db, instance.id) + 1
+    revision_number = actual_revision_number + 1
     db.add(ClinicalFormRevision(instance=instance, revision_number=revision_number, data_json=dict(data), rendered_summary=instance.rendered_summary, edited_by=actor_user_id))
     db.flush()
 
@@ -252,21 +276,20 @@ def save_and_complete_instance(
     instance: ClinicalFormInstance,
     data: dict,
     actor_user_id: int | None,
-    expected_revision_number: int | None = None,
-) -> None:
+    expected_revision_number: int,
+    idempotency_key: str,
+) -> bool:
+    payload_hash = _completion_payload_hash(data)
+    if instance.completion_idempotency_key == idempotency_key:
+        if instance.completion_payload_hash != payload_hash:
+            raise HTTPException(409, detail={"code": "idempotency_conflict", "message": "Ova potvrda dovršavanja već je iskorištena za drugi sadržaj."})
+        if instance.status in {"completed", "signed", "amended"}:
+            return False
     if instance.status not in {"draft", "in_progress"}:
         raise HTTPException(409, detail="Samo radni obrazac može biti dovršen")
     actual_revision_number = current_revision_number(db, instance.id)
-    if expected_revision_number is not None and expected_revision_number != actual_revision_number:
-        raise HTTPException(
-            409,
-            detail={
-                "code": "stale_form",
-                "message": "Obrazac je u međuvremenu izmijenjen. Osvježite podatke prije dovršavanja.",
-                "expected_revision_number": expected_revision_number,
-                "actual_revision_number": actual_revision_number,
-            },
-        )
+    if expected_revision_number != actual_revision_number:
+        raise _stale_form_error(instance, expected_revision_number, actual_revision_number)
     validate_submission(instance.form_version, data, require_complete=True)
     instance.data_json = dict(data)
     instance.rendered_summary = render_summary(instance.form_version, data)
@@ -274,6 +297,8 @@ def save_and_complete_instance(
     instance.last_edited_by = actor_user_id
     instance.completed_by = actor_user_id
     instance.completed_at = datetime.now(timezone.utc)
+    instance.completion_idempotency_key = idempotency_key
+    instance.completion_payload_hash = payload_hash
     db.add(
         ClinicalFormRevision(
             instance=instance,
@@ -284,6 +309,7 @@ def save_and_complete_instance(
         )
     )
     db.flush()
+    return True
 
 
 def sign_instance(db: Session, instance: ClinicalFormInstance, actor_user_id: int | None) -> None:

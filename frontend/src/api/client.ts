@@ -15,7 +15,14 @@ export type ApiValidationDetail = {
   code?: string;
   message?: string;
   errors?: Array<{ field_key?: string; label?: string; message?: string }>;
+  fields?: Array<{ field_key?: string; label?: string; message?: string }>;
+  actual_instance_id?: number;
+  actual_revision_number?: number;
+  current_updated_at?: string | null;
+  server_data?: Record<string, unknown>;
 };
+
+export type ApiRequestOptions = RequestInit & { suppressErrorToast?: boolean };
 
 export class ApiError extends Error {
   constructor(message: string, public readonly detail: unknown, public readonly status: number) {
@@ -79,7 +86,7 @@ function apiErrorMessage(detail: unknown): string {
   if (typeof detail === "string") return detail;
   if (detail && typeof detail === "object" && !Array.isArray(detail)) {
     const entry = detail as ApiValidationDetail;
-    const fieldMessages = (entry.errors ?? [])
+    const fieldMessages = (entry.fields ?? entry.errors ?? [])
       .map(error => error.label && error.message ? `${error.label}: ${error.message}` : error.message ?? null)
       .filter((message): message is string => Boolean(message));
     if (fieldMessages.length) return fieldMessages.join(" ");
@@ -142,13 +149,14 @@ function handleUnauthorized() {
   }
 }
 
-export async function api<T>(path: string, options: RequestInit = {}): Promise<T> {
-  const headers = new Headers(options.headers);
+export async function api<T>(path: string, options: ApiRequestOptions = {}): Promise<T> {
+  const { suppressErrorToast = false, ...requestOptions } = options;
+  const headers = new Headers(requestOptions.headers);
   headers.set("Content-Type", "application/json");
   const token = getToken();
   if (token) headers.set("Authorization", `Bearer ${token}`);
-  const method = options.method ?? "GET";
-  const response = await fetch(`${API_BASE_URL}${path}`, { ...options, headers });
+  const method = requestOptions.method ?? "GET";
+  const response = await fetch(`${API_BASE_URL}${path}`, { ...requestOptions, headers });
   if (response.status === 401) {
     handleUnauthorized();
     throw new Error("Potrebna je ponovna prijava.");
@@ -156,7 +164,7 @@ export async function api<T>(path: string, options: RequestInit = {}): Promise<T
   if (!response.ok) {
     const error = await response.json().catch(() => ({ detail: "Greska u komunikaciji s API-jem" }));
     const message = apiErrorMessage(error.detail);
-    notifyMutation(path, method, message, "error");
+    if (!suppressErrorToast) notifyMutation(path, method, message, "error");
     throw new ApiError(message, error.detail, response.status);
   }
   notifyMutation(path, method, mutationSuccessMessage(path, method));

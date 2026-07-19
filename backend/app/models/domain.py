@@ -754,6 +754,11 @@ class ClinicalFormInstance(TimestampMixin, Base):
     __table_args__ = (
         UniqueConstraint("activity_id", "purpose", "amended_from_instance_id", name="uq_clinical_form_instance_lineage"),
         CheckConstraint("status in ('draft','in_progress','completed','signed','amended','void')", name="ck_clinical_form_instances_status"),
+        CheckConstraint(
+            "(completion_idempotency_key is null and completion_payload_hash is null) or "
+            "(completion_idempotency_key is not null and completion_payload_hash is not null)",
+            name="ck_clinical_form_completion_idempotency_pair",
+        ),
     )
     id: Mapped[int] = mapped_column(primary_key=True)
     activity_id: Mapped[int] = mapped_column(ForeignKey("journey_activities.id", ondelete="CASCADE"), index=True)
@@ -771,6 +776,8 @@ class ClinicalFormInstance(TimestampMixin, Base):
     amended_from_instance_id: Mapped[int | None] = mapped_column(ForeignKey("clinical_form_instances.id", ondelete="SET NULL"))
     binding_source: Mapped[str] = mapped_column(String(80))
     resolved_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    completion_idempotency_key: Mapped[str | None] = mapped_column(String(160))
+    completion_payload_hash: Mapped[str | None] = mapped_column(String(64))
     form_version: Mapped[ClinicalFormVersion] = relationship()
     revisions: Mapped[list[ClinicalFormRevision]] = relationship(back_populates="instance", cascade="all, delete-orphan", order_by="ClinicalFormRevision.revision_number")
 

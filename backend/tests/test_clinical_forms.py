@@ -10,6 +10,18 @@ def headers(client):
     return {"Authorization": f"Bearer {login_token(client, 'admin@test.local')}"}
 
 
+def draft_payload(form: dict, data: dict) -> dict:
+    return {
+        "data": data,
+        "expected_instance_id": form["id"],
+        "expected_revision_number": form["revision_number"],
+    }
+
+
+def completion_payload(form: dict, data: dict, key: str) -> dict:
+    return {**draft_payload(form, data), "idempotency_key": key}
+
+
 def journey(client, db):
     appt = appointment(db)
     response = client.post("/api/patient-journeys", headers=headers(client), json={"appointment_id": appt.id, "intake_channel": "manual", "initial_stage": "booked"})
@@ -58,23 +70,23 @@ def test_form_lifecycle_signing_and_controlled_amendment(client, db, auth_setup)
     assert resolved.json()["binding_source"] == "default_service"
     assert resolved.json()["status"] == "draft"
 
-    unknown = client.patch(base, headers=headers(client), json={"data": {"unsupported": "x"}})
+    unknown = client.patch(base, headers=headers(client), json=draft_payload(resolved.json(), {"unsupported": "x"}))
     assert unknown.status_code == 422
-    incomplete = client.patch(base, headers=headers(client), json={"data": {"anamnesis": "Sintetička anamneza"}})
+    incomplete = client.patch(base, headers=headers(client), json=draft_payload(resolved.json(), {"anamnesis": "Sintetička anamneza"}))
     assert incomplete.status_code == 200
-    incomplete_completion = client.post(f"{base}/complete", headers=headers(client), json={"data": incomplete.json()["data_json"], "expected_revision_number": incomplete.json()["revision_number"]})
+    incomplete_completion = client.post(f"{base}/complete", headers=headers(client), json=completion_payload(incomplete.json(), incomplete.json()["data_json"], "incomplete-completion"))
     assert incomplete_completion.status_code == 422
-    assert incomplete_completion.json()["detail"]["errors"][0]["label"] == "Mišljenje"
+    assert incomplete_completion.json()["detail"]["fields"][0]["label"] == "Mišljenje"
     assert "opinion" not in incomplete_completion.json()["detail"]["message"]
 
-    saved = client.patch(base, headers=headers(client), json={"data": {"anamnesis": "Sintetička anamneza", "opinion": "Ljudsko mišljenje", "diagnoses": ["Z00.0"]}})
+    saved = client.patch(base, headers=headers(client), json=draft_payload(incomplete.json(), {"anamnesis": "Sintetička anamneza", "opinion": "Ljudsko mišljenje", "diagnoses": ["Z00.0"]}))
     assert saved.status_code == 200
     assert "Ljudsko mišljenje" in saved.json()["rendered_summary"]
-    completed = client.post(f"{base}/complete", headers=headers(client), json={"data": saved.json()["data_json"], "expected_revision_number": saved.json()["revision_number"]})
+    completed = client.post(f"{base}/complete", headers=headers(client), json=completion_payload(saved.json(), saved.json()["data_json"], "lifecycle-completion"))
     assert completed.status_code == 200 and completed.json()["status"] == "completed"
     signed = client.post(f"{base}/sign", headers=headers(client))
     assert signed.status_code == 200 and signed.json()["status"] == "signed"
-    assert client.patch(base, headers=headers(client), json={"data": {"anamnesis": "Tiha izmjena"}}).status_code == 409
+    assert client.patch(base, headers=headers(client), json=draft_payload(completed.json(), {"anamnesis": "Tiha izmjena"})).status_code == 409
 
     amended = client.post(f"{base}/amend", headers=headers(client))
     assert amended.status_code == 200 and amended.json()["status"] == "draft"
@@ -99,7 +111,7 @@ def test_complete_atomically_persists_current_unsaved_data_and_creates_one_revis
     completed = client.post(
         f"{base}/complete",
         headers=headers(client),
-        json={"data": current_data, "expected_revision_number": resolved["revision_number"]},
+        json=completion_payload(resolved, current_data, "atomic-current-data"),
     )
 
     assert completed.status_code == 200
@@ -119,18 +131,60 @@ def test_complete_rejects_stale_revision_and_duplicate_completion_without_extra_
     base = f"/api/patient-journeys/{visit['id']}/activities/{activity['id']}/form"
     resolved = client.post(f"{base}/resolve", headers=headers(client)).json()
     data = {"anamnesis": "A", "opinion": "Bez komplikacija."}
-    saved = client.patch(base, headers=headers(client), json={"data": data}).json()
+    saved = client.patch(base, headers=headers(client), json=draft_payload(resolved, data)).json()
 
-    stale = client.post(f"{base}/complete", headers=headers(client), json={"data": data, "expected_revision_number": resolved["revision_number"]})
+    stale = client.post(f"{base}/complete", headers=headers(client), json=completion_payload(resolved, data, "stale-completion"))
     assert stale.status_code == 409
     assert stale.json()["detail"]["code"] == "stale_form"
 
-    completed = client.post(f"{base}/complete", headers=headers(client), json={"data": data, "expected_revision_number": saved["revision_number"]})
+    payload = completion_payload(saved, data, "idempotent-completion")
+    completed = client.post(f"{base}/complete", headers=headers(client), json=payload)
     assert completed.status_code == 200
-    duplicate = client.post(f"{base}/complete", headers=headers(client), json={"data": data, "expected_revision_number": completed.json()["revision_number"]})
-    assert duplicate.status_code == 409
+    duplicate = client.post(f"{base}/complete", headers=headers(client), json=payload)
+    assert duplicate.status_code == 200
+    assert duplicate.json()["revision_number"] == completed.json()["revision_number"]
     db.expire_all()
     assert db.scalar(select(func.count(ClinicalFormRevision.id)).where(ClinicalFormRevision.instance_id == completed.json()["id"])) == 2
+
+
+def test_draft_optimistic_concurrency_preserves_newer_server_data(client, db, auth_setup):
+    visit = journey(client, db)
+    activity = visit["activities"][0]
+    published_form(db, activity["service_id"])
+    base = f"/api/patient-journeys/{visit['id']}/activities/{activity['id']}/form"
+    resolved = client.post(f"{base}/resolve", headers=headers(client)).json()
+
+    first_data = {"anamnesis": "Prvi korisnik", "opinion": "Spremljeno mišljenje"}
+    saved = client.patch(base, headers=headers(client), json=draft_payload(resolved, first_data))
+    assert saved.status_code == 200
+
+    stale_data = {"anamnesis": "Drugi korisnik", "opinion": "Ne smije prepisati"}
+    stale = client.patch(base, headers=headers(client), json=draft_payload(resolved, stale_data))
+    assert stale.status_code == 409
+    assert stale.json()["detail"]["code"] == "stale_form"
+    assert stale.json()["detail"]["server_data"] == first_data
+    current = client.get(base, headers=headers(client))
+    assert current.json()["data_json"] == first_data
+    assert current.json()["revision_number"] == saved.json()["revision_number"]
+
+
+def test_completion_idempotency_key_rejects_different_payload(client, db, auth_setup):
+    visit = journey(client, db)
+    activity = visit["activities"][0]
+    published_form(db, activity["service_id"])
+    base = f"/api/patient-journeys/{visit['id']}/activities/{activity['id']}/form"
+    resolved = client.post(f"{base}/resolve", headers=headers(client)).json()
+    data = {"anamnesis": "A", "opinion": "B"}
+    completed = client.post(f"{base}/complete", headers=headers(client), json=completion_payload(resolved, data, "same-completion-key"))
+    assert completed.status_code == 200
+
+    conflicting = client.post(
+        f"{base}/complete",
+        headers=headers(client),
+        json=completion_payload(resolved, {"anamnesis": "Promjena", "opinion": "B"}, "same-completion-key"),
+    )
+    assert conflicting.status_code == 409
+    assert conflicting.json()["detail"]["code"] == "idempotency_conflict"
 
 
 def test_controlled_registry_rejects_duplicate_and_executable_fields():

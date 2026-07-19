@@ -63,9 +63,11 @@ def activity_form(journey_id: int, activity_id: int, db: Session = Depends(get_d
 
 @router.patch("/patient-journeys/{journey_id}/activities/{activity_id}/form", response_model=ClinicalFormInstanceOut)
 def edit_activity_form(journey_id: int, activity_id: int, payload: ClinicalFormDataUpdate, request: Request, db: Session = Depends(get_db), actor: Actor = Depends(require_permission("encounter.write"))):
-    item = instance(db, journey_id, activity_id)
+    item = instance(db, journey_id, activity_id, lock_for_update=True)
+    if item.id != payload.expected_instance_id:
+        raise HTTPException(409, detail={"code": "stale_form_instance", "message": "Aktivna verzija obrasca je promijenjena. Lokalni unos nije prepisan.", "actual_instance_id": item.id})
     before = snapshot(item)
-    update_instance(db, item, payload.data, actor.user_id)
+    update_instance(db, item, payload.data, actor.user_id, payload.expected_revision_number)
     audit(db, "form_edited", "ClinicalFormInstance", item.id, "Klinički obrazac je izmijenjen", actor.user_id, actor.actor_type, actor.api_key_id, before, snapshot(item), request)
     db.commit()
     return instance(db, journey_id, activity_id, item.id)
@@ -74,9 +76,12 @@ def edit_activity_form(journey_id: int, activity_id: int, payload: ClinicalFormD
 @router.post("/patient-journeys/{journey_id}/activities/{activity_id}/form/complete", response_model=ClinicalFormInstanceOut)
 def complete_activity_form(journey_id: int, activity_id: int, payload: ClinicalFormCompleteRequest, request: Request, db: Session = Depends(get_db), actor: Actor = Depends(require_permission("encounter.complete"))):
     item = instance(db, journey_id, activity_id, lock_for_update=True)
+    if item.id != payload.expected_instance_id:
+        raise HTTPException(409, detail={"code": "stale_form_instance", "message": "Aktivna verzija obrasca je promijenjena. Lokalni unos nije dovršen.", "actual_instance_id": item.id})
     before = snapshot(item)
-    save_and_complete_instance(db, item, payload.data, actor.user_id, payload.expected_revision_number)
-    audit(db, "form_completed", "ClinicalFormInstance", item.id, "Klinički obrazac je spremljen i dovršen", actor.user_id, actor.actor_type, actor.api_key_id, before, snapshot(item), request)
+    created = save_and_complete_instance(db, item, payload.data, actor.user_id, payload.expected_revision_number, payload.idempotency_key)
+    if created:
+        audit(db, "form_completed", "ClinicalFormInstance", item.id, "Klinički obrazac je spremljen i dovršen", actor.user_id, actor.actor_type, actor.api_key_id, before, snapshot(item), request)
     db.commit()
     return instance(db, journey_id, activity_id, item.id)
 

@@ -9,6 +9,14 @@ def headers(client):
     return {"Authorization": f"Bearer {login_token(client, 'admin@test.local')}"}
 
 
+def draft_payload(form: dict, data: dict) -> dict:
+    return {"data": data, "expected_instance_id": form["id"], "expected_revision_number": form["revision_number"]}
+
+
+def completion_payload(form: dict, key: str) -> dict:
+    return {**draft_payload(form, form["data_json"]), "idempotency_key": key}
+
+
 def setup_signed_report(client, db):
     appt = appointment(db)
     patient = db.get(Patient, appt.patient_id)
@@ -27,10 +35,11 @@ def setup_signed_report(client, db):
     db.add(version); db.flush()
     db.add(ServiceFormBinding(service_id=activity["service_id"], form_version_id=version.id, active=True)); db.flush()
     base = f"/api/patient-journeys/{visit['id']}/activities/{activity['id']}/form"
-    assert client.post(f"{base}/resolve", headers=headers(client)).status_code == 200
-    saved = client.patch(base, headers=headers(client), json={"data": {"opinion": "Isključivo ljudski uneseno mišljenje."}})
+    resolved = client.post(f"{base}/resolve", headers=headers(client))
+    assert resolved.status_code == 200
+    saved = client.patch(base, headers=headers(client), json=draft_payload(resolved.json(), {"opinion": "Isključivo ljudski uneseno mišljenje."}))
     assert saved.status_code == 200
-    assert client.post(f"{base}/complete", headers=headers(client), json={"data": saved.json()["data_json"], "expected_revision_number": saved.json()["revision_number"]}).status_code == 200
+    assert client.post(f"{base}/complete", headers=headers(client), json=completion_payload(saved.json(), "signed-report-completion")).status_code == 200
     signed = client.post(f"{base}/sign", headers=headers(client))
     assert signed.status_code == 200
     report = db.query(SignedClinicalReport).filter_by(form_instance_id=signed.json()["id"]).one()
@@ -63,9 +72,9 @@ def test_delivery_is_explicit_stub_and_amendment_preserves_original(client, db, 
     assert delivered.json()[0]["delivered_at"] is None
 
     amendment = client.post(f"{base}/amend", headers=headers(client)).json()
-    saved_amendment = client.patch(base, headers=headers(client), json={"data": {"opinion": "Kontrolirani ispravak."}})
+    saved_amendment = client.patch(base, headers=headers(client), json=draft_payload(amendment, {"opinion": "Kontrolirani ispravak."}))
     assert saved_amendment.status_code == 200
-    assert client.post(f"{base}/complete", headers=headers(client), json={"data": saved_amendment.json()["data_json"], "expected_revision_number": saved_amendment.json()["revision_number"]}).status_code == 200
+    assert client.post(f"{base}/complete", headers=headers(client), json=completion_payload(saved_amendment.json(), "amendment-completion")).status_code == 200
     assert client.post(f"{base}/sign", headers=headers(client)).status_code == 200
     reports = db.query(SignedClinicalReport).filter_by(journey_id=visit["id"]).order_by(SignedClinicalReport.version_number).all()
     assert len(reports) == 2

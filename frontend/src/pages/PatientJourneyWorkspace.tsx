@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
 import { api, getSessionUser } from "../api/client";
 import { useApi } from "../hooks/useApi";
@@ -8,7 +8,7 @@ import { AISummaryPanel, BillingPanel, BlockerPanel, CheckInChecklist, Consumabl
 import { activityClockTime, journeyStatusLabel } from "../components/program2/journeyStatus";
 import { focusToStage, JourneyHeader, JourneyNextAction, JourneyStageStepper, stageForJourney } from "../components/program2/journey/JourneyChrome";
 import { JourneyClinicalContext } from "../components/program2/journey/JourneyClinicalContext";
-import { ClinicalActivityForm } from "../components/program2/ClinicalActivityForm";
+import { ClinicalActivityForm, type ClinicalActivityFormHandle } from "../components/program2/ClinicalActivityForm";
 import { VisitDocumentCenter } from "../components/program2/VisitDocumentCenter";
 import { PathologyFollowUpPanel } from "../components/program2/PathologyFollowUpPanel";
 import { ActivityInterventionsPanel } from "../components/program2/ActivityInterventionsPanel";
@@ -27,6 +27,8 @@ type WorkspaceConfirmation = {
   reason?: string;
   action: (reason?: string) => Promise<void>;
 };
+
+type PendingFormNavigation = { kind: "activity"; activityId: number } | { kind: "stage"; stage: JourneyStageKey };
 
 export function PatientJourneyWorkspace() {
   const { id } = useParams();
@@ -52,6 +54,8 @@ export function PatientJourneyWorkspace() {
   const [diagnosisBusy, setDiagnosisBusy] = useState(false);
   const [actionError, setActionError] = useState("");
   const [confirmation, setConfirmation] = useState<WorkspaceConfirmation | null>(null);
+  const [pendingFormNavigation, setPendingFormNavigation] = useState<PendingFormNavigation | null>(null);
+  const clinicalFormRef = useRef<ClinicalActivityFormHandle | null>(null);
 
   useEffect(() => { if (encounter.data) setDraft(encounter.data); }, [encounter.data]);
   useEffect(() => {
@@ -59,7 +63,7 @@ export function PatientJourneyWorkspace() {
     const current = stageForJourney(journey.data.current_stage);
     const role = (getSessionUser()?.role ?? "").replace(/^demo_/, "");
     const roleDefault = role === "billing" && ["awaiting_billing", "awaiting_payment"].includes(journey.data.current_stage) ? "billing" : current;
-    setActiveStage(focusToStage(searchParams.get("focus"), roleDefault));
+    if (!clinicalFormRef.current?.hasUnsavedChanges()) setActiveStage(focusToStage(searchParams.get("focus"), roleDefault));
   }, [journey.data?.id, journey.data?.current_stage, searchParams]);
 
   if (!journey.data) return <section className="page"><p>Učitavanje tijeka pacijenta...</p></section>;
@@ -86,12 +90,20 @@ export function PatientJourneyWorkspace() {
     visitDocuments.setData(await api<VisitDocument[]>(`/api/patient-journeys/${id}/visit-documents`));
     pathologyCases.setData(await api<PathologyCase[]>(`/api/patient-journeys/${id}/pathology-cases`));
   }
-  function selectActivity(activityId: number) {
+  function applyFormNavigation(target: PendingFormNavigation) {
+    if (target.kind === "stage") { setActiveStage(target.stage); return; }
     const next = new URLSearchParams(searchParams);
-    next.set("focus", "encounter"); next.set("activity", String(activityId));
+    next.set("focus", "encounter"); next.set("activity", String(target.activityId));
     setSearchParams(next);
     setActiveStage("encounter");
   }
+  function requestFormNavigation(target: PendingFormNavigation) {
+    if (target.kind === "activity" && selectedActivity?.id === target.activityId) return;
+    if (target.kind === "stage" && activeStage === target.stage) return;
+    if (clinicalFormRef.current?.hasUnsavedChanges()) { setPendingFormNavigation(target); return; }
+    applyFormNavigation(target);
+  }
+  function selectActivity(activityId: number) { requestFormNavigation({ kind: "activity", activityId }); }
   async function startCheckIn() { await perform(async () => { checkin.setData(await api<CheckInState>(`/api/patient-journeys/${id}/check-in`, { method: "POST" })); await refresh(); }); }
   async function open() { await perform(async () => { encounter.setData(await api(`/api/patient-journeys/${id}/encounter`, { method: "POST" })); await refresh(); }); }
   async function save() { await perform(async () => { encounter.setData(await api(`/api/patient-journeys/${id}/encounter`, { method: "PATCH", body: JSON.stringify(draft) })); }); }
@@ -191,18 +203,19 @@ export function PatientJourneyWorkspace() {
     <JourneyHeader journey={j} service={serviceName} clinician={clinicianName} formatDate={formatDate}/>
     {actionError && <p className="inline-error" role="alert">{actionError}</p>}
     {criticalFacts.length > 0 && <aside className="journey-critical-facts" aria-label="Važno sada">{criticalFacts.map(item => <span key={item}>{item}</span>)}</aside>}
-    <JourneyNextAction journey={j} stage={currentStage} onSelect={setActiveStage}/>
+    <JourneyNextAction journey={j} stage={currentStage} onSelect={stage => requestFormNavigation({ kind: "stage", stage })}/>
     {activities.length > 0 && <nav className="journey-activity-selector" aria-label="Aktivnosti dolaska"><span>{activities.length} {activities.length === 1 ? "aktivnost" : "aktivnosti"}</span>{activities.map(activity => { const activityService = services.data.find(item => item.id === activity.service_id)?.name ?? activity.activity_key; return <button type="button" key={activity.id} className={selectedActivity?.id === activity.id ? "active" : ""} onClick={() => selectActivity(activity.id)}><i className={`activity-dot ${activity.status}`} aria-hidden="true"/><span><b>{activity.sequence}. {activityService}</b><small>{activityClockTime(activity.planned_start)} · {activity.status === "in_progress" ? "u tijeku" : activity.status === "completed" ? "završeno" : "čeka"}</small></span></button>; })}</nav>}
-    <JourneyStageStepper active={activeStage} current={currentStage} onSelect={setActiveStage}/>
+    <JourneyStageStepper active={activeStage} current={currentStage} onSelect={stage => requestFormNavigation({ kind: "stage", stage })}/>
     <main className="journey-active-stage" id={`journey-${activeStage}`} tabIndex={-1} aria-live="polite">
       {activeStage === "documents" && <><BlockerPanel items={j.blockers} onResolve={resolveBlocker}/><div className="journey-stage-pair"><DocumentReadinessPanel status={j.document_status}/><PreparationPanel status={j.preparation_status} data={preparation.data ?? undefined} activityData={activityPreparation.data ?? undefined} onUpdate={updatePreparation} onActivityUpdate={updateActivityPreparation}/></div><PathologyFollowUpPanel items={pathologyCases.data} onChanged={refresh}/><VisitDocumentCenter journeyId={j.id} items={visitDocuments.data} patientEmail={j.patient.email} emailVerified={Boolean(j.patient.email_verified_at)} onChanged={refresh}/></>}
       {activeStage === "arrival" && <><BlockerPanel items={j.blockers} onResolve={resolveBlocker}/>{!checkin.data && <section className="journey-panel journey-start-panel"><h2>Dolazak i prijem</h2><p>Prijem još nije započet. Ova radnja evidentira dolazak i otvara prijemnu provjeru.</p><button type="button" className="primary" onClick={startCheckIn}>Započni prijem</button></section>}<CheckInChecklist data={checkin.data} onUpdate={updateCheckIn} onConfirmAdministrative={confirmAdministrativeCheckIn}/></>}
-      {activeStage === "encounter" && <><BlockerPanel items={j.blockers} onResolve={resolveBlocker}/>{selectedActivity ? <><ClinicalActivityForm journeyId={j.id} activity={selectedActivity} serviceName={services.data.find(item => item.id === selectedActivity.service_id)?.name ?? selectedActivity.activity_key} onChanged={refresh}/><ActivityInterventionsPanel journeyId={j.id} activity={selectedActivity} onChanged={refresh}/></> : <EncounterPanel draft={draft} setDraft={setDraft} status={encounter.data?.status} aiDiagnoses={aiDiagnoses} aiDiagnosisCapability={publicConfig.data.ai_diagnosis_suggestions} diagnosisBusy={diagnosisBusy} onOpen={open} onSave={save} onComplete={complete} onSuggestDiagnoses={suggestDiagnoses} onDecideDiagnosis={decideDiagnosis}/>}</>}
+      {activeStage === "encounter" && <><BlockerPanel items={j.blockers} onResolve={resolveBlocker}/>{selectedActivity ? <><ClinicalActivityForm ref={clinicalFormRef} journeyId={j.id} activity={selectedActivity} serviceName={services.data.find(item => item.id === selectedActivity.service_id)?.name ?? selectedActivity.activity_key} onChanged={refresh}/><ActivityInterventionsPanel journeyId={j.id} activity={selectedActivity} onChanged={refresh}/></> : <EncounterPanel draft={draft} setDraft={setDraft} status={encounter.data?.status} aiDiagnoses={aiDiagnoses} aiDiagnosisCapability={publicConfig.data.ai_diagnosis_suggestions} diagnosisBusy={diagnosisBusy} onOpen={open} onSave={save} onComplete={complete} onSuggestDiagnoses={suggestDiagnoses} onDecideDiagnosis={decideDiagnosis}/>}</>}
       {activeStage === "consumables" && <ConsumablesPanel status={selectedActivity?.consumables_status ?? j.consumables_status} canConfirm={j.current_stage === "procedure_completed"} items={inventory.data} onConfirm={confirmConsumables}/>}
       {activeStage === "billing" && <div className="journey-stage-pair"><BillingPanel status={j.billing_status} invoice={closure.data?.invoice ?? undefined} onPrepare={prepareBilling}/><PaymentPanel status={j.payment_status} invoice={closure.data?.invoice ?? undefined} stage={j.current_stage} onPay={pay} onDefer={defer} onClose={close}/></div>}
       {activeStage === "completed" && <section className="journey-panel journey-completed"><h2>Dolazak je završen</h2><p>Pregled, materijal i naplata nemaju otvorenu operativnu radnju.</p><Link to={`/patients/${j.patient_id}`}>Otvori longitudinalni zapis pacijenta</Link></section>}
     </main>
     <JourneyClinicalContext summary={<AISummaryPanel summary={summary.data} onGenerate={generateSummary} onReview={reviewSummaryFact}/>} timeline={<PatientTimeline items={timeline.data}/>} documents={<SourceDocumentViewer documents={documents.data} onReview={reviewDocument}/>}/>
+    {pendingFormNavigation && <div className="modal-backdrop"><section className="modal-panel clinical-draft-navigation" role="dialog" aria-modal="true" aria-labelledby="draft-navigation-title"><header><div><span className="eyebrow">Nespremljena skica</span><h2 id="draft-navigation-title">Želite li spremiti promjene?</h2></div></header><p>Promjena aktivnosti ili faze ne smije odbaciti uneseni klinički tekst bez vaše odluke.</p><footer><button type="button" onClick={() => setPendingFormNavigation(null)}>Ostani</button><button type="button" onClick={() => { clinicalFormRef.current?.discardLocalChanges(); const target = pendingFormNavigation; setPendingFormNavigation(null); applyFormNavigation(target); }}>Odbaci i nastavi</button><button type="button" className="primary" onClick={async () => { const saved = await clinicalFormRef.current?.saveDraft(); if (saved) { const target = pendingFormNavigation; setPendingFormNavigation(null); applyFormNavigation(target); } }}>Spremi skicu i nastavi</button></footer></section></div>}
     {confirmation && <div className="modal-backdrop" onMouseDown={event => event.target === event.currentTarget && setConfirmation(null)}>
       <section className="modal-panel" role="dialog" aria-modal="true" aria-labelledby="workspace-confirmation-title">
         <header><div><span className="eyebrow">Potvrda radnje</span><h2 id="workspace-confirmation-title">{confirmation.title}</h2></div></header>

@@ -15,7 +15,21 @@ def completed_encounter(client, db):
     client.post(f"/api/patient-journeys/{journey['id']}/encounter",headers=h)
     client.patch(f"/api/patient-journeys/{journey['id']}/encounter",headers=h,json={"procedure_findings":"Sintetički nalaz"})
     assert client.post(f"/api/patient-journeys/{journey['id']}/encounter/complete",headers=h).status_code==200
+    activity=journey["activities"][0]
+    for target in ("ready","in_progress","completed"):
+        assert client.post(f"/api/patient-journeys/{journey['id']}/activities/{activity['id']}/transition",headers=h,json={"target_status":target}).status_code==200
     return journey,h
+
+def test_legacy_consumables_endpoint_never_completes_activity(client,db,auth_setup):
+    h=headers(client);appt=appointment(db)
+    journey=client.post("/api/patient-journeys",headers=h,json={"appointment_id":appt.id,"intake_channel":"manual","initial_stage":"booked"}).json()
+    visit=db.get(PatientJourney,journey["id"])
+    visit.current_stage="procedure_completed";visit.encounter_status="completed"
+    db.commit()
+    response=client.post(f"/api/patient-journeys/{visit.id}/consumables/confirm",headers=h,json={"not_applicable":True})
+    assert response.status_code==409
+    db.refresh(visit.activities[0])
+    assert visit.activities[0].status=="planned"
 
 def test_explicit_no_consumables_invoice_payment_and_closure(client,db,auth_setup):
     journey,h=completed_encounter(client,db);url=f"/api/patient-journeys/{journey['id']}"
@@ -29,6 +43,16 @@ def test_cannot_close_with_unresolved_payment(client,db,auth_setup):
     journey,h=completed_encounter(client,db);url=f"/api/patient-journeys/{journey['id']}"
     client.post(f"{url}/consumables/confirm",headers=h,json={"not_applicable":True});client.post(f"{url}/billing/prepare",headers=h)
     assert client.post(f"{url}/close",headers=h).status_code==409
+
+def test_unsigned_required_activity_report_blocks_billing(client,db,auth_setup):
+    journey,h=completed_encounter(client,db);url=f"/api/patient-journeys/{journey['id']}"
+    visit=db.get(PatientJourney,journey["id"])
+    visit.activities[0].form_resolution_status="resolved"
+    db.commit()
+    assert client.post(f"{url}/consumables/confirm",headers=h,json={"not_applicable":True}).status_code==200
+    blocked=client.post(f"{url}/billing/prepare",headers=h)
+    assert blocked.status_code==409
+    assert "potpisani" in blocked.json()["detail"]
 
 def test_payment_may_be_explicitly_deferred_with_reason(client,db,auth_setup):
     journey,h=completed_encounter(client,db);url=f"/api/patient-journeys/{journey['id']}"

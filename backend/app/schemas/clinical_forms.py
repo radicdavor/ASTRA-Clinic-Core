@@ -46,12 +46,15 @@ class ClinicalFormInstanceOut(BaseModel):
     binding_source: str
     resolved_at: datetime
     revision_number: int
+    updated_at: datetime
     form_version: ClinicalFormVersionOut
 
 
 class ClinicalFormDataUpdate(BaseModel):
     data: dict = Field(default_factory=dict)
+    expected_instance_id: int = Field(gt=0)
+    expected_revision_number: int = Field(ge=0)
 
 
 class ClinicalFormCompleteRequest(ClinicalFormDataUpdate):
-    expected_revision_number: int | None = Field(default=None, ge=0)
+    idempotency_key: str = Field(min_length=8, max_length=160)

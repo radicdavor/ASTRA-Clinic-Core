@@ -33,7 +33,7 @@ export type ClinicalFormInstance = {
   id: number; activity_id: number; form_version_id: number; purpose: string; status: string; data_json: Record<string, unknown>;
   rendered_summary: string | null; completed_by: number | null; signed_by: number | null; completed_at: string | null;
   signed_at: string | null; amended_from_instance_id: number | null; binding_source: string; resolved_at: string;
-  revision_number: number;
+  revision_number: number; updated_at: string;
   form_version: { id: number; definition_id: number; version: number; status: string; sections_json: ClinicalFormSection[]; output_document_type: string };
 };
 

@@ -12,6 +12,7 @@ from app.schemas.common import AppointmentMaterialConsumptionRequest, PaymentTra
 from app.schemas.journey_closure import ClosureOut, ConsumablesConfirm, DeferPayment, PaymentRecord
 from app.services.appointment_materials import consume_appointment_materials
 from app.services.billing import draft_invoice_from_journey, issue_invoice, record_payment
+from app.services.clinical_visit_readiness import validate_clinical_visit_readiness
 from app.services.journey_activities import get_activity
 from app.services.patient_journeys import add_event, transition
 
@@ -87,14 +88,12 @@ def confirm_activity_consumables(journey_id: int, activity_id: int, payload: Con
 @router.post("/{journey_id}/consumables/confirm", response_model=ClosureOut)
 def confirm_consumables(journey_id: int, payload: ConsumablesConfirm, request: Request, db: Session = Depends(get_db), actor: Actor = Depends(require_permission("consumables.record"))):
     journey = load_journey(db, journey_id)
-    activity = next((item for item in journey.activities if item.required and item.status == "completed" and item.consumables_status not in {"confirmed", "not_applicable"}), None)
-    if not activity and journey.encounter_status == "completed":
-        activity = next((item for item in journey.activities if item.required and item.consumables_status not in {"confirmed", "not_applicable"}), None)
-        if activity and activity.status not in {"completed", "not_performed", "cancelled"}:
-            activity.status = "completed"
-    if not activity:
+    candidates = [item for item in journey.activities if item.required and item.status == "completed" and item.consumables_status not in {"confirmed", "not_applicable"}]
+    if len(candidates) > 1:
+        raise HTTPException(409, detail="Dolazak ima više nerazriješenih aktivnosti. Materijal potvrdite uz točno odabranu aktivnost.")
+    if not candidates:
         raise HTTPException(409, detail="Nema nerazriješene dovršene aktivnosti")
-    return _confirm_activity_consumables(db, journey, activity, payload, actor, request)
+    return _confirm_activity_consumables(db, journey, candidates[0], payload, actor, request)
 
 
 @router.post("/{journey_id}/billing/prepare", response_model=ClosureOut)
@@ -104,6 +103,7 @@ def prepare_billing(journey_id: int, request: Request, db: Session = Depends(get
         return projection(db, journey)
     if journey.current_stage != "awaiting_billing" or journey.consumables_status not in {"confirmed", "not_applicable"}:
         raise HTTPException(409, detail="Naplata nije spremna")
+    validate_clinical_visit_readiness(db, journey, require_consumables=True)
     invoice, _ = draft_invoice_from_journey(db, journey)
     if invoice.status == "draft":
         issue_invoice(db, invoice)
@@ -120,6 +120,7 @@ def add_payment(journey_id: int, payload: PaymentRecord, request: Request, db: S
     journey = load_journey(db, journey_id)
     if journey.current_stage != "awaiting_payment":
         raise HTTPException(409, detail="Dolazak ne čeka plaćanje")
+    validate_clinical_visit_readiness(db, journey, require_consumables=True)
     invoice = journey_invoice(db, journey)
     if not invoice:
         raise HTTPException(409, detail="Račun nije izrađen")
@@ -141,6 +142,7 @@ def defer_payment(journey_id: int, payload: DeferPayment, request: Request, db: 
     journey = load_journey(db, journey_id)
     if journey.current_stage != "awaiting_payment" or not payload.reason.strip():
         raise HTTPException(409, detail="Odgoda plaćanja mora imati razlog i izdani račun")
+    validate_clinical_visit_readiness(db, journey, require_consumables=True)
     journey.payment_status = "deferred"; journey.billing_status = "closed"
     add_event(db, journey, "payment_deferred", "Plaćanje je izričito odgođeno", actor, request, metadata={"reason": payload.reason})
     if "journey.transition" in actor.permissions:
@@ -152,6 +154,7 @@ def defer_payment(journey_id: int, payload: DeferPayment, request: Request, db: 
 @router.post("/{journey_id}/close", response_model=ClosureOut)
 def close_journey(journey_id: int, request: Request, db: Session = Depends(get_db), actor: Actor = Depends(require_permission("journey.transition"))):
     journey = load_journey(db, journey_id)
+    validate_clinical_visit_readiness(db, journey, require_consumables=True)
     transition(db, journey, "completed", actor, request, "Dolazak je administrativno i financijski razriješen")
     audit(db, "journey_completed", "PatientJourney", journey.id, "Dolazak je završen", actor.user_id, actor.actor_type, actor.api_key_id, None, snapshot(journey), request)
     db.commit()
