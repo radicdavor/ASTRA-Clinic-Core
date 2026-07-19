@@ -58,9 +58,10 @@ describe("radnje u radnom prostoru tijeka pacijenta", () => {
   test("administrativne podatke potvrđuje jednom radnjom", async () => {
     const user = userEvent.setup();
     const onConfirmAdministrative = vi.fn().mockResolvedValue(undefined);
-    render(<CheckInChecklist data={{ items: [{ id: 1, label: "Identitet potvrđen", state: "not_confirmed", note: null, requires_clinician: false }, { id: 2, label: "Antikoagulansi", state: "not_confirmed", note: null, requires_clinician: true }] }} onUpdate={vi.fn()} onConfirmAdministrative={onConfirmAdministrative}/>);
+    render(<CheckInChecklist data={{ items: [{ id: 1, label: "Opći podaci potvrđeni", category: "identity", state: "not_confirmed", note: null, requires_clinician: false }, { id: 2, label: "Aktualna terapija upisana", category: "preconditions", state: "not_confirmed", note: null, requires_clinician: false }] }} onUpdate={vi.fn()} onConfirmAdministrative={onConfirmAdministrative}/>);
 
-    await user.click(screen.getByRole("button", { name: "Potvrdi administrativne podatke" }));
+    expect(screen.getByText("Tajnica ili sestra provjerava samo podatke nužne prije pregleda. Ako pacijent koristi tablet, isti se podaci mogu potvrditi na tabletu.")).toBeTruthy();
+    await user.click(screen.getByRole("button", { name: "Potvrdi opće podatke" }));
     expect(onConfirmAdministrative).toHaveBeenCalledOnce();
   });
 

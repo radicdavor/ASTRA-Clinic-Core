@@ -21,12 +21,14 @@ def test_start_check_in_records_arrival_and_structured_items(client,db,auth_setu
     assert row["allowed_actions"]==["open_check_in"]
     response=client.post(f"/api/patient-journeys/{journey['id']}/check-in",headers=headers)
     assert response.status_code==200;body=response.json();assert body["status"]=="in_review" and body["arrived_at"]
-    assert {item["category"] for item in body["items"]}=={"identity","documents","preparation","preconditions"}
+    assert {item["category"] for item in body["items"]}=={"identity","preparation","preconditions"}
+    assert "patient_data_confirmed" in {item["item_key"] for item in body["items"]}
+    assert "last_food_drink" in {item["item_key"] for item in body["items"]}
     detail=client.get(f"/api/patient-journeys/{journey['id']}",headers=headers).json();assert detail["current_stage"]=="check_in_review" and detail["check_in_status"]=="in_review"
 
-def test_reception_may_escalate_but_not_clear_clinical_item(client,db,auth_setup):
-    journey,admin=ready_journey(client,db);checkin=client.post(f"/api/patient-journeys/{journey['id']}/check-in",headers=admin).json();clinical=next(item for item in checkin["items"] if item["item_key"]=="anticoagulants");reception=reception_headers(client,db)
-    denied=client.patch(f"/api/patient-journeys/{journey['id']}/check-in/items/{clinical['id']}",headers=reception,json={"state":"confirmed"});assert denied.status_code==403
+def test_reception_records_or_escalates_clinical_questions(client,db,auth_setup):
+    journey,admin=ready_journey(client,db);checkin=client.post(f"/api/patient-journeys/{journey['id']}/check-in",headers=admin).json();clinical=next(item for item in checkin["items"] if item["item_key"]=="anticoagulants_antiplatelets");reception=reception_headers(client,db)
+    recorded=client.patch(f"/api/patient-journeys/{journey['id']}/check-in/items/{clinical['id']}",headers=reception,json={"state":"confirmed","note":"Pacijent negira lijekove za razrjeđivanje krvi"});assert recorded.status_code==200
     escalated=client.patch(f"/api/patient-journeys/{journey['id']}/check-in/items/{clinical['id']}",headers=reception,json={"state":"requires_clinician_review","note":"Potrebna odluka liječnika"});assert escalated.status_code==200
     assert db.query(JourneyBlocker).filter_by(journey_id=journey["id"],is_clinical=True,status="open").count()==1
     confirmed=client.patch(f"/api/patient-journeys/{journey['id']}/check-in/items/{clinical['id']}",headers=admin,json={"state":"confirmed","note":"Liječnik pregledao"});assert confirmed.status_code==200
@@ -38,8 +40,8 @@ def test_reception_confirms_administrative_items_with_one_audited_action(client,
     response=client.post(f"/api/patient-journeys/{journey['id']}/check-in/confirm-administrative",headers=reception)
     assert response.status_code==200
     items=response.json()["items"]
-    assert all(item["state"]=="confirmed" for item in items if not item["requires_clinician"])
-    assert all(item["state"]=="not_confirmed" for item in items if item["requires_clinician"])
+    assert all(item["state"]=="confirmed" for item in items if item["category"]=="identity")
+    assert all(item["state"]=="not_confirmed" for item in items if item["category"]!="identity")
     assert db.query(AuditLog).filter_by(entity_type="PatientJourney",entity_id=journey["id"],action="checkin_administrative_confirmed").count()==1
 
 def test_check_in_becomes_ready_only_after_every_item_is_human_resolved(client,db,auth_setup):

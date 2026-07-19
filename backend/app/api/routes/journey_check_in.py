@@ -39,7 +39,7 @@ def confirm_administrative(journey_id:int,request:Request,db:Session=Depends(get
     if not check_in: raise HTTPException(404,detail="Prijemna provjera nije započeta")
     changed=[]
     for item in check_in.items:
-        if item.requires_clinician or item.state in {"confirmed","not_applicable"}: continue
+        if item.category != "identity" or item.requires_clinician or item.state in {"confirmed","not_applicable"}: continue
         before=snapshot(item);update_item(db,journey,check_in,item,"confirmed",item.note,actor,request);changed.append(item.item_key)
         audit(db,"checkin_item_changed","PatientJourney",journey.id,item.label,actor.user_id,actor.actor_type,actor.api_key_id,before,snapshot(item),request)
     audit(db,"checkin_administrative_confirmed","PatientJourney",journey.id,"Administrativne stavke prijema potvrđene",actor.user_id,actor.actor_type,actor.api_key_id,None,{"items":changed},request)

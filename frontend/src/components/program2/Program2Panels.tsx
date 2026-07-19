@@ -42,18 +42,29 @@ function CheckInItemRow({ item, onUpdate }: { item: any; onUpdate: (id: number, 
   const [busy, setBusy] = useState(false);
   useEffect(() => { setState(item.state); setNote(item.note ?? ""); }, [item.state, item.note]);
   async function save() { setBusy(true); try { await onUpdate(item.id, state, note); } finally { setBusy(false); } }
+  const placeholders: Record<string, string> = {
+    last_food_drink: "Npr. zadnji obrok 20:00, voda 06:30",
+    current_medication: "Npr. Controloc, Amlopin; ili pacijent ne uzima terapiju",
+    allergies: "Npr. penicilin; ili negira alergije na lijekove",
+    anticoagulants_antiplatelets: "Npr. Andol, Eliquis, Xarelto, Martefarin; ili negira",
+    diabetes_therapy: "Npr. inzulin/metformin; ili nije dijabetičar",
+    pregnancy: "Upisati samo gdje je relevantno",
+    sedation_escort: "Npr. pratnja dolazi po pacijenta; ili nije planirana sedacija",
+    bowel_preparation: "Npr. priprema provedena, stolica bistra; ili nije kolonoskopija",
+  };
   return <div className="journey-check-editor">
     <div><strong>{item.label}</strong>{item.requires_clinician && <small>Liječnička odluka</small>}</div>
     <select aria-label={`${item.label} — stanje`} value={state} onChange={event => setState(event.target.value)}>{reviewStates.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select>
-    <input aria-label={`${item.label} — napomena`} placeholder="Napomena" value={note} onChange={event => setNote(event.target.value)}/>
+    <input aria-label={`${item.label} — napomena`} placeholder={placeholders[item.item_key] ?? "Napomena"} value={note} onChange={event => setNote(event.target.value)}/>
     <button type="button" disabled={busy || (state === item.state && note === (item.note ?? ""))} onClick={save}>Spremi</button>
   </div>;
 }
 
 export function CheckInChecklist({ data, onUpdate, onConfirmAdministrative }: { data: any; onUpdate?: (id: number, state: string, note: string) => Promise<void>; onConfirmAdministrative?: () => Promise<void> }) {
-  const administrativeOpen = data?.items?.some((item: any) => !item.requires_clinician && !["confirmed", "not_applicable"].includes(item.state));
+  const administrativeOpen = data?.items?.some((item: any) => item.category === "identity" && !item.requires_clinician && !["confirmed", "not_applicable"].includes(item.state));
   return <Panel title="Prijemna provjera">
-    {administrativeOpen && onConfirmAdministrative && <div className="check-in-quick-action"><span><strong>Administrativni podaci</strong><small>Identitet, kontakt, platitelj i zaprimljeni dokumenti.</small></span><button type="button" className="primary" onClick={onConfirmAdministrative}>Potvrdi administrativne podatke</button></div>}
+    <p className="journey-panel-context">Tajnica ili sestra provjerava samo podatke nužne prije pregleda. Ako pacijent koristi tablet, isti se podaci mogu potvrditi na tabletu.</p>
+    {administrativeOpen && onConfirmAdministrative && <div className="check-in-quick-action"><span><strong>Opći podaci i potpis</strong><small>Identitet, kontaktni podaci i potvrda/potpis pacijenta.</small></span><button type="button" className="primary" onClick={onConfirmAdministrative}>Potvrdi opće podatke</button></div>}
     {data?.items?.map((item: any) => onUpdate ? <CheckInItemRow item={item} onUpdate={onUpdate} key={item.id}/> : <p className="journey-check" key={item.id}><span>{item.label}</span><strong>{journeyStatusLabel(item.state)}</strong></p>)}
     {!data && <p>Provjera nije započeta.</p>}
   </Panel>;

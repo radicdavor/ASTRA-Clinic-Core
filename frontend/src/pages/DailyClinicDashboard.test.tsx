@@ -142,22 +142,23 @@ describe("pojednostavljeni dnevni tijek pacijenata", () => {
   test("otvaranje prijema samo navigira i ne mijenja stanje", async () => {
     const user = userEvent.setup(); renderDashboard();
     const row = (await screen.findByText("Sintetički Čeka")).closest("tr") as HTMLTableRowElement;
-    await user.click(within(row).getByRole("button", { name: "Započni prijem" }));
+    await user.click(within(row).getByRole("button", { name: "Otvori prijem" }));
     expect(await screen.findByText("Otvoren radni prostor")).toBeTruthy();
     expect(fetch).not.toHaveBeenCalledWith(expect.stringContaining("/api/patient-journeys/16/check-in"), expect.objectContaining({ method: "POST" }));
   });
 
-  test("za prijem u tijeku prikazuje samo Nastavi prijem", async () => {
+  test("za pacijenta koji je stigao prikazuje samo Otvori prijem", async () => {
     renderDashboard();
     const row = (await screen.findByText("Sintetički Prijem")).closest("tr") as HTMLTableRowElement;
-    expect(within(row).getByRole("button", { name: "Nastavi prijem" })).toBeTruthy();
+    expect(within(row).getByText("Stigao")).toBeTruthy();
+    expect(within(row).getByRole("button", { name: "Otvori prijem" })).toBeTruthy();
     expect(within(row).getAllByRole("button")).toHaveLength(1);
   });
 
   test("nalaze koje pacijent donosi ne prikazuje kao uvjet za pregled", async () => {
     renderDashboard();
     const row = (await screen.findByText("Sintetički Dokumenti")).closest("tr") as HTMLTableRowElement;
-    expect(within(row).getByText("Čeka dolazak")).toBeTruthy();
+    expect(within(row).getByText("Naručen")).toBeTruthy();
     expect(within(row).getAllByText(/to ne blokira početak pregleda/).length).toBeGreaterThan(0);
     expect(within(row).queryByText("Nalazi za pregled")).toBeNull();
     expect(within(row).queryByText("Potrebna priprema")).toBeNull();

@@ -6,15 +6,16 @@ from app.models.domain import JourneyBlocker, JourneyCheckIn, JourneyCheckInItem
 from app.services.patient_journeys import add_event, transition
 
 DEFAULT_ITEMS = [
-    ("identity", "identity_confirmed", "Identitet potvrđen", False), ("identity", "contact_confirmed", "Kontaktni podaci potvrđeni", False),
-    ("identity", "payer_confirmed", "Platitelj ili osiguranje potvrđeni", False), ("identity", "consent_confirmed", "Status privole potvrđen", False),
-    ("documents", "referral", "Uputnica", False), ("documents", "laboratory_results", "Potrebni laboratorijski nalazi", False),
-    ("documents", "prior_reports", "Raniji relevantni nalazi", False), ("documents", "anesthesia_questionnaire", "Anesteziološki upitnik", True),
-    ("documents", "informed_consent", "Informirani pristanak", True), ("preparation", "fasting", "Post", True),
-    ("preparation", "bowel_preparation", "Priprema crijeva", True), ("preparation", "escort", "Pratnja nakon sedacije", True),
-    ("preconditions", "anticoagulants", "Antikoagulantna terapija", True), ("preconditions", "antiplatelets", "Antiagregacijska terapija", True),
-    ("preconditions", "diabetes_therapy", "Terapija šećerne bolesti", True), ("preconditions", "allergies", "Alergije", True),
-    ("preconditions", "pregnancy", "Trudnoća, gdje je relevantno", True), ("preconditions", "implants", "Elektrostimulator ili implantati", True),
+    ("identity", "patient_data_confirmed", "Opći podaci potvrđeni", False),
+    ("identity", "signature_or_tablet_confirmed", "Pacijent potpisao ili potvrdio na tabletu", False),
+    ("preparation", "last_food_drink", "Zadnji obrok i piće upisani", False),
+    ("preconditions", "current_medication", "Aktualna terapija upisana", False),
+    ("preconditions", "allergies", "Alergije na lijekove upisane", False),
+    ("preconditions", "anticoagulants_antiplatelets", "Lijekovi za razrjeđivanje krvi provjereni", False),
+    ("preconditions", "diabetes_therapy", "Šećerna bolest i terapija provjereni", False),
+    ("preconditions", "pregnancy", "Trudnoća provjerena gdje je relevantno", False),
+    ("preparation", "sedation_escort", "Pratnja nakon sedacije provjerena ako je potrebna", False),
+    ("preparation", "bowel_preparation", "Priprema crijeva provjerena ako je kolonoskopija", False),
 ]
 
 def start_check_in(db: Session, journey: PatientJourney, actor: Actor, request: Request):
@@ -33,7 +34,7 @@ def update_item(db: Session, journey: PatientJourney, check_in: JourneyCheckIn, 
     before=item.state; item.state=state; item.note=note; item.updated_by=actor.user_id
     if state in {"blocked", "requires_clinician_review"}:
         open_blocker=db.query(JourneyBlocker).filter_by(journey_id=journey.id, blocker_key=f"checkin:{item.item_key}", status="open").one_or_none()
-        if not open_blocker: db.add(JourneyBlocker(journey_id=journey.id, blocker_key=f"checkin:{item.item_key}", category=item.category, title=item.label, details=note, is_clinical=item.requires_clinician, created_by=actor.user_id))
+        if not open_blocker: db.add(JourneyBlocker(journey_id=journey.id, blocker_key=f"checkin:{item.item_key}", category=item.category, title=item.label, details=note, is_clinical=item.requires_clinician or state=="requires_clinician_review", created_by=actor.user_id))
     db.flush(); states=[current.state for current in check_in.items]
     if any(value=="blocked" for value in states): check_in.status="blocked"; journey.check_in_status="blocked"
     elif any(value=="requires_clinician_review" for value in states): check_in.status="in_review"; journey.check_in_status="in_review"
