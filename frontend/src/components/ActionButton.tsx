@@ -1,4 +1,5 @@
 import { ButtonHTMLAttributes, MouseEvent, ReactNode, useState } from "react";
+import { ConfirmActionDialog } from "./ConfirmActionDialog";
 import { HelpHint } from "./HelpHint";
 
 type ActionButtonProps = {
@@ -14,16 +15,10 @@ type ActionButtonProps = {
 
 export function ActionButton({ variant, helpTitle, help, requiresConfirm, confirmMessage, children, className = "", onClick, type = "button", ...props }: ActionButtonProps) {
   const [confirmOpen, setConfirmOpen] = useState(false);
-  const [busy, setBusy] = useState(false);
 
   async function runAction() {
-    setBusy(true);
-    try {
-      await onClick?.();
-      setConfirmOpen(false);
-    } finally {
-      setBusy(false);
-    }
+    await onClick?.();
+    setConfirmOpen(false);
   }
 
   async function handleClick(event: MouseEvent<HTMLButtonElement>) {
@@ -36,28 +31,20 @@ export function ActionButton({ variant, helpTitle, help, requiresConfirm, confir
   }
 
   return (
-    <span className="action-with-help">
-      <button type={type} className={`action-button action-${variant} ${className}`.trim()} onClick={onClick ? handleClick : undefined} {...props}>
-        {children}
-      </button>
-      {help && <HelpHint title={helpTitle ?? String(children)}>{help}</HelpHint>}
-      {confirmOpen && (
-        <div className="modal-backdrop">
-          <section className="modal-panel action-confirm-dialog" role="dialog" aria-modal="true" aria-labelledby="action-confirm-title">
-            <header>
-              <div>
-                <span className="eyebrow">Potvrda radnje</span>
-                <h2 id="action-confirm-title">{helpTitle ?? "Potvrditi radnju"}</h2>
-              </div>
-            </header>
-            <p>{confirmMessage ?? "Potvrditi radnju?"}</p>
-            <footer>
-              <button type="button" onClick={() => setConfirmOpen(false)} disabled={busy}>Odustani</button>
-              <button type="button" className="primary" onClick={runAction} disabled={busy}>{busy ? "Spremanje..." : "Potvrdi"}</button>
-            </footer>
-          </section>
-        </div>
-      )}
-    </span>
+    <>
+      <span className="action-with-help">
+        <button type={type} className={`action-button action-${variant} ${className}`.trim()} onClick={onClick ? handleClick : undefined} {...props}>
+          {children}
+        </button>
+        {help && <HelpHint title={helpTitle ?? String(children)}>{help}</HelpHint>}
+      </span>
+      <ConfirmActionDialog
+        open={confirmOpen}
+        title={helpTitle ?? "Potvrditi radnju"}
+        message={confirmMessage ?? "Potvrditi radnju?"}
+        onCancel={() => setConfirmOpen(false)}
+        onConfirm={runAction}
+      />
+    </>
   );
 }

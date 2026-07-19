@@ -662,9 +662,17 @@ assertIncludes("src/pages/AppointmentForm.tsx", 'window.dispatchEvent(new Event(
 assertIncludes("src/pages/AppointmentForm.tsx", "navigate(-1)");
 assertIncludes("src/pages/Reception.tsx", 'window.addEventListener("astra:appointments-changed"');
 assertIncludes("src/pages/Reception.tsx", "Pacijent ostaje u evidenciji");
-assertIncludes("src/pages/Reception.tsx", "deleteAppointment(slot.appointment!)");
+assertIncludes("src/pages/Reception.tsx", "setDeleteTarget(slot.appointment!)");
+assertIncludes("src/pages/Reception.tsx", "<ConfirmActionDialog");
 assertIncludes("src/pages/Appointments.tsx", "Pacijent ostaje u evidenciji");
 assertIncludes("src/pages/Appointments.tsx", 'method: "DELETE"');
+assertIncludes("src/pages/Appointments.tsx", "<ConfirmActionDialog");
+assertIncludes("src/pages/Services.tsx", "<ConfirmActionDialog");
+assertNotIncludes("src/pages/Appointments.tsx", "window.confirm");
+assertNotIncludes("src/pages/Reception.tsx", "window.confirm");
+assertNotIncludes("src/pages/Services.tsx", "window.confirm");
+assertNotIncludes("src/components/ActionButton.tsx", "window.confirm");
+assertNotIncludes("src/components/program2/ActivityInterventionsPanel.tsx", "window.prompt");
 assertIncludes("src/pages/AppointmentForm.tsx", "backgroundLocation");
 assertIncludes("src/pages/Appointments.tsx", "backgroundLocation: location");
 assertIncludes("src/pages/Reception.tsx", "backgroundLocation: location");

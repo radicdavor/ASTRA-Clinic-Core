@@ -1,6 +1,8 @@
 import { Link, useLocation } from "react-router-dom";
+import { useState } from "react";
 import { Trash2 } from "lucide-react";
 import { api } from "../api/client";
+import { ConfirmActionDialog } from "../components/ConfirmActionDialog";
 import { DataTable } from "../components/DataTable";
 import { HelpHint } from "../components/HelpHint";
 import { StatusBadge } from "../components/StatusBadge";
@@ -11,14 +13,15 @@ import { formatDate } from "../utils/date";
 export function Appointments() {
   const location = useLocation();
   const { data, setData } = useApi<Appointment[]>("/api/appointments", []);
+  const [deleteTarget, setDeleteTarget] = useState<Appointment | null>(null);
 
-  async function deleteAppointment(appointment: Appointment) {
-    const patientName = `${appointment.patient?.first_name ?? ""} ${appointment.patient?.last_name ?? ""}`.trim() || `pacijenta #${appointment.patient_id}`;
-    const confirmed = window.confirm(`Obrisati termin ${formatDate(appointment.date)} u ${appointment.start_time.slice(0, 5)} za ${patientName}? Pacijent ostaje u evidenciji.`);
-    if (!confirmed) return;
-    await api(`/api/appointments/${appointment.id}`, { method: "DELETE" });
-    setData(data.filter((item) => item.id !== appointment.id));
+  async function deleteAppointment() {
+    if (!deleteTarget) return;
+    await api(`/api/appointments/${deleteTarget.id}`, { method: "DELETE" });
+    setData(data.filter((item) => item.id !== deleteTarget.id));
+    setDeleteTarget(null);
   }
+  const deletePatientName = deleteTarget ? `${deleteTarget.patient?.first_name ?? ""} ${deleteTarget.patient?.last_name ?? ""}`.trim() || `pacijenta #${deleteTarget.patient_id}` : "";
   return (
     <section className="page">
       <div className="page-header">
@@ -36,11 +39,19 @@ export function Appointments() {
         { header: "Status", render: (row) => <StatusBadge status={row.status} /> },
         { header: "Detalj", render: (row) => <Link to={`/appointments/${row.id}`} state={{ backgroundLocation: location }}>Otvori</Link> },
         { header: "Brisanje", render: (row) => (
-          <button type="button" className="icon-button delete-icon-button" aria-label={`Obrisi termin ${formatDate(row.date)} u ${row.start_time.slice(0, 5)}`} title="Obrisi termin" onClick={() => deleteAppointment(row)}>
+          <button type="button" className="icon-button delete-icon-button" aria-label={`Obrisi termin ${formatDate(row.date)} u ${row.start_time.slice(0, 5)}`} title="Obrisi termin" onClick={() => setDeleteTarget(row)}>
             <Trash2 size={18} aria-hidden="true" />
           </button>
         ) }
       ]} />
+      <ConfirmActionDialog
+        open={Boolean(deleteTarget)}
+        title="Obrisati termin"
+        message={deleteTarget ? `Obrisati termin ${formatDate(deleteTarget.date)} u ${deleteTarget.start_time.slice(0, 5)} za ${deletePatientName}? Pacijent ostaje u evidenciji.` : ""}
+        confirmLabel="Obriši termin"
+        onCancel={() => setDeleteTarget(null)}
+        onConfirm={deleteAppointment}
+      />
     </section>
   );
 }

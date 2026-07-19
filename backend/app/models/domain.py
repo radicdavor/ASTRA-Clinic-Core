@@ -749,6 +749,28 @@ class ServiceFormBinding(Base):
     form_version: Mapped[ClinicalFormVersion] = relationship()
 
 
+class ActivityReportPolicy(Base):
+    __tablename__ = "activity_report_policies"
+    __table_args__ = (
+        CheckConstraint("service_id is not null or activity_kind is not null", name="ck_activity_report_policy_scope"),
+        CheckConstraint("policy_version <> ''", name="ck_activity_report_policy_version_nonempty"),
+    )
+    id: Mapped[int] = mapped_column(primary_key=True)
+    service_id: Mapped[int | None] = mapped_column(ForeignKey("services.id"), index=True)
+    specialty_key: Mapped[str | None] = mapped_column(String(80), index=True)
+    activity_kind: Mapped[str | None] = mapped_column(String(60), index=True)
+    report_required: Mapped[bool] = mapped_column(Boolean, default=True)
+    signature_required_before_activity_completion: Mapped[bool] = mapped_column(Boolean, default=False)
+    signature_required_before_billing: Mapped[bool] = mapped_column(Boolean, default=True)
+    allow_post_visit_signing: Mapped[bool] = mapped_column(Boolean, default=False)
+    policy_source: Mapped[str] = mapped_column(String(80), default="configured")
+    policy_version: Mapped[str] = mapped_column(String(40), default="1")
+    active: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_by: Mapped[int | None] = mapped_column(ForeignKey("users.id"))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    service: Mapped[Service | None] = relationship()
+
+
 class ClinicalFormInstance(TimestampMixin, Base):
     __tablename__ = "clinical_form_instances"
     __table_args__ = (

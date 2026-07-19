@@ -1,7 +1,7 @@
 from tests.conftest import login_token
 from tests.factories import appointment
 from datetime import datetime, timedelta, timezone
-from app.models.domain import ClinicalFormDefinition, ClinicalFormInstance, ClinicalFormVersion, JourneyActivity, PatientJourney, ProcedureIntervention
+from app.models.domain import ActivityReportPolicy, ClinicalFormDefinition, ClinicalFormInstance, ClinicalFormVersion, JourneyActivity, PatientJourney, ProcedureIntervention
 
 def headers(client): return {"Authorization": f"Bearer {login_token(client, 'admin@test.local')}"}
 
@@ -64,6 +64,17 @@ def test_required_activity_form_must_be_completed_before_billing(client,db,auth_
     journey,h=completed_encounter(client,db);url=f"/api/patient-journeys/{journey['id']}"
     visit=db.get(PatientJourney,journey["id"])
     visit.activities[0].form_resolution_status="resolved"
+    db.commit()
+    assert client.post(f"{url}/consumables/confirm",headers=h,json={"not_applicable":True}).status_code==200
+    blocked=client.post(f"{url}/billing/prepare",headers=h)
+    assert blocked.status_code==409
+    assert "obrazac" in blocked.json()["detail"]
+
+def test_explicit_report_policy_overrides_legacy_not_required_status(client,db,auth_setup):
+    journey,h=completed_encounter(client,db);url=f"/api/patient-journeys/{journey['id']}"
+    visit=db.get(PatientJourney,journey["id"])
+    activity=visit.activities[0]
+    db.add(ActivityReportPolicy(service_id=activity.service_id,activity_kind=activity.activity_kind,report_required=True,signature_required_before_billing=True,policy_source="test",policy_version="1"))
     db.commit()
     assert client.post(f"{url}/consumables/confirm",headers=h,json={"not_applicable":True}).status_code==200
     blocked=client.post(f"{url}/billing/prepare",headers=h)

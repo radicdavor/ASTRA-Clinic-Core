@@ -3,6 +3,7 @@ import { Trash2 } from "lucide-react";
 import { Link, useLocation } from "react-router-dom";
 import { api } from "../api/client";
 import { ActionButton } from "../components/ActionButton";
+import { ConfirmActionDialog } from "../components/ConfirmActionDialog";
 import { DateInput } from "../components/DateInput";
 import { HelpHint } from "../components/HelpHint";
 import { StatusBadge, statusLabel } from "../components/StatusBadge";
@@ -75,6 +76,7 @@ export function Reception() {
   const [view, setView] = useState<"day" | "week">("day");
   const [filters, setFilters] = useState({ clinic_id: "", room_id: "", provider_id: "", service_id: "", status: "" });
   const [selected, setSelected] = useState<Appointment | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<Appointment | null>(null);
   const [patientDraft, setPatientDraft] = useState({ first_name: "", last_name: "", date_of_birth: "", oib: "", phone: "", email: "" });
   const clinics = useApi<Clinic[]>("/api/clinics", []);
   const rooms = useApi<Room[]>("/api/rooms", []);
@@ -188,14 +190,14 @@ export function Reception() {
     await refresh();
   }
 
-  async function deleteAppointment(appointment: Appointment) {
-    const patientName = appointment.patient ? formatPatientName(appointment.patient) : `pacijenta #${appointment.patient_id}`;
-    const confirmed = window.confirm(`Obrisati termin ${appointment.start_time.slice(0, 5)} za ${patientName}? Pacijent ostaje u evidenciji.`);
-    if (!confirmed) return;
-    await api(`/api/appointments/${appointment.id}`, { method: "DELETE" });
-    if (selected?.id === appointment.id) setSelected(null);
+  async function deleteAppointment() {
+    if (!deleteTarget) return;
+    await api(`/api/appointments/${deleteTarget.id}`, { method: "DELETE" });
+    if (selected?.id === deleteTarget.id) setSelected(null);
+    setDeleteTarget(null);
     await refresh();
   }
+  const deletePatientName = deleteTarget ? (deleteTarget.patient ? formatPatientName(deleteTarget.patient) : `pacijenta #${deleteTarget.patient_id}`) : "";
 
   const hasIdentityDetails = Boolean(
     patientDraft.first_name.trim()
@@ -256,7 +258,7 @@ export function Reception() {
                   <StatusBadge status={slot.appointment.status} />
                   <small>{slot.appointment.arrived_at ? "Dolazak evidentiran" : `${slot.appointment.start_time.slice(0, 5)}–${slot.appointment.end_time.slice(0, 5)}`}</small>
                 </button>
-                <button type="button" className="icon-button delete-icon-button" aria-label={`Obrisi termin u ${slot.appointment.start_time.slice(0, 5)}`} title="Obrisi termin" onClick={() => deleteAppointment(slot.appointment!)}>
+                <button type="button" className="icon-button delete-icon-button" aria-label={`Obrisi termin u ${slot.appointment.start_time.slice(0, 5)}`} title="Obrisi termin" onClick={() => setDeleteTarget(slot.appointment!)}>
                   <Trash2 size={18} aria-hidden="true" />
                 </button>
               </div>
@@ -290,7 +292,7 @@ export function Reception() {
                           <small>{appointment.provider?.full_name ?? appointment.provider_id}</small>
                           <StatusBadge status={appointment.status} />
                         </button>
-                        <button type="button" className="week-delete-button" aria-label={`Obrisi termin ${weekDate} u ${appointment.start_time.slice(0, 5)}`} title="Obrisi termin" onClick={() => deleteAppointment(appointment)}>
+                        <button type="button" className="week-delete-button" aria-label={`Obrisi termin ${weekDate} u ${appointment.start_time.slice(0, 5)}`} title="Obrisi termin" onClick={() => setDeleteTarget(appointment)}>
                           <Trash2 size={15} aria-hidden="true" />
                         </button>
                       </article>
@@ -349,6 +351,14 @@ export function Reception() {
           </div>
         </div>
       )}
+      <ConfirmActionDialog
+        open={Boolean(deleteTarget)}
+        title="Obrisati termin"
+        message={deleteTarget ? `Obrisati termin ${deleteTarget.start_time.slice(0, 5)} za ${deletePatientName}? Pacijent ostaje u evidenciji.` : ""}
+        confirmLabel="Obriši termin"
+        onCancel={() => setDeleteTarget(null)}
+        onConfirm={deleteAppointment}
+      />
     </section>
   );
 }

@@ -2,7 +2,7 @@ from fastapi import HTTPException
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.models.domain import ClinicalFormInstance, JourneyActivity, PathologyCase, PathologySpecimen, PatientJourney, ProcedureIntervention, SignedClinicalReport
+from app.models.domain import ActivityReportPolicy, ClinicalFormInstance, JourneyActivity, PathologyCase, PathologySpecimen, PatientJourney, ProcedureIntervention, SignedClinicalReport
 from app.services.reports import verify_report_integrity
 
 
@@ -11,16 +11,50 @@ NO_REPORT_RESOLUTION_STATUSES = {"not_required", "legacy"}
 RESOLVED_CONSUMABLE_STATUSES = {"confirmed", "not_applicable"}
 SPECIMEN_REQUIRED_INTERVENTIONS = {"biopsy", "polypectomy"}
 SPECIMEN_RETRIEVED_STATUSES = {"retrieved", "collected"}
+DEFAULT_REPORT_REQUIRED_KINDS = {
+    "specialist_consultation",
+    "gastroscopy",
+    "colonoscopy",
+    "aesthetic_consultation",
+    "aesthetic_treatment",
+}
 
 
-def activity_report_policy(activity: JourneyActivity) -> dict:
-    report_required = activity.form_resolution_status not in NO_REPORT_RESOLUTION_STATUSES
+def _policy_payload(policy: ActivityReportPolicy) -> dict:
+    return {
+        "report_required": policy.report_required,
+        "signature_required_before_activity_completion": policy.signature_required_before_activity_completion,
+        "signature_required_before_billing": policy.signature_required_before_billing,
+        "allow_post_visit_signing": policy.allow_post_visit_signing,
+        "policy_source": policy.policy_source,
+        "policy_version": policy.policy_version,
+    }
+
+
+def activity_report_policy(db: Session, activity: JourneyActivity) -> dict:
+    policies = db.scalars(
+        select(ActivityReportPolicy).where(
+            ActivityReportPolicy.active.is_(True),
+            (ActivityReportPolicy.service_id.is_(None)) | (ActivityReportPolicy.service_id == activity.service_id),
+            (ActivityReportPolicy.specialty_key.is_(None)) | (ActivityReportPolicy.specialty_key == activity.specialty_key),
+            (ActivityReportPolicy.activity_kind.is_(None)) | (ActivityReportPolicy.activity_kind == activity.activity_kind),
+        )
+    ).all()
+    if policies:
+        def specificity(policy: ActivityReportPolicy) -> tuple[int, int]:
+            score = int(policy.service_id is not None) + int(policy.specialty_key is not None) + int(policy.activity_kind is not None)
+            return score, policy.id
+        return _policy_payload(sorted(policies, key=specificity, reverse=True)[0])
+    if activity.form_resolution_status in NO_REPORT_RESOLUTION_STATUSES:
+        report_required = False
+    else:
+        report_required = activity.activity_kind in DEFAULT_REPORT_REQUIRED_KINDS or activity.form_resolution_status == "resolved"
     return {
         "report_required": report_required,
         "signature_required_before_activity_completion": False,
         "signature_required_before_billing": report_required,
         "allow_post_visit_signing": False,
-        "policy_source": "activity_form_resolution_status",
+        "policy_source": "default_activity_kind" if report_required else "activity_form_resolution_status",
         "policy_version": "1",
     }
 
@@ -47,7 +81,7 @@ def validate_clinical_visit_readiness(db: Session, journey: PatientJourney, *, r
     for activity in activities:
         if activity.status != "completed":
             continue
-        policy = activity_report_policy(activity)
+        policy = activity_report_policy(db, activity)
         form = db.scalar(
             select(ClinicalFormInstance)
             .where(

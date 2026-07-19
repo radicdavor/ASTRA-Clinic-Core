@@ -9,6 +9,7 @@
 | Optimistic concurrency | Implemented, tested | Stale clients receive HTTP 409 with server metadata |
 | Structured validation labels | Implemented, tested | Frontend maps `fields` and focuses invalid field |
 | Central readiness validator | Implemented, tested | Used by billing, payment, deferral, and closure |
+| Activity report policy | Implemented, tested | Additive `ActivityReportPolicy` table; explicit policy overrides legacy compatibility state |
 | Hidden activity completion removal | Implemented, tested | Legacy consumables endpoint cannot complete activity |
 | Package booking | Implemented, tested | Existing `/appointments/package` UI and schedule preview |
 | Activity preparation | Implemented, tested | Activity requirements aggregate with provenance |
@@ -18,6 +19,6 @@
 | Secure report delivery | Implemented, stubbed | Dedicated permissions, verified recipient, `queued_stub` only |
 | Pathology communication disposition | Implemented, tested | Closure blocked until structured disposition |
 | Legacy clinical writes | Implemented boundary | Activity-enabled journeys use clinical forms |
-| Browser-native clinical confirmation | Improved | Shared `ActionButton` now uses application dialog; legacy appointment/service deletes may still use native confirm |
+| Browser-native confirmation cleanup | Implemented for known frontend occurrences | `ActionButton`, appointment delete, reception delete, and service delete use application dialogs |
 | Full backend suite | Not reconfirmed in this increment | Targeted backend suites passed; previous full run timed out without failure summary |
 | Production use | Not authorized | Synthetic-only hold remains active |
