@@ -93,6 +93,7 @@ export function PatientJourneyWorkspace() {
   const [patientReceptionDraft, setPatientReceptionDraft] = useState<PatientReceptionDraft>({ first_name: "", last_name: "", date_of_birth: "", oib: "", phone: "", email: "", notes: "" });
   const [receptionDraft, setReceptionDraft] = useState<ReceptionChecklistDraft>(receptionDefaults);
   const clinicalFormRef = useRef<ClinicalActivityFormHandle | null>(null);
+  const autoReceptionOpenedRef = useRef<string | null>(null);
 
   useEffect(() => { if (encounter.data) setDraft(encounter.data); }, [encounter.data]);
   useEffect(() => {
@@ -114,6 +115,14 @@ export function PatientJourneyWorkspace() {
     const roleDefault = role === "billing" && ["awaiting_billing", "awaiting_payment"].includes(journey.data.current_stage) ? "billing" : current;
     if (!clinicalFormRef.current?.hasUnsavedChanges()) setActiveStage(focusToStage(searchParams.get("focus"), roleDefault));
   }, [journey.data?.id, journey.data?.current_stage, searchParams]);
+  useEffect(() => {
+    if (!journey.data || searchParams.get("reception") !== "1") return;
+    const key = String(journey.data.id);
+    if (autoReceptionOpenedRef.current === key) return;
+    autoReceptionOpenedRef.current = key;
+    setActiveStage("arrival");
+    openReception();
+  }, [journey.data?.id, searchParams]);
 
   if (!journey.data) return <section className="page"><p>Učitavanje tijeka pacijenta...</p></section>;
   const j = journey.data;

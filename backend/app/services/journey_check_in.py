@@ -21,9 +21,11 @@ DEFAULT_ITEMS = [
     ("preconditions", "drug_allergies", "Alergije na lijekove", False),
 ]
 
+PRE_RECEPTION_STAGES = {"booked", "awaiting_forms", "awaiting_documents", "preparation_in_progress", "ready_for_arrival", "arrived", "check_in_review"}
+
 
 def start_check_in(db: Session, journey: PatientJourney, actor: Actor, request: Request):
-    if journey.current_stage not in {"ready_for_arrival", "arrived", "check_in_review"}:
+    if journey.current_stage not in PRE_RECEPTION_STAGES:
         raise HTTPException(409, detail="Tijek pacijenta nije u fazi prijema")
     existing = db.query(JourneyCheckIn).filter_by(journey_id=journey.id).one_or_none()
     if existing:
@@ -36,6 +38,8 @@ def start_check_in(db: Session, journey: PatientJourney, actor: Actor, request: 
         db.add(JourneyCheckInItem(check_in_id=item.id, category=category, item_key=key, label=label, requires_clinician=clinical, position=position))
     journey.check_in_status = "in_review"
     journey.appointment.arrived_at = journey.appointment.arrived_at or now
+    if journey.current_stage in {"booked", "awaiting_forms", "awaiting_documents", "preparation_in_progress"}:
+        transition(db, journey, "ready_for_arrival", actor, request, "Pacijent stigao na prijem")
     if journey.current_stage == "ready_for_arrival":
         transition(db, journey, "arrived", actor, request, "Pacijent stigao")
     if journey.current_stage == "arrived":

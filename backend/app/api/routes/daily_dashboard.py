@@ -115,7 +115,7 @@ def daily_dashboard(
             current_activity = remaining[0]
         next_activity = next((item for item in remaining if current_activity and item.sequence > current_activity.sequence), None)
         allowed_actions = []
-        if "checkin.update" in actor.permissions and journey.current_stage in {"ready_for_arrival", "arrived", "check_in_review"}:
+        if "checkin.update" in actor.permissions and journey.current_stage in {"booked", "awaiting_forms", "awaiting_documents", "preparation_in_progress", "ready_for_arrival", "arrived", "check_in_review"}:
             allowed_actions.append("open_check_in")
         if "encounter.read" in actor.permissions and journey.current_stage in {"ready_for_clinician", "in_encounter"}:
             allowed_actions.append("open_encounter")

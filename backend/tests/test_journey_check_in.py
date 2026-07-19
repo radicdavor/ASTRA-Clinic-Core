@@ -43,6 +43,21 @@ def test_start_check_in_records_arrival_and_structured_items(client, db, auth_se
     assert detail["current_stage"] == "check_in_review" and detail["check_in_status"] == "in_review"
 
 
+def test_start_check_in_from_booked_patient_opens_reception(client, db, auth_setup):
+    appt = appointment(db)
+    headers = admin_headers(client)
+    journey = client.post("/api/patient-journeys", headers=headers, json={"appointment_id": appt.id, "intake_channel": "manual", "initial_stage": "booked"}).json()
+    dashboard = client.get("/api/dashboard/day?selected_date=2026-07-06", headers=headers).json()
+    row = next(item for item in dashboard["rows"] if item["journey_id"] == journey["id"])
+    assert "open_check_in" in row["allowed_actions"]
+
+    response = client.post(f"/api/patient-journeys/{journey['id']}/check-in", headers=headers)
+
+    assert response.status_code == 200
+    detail = client.get(f"/api/patient-journeys/{journey['id']}", headers=headers).json()
+    assert detail["current_stage"] == "check_in_review"
+
+
 def test_reception_complete_records_red_notes_but_sends_patient_to_clinician(client, db, auth_setup):
     journey, admin = ready_journey(client, db)
     client.post(f"/api/patient-journeys/{journey['id']}/check-in", headers=admin)

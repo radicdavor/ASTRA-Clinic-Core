@@ -2,7 +2,7 @@ export const journeyStatusLabels: Record<string, string> = {
   requested: "Zatraženo", booked: "Termin potvrđen", awaiting_forms: "Čeka obrasce",
   awaiting_documents: "Čeka dokumente", preparation_in_progress: "Priprema u tijeku",
   ready_for_arrival: "Naručen", arrived: "Stigao", check_in_review: "Stigao",
-  ready_for_clinician: "Čeka liječnika", in_encounter: "Pregled u tijeku",
+  ready_for_clinician: "Čeka pregled/pretragu", in_encounter: "Pregled u tijeku",
   procedure_completed: "Postupak dovršen", awaiting_billing: "Čeka račun", awaiting_payment: "Čeka plaćanje",
   completed: "Dovršeno", cancelled: "Otkazano", no_show: "Pacijent nije došao", blocked: "Blokirano",
   not_requested: "Nije zatraženo", partial: "Nedostaje dio", complete: "Potpuno",
