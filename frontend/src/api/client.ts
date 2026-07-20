@@ -118,6 +118,21 @@ export function setSessionUser(user: SessionUser) {
   localStorage.setItem("astra_user", JSON.stringify(user));
 }
 
+export type UserClinic = { id: number; name: string };
+export type UserClinicsResponse = { clinics: UserClinic[]; default_clinic_id: number | null; requires_selection: boolean };
+
+export function getActiveClinicId() {
+  return localStorage.getItem("astra_active_clinic_id");
+}
+
+export function setActiveClinicId(clinicId: number | string | null) {
+  if (clinicId === null || clinicId === "") {
+    localStorage.removeItem("astra_active_clinic_id");
+    return;
+  }
+  localStorage.setItem("astra_active_clinic_id", String(clinicId));
+}
+
 export function getSessionUser(): SessionUser | null {
   try {
     const value = localStorage.getItem("astra_user");
@@ -139,6 +154,7 @@ export function getSessionUser(): SessionUser | null {
 export function clearToken() {
   localStorage.removeItem("astra_token");
   localStorage.removeItem("astra_user");
+  localStorage.removeItem("astra_active_clinic_id");
 }
 
 function handleUnauthorized() {
@@ -155,6 +171,8 @@ export async function api<T>(path: string, options: ApiRequestOptions = {}): Pro
   headers.set("Content-Type", "application/json");
   const token = getToken();
   if (token) headers.set("Authorization", `Bearer ${token}`);
+  const activeClinicId = getActiveClinicId();
+  if (activeClinicId) headers.set("X-Clinic-Id", activeClinicId);
   const method = requestOptions.method ?? "GET";
   const response = await fetch(`${API_BASE_URL}${path}`, { ...requestOptions, headers });
   if (response.status === 401) {
@@ -182,6 +200,7 @@ export async function login(email: string, password: string) {
     throw new Error(error.detail ?? "Prijava nije uspjela");
   }
   const result = await response.json() as { access_token: string; user: SessionUser };
+  setActiveClinicId(null);
   setToken(result.access_token);
   setSessionUser(result.user);
   return result;

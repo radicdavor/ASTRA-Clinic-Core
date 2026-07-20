@@ -120,6 +120,24 @@ def test_user_with_multiple_memberships_must_select_active_clinic(client, db, au
     assert "aktivne klinike" in response.json()["detail"]
 
 
+def test_current_user_clinics_reports_default_and_selection_requirement(client, db, auth_setup):
+    single = client.get("/auth/me/clinics", headers=auth_headers(client))
+    assert single.status_code == 200
+    assert single.json()["default_clinic_id"] == auth_setup["clinic"].id
+    assert single.json()["requires_selection"] is False
+
+    clinic_b = Clinic(name="Selectable Clinic")
+    db.add(clinic_b)
+    db.flush()
+    db.add(ClinicMembership(user_id=auth_setup["admin"].id, clinic_id=clinic_b.id, created_by_user_id=auth_setup["admin"].id))
+    db.commit()
+
+    multiple = client.get("/auth/me/clinics", headers=auth_headers(client))
+    assert multiple.status_code == 200
+    assert multiple.json()["default_clinic_id"] is None
+    assert multiple.json()["requires_selection"] is True
+
+
 def test_invalid_active_clinic_header_is_rejected(client, db, auth_setup):
     clinic_b = Clinic(name="Forbidden Header Clinic")
     db.add(clinic_b)
