@@ -1,10 +1,11 @@
-from datetime import date, time
+from datetime import UTC, date, datetime, time
 
 import pytest
 from fastapi import HTTPException
 
 from app.models.domain import AuditLog, Clinic, Provider, Room, Service
 from app.services.appointments import validate_appointment_payload
+from app.services.clinic_time import clinic_local_date
 from tests.conftest import login_token
 from tests.factories import room
 
@@ -12,9 +13,10 @@ from tests.factories import room
 def test_create_clinic_room_and_provider(client, auth_setup):
     headers = {"Authorization": f"Bearer {login_token(client, 'admin@test.local')}"}
 
-    clinic = client.post("/api/clinics", headers=headers, json={"name": "Kardiologija"})
+    clinic = client.post("/api/clinics", headers=headers, json={"name": "Kardiologija", "timezone": "Europe/Zagreb"})
     assert clinic.status_code == 200
     clinic_id = clinic.json()["id"]
+    assert clinic.json()["timezone"] == "Europe/Zagreb"
 
     created_room = client.post("/api/rooms", headers=headers, json={"name": "Kardio 1", "type": "ordinacija", "clinic_id": clinic_id})
     assert created_room.status_code == 200
@@ -34,6 +36,23 @@ def test_create_clinic_room_and_provider(client, auth_setup):
     assert provider.json()["work_end"] == "16:00:00"
     assert provider.json()["weekly_working_hours"]["0"] == {"enabled": True, "start": "08:00", "end": "16:00"}
     assert provider.json()["weekly_working_hours"]["6"]["enabled"] is False
+
+
+def test_create_clinic_rejects_invalid_timezone(client, auth_setup):
+    headers = {"Authorization": f"Bearer {login_token(client, 'admin@test.local')}"}
+
+    response = client.post("/api/clinics", headers=headers, json={"name": "Kriva zona", "timezone": "Europe/NotAClinic"})
+
+    assert response.status_code == 422
+
+
+def test_clinic_local_date_uses_clinic_timezone_across_dst():
+    before_zagreb_midnight = datetime(2026, 3, 28, 22, 45, tzinfo=UTC)
+    after_zagreb_midnight = datetime(2026, 3, 28, 23, 30, tzinfo=UTC)
+
+    assert clinic_local_date("Europe/Zagreb", before_zagreb_midnight) == date(2026, 3, 28)
+    assert clinic_local_date("Europe/Zagreb", after_zagreb_midnight) == date(2026, 3, 29)
+    assert clinic_local_date("Invalid/Zone", after_zagreb_midnight) == date(2026, 3, 29)
 
 
 def test_list_providers_keeps_legacy_demo_local_email_readable(client, db, auth_setup):

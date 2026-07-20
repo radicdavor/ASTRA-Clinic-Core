@@ -142,6 +142,7 @@ class Clinic(TimestampMixin, Base):
     __tablename__ = "clinics"
     id: Mapped[int] = mapped_column(primary_key=True)
     name: Mapped[str] = mapped_column(String(120), unique=True, index=True)
+    timezone: Mapped[str] = mapped_column(String(80), default="Europe/Zagreb")
     active: Mapped[bool] = mapped_column(Boolean, default=True, index=True)
     visible_in_catalog: Mapped[bool] = mapped_column(Boolean, default=True, index=True)
     user_memberships: Mapped[list["ClinicMembership"]] = relationship(back_populates="clinic", cascade="all, delete-orphan")
