@@ -94,7 +94,7 @@ def daily_dashboard(
     reception_warnings = {
         check_in.journey_id: [
             item.note for item in check_in.items
-            if item.note and item.state == "confirmed"
+            if item.note and item.state in {"requires_clinician_review", "blocked"}
         ]
         for check_in in check_ins
     }

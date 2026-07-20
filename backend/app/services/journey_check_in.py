@@ -19,6 +19,7 @@ DEFAULT_ITEMS = [
     ("preconditions", "pacemaker", "Elektrostimulator", False),
     ("preconditions", "current_medication", "Lijekovi koje pacijent uzima", False),
     ("preconditions", "drug_allergies", "Alergije na lijekove", False),
+    ("preconditions", "other_medical_review", "Druga napomena za liječničku provjeru", False),
 ]
 
 PRE_RECEPTION_STAGES = {"booked", "awaiting_forms", "awaiting_documents", "preparation_in_progress", "ready_for_arrival", "arrived", "check_in_review"}
@@ -80,12 +81,23 @@ def update_item(db: Session, journey: PatientJourney, check_in: JourneyCheckIn, 
 
 
 def complete_reception_check_in(db: Session, journey: PatientJourney, check_in: JourneyCheckIn, notes_by_key: dict[str, str | None], actor: Actor, request: Request):
+    red_flags = {
+        key: note.strip()
+        for key, note in notes_by_key.items()
+        if isinstance(note, str) and note.strip()
+    }
     changed = []
     for item in check_in.items:
-        note = notes_by_key.get(item.item_key)
         before = item.state
-        item.state = "confirmed"
-        item.note = note.strip() if isinstance(note, str) and note.strip() else None
+        if item.item_key == "patient_data_confirmed":
+            item.state = "confirmed"
+            item.note = None
+        elif item.item_key in red_flags:
+            item.state = "requires_clinician_review"
+            item.note = red_flags[item.item_key]
+        else:
+            item.state = "not_applicable"
+            item.note = None
         item.updated_by = actor.user_id
         changed.append({"item_key": item.item_key, "before": before, "after": item.state, "note": item.note})
     check_in.status = "ready"

@@ -74,6 +74,11 @@ def test_reception_complete_records_red_notes_but_sends_patient_to_clinician(cli
     )
     assert response.status_code == 200
     assert response.json()["status"] == "ready"
+    response_items = {item["item_key"]: item for item in response.json()["items"]}
+    assert response_items["patient_data_confirmed"]["state"] == "confirmed"
+    assert response_items["consent_status"]["state"] == "not_applicable"
+    assert response_items["fasting_6h"]["state"] == "requires_clinician_review"
+    assert response_items["pacemaker"]["state"] == "requires_clinician_review"
     detail = client.get(f"/api/patient-journeys/{journey['id']}", headers=admin).json()
     assert detail["current_stage"] == "ready_for_clinician"
     assert db.query(JourneyBlocker).filter_by(journey_id=journey["id"], status="open").count() == 0

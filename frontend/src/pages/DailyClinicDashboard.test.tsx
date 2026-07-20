@@ -97,12 +97,34 @@ function response(body: unknown) {
   return Promise.resolve(new Response(JSON.stringify(body), { status: 200, headers: { "Content-Type": "application/json" } }));
 }
 
+function journeyResponse(id: number) {
+  return {
+    id, patient_id: 501, appointment_id: 106, intake_channel: "manual", current_stage: "ready_for_arrival",
+    document_status: "complete", preparation_status: "complete", check_in_status: "not_arrived",
+    encounter_status: "not_started", consumables_status: "not_ready", billing_status: "not_ready",
+    payment_status: "not_due", closed_at: null, blockers: [], activities: [],
+    patient: {
+      id: 501, first_name: "Sintetički", last_name: "Čeka", date_of_birth: "1992-01-06",
+      oib: null, email: "synthetic@example.com", phone: "0994477445", notes: null, email_verified_at: null,
+    },
+    appointment: {
+      id: 106, service_id: 1, provider_id: 1, room_id: 1, date: "2026-07-13",
+      start_time: "13:00:00", end_time: "13:30:00", status: "booked", source: "manual",
+      service: { id: 1, name: "Kontrola" }, provider: { id: 1, full_name: "dr. Test" }, room: { id: 1, name: "Ordinacija 1" },
+    },
+  };
+}
+
 function installFetchMock() {
   return vi.spyOn(globalThis, "fetch").mockImplementation((input, init) => {
     const url = String(input);
     if (url.includes("/api/dashboard/day")) return response({ date: "2026-07-13", refreshed_at: "2026-07-13T08:00:00Z", visible_sections: [], ...dashboardAccess, rows });
     if (url.endsWith("/api/providers")) return response([{ id: 1, full_name: "dr. Test", staff_role: "physician" }]);
     if (url.endsWith("/api/rooms") || url.endsWith("/api/services")) return response([]);
+    if (/\/api\/patient-journeys\/\d+$/.test(url)) return response(journeyResponse(Number(url.split("/").pop())));
+    if (url.endsWith("/api/patients/501") && init?.method === "PATCH") return response({});
+    if (url.endsWith("/api/patient-journeys/16/check-in") && init?.method === "POST") return response({ id: 1, journey_id: 16, status: "in_review", arrived_at: "2026-07-13T11:00:00Z", completed_at: null, items: [] });
+    if (url.endsWith("/api/patient-journeys/16/check-in/complete-reception") && init?.method === "POST") return response({ id: 1, journey_id: 16, status: "ready", arrived_at: "2026-07-13T11:00:00Z", completed_at: "2026-07-13T11:05:00Z", items: [] });
     if (init?.method === "POST") return response({});
     throw new Error(`Neočekivani testni API poziv: ${url}`);
   });
@@ -147,11 +169,12 @@ describe("pojednostavljeni dnevni tijek pacijenata", () => {
     expect(within(row).queryByRole("button")).toBeNull();
   });
 
-  test("otvaranje prijema samo navigira i ne mijenja stanje", async () => {
+  test("otvaranje prijema ostaje na dnevnoj ploči i otvara float prozor", async () => {
     const user = userEvent.setup(); renderDashboard();
     const row = (await screen.findByText("Sintetički Čeka")).closest("tr") as HTMLTableRowElement;
     await user.click(within(row).getByRole("button", { name: "Otvori prijem" }));
-    expect(await screen.findByText("Otvoren radni prostor")).toBeTruthy();
+    expect(await screen.findByRole("dialog", { name: "Opći podaci pacijenta" })).toBeTruthy();
+    expect(screen.queryByText("Otvoren radni prostor")).toBeNull();
     expect(fetch).not.toHaveBeenCalledWith(expect.stringContaining("/api/patient-journeys/16/check-in"), expect.objectContaining({ method: "POST" }));
   });
 
@@ -160,7 +183,7 @@ describe("pojednostavljeni dnevni tijek pacijenata", () => {
     const row = (await screen.findByText("Sintetički Prijem")).closest("tr") as HTMLTableRowElement;
     expect(within(row).getByText("Stigao")).toBeTruthy();
     expect(within(row).getByRole("button", { name: "Otvori prijem" })).toBeTruthy();
-    expect(within(row).getAllByRole("button")).toHaveLength(1);
+    expect(within(row).getByRole("button", { name: /Sinteti.*Prijem/ })).toBeTruthy();
   });
 
   test("nalaze koje pacijent donosi ne prikazuje kao uvjet za pregled", async () => {
