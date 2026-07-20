@@ -10,9 +10,12 @@ from app.models.domain import (
     PatientClinicAssociation,
     PatientJourney,
     Provider,
+    Role,
     Room,
     Service,
+    User,
 )
+from app.services.seed import seed_demo_memberships
 from tests.conftest import login_token
 
 
@@ -136,6 +139,22 @@ def test_current_user_clinics_reports_default_and_selection_requirement(client, 
     assert multiple.status_code == 200
     assert multiple.json()["default_clinic_id"] is None
     assert multiple.json()["requires_selection"] is True
+
+
+def test_seed_demo_memberships_assigns_demo_roles_to_clinics(db):
+    clinic_a = Clinic(name="Demo Seed Clinic A")
+    clinic_b = Clinic(name="Demo Seed Clinic B")
+    role = Role(name="demo_admin", description="Demo Admin")
+    user = User(email="demo.seed@astra.local", full_name="Demo Seed", password_hash="demo", role=role)
+    db.add_all([clinic_a, clinic_b, role, user])
+    db.commit()
+
+    seed_demo_memberships(db)
+    db.commit()
+
+    memberships = db.query(ClinicMembership).filter(ClinicMembership.user_id == user.id).all()
+    assert {membership.clinic_id for membership in memberships} == {clinic_a.id, clinic_b.id}
+    assert all(membership.active for membership in memberships)
 
 
 def test_invalid_active_clinic_header_is_rejected(client, db, auth_setup):

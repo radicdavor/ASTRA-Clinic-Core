@@ -346,7 +346,11 @@ def seed_demo_memberships(db: Session) -> None:
     clinics = db.scalars(select(Clinic)).all()
     if not clinics:
         return
-    admins = db.scalars(select(User).join(Role, User.role_id == Role.id).where(Role.name == "admin")).all()
+    admins = db.scalars(
+        select(User)
+        .join(Role, User.role_id == Role.id)
+        .where((Role.name == "admin") | (Role.name.like("demo_%")))
+    ).all()
     for admin in admins:
         for clinic in clinics:
             membership = db.scalar(

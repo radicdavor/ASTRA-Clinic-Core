@@ -8,6 +8,7 @@ from app.core.security import hash_password
 from app.models.domain import (
     Appointment,
     Clinic,
+    ClinicMembership,
     ClinicalDocument,
     ClinicalEpisode,
     ClinicalPlan,
@@ -72,13 +73,33 @@ def ensure_demo_user(db, role_name: str, email: str, permissions_by_name):
 def main() -> None:
     with SessionLocal() as db:
         permissions = ensure_permissions(db)
+        demo_users = {}
         for role_name, email in DEMO_EMAILS.items():
-            ensure_demo_user(db, role_name, email, permissions)
+            demo_users[role_name] = ensure_demo_user(db, role_name, email, permissions)
 
         gastro_clinic = db.scalar(select(Clinic).where(Clinic.name == "Gastroenterologija")) or Clinic(name="Gastroenterologija")
         aesthetic_clinic = db.scalar(select(Clinic).where(Clinic.name == "Estetika")) or Clinic(name="Estetika")
         db.add_all([gastro_clinic, aesthetic_clinic])
         db.flush()
+        for user in demo_users.values():
+            for clinic in (gastro_clinic, aesthetic_clinic):
+                membership = db.scalar(
+                    select(ClinicMembership).where(
+                        ClinicMembership.user_id == user.id,
+                        ClinicMembership.clinic_id == clinic.id,
+                    )
+                )
+                if membership is None:
+                    db.add(
+                        ClinicMembership(
+                            user_id=user.id,
+                            clinic_id=clinic.id,
+                            active=True,
+                            created_by_user_id=demo_users["admin"].id,
+                        )
+                    )
+                else:
+                    membership.active = True
         patient = db.scalar(select(Patient).where(Patient.email.in_([DEMO_PATIENT_EMAIL, LEGACY_DEMO_PATIENT_EMAIL]))) or Patient(first_name="Demo", last_name="Pacijent", email=DEMO_PATIENT_EMAIL)
         patient.email = DEMO_PATIENT_EMAIL
         patient.email_verified_at = patient.email_verified_at or datetime.now(timezone.utc)
