@@ -1,10 +1,13 @@
+import hashlib
+import json
 from datetime import datetime, timezone
 
 from fastapi import HTTPException, Request
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.auth.dependencies import Actor
-from app.models.domain import JourneyBlocker, JourneyCheckIn, JourneyCheckInItem, PatientJourney
+from app.models.domain import JourneyBlocker, JourneyCheckIn, JourneyCheckInItem, JourneyEvent, PatientJourney
 from app.services.patient_journeys import add_event, transition
 
 DEFAULT_ITEMS = [
@@ -19,9 +22,53 @@ DEFAULT_ITEMS = [
     ("preconditions", "pacemaker", "Elektrostimulator", False),
     ("preconditions", "current_medication", "Lijekovi koje pacijent uzima", False),
     ("preconditions", "drug_allergies", "Alergije na lijekove", False),
+    ("preconditions", "other_medical_review", "Druga napomena za liječničku provjeru", False),
 ]
 
 PRE_RECEPTION_STAGES = {"booked", "awaiting_forms", "awaiting_documents", "preparation_in_progress", "ready_for_arrival", "arrived", "check_in_review"}
+
+
+def normalize_reception_completion_key(idempotency_key: str | None) -> str | None:
+    if idempotency_key is None:
+        return None
+    cleaned = idempotency_key.strip()
+    return cleaned or None
+
+
+def clean_reception_note(value: str | None) -> str | None:
+    if value is None:
+        return None
+    cleaned = value.strip()
+    return cleaned or None
+
+
+def reception_completion_fingerprint(items_by_key: dict[str, dict], reception_note: str | None = None) -> str:
+    normalized = {
+        key: {
+            "note": (payload.get("note") or "").strip(),
+            "details": payload.get("details") or {},
+            "activity_ids": sorted({int(activity_id) for activity_id in payload.get("activity_ids", []) if str(activity_id).strip()}),
+        }
+        for key, payload in sorted(items_by_key.items())
+    }
+    note = clean_reception_note(reception_note)
+    if note:
+        normalized["_reception_note"] = {"note": note}
+    body = json.dumps(normalized, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(body.encode("utf-8")).hexdigest()
+
+
+def find_reception_completion_event(db: Session, journey_id: int, idempotency_key: str | None) -> JourneyEvent | None:
+    key = normalize_reception_completion_key(idempotency_key)
+    if not key:
+        return None
+    return db.scalar(
+        select(JourneyEvent)
+        .where(JourneyEvent.journey_id == journey_id, JourneyEvent.event_type == "check_in_reception_completed")
+        .where(JourneyEvent.metadata_json["idempotency_key"].as_string() == key)
+        .order_by(JourneyEvent.id.desc())
+        .limit(1)
+    )
 
 
 def start_check_in(db: Session, journey: PatientJourney, actor: Actor, request: Request):
@@ -79,18 +126,71 @@ def update_item(db: Session, journey: PatientJourney, check_in: JourneyCheckIn, 
     add_event(db, journey, "check_in_item_updated", f"{item.label}: {state}", actor, request, journey.current_stage, journey.current_stage, {"item_id": item.id, "before": before, "after": state})
 
 
-def complete_reception_check_in(db: Session, journey: PatientJourney, check_in: JourneyCheckIn, notes_by_key: dict[str, str | None], actor: Actor, request: Request):
+def complete_reception_check_in(db: Session, journey: PatientJourney, check_in: JourneyCheckIn, items_by_key: dict[str, dict], actor: Actor, request: Request, idempotency_key: str | None = None, payload_fingerprint: str | None = None, reception_note: str | None = None):
+    red_flags = {
+        key: payload
+        for key, payload in items_by_key.items()
+        if isinstance(payload.get("note"), str) and payload["note"].strip()
+    }
+    activity_ids = {activity.id for activity in journey.activities}
     changed = []
     for item in check_in.items:
-        note = notes_by_key.get(item.item_key)
         before = item.state
-        item.state = "confirmed"
-        item.note = note.strip() if isinstance(note, str) and note.strip() else None
+        if item.item_key == "patient_data_confirmed":
+            item.state = "confirmed"
+            item.note = None
+            item.details_json = {}
+            item.activity_ids_json = []
+        elif item.item_key in red_flags:
+            payload = red_flags[item.item_key]
+            linked_activity_ids = [int(activity_id) for activity_id in payload.get("activity_ids", []) if int(activity_id) in activity_ids]
+            item.state = "requires_clinician_review"
+            item.note = payload["note"].strip()
+            item.details_json = payload.get("details") or {}
+            item.activity_ids_json = linked_activity_ids
+            item.medical_disposition = None
+            item.medical_disposition_note = None
+            item.medical_reviewed_by = None
+            item.medical_reviewed_at = None
+        else:
+            item.state = "not_applicable"
+            item.note = None
+            item.details_json = {}
+            item.activity_ids_json = []
         item.updated_by = actor.user_id
-        changed.append({"item_key": item.item_key, "before": before, "after": item.state, "note": item.note})
+        changed.append({"item_key": item.item_key, "before": before, "after": item.state, "note": item.note, "activity_ids": item.activity_ids_json})
     check_in.status = "ready"
     check_in.completed_at = datetime.now(timezone.utc)
     check_in.completed_by = actor.user_id
+    check_in.reception_note = clean_reception_note(reception_note)
     journey.check_in_status = "ready"
     transition(db, journey, "ready_for_clinician", actor, request, "Prijem završen; pacijent čeka pregled/pretragu")
-    add_event(db, journey, "check_in_reception_completed", "Prijem završen", actor, request, "check_in_review", journey.current_stage, {"items": changed})
+    add_event(
+        db,
+        journey,
+        "check_in_reception_completed",
+        "Prijem zavrsen",
+        actor,
+        request,
+        "check_in_review",
+        journey.current_stage,
+        {"items": changed, "reception_note": check_in.reception_note, "idempotency_key": normalize_reception_completion_key(idempotency_key), "payload_fingerprint": payload_fingerprint},
+    )
+
+
+def record_medical_disposition(db: Session, journey: PatientJourney, item: JourneyCheckInItem, disposition: str, note: str, actor: Actor, request: Request):
+    if item.state != "requires_clinician_review":
+        raise HTTPException(409, detail="Stavka ne čeka liječničku provjeru")
+    before = {"state": item.state, "medical_disposition": item.medical_disposition}
+    item.medical_disposition = disposition
+    item.medical_disposition_note = note.strip()
+    item.medical_reviewed_by = actor.user_id
+    item.medical_reviewed_at = datetime.now(timezone.utc)
+    if disposition in {"accepted_for_review", "proceed"}:
+        item.state = "confirmed"
+    elif disposition == "modify_plan":
+        item.state = "requires_clinician_review"
+    else:
+        item.state = "blocked"
+    item.updated_by = actor.user_id
+    add_event(db, journey, "check_in_medical_disposition", f"{item.label}: {disposition}", actor, request, journey.current_stage, journey.current_stage, {"item_id": item.id, "before": before, "after": {"state": item.state, "medical_disposition": disposition}})

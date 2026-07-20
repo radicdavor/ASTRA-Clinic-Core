@@ -10,7 +10,7 @@ export type PatientJourneyDetail = {
   id: number; patient_id: number; appointment_id: number; intake_channel: string; current_stage: JourneyStage;
   document_status: string; preparation_status: string; check_in_status: string; encounter_status: string;
   consumables_status: string; billing_status: string; payment_status: string; closed_at: string | null;
-  patient: { id: number; first_name: string; last_name: string; date_of_birth: string | null; oib: string | null; email: string | null; phone?: string | null; notes?: string | null; email_verified_at: string | null };
+  patient: { id: number; first_name: string; last_name: string; date_of_birth: string | null; oib: string | null; email: string | null; phone?: string | null; notes?: string | null; email_verified_at: string | null; updated_at: string };
   appointment: {
     id: number; service_id: number; provider_id: number; room_id: number; date: string; start_time: string; end_time: string; status: string; source: string;
     service: { id: number; name: string }; provider: { id: number; full_name: string }; room: { id: number; name: string };
@@ -67,7 +67,12 @@ export type PatientJourneySummary = {
 
 export type CheckInState = {
   id: number; journey_id: number; status: string; arrived_at: string | null; completed_at: string | null;
-  items: Array<{ id: number; item_key: string; category: string; label: string; state: string; requires_clinician: boolean; note: string | null; position: number }>;
+  reception_note?: string | null;
+  items: Array<{
+    id: number; item_key: string; category: string; label: string; state: string; requires_clinician: boolean; note: string | null; position: number;
+    details_json?: Record<string, unknown>; activity_ids_json?: number[];
+    medical_disposition?: string | null; medical_disposition_note?: string | null; medical_reviewed_at?: string | null;
+  }>;
 };
 
 export type PreparationState = {

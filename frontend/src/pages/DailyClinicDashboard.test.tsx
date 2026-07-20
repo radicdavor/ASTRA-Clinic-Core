@@ -93,8 +93,29 @@ let dashboardAccess: {
   available_clinics: [{ id: 1, name: "Klinika Sjever" }, { id: 2, name: "Klinika Jug" }],
 };
 
-function response(body: unknown) {
-  return Promise.resolve(new Response(JSON.stringify(body), { status: 200, headers: { "Content-Type": "application/json" } }));
+function response(body: unknown, status = 200) {
+  return Promise.resolve(new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } }));
+}
+
+function journeyResponse(id: number) {
+  return {
+    id, patient_id: 501, appointment_id: 106, intake_channel: "manual", current_stage: "ready_for_arrival",
+    document_status: "complete", preparation_status: "complete", check_in_status: "not_arrived",
+    encounter_status: "not_started", consumables_status: "not_ready", billing_status: "not_ready",
+    payment_status: "not_due", closed_at: null, blockers: [], activities: [
+      { id: 601, journey_id: id, appointment_id: 106, service_id: 1, activity_key: "Prvi pregled", activity_kind: "consultation", specialty_key: "gastroenterology", clinic_id: 1, primary_provider_id: 1, room_id: 1, sequence: 1, depends_on_activity_id: null, required: true, planned_start: "2026-07-13T13:00:00", planned_end: "2026-07-13T13:30:00", actual_start: null, actual_end: null, status: "ready", not_performed_reason: null, form_resolution_status: "not_started", billing_status: "not_ready", consumables_status: "not_ready" },
+      { id: 602, journey_id: id, appointment_id: 106, service_id: 1, activity_key: "Gastroskopija", activity_kind: "procedure", specialty_key: "gastroenterology", clinic_id: 1, primary_provider_id: 1, room_id: 1, sequence: 2, depends_on_activity_id: null, required: true, planned_start: "2026-07-13T13:30:00", planned_end: "2026-07-13T14:00:00", actual_start: null, actual_end: null, status: "ready", not_performed_reason: null, form_resolution_status: "not_started", billing_status: "not_ready", consumables_status: "not_ready" },
+    ],
+    patient: {
+      id: 501, first_name: "Sintetički", last_name: "Čeka", date_of_birth: "1992-01-06",
+      oib: null, email: "synthetic@example.com", phone: "0994477445", notes: null, email_verified_at: null, updated_at: "2026-07-13T10:00:00Z",
+    },
+    appointment: {
+      id: 106, service_id: 1, provider_id: 1, room_id: 1, date: "2026-07-13",
+      start_time: "13:00:00", end_time: "13:30:00", status: "booked", source: "manual",
+      service: { id: 1, name: "Kontrola" }, provider: { id: 1, full_name: "dr. Test" }, room: { id: 1, name: "Ordinacija 1" },
+    },
+  };
 }
 
 function installFetchMock() {
@@ -103,6 +124,10 @@ function installFetchMock() {
     if (url.includes("/api/dashboard/day")) return response({ date: "2026-07-13", refreshed_at: "2026-07-13T08:00:00Z", visible_sections: [], ...dashboardAccess, rows });
     if (url.endsWith("/api/providers")) return response([{ id: 1, full_name: "dr. Test", staff_role: "physician" }]);
     if (url.endsWith("/api/rooms") || url.endsWith("/api/services")) return response([]);
+    if (/\/api\/patient-journeys\/\d+$/.test(url)) return response(journeyResponse(Number(url.split("/").pop())));
+    if (url.endsWith("/api/patients/501") && init?.method === "PATCH") return response({ updated_at: "2026-07-13T10:05:00Z" });
+    if (url.endsWith("/api/patient-journeys/16/check-in") && init?.method === "POST") return response({ id: 1, journey_id: 16, status: "in_review", arrived_at: "2026-07-13T11:00:00Z", completed_at: null, items: [] });
+    if (url.endsWith("/api/patient-journeys/16/check-in/complete-reception") && init?.method === "POST") return response({ id: 1, journey_id: 16, status: "ready", arrived_at: "2026-07-13T11:00:00Z", completed_at: "2026-07-13T11:05:00Z", items: [] });
     if (init?.method === "POST") return response({});
     throw new Error(`Neočekivani testni API poziv: ${url}`);
   });
@@ -147,12 +172,66 @@ describe("pojednostavljeni dnevni tijek pacijenata", () => {
     expect(within(row).queryByRole("button")).toBeNull();
   });
 
-  test("otvaranje prijema samo navigira i ne mijenja stanje", async () => {
+  test("otvaranje prijema ostaje na dnevnoj ploči i otvara float prozor", async () => {
     const user = userEvent.setup(); renderDashboard();
     const row = (await screen.findByText("Sintetički Čeka")).closest("tr") as HTMLTableRowElement;
     await user.click(within(row).getByRole("button", { name: "Otvori prijem" }));
-    expect(await screen.findByText("Otvoren radni prostor")).toBeTruthy();
+    expect(await screen.findByRole("dialog", { name: "Opći podaci pacijenta" })).toBeTruthy();
+    expect(screen.queryByText("Otvoren radni prostor")).toBeNull();
     expect(fetch).not.toHaveBeenCalledWith(expect.stringContaining("/api/patient-journeys/16/check-in"), expect.objectContaining({ method: "POST" }));
+  });
+
+  test("red flag prijem ima ciljane dropdownove i šalje activity provenance", async () => {
+    const user = userEvent.setup(); renderDashboard();
+    const row = (await screen.findByRole("link", { name: /Sinteti.*eka/ })).closest("tr") as HTMLTableRowElement;
+    await user.click(within(row).getByRole("button", { name: "Otvori prijem" }));
+    await user.click(await screen.findByRole("button", { name: "Podaci su točni" }));
+    await user.click(await screen.findByLabelText(/Problem s postom/));
+    await user.selectOptions(screen.getByLabelText("Zadnji unos"), "2–4 sata");
+    await user.selectOptions(screen.getByLabelText("Vrsta unosa"), "kava s mlijekom");
+    await user.selectOptions(screen.getByLabelText("Odnosi se na aktivnost"), "602");
+    await user.click(screen.getByRole("button", { name: "Provjereno" }));
+
+    await waitFor(() => expect(fetch).toHaveBeenCalledWith(expect.stringContaining("/api/patient-journeys/16/check-in/complete-reception"), expect.anything()));
+    const completionCall = vi.mocked(fetch).mock.calls.find(([url]) => String(url).includes("/api/patient-journeys/16/check-in/complete-reception"));
+    const body = JSON.parse(String(completionCall?.[1]?.body));
+    expect(body.items[0].item_key).toBe("fasting_6h");
+    expect(body.items[0].details).toMatchObject({ last_intake_timing: "2–4 sata", intake_type: "kava s mlijekom" });
+    expect(body.items[0].activity_ids).toEqual([602]);
+  });
+
+  test("floating prijem salje expected version i visit-scoped napomenu bez patient.notes", async () => {
+    const user = userEvent.setup(); renderDashboard();
+    const row = (await screen.findByRole("link", { name: /Sinteti.*eka/ })).closest("tr") as HTMLTableRowElement;
+    await user.click(within(row).getByRole("button", { name: "Otvori prijem" }));
+    await user.clear(await screen.findByLabelText("Telefon"));
+    await user.type(screen.getByLabelText("Telefon"), "091222333");
+    await user.type(screen.getByLabelText("Napomena za današnji dolazak"), "Pacijent treba pomoc pri kretanju.");
+    await user.click(await screen.findByRole("button", { name: "Podaci su točni" }));
+    await user.click(await screen.findByRole("button", { name: "Provjereno" }));
+
+    const patientCall = vi.mocked(fetch).mock.calls.find(([url, init]) => String(url).endsWith("/api/patients/501") && init?.method === "PATCH");
+    const patientPayload = JSON.parse(String(patientCall?.[1]?.body));
+    expect(patientPayload).toMatchObject({ expected_updated_at: "2026-07-13T10:00:00Z", phone: "091222333" });
+    expect(patientPayload.notes).toBeUndefined();
+    const completionCall = vi.mocked(fetch).mock.calls.find(([url]) => String(url).includes("/api/patient-journeys/16/check-in/complete-reception"));
+    const completionPayload = JSON.parse(String(completionCall?.[1]?.body));
+    expect(completionPayload.reception_note).toBe("Pacijent treba pomoc pri kretanju.");
+  });
+
+  test("zatvaranje prijema čuva filter, prikaz i fokus na istom retku", async () => {
+    const user = userEvent.setup(); renderDashboard();
+    const search = await screen.findByRole("textbox", { name: /Pretra/ });
+    await user.type(search, "Čeka");
+    await user.click(screen.getByRole("button", { name: "Po prostorijama" }));
+    await user.click(screen.getByRole("button", { name: "Po pacijentima" }));
+    const row = (await screen.findByRole("link", { name: /Sinteti.*eka/ })).closest("tr") as HTMLTableRowElement;
+    const button = within(row).getByRole("button", { name: "Otvori prijem" });
+    await user.click(button);
+    await user.click(await screen.findByRole("button", { name: "Zatvori prijem" }));
+    await waitFor(() => expect(document.activeElement).toBe(button));
+    expect((screen.getByRole("textbox", { name: /Pretra/ }) as HTMLInputElement).value).toBe("Čeka");
+    expect(screen.getByRole("button", { name: "Po pacijentima" }).classList.contains("active")).toBe(true);
   });
 
   test("za pacijenta koji je stigao prikazuje samo Otvori prijem", async () => {
@@ -160,7 +239,7 @@ describe("pojednostavljeni dnevni tijek pacijenata", () => {
     const row = (await screen.findByText("Sintetički Prijem")).closest("tr") as HTMLTableRowElement;
     expect(within(row).getByText("Stigao")).toBeTruthy();
     expect(within(row).getByRole("button", { name: "Otvori prijem" })).toBeTruthy();
-    expect(within(row).getAllByRole("button")).toHaveLength(1);
+    expect(within(row).getByRole("link", { name: /Sinteti.*Prijem/ })).toBeTruthy();
   });
 
   test("nalaze koje pacijent donosi ne prikazuje kao uvjet za pregled", async () => {
@@ -204,7 +283,7 @@ describe("pojednostavljeni dnevni tijek pacijenata", () => {
 
   test("pretragu pacijenta šalje dnevnom API-ju", async () => {
     const user = userEvent.setup(); renderDashboard();
-    const search = await screen.findByRole("textbox", { name: "Pretraži pacijenta" });
+    const search = await screen.findByRole("textbox", { name: /Pretra/ });
     await user.type(search, "Dolazak");
     await waitFor(() => expect(fetch).toHaveBeenCalledWith(expect.stringMatching(/dashboard\/day\?.*q=Dolazak/), expect.anything()));
   });
@@ -233,7 +312,7 @@ describe("pojednostavljeni dnevni tijek pacijenata", () => {
   test("zadano prikazuje samo pretragu, problem i liječnika, a ostalo skriva", async () => {
     const user = userEvent.setup(); renderDashboard();
     await screen.findByText("Sintetički Dolazak");
-    expect(screen.getByRole("textbox", { name: "Pretraži pacijenta" })).toBeTruthy();
+    expect(screen.getByRole("textbox", { name: /Pretra/ })).toBeTruthy();
     expect(screen.getByRole("combobox", { name: "Problem" })).toBeTruthy();
     const advanced = screen.getByText("Dodatni filtri").closest("details") as HTMLDetailsElement;
     expect(advanced.open).toBe(false);

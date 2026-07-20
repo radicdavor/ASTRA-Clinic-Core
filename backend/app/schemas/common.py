@@ -1141,6 +1141,7 @@ class PatientCreate(BaseModel):
 
 
 class PatientUpdate(BaseModel):
+    expected_updated_at: DateTimeType | None = None
     first_name: str | None = None
     last_name: str | None = None
     date_of_birth: DateType | None = None
@@ -1157,6 +1158,7 @@ class PatientUpdate(BaseModel):
 
 class PatientOut(PatientCreate, ORMModel):
     id: int
+    email: str | None = None
     created_at: DateTimeType
     updated_at: DateTimeType
 

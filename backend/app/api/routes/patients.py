@@ -1,4 +1,4 @@
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy import and_, func, or_, select
@@ -40,6 +40,31 @@ def flush_or_conflict(db: Session) -> None:
 
 def scalar_count(db: Session, stmt) -> int:
     return int(db.scalar(stmt) or 0)
+
+
+def normalize_dt(value: datetime | None) -> datetime | None:
+    if value is None:
+        return None
+    if value.tzinfo is None:
+        return value.replace(tzinfo=timezone.utc)
+    return value.astimezone(timezone.utc)
+
+
+def patient_stale_detail(patient: Patient) -> dict:
+    return {
+        "code": "stale_patient",
+        "message": "Podaci pacijenta u meduvremenu su promijenjeni. Vas unos nije prepisan.",
+        "current_updated_at": patient.updated_at.isoformat() if patient.updated_at else None,
+        "server_values": {
+            "first_name": patient.first_name,
+            "last_name": patient.last_name,
+            "date_of_birth": patient.date_of_birth.isoformat() if patient.date_of_birth else None,
+            "oib": patient.oib,
+            "phone": patient.phone,
+            "email": patient.email,
+            "notes": patient.notes,
+        },
+    }
 
 
 def episode_with_count(db: Session, episode: ClinicalEpisode) -> ClinicalEpisodeOut:
@@ -348,7 +373,13 @@ def update_patient(
     if not patient:
         raise HTTPException(404, detail="Pacijent nije pronaÄ‘en")
     before = snapshot(patient)
-    patch_model(patient, payload.model_dump(exclude_unset=True))
+    updates = payload.model_dump(exclude_unset=True)
+    expected_updated_at = updates.pop("expected_updated_at", None)
+    if expected_updated_at is not None and normalize_dt(expected_updated_at) != normalize_dt(patient.updated_at):
+        raise HTTPException(409, detail=patient_stale_detail(patient))
+    if "email" in updates and (updates["email"] or "").lower() != (patient.email or "").lower():
+        patient.email_verified_at = None
+    patch_model(patient, updates)
     flush_or_conflict(db)
     audit(db, "update", "Patient", patient.id, "AĹľuriran pacijent", actor.user_id, actor.actor_type, actor.api_key_id, before, snapshot(patient), request)
     commit_or_conflict(db)

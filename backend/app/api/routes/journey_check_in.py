@@ -6,8 +6,8 @@ from app.audit.service import audit, snapshot
 from app.auth.dependencies import Actor, require_permission
 from app.core.database import get_db
 from app.models.domain import JourneyCheckIn, JourneyCheckInItem, PatientJourney
-from app.schemas.journey_check_in import CheckInItemUpdate, CheckInOut, ReceptionCheckInComplete
-from app.services.journey_check_in import complete_reception_check_in, start_check_in, update_item
+from app.schemas.journey_check_in import CheckInItemUpdate, CheckInMedicalDisposition, CheckInOut, ReceptionCheckInComplete
+from app.services.journey_check_in import complete_reception_check_in, find_reception_completion_event, reception_completion_fingerprint, record_medical_disposition, start_check_in, update_item
 
 router = APIRouter(prefix="/api/patient-journeys", tags=["journey-check-in"])
 
@@ -87,13 +87,45 @@ def complete_reception(journey_id: int, payload: ReceptionCheckInComplete, reque
         check_in = start_check_in(db, journey, actor, request)
         db.flush()
         check_in = db.scalar(checkin_query().where(JourneyCheckIn.id == check_in.id))
-    if journey.current_stage not in {"arrived", "check_in_review"}:
-        raise HTTPException(409, detail="Prijem se može završiti samo prije pregleda")
     known = {item.item_key for item in check_in.items}
     unknown = [item.item_key for item in payload.items if item.item_key not in known]
     if unknown:
         raise HTTPException(422, detail=f"Nepoznata prijemna stavka: {', '.join(unknown)}")
-    complete_reception_check_in(db, journey, check_in, {item.item_key: item.note for item in payload.items}, actor, request)
+    items_by_key = {item.item_key: {"note": item.note, "details": item.details, "activity_ids": item.activity_ids} for item in payload.items}
+    payload_fingerprint = reception_completion_fingerprint(items_by_key, payload.reception_note)
+    existing_event = find_reception_completion_event(db, journey.id, payload.idempotency_key)
+    if existing_event:
+        metadata = existing_event.metadata_json or {}
+        if metadata.get("payload_fingerprint") != payload_fingerprint:
+            raise HTTPException(409, detail={"code": "idempotency_conflict", "message": "Ova oznaka dovrsetka prijema vec je iskoristena za drugi sadrzaj."})
+        return db.scalar(checkin_query().where(JourneyCheckIn.id == check_in.id))
+    if journey.current_stage not in {"arrived", "check_in_review"}:
+        raise HTTPException(409, detail="Prijem se može završiti samo prije pregleda")
+    complete_reception_check_in(
+        db,
+        journey,
+        check_in,
+        items_by_key,
+        actor,
+        request,
+        payload.idempotency_key,
+        payload_fingerprint,
+        payload.reception_note,
+    )
     audit(db, "checkin_reception_completed", "PatientJourney", journey.id, "Prijem završen; pacijent čeka pregled/pretragu", actor.user_id, actor.actor_type, actor.api_key_id, before, snapshot(journey), request)
+    db.commit()
+    return db.scalar(checkin_query().where(JourneyCheckIn.id == check_in.id))
+
+
+@router.post("/{journey_id}/check-in/items/{item_id}/medical-disposition", response_model=CheckInOut)
+def medical_disposition(journey_id: int, item_id: int, payload: CheckInMedicalDisposition, request: Request, db: Session = Depends(get_db), actor: Actor = Depends(require_permission("checkin.clinical_review"))):
+    journey = get_journey(db, journey_id)
+    check_in = db.scalar(checkin_query().where(JourneyCheckIn.journey_id == journey_id))
+    item = db.get(JourneyCheckInItem, item_id)
+    if not check_in or not item or item.check_in_id != check_in.id:
+        raise HTTPException(404, detail="Stavka prijemne provjere nije pronađena")
+    before = snapshot(item)
+    record_medical_disposition(db, journey, item, payload.disposition, payload.note, actor, request)
+    audit(db, "checkin_medical_disposition", "PatientJourney", journey.id, item.label, actor.user_id, actor.actor_type, actor.api_key_id, before, snapshot(item), request)
     db.commit()
     return db.scalar(checkin_query().where(JourneyCheckIn.id == check_in.id))

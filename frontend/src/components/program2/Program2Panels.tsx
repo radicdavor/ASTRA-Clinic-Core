@@ -70,6 +70,45 @@ export function CheckInChecklist({ data, onUpdate, onConfirmAdministrative }: { 
   </Panel>;
 }
 
+const dispositionLabels = [
+  ["accepted_for_review", "Pregledano, odluka u nalazu"],
+  ["proceed", "Može nastaviti"],
+  ["modify_plan", "Promijeniti plan"],
+  ["defer", "Odgoditi"],
+  ["cancel", "Otkazati"],
+];
+
+function HandoffItem({ item, activities, onMedicalDisposition }: { item: any; activities: any[]; onMedicalDisposition?: (itemId: number, disposition: string, note: string) => Promise<void> }) {
+  const [disposition, setDisposition] = useState(item.medical_disposition ?? "accepted_for_review");
+  const [note, setNote] = useState(item.medical_disposition_note ?? "");
+  const [busy, setBusy] = useState(false);
+  const activityNames = (item.activity_ids_json ?? [])
+    .map((id: number) => activities.find(activity => activity.id === id))
+    .filter(Boolean)
+    .map((activity: any) => `${activity.sequence}. ${activity.activity_key}`);
+  async function save() {
+    if (!note.trim() || !onMedicalDisposition) return;
+    setBusy(true);
+    try { await onMedicalDisposition(item.id, disposition, note); } finally { setBusy(false); }
+  }
+  return <article className="medical-handoff-item">
+    <header><span><strong>{item.label}</strong><small>{activityNames.length ? activityNames.join(", ") : "Zajedničko za dolazak"}</small></span><b>{journeyStatusLabel(item.state)}</b></header>
+    {item.note && <p>{item.note}</p>}
+    {item.details_json && Object.keys(item.details_json).length > 0 && <dl>{Object.entries(item.details_json).map(([key, value]) => value ? <div key={key}><dt>{key}</dt><dd>{String(value)}</dd></div> : null)}</dl>}
+    {item.medical_disposition ? <small className="medical-disposition-done">Medicinska dispozicija: {dispositionLabels.find(([value]) => value === item.medical_disposition)?.[1] ?? item.medical_disposition}. {item.medical_disposition_note}</small> : onMedicalDisposition && <div className="medical-disposition-form"><label>Medicinska dispozicija<select value={disposition} onChange={event => setDisposition(event.target.value)}>{dispositionLabels.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label><label>Bilješka liječnika/anesteziologa<textarea value={note} onChange={event => setNote(event.target.value)} placeholder="Kratko obrazloženje odluke"/></label><button type="button" disabled={busy || !note.trim()} onClick={save}>Spremi medicinsku odluku</button></div>}
+  </article>;
+}
+
+export function ReceptionMedicalHandoff({ data, activities, onMedicalDisposition }: { data: any; activities: any[]; onMedicalDisposition?: (itemId: number, disposition: string, note: string) => Promise<void> }) {
+  const flagged = data?.items?.filter((item: any) => ["requires_clinician_review", "blocked"].includes(item.state) || item.medical_disposition) ?? [];
+  return <Panel title="Podaci evidentirani na prijemu">
+    <p className="journey-panel-context">Ovo su činjenice s prijema. Recepcija ne donosi medicinsku odluku.</p>
+    {data?.reception_note && <article className="handoff-item reception-visit-note"><strong>Napomena za današnji dolazak</strong><p>{data.reception_note}</p></article>}
+    {flagged.map((item: any) => <HandoffItem key={item.id} item={item} activities={activities} onMedicalDisposition={onMedicalDisposition}/>)}
+    {!flagged.length && !data?.reception_note && <p>Nema crvenih prijemnih napomena.</p>}
+  </Panel>;
+}
+
 export function PatientTimeline({ items }: { items: any[] }) {
   return <Panel title="Vremenska crta">{items.map(item => <article className="journey-timeline-item" key={`${item.event_type}-${item.date}-${item.title}`}><small>{new Date(item.date).toLocaleString("hr-HR")}</small><strong>{item.title}</strong>{item.summary && <span>{item.summary}</span>}{item.source_url && <a href={item.source_url} target="_blank" rel="noreferrer">Otvori izvor <ExternalLink size={13}/></a>}</article>)}</Panel>;
 }
