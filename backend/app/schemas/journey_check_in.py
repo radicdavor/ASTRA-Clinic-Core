@@ -26,6 +26,7 @@ class ReceptionCheckInItemResult(BaseModel):
 
 class ReceptionCheckInComplete(BaseModel):
     items: list[ReceptionCheckInItemResult] = Field(default_factory=list)
+    idempotency_key: str | None = Field(default=None, min_length=8, max_length=160)
 
 class CheckInMedicalDisposition(BaseModel):
     disposition: str = Field(pattern="^(accepted_for_review|proceed|defer|cancel|modify_plan)$")

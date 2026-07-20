@@ -56,6 +56,7 @@ export function ReceptionFloatingModal({ journeyId, open, onClose, onCompleted }
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [confirmClose, setConfirmClose] = useState(false);
+  const [completionIdempotencyKey, setCompletionIdempotencyKey] = useState("");
   const selectedFlags = useMemo(() => redFlagItems.filter((item) => flags[item.key]?.active), [flags]);
   const dirty = useMemo(() => {
     if (!open) return false;
@@ -68,6 +69,7 @@ export function ReceptionFloatingModal({ journeyId, open, onClose, onCompleted }
     if (!open || journeyId == null) return;
     let alive = true;
     setLoading(true); setError(null); setStep("identity"); setFlags(emptyFlags()); setConfirmClose(false);
+    setCompletionIdempotencyKey(`reception-${journeyId}-${Date.now()}-${Math.random().toString(36).slice(2)}`);
     api<PatientJourneyDetail>(`/api/patient-journeys/${journeyId}`, { suppressErrorToast: true })
       .then((result) => {
         if (!alive) return;
@@ -97,13 +99,23 @@ export function ReceptionFloatingModal({ journeyId, open, onClose, onCompleted }
 
   async function savePatient() {
     if (!journey || !draft) return;
-    await api(`/api/patients/${journey.patient_id}`, {
-      method: "PATCH",
-      body: JSON.stringify({
-        first_name: draft.first_name, last_name: draft.last_name, date_of_birth: draft.date_of_birth || null,
-        oib: draft.oib || null, phone: draft.phone || null, email: draft.email || null, notes: draft.notes || null,
-      }),
-    });
+    const payload: Partial<PatientDraft> = {};
+    for (const key of ["first_name", "last_name", "date_of_birth", "oib", "phone", "email", "notes"] as const) {
+      if (!initialDraft || draft[key] !== initialDraft[key]) payload[key] = draft[key] || "";
+    }
+    if (Object.keys(payload).length) {
+      await api(`/api/patients/${journey.patient_id}`, {
+        method: "PATCH",
+        body: JSON.stringify({
+          ...payload,
+          date_of_birth: payload.date_of_birth === "" ? null : payload.date_of_birth,
+          oib: payload.oib === "" ? null : payload.oib,
+          phone: payload.phone === "" ? null : payload.phone,
+          email: payload.email === "" ? null : payload.email,
+          notes: payload.notes === "" ? null : payload.notes,
+        }),
+      });
+    }
     setInitialDraft(draft);
   }
 
@@ -127,6 +139,7 @@ export function ReceptionFloatingModal({ journeyId, open, onClose, onCompleted }
       await api(`/api/patient-journeys/${journeyId}/check-in/complete-reception`, {
         method: "POST",
         body: JSON.stringify({
+          idempotency_key: completionIdempotencyKey,
           items: selectedFlags.map((item) => {
             const state = flags[item.key];
             const extra = detailLine(item.key, state.details);

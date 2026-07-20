@@ -92,6 +92,7 @@ export function PatientJourneyWorkspace() {
   const [receptionBusy, setReceptionBusy] = useState(false);
   const [patientReceptionDraft, setPatientReceptionDraft] = useState<PatientReceptionDraft>({ first_name: "", last_name: "", date_of_birth: "", oib: "", phone: "", email: "", notes: "" });
   const [receptionDraft, setReceptionDraft] = useState<ReceptionChecklistDraft>(receptionDefaults);
+  const [receptionCompletionKey, setReceptionCompletionKey] = useState("");
   const clinicalFormRef = useRef<ClinicalActivityFormHandle | null>(null);
   const autoReceptionOpenedRef = useRef<string | null>(null);
 
@@ -167,6 +168,7 @@ export function PatientJourneyWorkspace() {
   async function startCheckIn() { openReception(); }
   async function openReception() {
     setReceptionDraft(receptionDefaults);
+    setReceptionCompletionKey(`workspace-reception-${id}-${Date.now()}-${Math.random().toString(36).slice(2)}`);
     setReceptionModal("identity");
   }
   async function confirmPatientReceptionData() {
@@ -200,7 +202,7 @@ export function PatientJourneyWorkspace() {
       for (const item of receptionChecklist) if (Boolean(receptionDraft[item.key]) !== item.defaultChecked) notes.set(item.key, item.warning);
       if (receptionDraft.current_medication_text.trim()) notes.set("current_medication", `Lijekovi: ${receptionDraft.current_medication_text.trim()}`);
       if (receptionDraft.drug_allergy_text.trim()) notes.set("drug_allergies", `Alergije na lijekove: ${receptionDraft.drug_allergy_text.trim()}`);
-      checkin.setData(await api<CheckInState>(`/api/patient-journeys/${id}/check-in/complete-reception`, { method: "POST", body: JSON.stringify({ items: Array.from(notes.entries()).map(([item_key, note]) => ({ item_key, note })) }) }));
+      checkin.setData(await api<CheckInState>(`/api/patient-journeys/${id}/check-in/complete-reception`, { method: "POST", body: JSON.stringify({ idempotency_key: receptionCompletionKey, items: Array.from(notes.entries()).map(([item_key, note]) => ({ item_key, note })) }) }));
       await refresh();
       setActiveStage("encounter");
       setReceptionModal(null);

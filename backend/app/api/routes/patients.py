@@ -348,7 +348,10 @@ def update_patient(
     if not patient:
         raise HTTPException(404, detail="Pacijent nije pronaÄ‘en")
     before = snapshot(patient)
-    patch_model(patient, payload.model_dump(exclude_unset=True))
+    updates = payload.model_dump(exclude_unset=True)
+    if "email" in updates and (updates["email"] or "").lower() != (patient.email or "").lower():
+        patient.email_verified_at = None
+    patch_model(patient, updates)
     flush_or_conflict(db)
     audit(db, "update", "Patient", patient.id, "AĹľuriran pacijent", actor.user_id, actor.actor_type, actor.api_key_id, before, snapshot(patient), request)
     commit_or_conflict(db)

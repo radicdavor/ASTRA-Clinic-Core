@@ -1157,6 +1157,7 @@ class PatientUpdate(BaseModel):
 
 class PatientOut(PatientCreate, ORMModel):
     id: int
+    email: str | None = None
     created_at: DateTimeType
     updated_at: DateTimeType
 

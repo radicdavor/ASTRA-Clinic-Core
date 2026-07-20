@@ -1,3 +1,6 @@
+from datetime import datetime, timezone
+
+from app.models.domain import Patient
 from tests.conftest import login_token
 
 
@@ -72,3 +75,26 @@ def test_possible_duplicates_returns_identity_candidates(client, auth_setup):
 
     assert response.status_code == 200
     assert response.json()[0]["first_name"] == "Ana"
+
+
+def test_patch_patient_keeps_legacy_demo_email_readable_and_invalidates_changed_email(client, db, auth_setup):
+    patient = Patient(
+        first_name="Legacy",
+        last_name="Email",
+        email="synthetic.legacy@example.invalid",
+        phone="001",
+        email_verified_at=datetime.now(timezone.utc),
+    )
+    db.add(patient)
+    db.commit()
+    headers = auth_headers(client)
+
+    phone_only = client.patch(f"/api/patients/{patient.id}", headers=headers, json={"phone": "002"})
+    changed_email = client.patch(f"/api/patients/{patient.id}", headers=headers, json={"email": "synthetic.legacy@example.com"})
+
+    assert phone_only.status_code == 200
+    assert phone_only.json()["email"] == "synthetic.legacy@example.invalid"
+    assert changed_email.status_code == 200
+    assert changed_email.json()["email"] == "synthetic.legacy@example.com"
+    db.refresh(patient)
+    assert patient.email_verified_at is None
