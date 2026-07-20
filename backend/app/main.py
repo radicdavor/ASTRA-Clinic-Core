@@ -102,5 +102,10 @@ def health() -> dict[str, str]:
 @app.get("/ready")
 def ready() -> JSONResponse:
     result = check_configured_database_schema_readiness()
-    status_code = 200 if result.status == "ready" else 503
-    return JSONResponse(status_code=status_code, content=result.to_public_dict())
+    configuration_errors = settings.production_safety_errors()
+    payload = result.to_public_dict()
+    payload["checks"]["configuration"] = "invalid" if configuration_errors else "valid"
+    payload["configuration_errors"] = configuration_errors
+    payload["status"] = "ready" if result.status == "ready" and not configuration_errors else "not_ready"
+    status_code = 200 if payload["status"] == "ready" else 503
+    return JSONResponse(status_code=status_code, content=payload)

@@ -130,6 +130,32 @@ def test_ready_endpoint_returns_503_when_schema_is_not_ready(client, monkeypatch
 
     assert response.status_code == 503
     assert response.json()["checks"]["schema"] == "out_of_date"
+    assert response.json()["checks"]["configuration"] == "valid"
+
+
+def test_ready_endpoint_returns_503_when_configuration_is_invalid(client, monkeypatch):
+    from app.services.schema_readiness import SchemaReadiness
+
+    monkeypatch.setattr(
+        "app.main.check_configured_database_schema_readiness",
+        lambda: SchemaReadiness(
+            status="ready",
+            checks={"database": "reachable", "schema": "up_to_date"},
+            database_revision="head123",
+            expected_revision="head123",
+        ),
+    )
+    monkeypatch.setattr(
+        "app.core.config.Settings.production_safety_errors",
+        lambda self: ["JWT secret is missing or uses a forbidden development value."],
+    )
+
+    response = client.get("/ready")
+
+    assert response.status_code == 503
+    assert response.json()["status"] == "not_ready"
+    assert response.json()["checks"]["configuration"] == "invalid"
+    assert "JWT secret" in response.json()["configuration_errors"][0]
 
 
 def test_health_endpoint_does_not_fail_when_schema_is_not_ready(client, monkeypatch):
