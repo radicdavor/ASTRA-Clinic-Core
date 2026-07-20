@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, status as http_status
 from sqlalchemy import or_, select
 from sqlalchemy.orm import Session, joinedload, selectinload
 
-from app.auth.dependencies import Actor, require_permission
+from app.auth.dependencies import CurrentUserContext, require_active_clinic
 from app.core.database import get_db
 from app.models.domain import Appointment, Clinic, JourneyActivity, JourneyCheckIn, Patient, PatientJourney, Provider, Room
 from app.schemas.daily_dashboard import DailyDashboardResponse, DailyDashboardRow
@@ -24,8 +24,12 @@ def daily_dashboard(
     blocker: bool | None = None,
     q: str | None = None,
     db: Session = Depends(get_db),
-    actor: Actor = Depends(require_permission("journey.read")),
+    context: CurrentUserContext = Depends(require_active_clinic("journey.read")),
 ):
+    actor = context.actor
+    if clinic_id is not None and clinic_id != context.active_clinic_id:
+        raise HTTPException(status_code=http_status.HTTP_403_FORBIDDEN, detail="Korisnik nema pristup odabranoj klinici")
+    clinic_id = context.active_clinic_id
     role_name = actor.user.role.name if actor.user else "api_key"
     normalized_role = role_name.removeprefix("demo_")
     is_admin = normalized_role == "admin"
@@ -48,7 +52,7 @@ def daily_dashboard(
         .join(JourneyActivity, JourneyActivity.clinic_id == Clinic.id)
         .join(PatientJourney, PatientJourney.id == JourneyActivity.journey_id)
         .join(Appointment, Appointment.id == PatientJourney.appointment_id)
-        .where(Appointment.date == selected_date)
+        .where(Appointment.date == selected_date, JourneyActivity.clinic_id == clinic_id)
         .distinct()
         .order_by(Clinic.name)
     )
@@ -70,13 +74,12 @@ def daily_dashboard(
             selectinload(PatientJourney.activities).joinedload(JourneyActivity.primary_provider),
             selectinload(PatientJourney.activities).joinedload(JourneyActivity.room),
         )
-        .where(Appointment.date == selected_date)
+        .where(Appointment.date == selected_date, PatientJourney.clinic_id == clinic_id)
         .order_by(Appointment.start_time, Patient.last_name, Patient.first_name)
     )
     if clinician_id:
         stmt = stmt.where(PatientJourney.activities.any(JourneyActivity.primary_provider_id == clinician_id))
-    if clinic_id:
-        stmt = stmt.where(PatientJourney.activities.any(JourneyActivity.clinic_id == clinic_id))
+    stmt = stmt.where(PatientJourney.activities.any(JourneyActivity.clinic_id == clinic_id))
     if room_id:
         stmt = stmt.where(PatientJourney.activities.any(JourneyActivity.room_id == room_id))
     if service_id:

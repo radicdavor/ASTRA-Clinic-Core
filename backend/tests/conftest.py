@@ -12,7 +12,7 @@ from app.core.database import get_db
 from app.core.security import hash_password
 from app.main import app
 from app.models import domain  # noqa: F401
-from app.models.domain import Permission, Role, User
+from app.models.domain import Clinic, ClinicMembership, Permission, Role, User
 
 
 @pytest.fixture()
@@ -149,15 +149,19 @@ def auth_setup(db: Session) -> dict[str, User]:
         "reports.send",
         "reports.send_alternate_recipient",
         "reports.delivery_history",
+        "system.admin",
     ]
     permissions = {name: Permission(name=name, description=name) for name in permission_names}
     admin_role = Role(name="admin", description="Admin", permissions=list(permissions.values()))
     limited_role = Role(name="limited", description="Limited", permissions=[permissions["inventory.read"], permissions["billing.read"]])
     admin = User(email="admin@test.local", full_name="Admin", password_hash=hash_password("secret"), role=admin_role)
     limited = User(email="limited@test.local", full_name="Limited", password_hash=hash_password("secret"), role=limited_role)
-    db.add_all([*permissions.values(), admin_role, limited_role, admin, limited])
+    demo_clinic = Clinic(name="Test Clinic")
+    db.add_all([*permissions.values(), admin_role, limited_role, admin, limited, demo_clinic])
     db.flush()
-    return {"admin": admin, "limited": limited}
+    db.add(ClinicMembership(user_id=admin.id, clinic_id=demo_clinic.id, created_by_user_id=admin.id))
+    db.flush()
+    return {"admin": admin, "limited": limited, "clinic": demo_clinic}
 
 
 def login_token(client: TestClient, email: str, password: str = "secret") -> str:

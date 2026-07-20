@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
 from app.core.database import get_db
-from app.models.domain import ApiKey, User
+from app.models.domain import ApiKey, Clinic, ClinicMembership, Patient, PatientClinicAssociation, PatientJourney, User
 
 bearer = HTTPBearer(auto_error=False)
 
@@ -36,6 +36,22 @@ class Actor:
         if self.api_key:
             return set(self.api_key.scopes or [])
         return set()
+
+
+@dataclass(frozen=True)
+class CurrentUserContext:
+    actor: Actor
+    user: User
+    permissions: set[str]
+    active_clinic: Clinic | None = None
+
+    @property
+    def active_clinic_id(self) -> int | None:
+        return self.active_clinic.id if self.active_clinic else None
+
+    @property
+    def is_system_admin(self) -> bool:
+        return "system.admin" in self.permissions
 
 
 def hash_api_key(raw_key: str) -> str:
@@ -82,6 +98,76 @@ def require_permission(permission_name: str):
         return actor
 
     return dependency
+
+
+def active_clinic_memberships(db: Session, user_id: int) -> list[ClinicMembership]:
+    return db.scalars(
+        select(ClinicMembership)
+        .where(ClinicMembership.user_id == user_id, ClinicMembership.active.is_(True))
+        .join(Clinic, Clinic.id == ClinicMembership.clinic_id)
+        .where(Clinic.active.is_(True))
+        .order_by(Clinic.name, Clinic.id)
+    ).all()
+
+
+def require_active_clinic(permission_name: str):
+    def dependency(
+        actor: Actor = Depends(require_permission(permission_name)),
+        x_clinic_id: int | None = Header(default=None, alias="X-Clinic-Id"),
+        db: Session = Depends(get_db),
+    ) -> CurrentUserContext:
+        if actor.actor_type != "user" or actor.user is None:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Clinic-scoped pristup zahtijeva prijavljenog korisnika")
+        memberships = active_clinic_memberships(db, actor.user.id)
+        if not memberships:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Korisnik nema aktivno članstvo ni u jednoj klinici")
+        if x_clinic_id is None:
+            if len(memberships) == 1:
+                membership = memberships[0]
+            else:
+                raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Potreban je odabir aktivne klinike")
+        else:
+            membership = next((item for item in memberships if item.clinic_id == x_clinic_id), None)
+            if membership is None:
+                raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Korisnik nema pristup odabranoj klinici")
+        return CurrentUserContext(
+            actor=actor,
+            user=actor.user,
+            permissions=actor.permissions,
+            active_clinic=membership.clinic,
+        )
+
+    return dependency
+
+
+def patient_in_active_clinic_statement(patient_id: int, clinic_id: int):
+    return (
+        select(Patient)
+        .join(PatientClinicAssociation, PatientClinicAssociation.patient_id == Patient.id)
+        .where(
+            Patient.id == patient_id,
+            PatientClinicAssociation.clinic_id == clinic_id,
+            PatientClinicAssociation.active.is_(True),
+        )
+    )
+
+
+def get_scoped_patient(db: Session, patient_id: int, context: CurrentUserContext) -> Patient:
+    if context.active_clinic_id is None:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Aktivna klinika nije razriješena")
+    patient = db.scalar(patient_in_active_clinic_statement(patient_id, context.active_clinic_id))
+    if patient is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Pacijent nije pronađen")
+    return patient
+
+
+def get_scoped_journey(db: Session, journey_id: int, context: CurrentUserContext) -> PatientJourney:
+    if context.active_clinic_id is None:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Aktivna klinika nije razriješena")
+    journey = db.scalar(select(PatientJourney).where(PatientJourney.id == journey_id, PatientJourney.clinic_id == context.active_clinic_id))
+    if journey is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tijek pacijenta nije pronađen")
+    return journey
 
 
 def require_roles(*role_names: str):
