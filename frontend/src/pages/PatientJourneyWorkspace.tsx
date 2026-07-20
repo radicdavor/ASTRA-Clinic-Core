@@ -106,7 +106,7 @@ export function PatientJourneyWorkspace() {
       oib: journey.data.patient.oib ?? "",
       phone: journey.data.patient.phone ?? "",
       email: journey.data.patient.email ?? "",
-      notes: journey.data.patient.notes ?? "",
+      notes: "",
     });
   }, [journey.data?.patient]);
   useEffect(() => {
@@ -181,7 +181,6 @@ export function PatientJourneyWorkspace() {
         oib: patientReceptionDraft.oib.trim() || null,
         phone: patientReceptionDraft.phone.trim() || null,
         email: patientReceptionDraft.email.trim() || null,
-        notes: patientReceptionDraft.notes.trim() || null,
       }) });
       checkin.setData(await api<CheckInState>(`/api/patient-journeys/${id}/check-in`, { method: "POST" }));
       await refresh();
@@ -202,7 +201,7 @@ export function PatientJourneyWorkspace() {
       for (const item of receptionChecklist) if (Boolean(receptionDraft[item.key]) !== item.defaultChecked) notes.set(item.key, item.warning);
       if (receptionDraft.current_medication_text.trim()) notes.set("current_medication", `Lijekovi: ${receptionDraft.current_medication_text.trim()}`);
       if (receptionDraft.drug_allergy_text.trim()) notes.set("drug_allergies", `Alergije na lijekove: ${receptionDraft.drug_allergy_text.trim()}`);
-      checkin.setData(await api<CheckInState>(`/api/patient-journeys/${id}/check-in/complete-reception`, { method: "POST", body: JSON.stringify({ idempotency_key: receptionCompletionKey, items: Array.from(notes.entries()).map(([item_key, note]) => ({ item_key, note })) }) }));
+      checkin.setData(await api<CheckInState>(`/api/patient-journeys/${id}/check-in/complete-reception`, { method: "POST", body: JSON.stringify({ idempotency_key: receptionCompletionKey, reception_note: patientReceptionDraft.notes.trim() || null, items: Array.from(notes.entries()).map(([item_key, note]) => ({ item_key, note })) }) }));
       await refresh();
       setActiveStage("encounter");
       setReceptionModal(null);
@@ -337,7 +336,7 @@ export function PatientJourneyWorkspace() {
           <label>OIB<input value={patientReceptionDraft.oib} onChange={event => setPatientReceptionDraft(current => ({ ...current, oib: event.target.value }))} placeholder="Demo OIB ili prazno"/></label>
           <label>Telefon<input value={patientReceptionDraft.phone} onChange={event => setPatientReceptionDraft(current => ({ ...current, phone: event.target.value }))}/></label>
           <label>E-pošta<input value={patientReceptionDraft.email} onChange={event => setPatientReceptionDraft(current => ({ ...current, email: event.target.value }))}/></label>
-          <label className="span-2">Napomene<input value={patientReceptionDraft.notes} onChange={event => setPatientReceptionDraft(current => ({ ...current, notes: event.target.value }))}/></label>
+          <label className="span-2">Napomena za današnji dolazak<input value={patientReceptionDraft.notes} onChange={event => setPatientReceptionDraft(current => ({ ...current, notes: event.target.value }))}/></label>
         </div>
         <footer><button type="button" onClick={() => setReceptionModal(null)}>Odustani</button><button type="button" className="primary" disabled={receptionBusy || !patientReceptionDraft.first_name.trim() || !patientReceptionDraft.last_name.trim()} onClick={confirmPatientReceptionData}>{receptionBusy ? "Spremam…" : "Podaci su točni"}</button></footer>
       </section>

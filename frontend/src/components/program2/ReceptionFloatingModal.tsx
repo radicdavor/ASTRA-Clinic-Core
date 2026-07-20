@@ -1,11 +1,12 @@
 import { AlertTriangle, CheckCircle2, ClipboardCheck, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
-import { api } from "../../api/client";
+import { ApiError, api } from "../../api/client";
 import { DateInput } from "../DateInput";
 import type { PatientJourneyDetail } from "../../types/program2";
 
 type ReceptionStep = "identity" | "red_flags";
-type PatientDraft = { first_name: string; last_name: string; date_of_birth: string; oib: string; phone: string; email: string; notes: string };
+type PatientDraft = { first_name: string; last_name: string; date_of_birth: string; oib: string; phone: string; email: string };
+type PatientConflict = { message: string; current_updated_at: string; server_values: Partial<PatientDraft> };
 type RedFlagKey = "laboratory_results" | "anesthesia_questionnaire" | "informed_consent" | "fasting_6h" | "bowel_preparation_clear" | "sedation_escort" | "pacemaker" | "current_medication" | "drug_allergies" | "other_medical_review";
 type RedFlagDraft = Record<RedFlagKey, { active: boolean; note: string; details: Record<string, string>; activityIds: number[] }>;
 
@@ -34,7 +35,6 @@ function patientDraftFromJourney(journey: PatientJourneyDetail): PatientDraft {
     oib: journey.patient.oib ?? "",
     phone: journey.patient.phone ?? "",
     email: journey.patient.email ?? "",
-    notes: journey.patient.notes ?? "",
   };
 }
 
@@ -57,24 +57,27 @@ export function ReceptionFloatingModal({ journeyId, open, onClose, onCompleted }
   const [error, setError] = useState<string | null>(null);
   const [confirmClose, setConfirmClose] = useState(false);
   const [completionIdempotencyKey, setCompletionIdempotencyKey] = useState("");
+  const [patientUpdatedAt, setPatientUpdatedAt] = useState<string | null>(null);
+  const [patientConflict, setPatientConflict] = useState<PatientConflict | null>(null);
+  const [receptionNote, setReceptionNote] = useState("");
   const selectedFlags = useMemo(() => redFlagItems.filter((item) => flags[item.key]?.active), [flags]);
   const dirty = useMemo(() => {
     if (!open) return false;
     const identityDirty = Boolean(draft && initialDraft && JSON.stringify(draft) !== JSON.stringify(initialDraft));
-    const flagDirty = selectedFlags.length > 0 || step === "red_flags";
+    const flagDirty = selectedFlags.length > 0 || step === "red_flags" || Boolean(receptionNote.trim());
     return identityDirty || flagDirty;
-  }, [draft, initialDraft, open, selectedFlags.length, step]);
+  }, [draft, initialDraft, open, receptionNote, selectedFlags.length, step]);
 
   useEffect(() => {
     if (!open || journeyId == null) return;
     let alive = true;
-    setLoading(true); setError(null); setStep("identity"); setFlags(emptyFlags()); setConfirmClose(false);
+    setLoading(true); setError(null); setStep("identity"); setFlags(emptyFlags()); setConfirmClose(false); setPatientConflict(null); setReceptionNote("");
     setCompletionIdempotencyKey(`reception-${journeyId}-${Date.now()}-${Math.random().toString(36).slice(2)}`);
     api<PatientJourneyDetail>(`/api/patient-journeys/${journeyId}`, { suppressErrorToast: true })
       .then((result) => {
         if (!alive) return;
         const nextDraft = patientDraftFromJourney(result);
-        setJourney(result); setDraft(nextDraft); setInitialDraft(nextDraft);
+        setJourney(result); setDraft(nextDraft); setInitialDraft(nextDraft); setPatientUpdatedAt(result.patient.updated_at ?? null);
       })
       .catch((err) => alive && setError(err.message))
       .finally(() => alive && setLoading(false));
@@ -100,23 +103,57 @@ export function ReceptionFloatingModal({ journeyId, open, onClose, onCompleted }
   async function savePatient() {
     if (!journey || !draft) return;
     const payload: Partial<PatientDraft> = {};
-    for (const key of ["first_name", "last_name", "date_of_birth", "oib", "phone", "email", "notes"] as const) {
+    for (const key of ["first_name", "last_name", "date_of_birth", "oib", "phone", "email"] as const) {
       if (!initialDraft || draft[key] !== initialDraft[key]) payload[key] = draft[key] || "";
     }
     if (Object.keys(payload).length) {
-      await api(`/api/patients/${journey.patient_id}`, {
+      const updated = await api<{ updated_at: string }>(`/api/patients/${journey.patient_id}`, {
         method: "PATCH",
         body: JSON.stringify({
+          expected_updated_at: patientUpdatedAt,
           ...payload,
           date_of_birth: payload.date_of_birth === "" ? null : payload.date_of_birth,
           oib: payload.oib === "" ? null : payload.oib,
           phone: payload.phone === "" ? null : payload.phone,
           email: payload.email === "" ? null : payload.email,
-          notes: payload.notes === "" ? null : payload.notes,
         }),
       });
+      setPatientUpdatedAt(updated.updated_at);
     }
     setInitialDraft(draft);
+    setPatientConflict(null);
+  }
+
+  function handlePatientConflict(err: unknown) {
+    if (!(err instanceof ApiError) || err.status !== 409 || !err.detail || typeof err.detail !== "object") return false;
+    const detail = err.detail as { code?: string; message?: string; current_updated_at?: string; server_values?: Partial<PatientDraft> };
+    if (detail.code !== "stale_patient") return false;
+    setPatientConflict({
+      message: detail.message ?? "Podaci pacijenta su promijenjeni u meduvremenu.",
+      current_updated_at: detail.current_updated_at ?? "",
+      server_values: detail.server_values ?? {},
+    });
+    setError(null);
+    window.setTimeout(() => document.getElementById("reception-patient-conflict")?.focus(), 0);
+    return true;
+  }
+
+  function loadCurrentPatientValues() {
+    if (!patientConflict) return;
+    const server = patientConflict.server_values;
+    const nextDraft = {
+      first_name: server.first_name ?? "",
+      last_name: server.last_name ?? "",
+      date_of_birth: server.date_of_birth ?? "",
+      oib: server.oib ?? "",
+      phone: server.phone ?? "",
+      email: server.email ?? "",
+    };
+    setDraft(nextDraft);
+    setInitialDraft(nextDraft);
+    setPatientUpdatedAt(patientConflict.current_updated_at);
+    setPatientConflict(null);
+    setError(null);
   }
 
   async function confirmIdentity() {
@@ -127,6 +164,7 @@ export function ReceptionFloatingModal({ journeyId, open, onClose, onCompleted }
       await api(`/api/patient-journeys/${journeyId}/check-in`, { method: "POST" });
       setStep("red_flags");
     } catch (err) {
+      if (handlePatientConflict(err)) return;
       setError(err instanceof Error ? err.message : "Prijem nije spremljen.");
     } finally {
       setSaving(false);
@@ -140,6 +178,7 @@ export function ReceptionFloatingModal({ journeyId, open, onClose, onCompleted }
         method: "POST",
         body: JSON.stringify({
           idempotency_key: completionIdempotencyKey,
+          reception_note: receptionNote || null,
           items: selectedFlags.map((item) => {
             const state = flags[item.key];
             const extra = detailLine(item.key, state.details);
@@ -164,6 +203,7 @@ export function ReceptionFloatingModal({ journeyId, open, onClose, onCompleted }
       else await completeReception(true);
       if (step === "identity") onClose();
     } catch (err) {
+      if (handlePatientConflict(err)) return;
       setError(err instanceof Error ? err.message : "Promjene nisu spremljene.");
     } finally {
       setSaving(false);
@@ -180,6 +220,7 @@ export function ReceptionFloatingModal({ journeyId, open, onClose, onCompleted }
     id: activity.id,
     label: `${activity.sequence}. ${activity.activity_key}`,
   })) ?? [];
+  const receptionActionDisabled = saving || loading || Boolean(patientConflict);
 
   return <div className="modal-backdrop reception-native-backdrop" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && requestClose()}>
     <section className="modal-panel reception-modal reception-native-modal" role="dialog" aria-modal="true" aria-labelledby="reception-native-title">
@@ -189,6 +230,17 @@ export function ReceptionFloatingModal({ journeyId, open, onClose, onCompleted }
       </header>
       {loading && <p>Učitavanje prijema…</p>}
       {error && <p className="form-error">{error}</p>}
+      {patientConflict && <section id="reception-patient-conflict" className="form-error reception-conflict-panel" role="alert" tabIndex={-1}>
+        <strong>Podaci pacijenta su promijenjeni</strong>
+        <p>{patientConflict.message}</p>
+        <dl>
+          <div><dt>Vaš telefon</dt><dd>{draft?.phone || "nije upisan"}</dd></div>
+          <div><dt>Trenutačni telefon</dt><dd>{patientConflict.server_values.phone || "nije upisan"}</dd></div>
+          <div><dt>Vaša e-pošta</dt><dd>{draft?.email || "nije upisana"}</dd></div>
+          <div><dt>Trenutačna e-pošta</dt><dd>{patientConflict.server_values.email || "nije upisana"}</dd></div>
+        </dl>
+        <div className="inline-actions"><button type="button" onClick={loadCurrentPatientValues}>Učitaj trenutačne podatke</button><button type="button" onClick={() => setPatientConflict(null)}>Ostani i pregledaj</button></div>
+      </section>}
       {!loading && draft && step === "identity" && <div className="form-grid two">
         <label>Ime<input value={draft.first_name} onChange={(event) => updateDraft("first_name", event.target.value)}/></label>
         <label>Prezime<input value={draft.last_name} onChange={(event) => updateDraft("last_name", event.target.value)}/></label>
@@ -196,7 +248,7 @@ export function ReceptionFloatingModal({ journeyId, open, onClose, onCompleted }
         <label>OIB<input value={draft.oib} onChange={(event) => updateDraft("oib", event.target.value)} placeholder="Demo OIB ili prazno"/></label>
         <label>Telefon<input value={draft.phone} onChange={(event) => updateDraft("phone", event.target.value)}/></label>
         <label>E-pošta<input value={draft.email} onChange={(event) => updateDraft("email", event.target.value)}/></label>
-        <label className="span-2">Recepcijska napomena<input value={draft.notes} onChange={(event) => updateDraft("notes", event.target.value)} placeholder="Ne koristiti za kliničku odluku"/></label>
+        <label className="span-2">Napomena za današnji dolazak<input value={receptionNote} onChange={(event) => setReceptionNote(event.target.value)} placeholder="Vidljivo samo uz ovaj dolazak; ne koristi se za kliničku odluku"/></label>
       </div>}
       {!loading && step === "red_flags" && <div className="reception-native-flags">
         <div className={selectedFlags.length ? "reception-red-summary active" : "reception-red-summary"}>{selectedFlags.length ? <AlertTriangle size={18}/> : <CheckCircle2 size={18}/>}<span>{selectedFlags.length ? "Postoji crvena napomena. Pacijent se upućuje liječniku/anesteziologu na odluku." : "Nema označenih red flagova. Pacijent može čekati pregled/pretragu."}</span></div>
@@ -217,7 +269,7 @@ export function ReceptionFloatingModal({ journeyId, open, onClose, onCompleted }
       </div>}
       <footer className="reception-native-footer">
         <button type="button" onClick={requestClose} disabled={saving}>Odustani</button>
-        {step === "identity" ? <button type="button" onClick={confirmIdentity} disabled={saving || loading || !draft}><ClipboardCheck size={16}/>{saving ? "Spremam…" : "Podaci su točni"}</button> : <button type="button" onClick={() => completeReception(false)} disabled={saving || loading}><ClipboardCheck size={16}/>{saving ? "Spremam…" : "Provjereno"}</button>}
+        {step === "identity" ? <button type="button" onClick={confirmIdentity} disabled={receptionActionDisabled || !draft}><ClipboardCheck size={16}/>{saving ? "Spremam…" : "Podaci su točni"}</button> : <button type="button" onClick={() => completeReception(false)} disabled={receptionActionDisabled}><ClipboardCheck size={16}/>{saving ? "Spremam…" : "Provjereno"}</button>}
       </footer>
     </section>
     {confirmClose && <section className="modal-panel reception-discard-dialog" role="dialog" aria-modal="true" aria-labelledby="reception-discard-title" onMouseDown={(event) => event.stopPropagation()}>

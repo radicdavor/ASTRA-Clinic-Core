@@ -12,7 +12,7 @@ class CheckInItemOut(BaseModel):
 
 class CheckInOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
-    id: int; journey_id: int; status: str; arrived_at: datetime | None; completed_at: datetime | None; items: list[CheckInItemOut]
+    id: int; journey_id: int; status: str; arrived_at: datetime | None; completed_at: datetime | None; reception_note: str | None = None; items: list[CheckInItemOut]
 
 class CheckInItemUpdate(BaseModel):
     state: str = Field(pattern="^(confirmed|not_confirmed|not_applicable|requires_clinician_review|blocked)$")
@@ -27,6 +27,7 @@ class ReceptionCheckInItemResult(BaseModel):
 class ReceptionCheckInComplete(BaseModel):
     items: list[ReceptionCheckInItemResult] = Field(default_factory=list)
     idempotency_key: str | None = Field(default=None, min_length=8, max_length=160)
+    reception_note: str | None = Field(default=None, max_length=2000)
 
 class CheckInMedicalDisposition(BaseModel):
     disposition: str = Field(pattern="^(accepted_for_review|proceed|defer|cancel|modify_plan)$")

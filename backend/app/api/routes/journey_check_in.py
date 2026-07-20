@@ -92,7 +92,7 @@ def complete_reception(journey_id: int, payload: ReceptionCheckInComplete, reque
     if unknown:
         raise HTTPException(422, detail=f"Nepoznata prijemna stavka: {', '.join(unknown)}")
     items_by_key = {item.item_key: {"note": item.note, "details": item.details, "activity_ids": item.activity_ids} for item in payload.items}
-    payload_fingerprint = reception_completion_fingerprint(items_by_key)
+    payload_fingerprint = reception_completion_fingerprint(items_by_key, payload.reception_note)
     existing_event = find_reception_completion_event(db, journey.id, payload.idempotency_key)
     if existing_event:
         metadata = existing_event.metadata_json or {}
@@ -110,6 +110,7 @@ def complete_reception(journey_id: int, payload: ReceptionCheckInComplete, reque
         request,
         payload.idempotency_key,
         payload_fingerprint,
+        payload.reception_note,
     )
     audit(db, "checkin_reception_completed", "PatientJourney", journey.id, "Prijem završen; pacijent čeka pregled/pretragu", actor.user_id, actor.actor_type, actor.api_key_id, before, snapshot(journey), request)
     db.commit()

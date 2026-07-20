@@ -382,6 +382,7 @@ class JourneyCheckIn(TimestampMixin, Base):
     started_by: Mapped[int | None] = mapped_column(ForeignKey("users.id"))
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     completed_by: Mapped[int | None] = mapped_column(ForeignKey("users.id"))
+    reception_note: Mapped[str | None] = mapped_column(Text)
     journey: Mapped[PatientJourney] = relationship()
     items: Mapped[list["JourneyCheckInItem"]] = relationship(back_populates="check_in", cascade="all, delete-orphan", order_by="JourneyCheckInItem.position")
 

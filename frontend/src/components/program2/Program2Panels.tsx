@@ -103,8 +103,9 @@ export function ReceptionMedicalHandoff({ data, activities, onMedicalDisposition
   const flagged = data?.items?.filter((item: any) => ["requires_clinician_review", "blocked"].includes(item.state) || item.medical_disposition) ?? [];
   return <Panel title="Podaci evidentirani na prijemu">
     <p className="journey-panel-context">Ovo su činjenice s prijema. Recepcija ne donosi medicinsku odluku.</p>
+    {data?.reception_note && <article className="handoff-item reception-visit-note"><strong>Napomena za današnji dolazak</strong><p>{data.reception_note}</p></article>}
     {flagged.map((item: any) => <HandoffItem key={item.id} item={item} activities={activities} onMedicalDisposition={onMedicalDisposition}/>)}
-    {!flagged.length && <p>Nema crvenih prijemnih napomena.</p>}
+    {!flagged.length && !data?.reception_note && <p>Nema crvenih prijemnih napomena.</p>}
   </Panel>;
 }
 

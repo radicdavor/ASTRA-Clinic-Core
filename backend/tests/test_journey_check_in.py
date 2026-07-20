@@ -1,7 +1,7 @@
-from datetime import timedelta
+from datetime import date, time, timedelta
 
 from app.core.security import hash_password
-from app.models.domain import AuditLog, JourneyActivity, JourneyBlocker, JourneyEvent, Permission, Role, User
+from app.models.domain import Appointment, AuditLog, JourneyActivity, JourneyBlocker, JourneyEvent, Patient, Permission, Role, User
 from tests.conftest import login_token
 from tests.factories import appointment
 
@@ -117,6 +117,48 @@ def test_reception_complete_records_red_notes_but_sends_patient_to_clinician(cli
     row = next(item for item in dashboard["rows"] if item["journey_id"] == journey["id"])
     assert row["reception_warning"] is True
     assert "Pacijent navodi elektrostimulator." in row["reception_warning_details"]
+
+
+def test_reception_note_is_visit_scoped_and_does_not_update_patient_notes(client, db, auth_setup):
+    journey, admin = ready_journey(client, db)
+    detail_before = client.get(f"/api/patient-journeys/{journey['id']}", headers=admin).json()
+    patient_id = detail_before["patient_id"]
+    patient = db.get(Patient, patient_id)
+    patient.notes = "Longitudinalna napomena ostaje."
+    db.commit()
+    client.post(f"/api/patient-journeys/{journey['id']}/check-in", headers=admin)
+    reception = reception_headers(client, db)
+
+    response = client.post(
+        f"/api/patient-journeys/{journey['id']}/check-in/complete-reception",
+        headers=reception,
+        json={"idempotency_key": "visit-note-key", "reception_note": "Pacijent danas treba pomoc pri kretanju.", "items": []},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["reception_note"] == "Pacijent danas treba pomoc pri kretanju."
+    db.refresh(patient)
+    assert patient.notes == "Longitudinalna napomena ostaje."
+    handoff = client.get(f"/api/patient-journeys/{journey['id']}/check-in", headers=admin).json()
+    assert handoff["reception_note"] == "Pacijent danas treba pomoc pri kretanju."
+
+    appt2 = Appointment(
+        patient_id=patient_id,
+        service_id=detail_before["appointment"]["service_id"],
+        provider_id=detail_before["appointment"]["provider_id"],
+        room_id=detail_before["appointment"]["room_id"],
+        date=date(2026, 7, 7),
+        start_time=time(9, 0),
+        end_time=time(9, 30),
+        duration_minutes=30,
+        status="scheduled",
+        source="manual",
+    )
+    db.add(appt2)
+    db.commit()
+    second = client.post("/api/patient-journeys", headers=admin, json={"appointment_id": appt2.id, "intake_channel": "manual", "initial_stage": "booked"}).json()
+    second_checkin = client.post(f"/api/patient-journeys/{second['id']}/check-in", headers=admin).json()
+    assert second_checkin["reception_note"] is None
 
 
 def test_medical_disposition_is_separate_from_reception_completion_and_requires_permission(client, db, auth_setup):

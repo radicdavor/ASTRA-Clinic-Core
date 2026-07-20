@@ -32,6 +32,9 @@ Starting commit: `719bdcd Open reception directly from daily dashboard`
 - Patient-name links on the daily dashboard now open the canonical journey workspace. The reception modal opens only through the explicit reception action.
 - The reception floating modal sends only changed patient fields when confirming demographics, so legacy synthetic `.invalid` e-mail values remain readable and unchanged fields do not block reception.
 - Changing a patient's e-mail through the patient update endpoint clears `email_verified_at`.
+- Reception notes for new reception entries are visit-scoped on `JourneyCheckIn.reception_note`; they are not written to longitudinal `patient.notes`.
+- Patient demographic PATCH supports optimistic concurrency through `expected_updated_at` and returns HTTP 409 with `code = stale_patient` when the local modal data is stale.
+- The floating reception modal preserves local red flags and the visit-scoped note when a stale patient conflict is shown.
 
 ## Clinical boundary
 
@@ -45,6 +48,5 @@ If a red flag exists, the patient can still wait for the physician or anesthesio
 - Procedure-specific dynamic red-flag catalogs beyond the current gastro-oriented baseline.
 - Migration of older already-started check-ins that do not contain the new `other_medical_review` item.
 - Full focus-trap component extraction and a shared application modal primitive for all clinical workflows.
-- Full optimistic-concurrency handling for patient-demographic edits during reception.
-- Moving generic reception notes out of longitudinal `patient.notes` into a fully visit-scoped reception-note field.
+- Full per-field merge conflict resolution; stale patient edits currently require reloading current patient demographics before retry.
 - A project-owned Playwright E2E suite. Browser validation in this increment was performed manually/in-app against the running synthetic stack; the project does not currently include Playwright.

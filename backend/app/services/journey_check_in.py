@@ -35,7 +35,14 @@ def normalize_reception_completion_key(idempotency_key: str | None) -> str | Non
     return cleaned or None
 
 
-def reception_completion_fingerprint(items_by_key: dict[str, dict]) -> str:
+def clean_reception_note(value: str | None) -> str | None:
+    if value is None:
+        return None
+    cleaned = value.strip()
+    return cleaned or None
+
+
+def reception_completion_fingerprint(items_by_key: dict[str, dict], reception_note: str | None = None) -> str:
     normalized = {
         key: {
             "note": (payload.get("note") or "").strip(),
@@ -44,6 +51,9 @@ def reception_completion_fingerprint(items_by_key: dict[str, dict]) -> str:
         }
         for key, payload in sorted(items_by_key.items())
     }
+    note = clean_reception_note(reception_note)
+    if note:
+        normalized["_reception_note"] = {"note": note}
     body = json.dumps(normalized, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
     return hashlib.sha256(body.encode("utf-8")).hexdigest()
 
@@ -116,7 +126,7 @@ def update_item(db: Session, journey: PatientJourney, check_in: JourneyCheckIn, 
     add_event(db, journey, "check_in_item_updated", f"{item.label}: {state}", actor, request, journey.current_stage, journey.current_stage, {"item_id": item.id, "before": before, "after": state})
 
 
-def complete_reception_check_in(db: Session, journey: PatientJourney, check_in: JourneyCheckIn, items_by_key: dict[str, dict], actor: Actor, request: Request, idempotency_key: str | None = None, payload_fingerprint: str | None = None):
+def complete_reception_check_in(db: Session, journey: PatientJourney, check_in: JourneyCheckIn, items_by_key: dict[str, dict], actor: Actor, request: Request, idempotency_key: str | None = None, payload_fingerprint: str | None = None, reception_note: str | None = None):
     red_flags = {
         key: payload
         for key, payload in items_by_key.items()
@@ -152,6 +162,7 @@ def complete_reception_check_in(db: Session, journey: PatientJourney, check_in: 
     check_in.status = "ready"
     check_in.completed_at = datetime.now(timezone.utc)
     check_in.completed_by = actor.user_id
+    check_in.reception_note = clean_reception_note(reception_note)
     journey.check_in_status = "ready"
     transition(db, journey, "ready_for_clinician", actor, request, "Prijem završen; pacijent čeka pregled/pretragu")
     add_event(
@@ -163,7 +174,7 @@ def complete_reception_check_in(db: Session, journey: PatientJourney, check_in: 
         request,
         "check_in_review",
         journey.current_stage,
-        {"items": changed, "idempotency_key": normalize_reception_completion_key(idempotency_key), "payload_fingerprint": payload_fingerprint},
+        {"items": changed, "reception_note": check_in.reception_note, "idempotency_key": normalize_reception_completion_key(idempotency_key), "payload_fingerprint": payload_fingerprint},
     )
 
 

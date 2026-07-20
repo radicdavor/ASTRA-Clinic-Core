@@ -93,8 +93,8 @@ let dashboardAccess: {
   available_clinics: [{ id: 1, name: "Klinika Sjever" }, { id: 2, name: "Klinika Jug" }],
 };
 
-function response(body: unknown) {
-  return Promise.resolve(new Response(JSON.stringify(body), { status: 200, headers: { "Content-Type": "application/json" } }));
+function response(body: unknown, status = 200) {
+  return Promise.resolve(new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } }));
 }
 
 function journeyResponse(id: number) {
@@ -108,7 +108,7 @@ function journeyResponse(id: number) {
     ],
     patient: {
       id: 501, first_name: "Sintetički", last_name: "Čeka", date_of_birth: "1992-01-06",
-      oib: null, email: "synthetic@example.com", phone: "0994477445", notes: null, email_verified_at: null,
+      oib: null, email: "synthetic@example.com", phone: "0994477445", notes: null, email_verified_at: null, updated_at: "2026-07-13T10:00:00Z",
     },
     appointment: {
       id: 106, service_id: 1, provider_id: 1, room_id: 1, date: "2026-07-13",
@@ -125,7 +125,7 @@ function installFetchMock() {
     if (url.endsWith("/api/providers")) return response([{ id: 1, full_name: "dr. Test", staff_role: "physician" }]);
     if (url.endsWith("/api/rooms") || url.endsWith("/api/services")) return response([]);
     if (/\/api\/patient-journeys\/\d+$/.test(url)) return response(journeyResponse(Number(url.split("/").pop())));
-    if (url.endsWith("/api/patients/501") && init?.method === "PATCH") return response({});
+    if (url.endsWith("/api/patients/501") && init?.method === "PATCH") return response({ updated_at: "2026-07-13T10:05:00Z" });
     if (url.endsWith("/api/patient-journeys/16/check-in") && init?.method === "POST") return response({ id: 1, journey_id: 16, status: "in_review", arrived_at: "2026-07-13T11:00:00Z", completed_at: null, items: [] });
     if (url.endsWith("/api/patient-journeys/16/check-in/complete-reception") && init?.method === "POST") return response({ id: 1, journey_id: 16, status: "ready", arrived_at: "2026-07-13T11:00:00Z", completed_at: "2026-07-13T11:05:00Z", items: [] });
     if (init?.method === "POST") return response({});
@@ -198,6 +198,25 @@ describe("pojednostavljeni dnevni tijek pacijenata", () => {
     expect(body.items[0].item_key).toBe("fasting_6h");
     expect(body.items[0].details).toMatchObject({ last_intake_timing: "2–4 sata", intake_type: "kava s mlijekom" });
     expect(body.items[0].activity_ids).toEqual([602]);
+  });
+
+  test("floating prijem salje expected version i visit-scoped napomenu bez patient.notes", async () => {
+    const user = userEvent.setup(); renderDashboard();
+    const row = (await screen.findByRole("link", { name: /Sinteti.*eka/ })).closest("tr") as HTMLTableRowElement;
+    await user.click(within(row).getByRole("button", { name: "Otvori prijem" }));
+    await user.clear(await screen.findByLabelText("Telefon"));
+    await user.type(screen.getByLabelText("Telefon"), "091222333");
+    await user.type(screen.getByLabelText("Napomena za današnji dolazak"), "Pacijent treba pomoc pri kretanju.");
+    await user.click(await screen.findByRole("button", { name: "Podaci su točni" }));
+    await user.click(await screen.findByRole("button", { name: "Provjereno" }));
+
+    const patientCall = vi.mocked(fetch).mock.calls.find(([url, init]) => String(url).endsWith("/api/patients/501") && init?.method === "PATCH");
+    const patientPayload = JSON.parse(String(patientCall?.[1]?.body));
+    expect(patientPayload).toMatchObject({ expected_updated_at: "2026-07-13T10:00:00Z", phone: "091222333" });
+    expect(patientPayload.notes).toBeUndefined();
+    const completionCall = vi.mocked(fetch).mock.calls.find(([url]) => String(url).includes("/api/patient-journeys/16/check-in/complete-reception"));
+    const completionPayload = JSON.parse(String(completionCall?.[1]?.body));
+    expect(completionPayload.reception_note).toBe("Pacijent treba pomoc pri kretanju.");
   });
 
   test("zatvaranje prijema čuva filter, prikaz i fokus na istom retku", async () => {
