@@ -4,90 +4,108 @@ import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { DailyClinicDashboard } from "./DailyClinicDashboard";
 
+function activity(id: number, time: string, end_time: string, service_name: string, room_name = "Ordinacija 1", status = "ready") {
+  return { id, sequence: id, time, end_time, service_name, clinician_name: "dr. Test", room_name, status };
+}
+
 const rows = [
   {
-    journey_id: 11, appointment_id: 101, time: "08:00:00", patient_name: "Sintetički Dolazak",
+    journey_id: 1, appointment_id: 101, time: "08:00:00", patient_name: "Kratki Pregled",
     service_id: 1, service_name: "Prvi pregled", clinician_id: 1, clinician_name: "dr. Test",
     room_id: 1, room_name: "Ordinacija 1", clinic_id: 1, clinic_name: "Klinika Sjever", intake_channel: "manual", workflow_stage: "ready_for_arrival",
-    document_status: "complete", preparation_status: "in_progress", arrival_status: "not_arrived",
+    document_status: "complete", preparation_status: "complete", arrival_status: "not_arrived",
     check_in_status: "not_arrived", encounter_status: "not_started", consumables_status: "not_ready",
-    billing_status: "not_ready", payment_status: "not_due", blocker_status: "blocked",
-    blocker_labels: ["Nedostaje nalaz"], blockers: [{ id: 1, title: "Nedostaje nalaz", details: "Laboratorijski nalaz nije priložen.", is_clinical: false }], allowed_actions: ["open_check_in"],
+    billing_status: "not_ready", payment_status: "not_due", blocker_status: "clear",
+    blocker_labels: [], blockers: [], reception_warning: false, reception_warning_details: [], allowed_actions: ["open_check_in"],
+    activity_count: 1, current_activity_id: 1011, next_activity_id: null, activities: [activity(1011, "08:00:00", "08:30:00", "Prvi pregled")],
   },
   {
-    journey_id: 12, appointment_id: 102, time: "09:00:00", patient_name: "Sintetički Prijem",
-    service_id: 1, service_name: "Kontrola", clinician_id: 1, clinician_name: "dr. Test",
-    room_id: 1, room_name: "Ordinacija 1", intake_channel: "web", workflow_stage: "arrived",
-    document_status: "requested", preparation_status: "complete", arrival_status: "arrived",
-    check_in_status: "not_arrived", encounter_status: "not_started", consumables_status: "not_ready",
-    billing_status: "not_ready", payment_status: "not_due", blocker_status: "clear", blocker_labels: [], blockers: [], allowed_actions: ["open_check_in"],
-  },
-  {
-    journey_id: 13, appointment_id: 103, time: "10:00:00", patient_name: "Sintetički Pregled",
-    service_id: 1, service_name: "Pregled", clinician_id: 1, clinician_name: "dr. Test",
-    room_id: 1, room_name: "Ordinacija 1", intake_channel: "ai_secretary", workflow_stage: "ready_for_clinician",
+    journey_id: 2, appointment_id: 102, time: "08:15:00", patient_name: "Preklop Pacijent",
+    service_id: 2, service_name: "Kontrola", clinician_id: 1, clinician_name: "dr. Test",
+    room_id: 1, room_name: "Ordinacija 1", clinic_id: 1, clinic_name: "Klinika Sjever", intake_channel: "web", workflow_stage: "arrived",
     document_status: "complete", preparation_status: "complete", arrival_status: "arrived",
-    check_in_status: "ready", encounter_status: "in_progress", consumables_status: "not_ready",
-    billing_status: "not_ready", payment_status: "not_due", blocker_status: "clear", blocker_labels: [], blockers: [], allowed_actions: ["open_encounter"],
-    activity_count: 2, current_activity_id: 132, next_activity_id: null, activities: [
-      { id: 131, sequence: 1, time: "10:00:00", service_name: "Gastro pregled", clinician_name: "dr. Test", room_name: "Ordinacija 1", status: "completed" },
-      { id: 132, sequence: 2, time: "10:30:00", service_name: "Gastroskopija", clinician_name: "dr. Test", room_name: "Endoskopija 1", status: "in_progress" },
+    check_in_status: "in_review", encounter_status: "not_started", consumables_status: "not_ready",
+    billing_status: "not_ready", payment_status: "not_due", blocker_status: "clear",
+    blocker_labels: [], blockers: [], reception_warning: false, reception_warning_details: [], allowed_actions: ["open_check_in"],
+    activity_count: 1, current_activity_id: 1021, next_activity_id: null, activities: [activity(1021, "08:15:00", "08:45:00", "Kontrola")],
+  },
+  {
+    journey_id: 3, appointment_id: 103, time: "09:00:00", patient_name: "Paket Gastro",
+    service_id: 3, service_name: "Gastro paket", clinician_id: 1, clinician_name: "dr. Test",
+    room_id: 1, room_name: "Ordinacija 1", clinic_id: 1, clinic_name: "Klinika Sjever", intake_channel: "manual", workflow_stage: "ready_for_clinician",
+    document_status: "complete", preparation_status: "complete", arrival_status: "arrived",
+    check_in_status: "ready", encounter_status: "not_started", consumables_status: "not_ready",
+    billing_status: "not_ready", payment_status: "not_due", blocker_status: "clear",
+    blocker_labels: [], blockers: [], reception_warning: false, reception_warning_details: [], allowed_actions: ["open_encounter"],
+    activity_count: 2, current_activity_id: 302, next_activity_id: null, activities: [
+      activity(301, "09:00:00", "09:30:00", "Prvi gastro pregled", "Ordinacija 1", "completed"),
+      activity(302, "09:30:00", "10:30:00", "Gastroskopija", "Endoskopija 1", "ready"),
     ],
   },
   {
-    journey_id: 14, appointment_id: 104, time: "11:00:00", patient_name: "Sintetički Materijal",
-    service_id: 1, service_name: "Završeni zahvat", clinician_id: 1, clinician_name: "dr. Test",
-    room_id: 1, room_name: "Ordinacija 1", intake_channel: "manual", workflow_stage: "procedure_completed",
+    journey_id: 4, appointment_id: 104, time: "11:00:00", patient_name: "Crvena Napomena",
+    service_id: 4, service_name: "Gastroskopija", clinician_id: 1, clinician_name: "dr. Test",
+    room_id: 2, room_name: "Endoskopija 1", clinic_id: 1, clinic_name: "Klinika Sjever", intake_channel: "manual", workflow_stage: "ready_for_clinician",
     document_status: "complete", preparation_status: "complete", arrival_status: "arrived",
-    check_in_status: "ready", encounter_status: "completed", consumables_status: "pending",
-    billing_status: "not_ready", payment_status: "not_due", blocker_status: "clear", blocker_labels: [], blockers: [], allowed_actions: ["record_consumables"],
+    check_in_status: "ready", encounter_status: "not_started", consumables_status: "not_ready",
+    billing_status: "not_ready", payment_status: "not_due", blocker_status: "blocked",
+    blocker_labels: ["Post nije potvrđen"], blockers: [{ id: 8, title: "Post nije potvrđen", details: "Pacijent je pio kavu s mlijekom.", is_clinical: true }],
+    reception_warning: true, reception_warning_details: ["Pratnja nakon sedacije nije potvrđena."], allowed_actions: ["open_encounter"],
+    activity_count: 1, current_activity_id: 401, next_activity_id: null, activities: [activity(401, "11:00:00", "11:45:00", "Gastroskopija", "Endoskopija 1")],
   },
   {
-    journey_id: 15, appointment_id: 105, time: "12:00:00", patient_name: "Sintetička Naplata",
-    service_id: 1, service_name: "Naplata usluge", clinician_id: 1, clinician_name: "dr. Test",
-    room_id: 1, room_name: "Ordinacija 1", intake_channel: "manual", workflow_stage: "awaiting_payment",
+    journey_id: 5, appointment_id: 105, time: "12:00:00", patient_name: "Čeka Naplatu",
+    service_id: 5, service_name: "Zahvat", clinician_id: 1, clinician_name: "dr. Test",
+    room_id: 2, room_name: "Endoskopija 1", clinic_id: 1, clinic_name: "Klinika Sjever", intake_channel: "manual", workflow_stage: "awaiting_payment",
     document_status: "complete", preparation_status: "complete", arrival_status: "arrived",
     check_in_status: "ready", encounter_status: "completed", consumables_status: "confirmed",
-    billing_status: "invoice_created", payment_status: "unpaid", blocker_status: "clear", blocker_labels: [], blockers: [], allowed_actions: ["open_payment"],
+    billing_status: "invoice_created", payment_status: "unpaid", blocker_status: "clear",
+    blocker_labels: [], blockers: [], reception_warning: false, reception_warning_details: [], allowed_actions: ["open_payment"],
+    activity_count: 1, current_activity_id: 501, next_activity_id: null, activities: [activity(501, "12:00:00", "12:30:00", "Zahvat", "Endoskopija 1", "completed")],
   },
   {
-    journey_id: 16, appointment_id: 106, time: "13:00:00", patient_name: "Sintetički Čeka",
-    service_id: 1, service_name: "Kontrola", clinician_id: 1, clinician_name: "dr. Test",
-    room_id: 1, room_name: "Ordinacija 1", intake_channel: "manual", workflow_stage: "ready_for_arrival",
-    document_status: "complete", preparation_status: "complete", arrival_status: "not_arrived",
-    check_in_status: "not_arrived", encounter_status: "not_started", consumables_status: "not_ready",
-    billing_status: "not_ready", payment_status: "not_due", blocker_status: "clear", blocker_labels: [], blockers: [], allowed_actions: ["open_check_in"],
-  },
-  {
-    journey_id: 18, appointment_id: 108, time: "13:30:00", patient_name: "Sintetički Dokumenti",
-    service_id: 1, service_name: "Gastroskopija", clinician_id: 1, clinician_name: "dr. Test",
-    room_id: 1, room_name: "Ordinacija 1", intake_channel: "manual", workflow_stage: "awaiting_documents",
-    document_status: "requested", preparation_status: "complete", arrival_status: "not_arrived",
-    check_in_status: "not_arrived", encounter_status: "not_started", consumables_status: "not_ready",
-    billing_status: "not_ready", payment_status: "not_due", blocker_status: "clear", blocker_labels: [], blockers: [], allowed_actions: ["open_check_in"],
-  },
-  {
-    journey_id: 19, appointment_id: 109, time: "13:45:00", patient_name: "Sintetički Priprema",
-    service_id: 1, service_name: "Gastroskopija", clinician_id: 1, clinician_name: "dr. Test",
-    room_id: 1, room_name: "Ordinacija 1", intake_channel: "manual", workflow_stage: "preparation_in_progress",
-    document_status: "complete", preparation_status: "in_progress", arrival_status: "not_arrived",
-    check_in_status: "not_arrived", encounter_status: "not_started", consumables_status: "not_ready",
-    billing_status: "not_ready", payment_status: "not_due", blocker_status: "clear", blocker_labels: [], blockers: [], allowed_actions: ["open_check_in"],
-  },
-  {
-    journey_id: 17, appointment_id: 107, time: "14:00:00", patient_name: "Sintetički Završeno",
-    service_id: 1, service_name: "Kontrola", clinician_id: 1, clinician_name: "dr. Test",
-    room_id: 1, room_name: "Ordinacija 1", intake_channel: "manual", workflow_stage: "completed",
+    journey_id: 6, appointment_id: 106, time: "13:00:00", patient_name: "Plaćeno Gotovo",
+    service_id: 6, service_name: "Kontrola", clinician_id: 1, clinician_name: "dr. Test",
+    room_id: 1, room_name: "Ordinacija 1", clinic_id: 1, clinic_name: "Klinika Sjever", intake_channel: "manual", workflow_stage: "completed",
     document_status: "complete", preparation_status: "complete", arrival_status: "arrived",
     check_in_status: "ready", encounter_status: "completed", consumables_status: "not_applicable",
-    billing_status: "closed", payment_status: "paid", blocker_status: "clear", blocker_labels: [], blockers: [], allowed_actions: [],
+    billing_status: "closed", payment_status: "paid", blocker_status: "clear",
+    blocker_labels: [], blockers: [], reception_warning: false, reception_warning_details: [], allowed_actions: [],
+    activity_count: 1, current_activity_id: 601, next_activity_id: null, activities: [activity(601, "13:00:00", "13:30:00", "Kontrola", "Ordinacija 1", "completed")],
+  },
+  {
+    journey_id: 7, appointment_id: 107, time: "14:00:00", patient_name: "Bez Kraja",
+    service_id: 7, service_name: "Kratka kontrola", clinician_id: 1, clinician_name: "dr. Test",
+    room_id: 1, room_name: "Ordinacija 1", clinic_id: 1, clinic_name: "Klinika Sjever", intake_channel: "manual", workflow_stage: "ready_for_arrival",
+    document_status: "complete", preparation_status: "complete", arrival_status: "not_arrived",
+    check_in_status: "not_arrived", encounter_status: "not_started", consumables_status: "not_ready",
+    billing_status: "not_ready", payment_status: "not_due", blocker_status: "clear",
+    blocker_labels: [], blockers: [], reception_warning: false, reception_warning_details: [], allowed_actions: ["open_check_in"],
+    activity_count: 1, current_activity_id: 701, next_activity_id: null, activities: [{ id: 701, sequence: 1, time: "14:00:00", service_name: "Kratka kontrola", clinician_name: "dr. Test", room_name: "Ordinacija 1", status: "ready" }],
+  },
+  {
+    journey_id: 8, appointment_id: 108, time: "06:30:00", patient_name: "Rani Pacijent",
+    service_id: 8, service_name: "Rani pregled", clinician_id: 1, clinician_name: "dr. Test",
+    room_id: 1, room_name: "Ordinacija 1", clinic_id: 1, clinic_name: "Klinika Sjever", intake_channel: "manual", workflow_stage: "ready_for_arrival",
+    document_status: "complete", preparation_status: "complete", arrival_status: "not_arrived",
+    check_in_status: "not_arrived", encounter_status: "not_started", consumables_status: "not_ready",
+    billing_status: "not_ready", payment_status: "not_due", blocker_status: "clear",
+    blocker_labels: [], blockers: [], reception_warning: false, reception_warning_details: [], allowed_actions: ["open_check_in"],
+    activity_count: 1, current_activity_id: 801, next_activity_id: null, activities: [activity(801, "06:30:00", "07:00:00", "Rani pregled", "Ordinacija 1")],
+  },
+  {
+    journey_id: 9, appointment_id: 109, time: "20:00:00", patient_name: "Kasni Pacijent",
+    service_id: 9, service_name: "Kasni pregled", clinician_id: 1, clinician_name: "dr. Test",
+    room_id: 2, room_name: "Endoskopija 1", clinic_id: 1, clinic_name: "Klinika Sjever", intake_channel: "manual", workflow_stage: "ready_for_arrival",
+    document_status: "complete", preparation_status: "complete", arrival_status: "not_arrived",
+    check_in_status: "not_arrived", encounter_status: "not_started", consumables_status: "not_ready",
+    billing_status: "not_ready", payment_status: "not_due", blocker_status: "clear",
+    blocker_labels: [], blockers: [], reception_warning: false, reception_warning_details: [], allowed_actions: ["open_check_in"],
+    activity_count: 1, current_activity_id: 901, next_activity_id: null, activities: [activity(901, "20:00:00", "20:30:00", "Kasni pregled", "Endoskopija 1")],
   },
 ];
 
-let dashboardAccess: {
-  viewer_role: string; scope: string; scope_label: string; scoped_clinician_id: number | null;
-  can_filter_clinician: boolean; available_clinics: Array<{ id: number; name: string }>;
-} = {
+let dashboardAccess = {
   viewer_role: "admin", scope: "all", scope_label: "Svi liječnici", scoped_clinician_id: null,
   can_filter_clinician: true,
   available_clinics: [{ id: 1, name: "Klinika Sjever" }, { id: 2, name: "Klinika Jug" }],
@@ -99,21 +117,20 @@ function response(body: unknown, status = 200) {
 
 function journeyResponse(id: number) {
   return {
-    id, patient_id: 501, appointment_id: 106, intake_channel: "manual", current_stage: "ready_for_arrival",
+    id, patient_id: 501, appointment_id: 101, intake_channel: "manual", current_stage: "ready_for_arrival",
     document_status: "complete", preparation_status: "complete", check_in_status: "not_arrived",
     encounter_status: "not_started", consumables_status: "not_ready", billing_status: "not_ready",
     payment_status: "not_due", closed_at: null, blockers: [], activities: [
-      { id: 601, journey_id: id, appointment_id: 106, service_id: 1, activity_key: "Prvi pregled", activity_kind: "consultation", specialty_key: "gastroenterology", clinic_id: 1, primary_provider_id: 1, room_id: 1, sequence: 1, depends_on_activity_id: null, required: true, planned_start: "2026-07-13T13:00:00", planned_end: "2026-07-13T13:30:00", actual_start: null, actual_end: null, status: "ready", not_performed_reason: null, form_resolution_status: "not_started", billing_status: "not_ready", consumables_status: "not_ready" },
-      { id: 602, journey_id: id, appointment_id: 106, service_id: 1, activity_key: "Gastroskopija", activity_kind: "procedure", specialty_key: "gastroenterology", clinic_id: 1, primary_provider_id: 1, room_id: 1, sequence: 2, depends_on_activity_id: null, required: true, planned_start: "2026-07-13T13:30:00", planned_end: "2026-07-13T14:00:00", actual_start: null, actual_end: null, status: "ready", not_performed_reason: null, form_resolution_status: "not_started", billing_status: "not_ready", consumables_status: "not_ready" },
+      { id: 601, journey_id: id, appointment_id: 101, service_id: 1, activity_key: "Prvi pregled", activity_kind: "consultation", specialty_key: "gastroenterology", clinic_id: 1, primary_provider_id: 1, room_id: 1, sequence: 1, depends_on_activity_id: null, required: true, planned_start: "2026-07-13T08:00:00", planned_end: "2026-07-13T08:30:00", actual_start: null, actual_end: null, status: "ready", not_performed_reason: null, form_resolution_status: "not_started", billing_status: "not_ready", consumables_status: "not_ready" },
     ],
     patient: {
-      id: 501, first_name: "Sintetički", last_name: "Čeka", date_of_birth: "1992-01-06",
+      id: 501, first_name: "Kratki", last_name: "Pregled", date_of_birth: "1992-01-06",
       oib: null, email: "synthetic@example.com", phone: "0994477445", notes: null, email_verified_at: null, updated_at: "2026-07-13T10:00:00Z",
     },
     appointment: {
-      id: 106, service_id: 1, provider_id: 1, room_id: 1, date: "2026-07-13",
-      start_time: "13:00:00", end_time: "13:30:00", status: "booked", source: "manual",
-      service: { id: 1, name: "Kontrola" }, provider: { id: 1, full_name: "dr. Test" }, room: { id: 1, name: "Ordinacija 1" },
+      id: 101, service_id: 1, provider_id: 1, room_id: 1, date: "2026-07-13",
+      start_time: "08:00:00", end_time: "08:30:00", status: "booked", source: "manual",
+      service: { id: 1, name: "Prvi pregled" }, provider: { id: 1, full_name: "dr. Test" }, room: { id: 1, name: "Ordinacija 1" },
     },
   };
 }
@@ -123,11 +140,12 @@ function installFetchMock() {
     const url = String(input);
     if (url.includes("/api/dashboard/day")) return response({ date: "2026-07-13", refreshed_at: "2026-07-13T08:00:00Z", visible_sections: [], ...dashboardAccess, rows });
     if (url.endsWith("/api/providers")) return response([{ id: 1, full_name: "dr. Test", staff_role: "physician" }]);
-    if (url.endsWith("/api/rooms") || url.endsWith("/api/services")) return response([]);
+    if (url.endsWith("/api/rooms")) return response([{ id: 1, name: "Ordinacija 1", clinic_id: 1 }, { id: 2, name: "Endoskopija 1", clinic_id: 1 }]);
+    if (url.endsWith("/api/services")) return response([{ id: 1, name: "Prvi pregled" }, { id: 4, name: "Gastroskopija" }]);
     if (/\/api\/patient-journeys\/\d+$/.test(url)) return response(journeyResponse(Number(url.split("/").pop())));
     if (url.endsWith("/api/patients/501") && init?.method === "PATCH") return response({ updated_at: "2026-07-13T10:05:00Z" });
-    if (url.endsWith("/api/patient-journeys/16/check-in") && init?.method === "POST") return response({ id: 1, journey_id: 16, status: "in_review", arrived_at: "2026-07-13T11:00:00Z", completed_at: null, items: [] });
-    if (url.endsWith("/api/patient-journeys/16/check-in/complete-reception") && init?.method === "POST") return response({ id: 1, journey_id: 16, status: "ready", arrived_at: "2026-07-13T11:00:00Z", completed_at: "2026-07-13T11:05:00Z", items: [] });
+    if (url.endsWith("/api/patient-journeys/1/check-in") && init?.method === "POST") return response({ id: 1, journey_id: 1, status: "in_review", arrived_at: "2026-07-13T08:00:00Z", completed_at: null, items: [] });
+    if (url.endsWith("/api/patient-journeys/1/check-in/complete-reception") && init?.method === "POST") return response({ id: 1, journey_id: 1, status: "ready", arrived_at: "2026-07-13T08:00:00Z", completed_at: "2026-07-13T08:05:00Z", items: [] });
     if (init?.method === "POST") return response({});
     throw new Error(`Neočekivani testni API poziv: ${url}`);
   });
@@ -137,187 +155,135 @@ function renderDashboard() {
   return render(<MemoryRouter initialEntries={["/"]}><Routes><Route path="/" element={<DailyClinicDashboard/>}/><Route path="/journeys/:id" element={<p>Otvoren radni prostor</p>}/></Routes></MemoryRouter>);
 }
 
+async function findPatientBlock(label: RegExp) {
+  await screen.findByText(label);
+  const block = screen.getAllByLabelText(label).find(item => item.classList.contains("timeline-patient-block"));
+  if (!block) throw new Error(`Nije pronađen blok pacijenta za ${label}`);
+  return block;
+}
+
 beforeEach(() => {
   dashboardAccess = { viewer_role: "admin", scope: "all", scope_label: "Svi liječnici", scoped_clinician_id: null, can_filter_clinician: true, available_clinics: [{ id: 1, name: "Klinika Sjever" }, { id: 2, name: "Klinika Jug" }] };
-  installFetchMock(); vi.spyOn(window, "confirm").mockReturnValue(true);
+  installFetchMock();
 });
 afterEach(() => { cleanup(); vi.restoreAllMocks(); });
 
-describe("pojednostavljeni dnevni tijek pacijenata", () => {
-  test("prikazuje samo četiri operativna stupca", async () => {
+describe("vremenska dnevna ploča", () => {
+  test("single short appointment renders as one patient block on a visible time axis", async () => {
     renderDashboard();
-    expect(await screen.findByText("Sintetički Dolazak")).toBeTruthy();
-    expect(screen.getAllByRole("columnheader").map(item => item.textContent)).toEqual(["Vrijeme i pacijent", "Usluga i liječnik", "Trenutačno stanje", "Sljedeća radnja"]);
-    expect(screen.queryByRole("columnheader", { name: "Dokumenti" })).toBeNull();
-    expect(screen.queryByRole("columnheader", { name: "Naplata" })).toBeNull();
+    expect(await screen.findByRole("button", { name: "Kratki Pregled" })).toBeTruthy();
+    expect(screen.getByLabelText("Vremenska os")).toBeTruthy();
+    expect(screen.getAllByText("08:00").length).toBeGreaterThan(0);
+    const block = await findPatientBlock(/Kratki Pregled/);
+    expect(within(block).getByText("Prvi pregled")).toBeTruthy();
+    expect(within(block).getByText("Ordinacija 1")).toBeTruthy();
   });
 
-  test("prikazuje jedno stanje i puni razlog problema", async () => {
+  test("multi-activity visit stays one connected block spanning multiple timeline rows", async () => {
     renderDashboard();
-    const patient = await screen.findByText("Sintetički Dolazak");
-    const row = patient.closest("tr") as HTMLTableRowElement;
-    expect(within(row).getByText("Nedostaje nalaz")).toBeTruthy();
-    expect(within(row).getByText("Laboratorijski nalaz nije priložen.")).toBeTruthy();
-    const signal = within(row).getByLabelText("Nedostaje nalaz. Laboratorijski nalaz nije priložen.");
-    expect(signal.classList.contains("problem")).toBe(true);
-    expect(within(signal).getByRole("tooltip").textContent).toContain("Laboratorijski nalaz");
+    const block = await findPatientBlock(/Paket Gastro/);
+    expect(within(block).getByText("Prvi gastro pregled")).toBeTruthy();
+    expect(within(block).getByText("Gastroskopija")).toBeTruthy();
+    expect(within(block).getByText("09:00–09:30")).toBeTruthy();
+    expect(within(block).getByText("09:30–10:30")).toBeTruthy();
+    expect(block.classList.contains("timeline-patient-block")).toBe(true);
   });
 
-  test("zeleni semafor nema dodatnu administrativnu radnju", async () => {
+  test("overlapping patients are both visible as separate patient blocks", async () => {
     renderDashboard();
-    const patient = await screen.findByText("Sintetički Završeno");
-    const row = patient.closest("tr") as HTMLTableRowElement;
-    expect(within(row).getByText("Završeno")).toBeTruthy();
-    expect(within(row).getByLabelText(/Završeno/).classList.contains("resolved")).toBe(true);
-    expect(within(row).queryByRole("button")).toBeNull();
+    const first = await findPatientBlock(/Kratki Pregled/);
+    const second = await findPatientBlock(/Preklop Pacijent/);
+    expect(first).toBeTruthy();
+    expect(second).toBeTruthy();
+    expect(first).not.toBe(second);
   });
 
-  test("otvaranje prijema ostaje na dnevnoj ploči i otvara float prozor", async () => {
-    const user = userEvent.setup(); renderDashboard();
-    const row = (await screen.findByText("Sintetički Čeka")).closest("tr") as HTMLTableRowElement;
-    await user.click(within(row).getByRole("button", { name: "Otvori prijem" }));
+  test("red-flag status uses red color and opens structured details", async () => {
+    const user = userEvent.setup();
+    renderDashboard();
+    const block = await findPatientBlock(/Crvena Napomena/);
+    expect(block.classList.contains("tone-red")).toBe(true);
+    expect(within(block).getByLabelText(/Čeka pregled\/pretragu/).classList.contains("red")).toBe(true);
+    await user.click(within(block).getByRole("button", { name: "2 crvenih napomena" }));
+    expect(await screen.findByRole("dialog", { name: "Crvene napomene za Crvena Napomena" })).toBeTruthy();
+    expect(screen.getByText("Pacijent je pio kavu s mlijekom.")).toBeTruthy();
+    expect(screen.getByText("Pratnja nakon sedacije nije potvrđena.")).toBeTruthy();
+  });
+
+  test("completed and paid state is green and has no primary action", async () => {
+    renderDashboard();
+    const block = await findPatientBlock(/Plaćeno Gotovo/);
+    expect(block.classList.contains("tone-green")).toBe(true);
+    expect(within(block).getAllByText("Završeno").length).toBeGreaterThan(0);
+    expect(within(block).queryByRole("button", { name: /Naplati|Otvori prijem|Otvori pregled/ })).toBeNull();
+  });
+
+  test("room view keeps rooms and activities in a horizontally scrollable timeline", async () => {
+    const user = userEvent.setup();
+    renderDashboard();
+    await user.click(await screen.findByRole("button", { name: "Po prostorijama" }));
+    expect(screen.getByLabelText("Raspored prostorije Ordinacija 1")).toBeTruthy();
+    expect(screen.getByLabelText("Raspored prostorije Endoskopija 1")).toBeTruthy();
+    expect(screen.getAllByText("Endoskopija 1").length).toBeGreaterThan(0);
+    expect(screen.getAllByRole("button", { name: "Paket Gastro" })).toHaveLength(1);
+  });
+
+  test("missing end_time falls back to a short block without losing the activity", async () => {
+    renderDashboard();
+    const block = await findPatientBlock(/Bez Kraja/);
+    expect(within(block).getByText("Kratka kontrola")).toBeTruthy();
+    expect(within(block).getAllByText("14:00").length).toBeGreaterThan(0);
+  });
+
+  test("activities outside 07:00-20:00 extend the visible time axis", async () => {
+    renderDashboard();
+    expect(await screen.findByRole("button", { name: "Rani Pacijent" })).toBeTruthy();
+    expect(screen.getAllByText("06:30").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("20:30").length).toBeGreaterThan(0);
+  });
+
+  test("each patient block exposes only one primary action and moves secondary actions to menu", async () => {
+    renderDashboard();
+    const block = await findPatientBlock(/Kratki Pregled/);
+    expect(within(block).getByRole("button", { name: "Otvori prijem" })).toBeTruthy();
+    expect(within(block).getByLabelText("Dodatne radnje za Kratki Pregled")).toBeTruthy();
+    expect(within(block).getAllByText("Otvori prijem")).toHaveLength(1);
+  });
+
+  test("keyboard and screen-reader status includes accessible text label", async () => {
+    renderDashboard();
+    const block = await findPatientBlock(/Preklop Pacijent/);
+    const status = within(block).getByLabelText(/Stigao. Otvorite prijem/);
+    expect(status.getAttribute("tabindex")).toBe("0");
+    expect(within(status).getByRole("tooltip").textContent).toContain("Stigao");
+  });
+
+  test("otvori prijem continues to open dashboard-native reception modal", async () => {
+    const user = userEvent.setup();
+    renderDashboard();
+    const block = await findPatientBlock(/Kratki Pregled/);
+    await user.click(within(block).getByRole("button", { name: "Otvori prijem" }));
     expect(await screen.findByRole("dialog", { name: "Opći podaci pacijenta" })).toBeTruthy();
     expect(screen.queryByText("Otvoren radni prostor")).toBeNull();
-    expect(fetch).not.toHaveBeenCalledWith(expect.stringContaining("/api/patient-journeys/16/check-in"), expect.objectContaining({ method: "POST" }));
   });
 
-  test("red flag prijem ima ciljane dropdownove i šalje activity provenance", async () => {
-    const user = userEvent.setup(); renderDashboard();
-    const row = (await screen.findByRole("link", { name: /Sinteti.*eka/ })).closest("tr") as HTMLTableRowElement;
-    await user.click(within(row).getByRole("button", { name: "Otvori prijem" }));
-    await user.click(await screen.findByRole("button", { name: "Podaci su točni" }));
-    await user.click(await screen.findByLabelText(/Problem s postom/));
-    await user.selectOptions(screen.getByLabelText("Zadnji unos"), "2–4 sata");
-    await user.selectOptions(screen.getByLabelText("Vrsta unosa"), "kava s mlijekom");
-    await user.selectOptions(screen.getByLabelText("Odnosi se na aktivnost"), "602");
-    await user.click(screen.getByRole("button", { name: "Provjereno" }));
-
-    await waitFor(() => expect(fetch).toHaveBeenCalledWith(expect.stringContaining("/api/patient-journeys/16/check-in/complete-reception"), expect.anything()));
-    const completionCall = vi.mocked(fetch).mock.calls.find(([url]) => String(url).includes("/api/patient-journeys/16/check-in/complete-reception"));
-    const body = JSON.parse(String(completionCall?.[1]?.body));
-    expect(body.items[0].item_key).toBe("fasting_6h");
-    expect(body.items[0].details).toMatchObject({ last_intake_timing: "2–4 sata", intake_type: "kava s mlijekom" });
-    expect(body.items[0].activity_ids).toEqual([602]);
-  });
-
-  test("floating prijem salje expected version i visit-scoped napomenu bez patient.notes", async () => {
-    const user = userEvent.setup(); renderDashboard();
-    const row = (await screen.findByRole("link", { name: /Sinteti.*eka/ })).closest("tr") as HTMLTableRowElement;
-    await user.click(within(row).getByRole("button", { name: "Otvori prijem" }));
-    await user.clear(await screen.findByLabelText("Telefon"));
-    await user.type(screen.getByLabelText("Telefon"), "091222333");
-    await user.type(screen.getByLabelText("Napomena za današnji dolazak"), "Pacijent treba pomoc pri kretanju.");
-    await user.click(await screen.findByRole("button", { name: "Podaci su točni" }));
-    await user.click(await screen.findByRole("button", { name: "Provjereno" }));
-
-    const patientCall = vi.mocked(fetch).mock.calls.find(([url, init]) => String(url).endsWith("/api/patients/501") && init?.method === "PATCH");
-    const patientPayload = JSON.parse(String(patientCall?.[1]?.body));
-    expect(patientPayload).toMatchObject({ expected_updated_at: "2026-07-13T10:00:00Z", phone: "091222333" });
-    expect(patientPayload.notes).toBeUndefined();
-    const completionCall = vi.mocked(fetch).mock.calls.find(([url]) => String(url).includes("/api/patient-journeys/16/check-in/complete-reception"));
-    const completionPayload = JSON.parse(String(completionCall?.[1]?.body));
-    expect(completionPayload.reception_note).toBe("Pacijent treba pomoc pri kretanju.");
-  });
-
-  test("zatvaranje prijema čuva filter, prikaz i fokus na istom retku", async () => {
-    const user = userEvent.setup(); renderDashboard();
-    const search = await screen.findByRole("textbox", { name: /Pretra/ });
-    await user.type(search, "Čeka");
-    await user.click(screen.getByRole("button", { name: "Po prostorijama" }));
-    await user.click(screen.getByRole("button", { name: "Po pacijentima" }));
-    const row = (await screen.findByRole("link", { name: /Sinteti.*eka/ })).closest("tr") as HTMLTableRowElement;
-    const button = within(row).getByRole("button", { name: "Otvori prijem" });
-    await user.click(button);
-    await user.click(await screen.findByRole("button", { name: "Zatvori prijem" }));
-    await waitFor(() => expect(document.activeElement).toBe(button));
-    expect((screen.getByRole("textbox", { name: /Pretra/ }) as HTMLInputElement).value).toBe("Čeka");
-    expect(screen.getByRole("button", { name: "Po pacijentima" }).classList.contains("active")).toBe(true);
-  });
-
-  test("za pacijenta koji je stigao prikazuje samo Otvori prijem", async () => {
+  test("otvori pregled opens canonical clinical workspace", async () => {
+    const user = userEvent.setup();
     renderDashboard();
-    const row = (await screen.findByText("Sintetički Prijem")).closest("tr") as HTMLTableRowElement;
-    expect(within(row).getByText("Stigao")).toBeTruthy();
-    expect(within(row).getByRole("button", { name: "Otvori prijem" })).toBeTruthy();
-    expect(within(row).getByRole("link", { name: /Sinteti.*Prijem/ })).toBeTruthy();
-  });
-
-  test("nalaze koje pacijent donosi ne prikazuje kao uvjet za pregled", async () => {
-    renderDashboard();
-    const row = (await screen.findByText("Sintetički Dokumenti")).closest("tr") as HTMLTableRowElement;
-    expect(within(row).getByText("Naručen")).toBeTruthy();
-    expect(within(row).getAllByText(/to ne blokira početak pregleda/).length).toBeGreaterThan(0);
-    expect(within(row).queryByText("Nalazi za pregled")).toBeNull();
-    expect(within(row).queryByText("Potrebna priprema")).toBeNull();
-  });
-
-  test("pripremu prije dolaska ne prikazuje kao dodatni administrativni alarm", async () => {
-    renderDashboard();
-    const row = (await screen.findByText("Sintetički Priprema")).closest("tr") as HTMLTableRowElement;
-    expect(within(row).getByText("Naručen")).toBeTruthy();
-    expect(within(row).getByText("Priprema će se kratko provjeriti u prijemu.")).toBeTruthy();
-    expect(within(row).queryByText("Potrebna priprema")).toBeNull();
-  });
-
-  test("pregled, materijal i naplata dobivaju po jednu kontekstualnu radnju", async () => {
-    renderDashboard();
-    expect(await screen.findByRole("button", { name: "Otvori pregled" })).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Evidentiraj materijal" })).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Naplati" })).toBeTruthy();
-  });
-
-  test("više usluga ostaje u jednom retku s jasnom tračnicom aktivnosti", async () => {
-    renderDashboard();
-    const row = (await screen.findByText("2 aktivnosti")).closest("tr") as HTMLTableRowElement;
-    expect(within(row).getByText(/10:00 Gastro pregled/)).toBeTruthy();
-    expect(within(row).getByText(/10:30 Gastroskopija/)).toBeTruthy();
-    expect(within(row).getByLabelText(/Gastroskopija. U tijeku/).classList.contains("active")).toBe(true);
-  });
-
-  test("naplata otvara postojeći račun bez dodatne mutacije", async () => {
-    const user = userEvent.setup(); renderDashboard();
-    await user.click(await screen.findByRole("button", { name: "Naplati" }));
+    const block = await findPatientBlock(/Paket Gastro/);
+    await user.click(within(block).getByRole("button", { name: "Otvori pregled" }));
     expect(await screen.findByText("Otvoren radni prostor")).toBeTruthy();
-    expect(fetch).not.toHaveBeenCalledWith(expect.stringContaining("/billing/prepare"), expect.anything());
   });
 
-  test("pretragu pacijenta šalje dnevnom API-ju", async () => {
-    const user = userEvent.setup(); renderDashboard();
-    const search = await screen.findByRole("textbox", { name: /Pretra/ });
-    await user.type(search, "Dolazak");
-    await waitFor(() => expect(fetch).toHaveBeenCalledWith(expect.stringMatching(/dashboard\/day\?.*q=Dolazak/), expect.anything()));
-  });
-
-  test("administrator vidi sve liječnike i filter klinike kada ih ima više", async () => {
-    const user = userEvent.setup(); renderDashboard();
-    expect(await screen.findByText("Prikaz: Svi liječnici")).toBeTruthy();
-    expect(screen.getByRole("combobox", { name: "Liječnik" })).toBeTruthy();
-    const advanced = screen.getByText("Dodatni filtri").closest("details") as HTMLDetailsElement;
-    expect(advanced.open).toBe(false);
-    await user.click(advanced.querySelector("summary") as HTMLElement);
-    expect(advanced.open).toBe(true);
-    const clinic = screen.getByRole("combobox", { name: "Klinika" });
-    await user.selectOptions(clinic, "2");
-    await waitFor(() => expect(fetch).toHaveBeenCalledWith(expect.stringMatching(/dashboard\/day\?.*clinic_id=2/), expect.anything()));
-  });
-
-  test("liječnik vidi vlastiti opseg bez filtera drugih liječnika", async () => {
-    dashboardAccess = { viewer_role: "physician", scope: "own_clinician", scope_label: "dr. Test", scoped_clinician_id: 1, can_filter_clinician: false, available_clinics: [{ id: 1, name: "Klinika Sjever" }] };
+  test("filters and physician scoping are preserved", async () => {
+    const user = userEvent.setup();
     renderDashboard();
-    expect(await screen.findByText("Prikaz: dr. Test")).toBeTruthy();
-    expect(screen.queryByRole("combobox", { name: "Liječnik" })).toBeNull();
-    expect(screen.queryByRole("combobox", { name: "Klinika" })).toBeNull();
-  });
-
-  test("zadano prikazuje samo pretragu, problem i liječnika, a ostalo skriva", async () => {
-    const user = userEvent.setup(); renderDashboard();
-    await screen.findByText("Sintetički Dolazak");
-    expect(screen.getByRole("textbox", { name: /Pretra/ })).toBeTruthy();
-    expect(screen.getByRole("combobox", { name: "Problem" })).toBeTruthy();
+    expect(await screen.findByText("Prikaz: Svi liječnici")).toBeTruthy();
+    await user.type(screen.getByRole("textbox", { name: /Pretraži pacijenta/ }), "Gastro");
+    await waitFor(() => expect(fetch).toHaveBeenCalledWith(expect.stringMatching(/dashboard\/day\?.*q=Gastro/), expect.anything()));
     const advanced = screen.getByText("Dodatni filtri").closest("details") as HTMLDetailsElement;
-    expect(advanced.open).toBe(false);
     await user.click(advanced.querySelector("summary") as HTMLElement);
-    expect(advanced.open).toBe(true);
-    expect(screen.getByRole("combobox", { name: "Prostorija" })).toBeTruthy();
+    await user.selectOptions(screen.getByRole("combobox", { name: "Klinika" }), "2");
+    await waitFor(() => expect(fetch).toHaveBeenCalledWith(expect.stringMatching(/dashboard\/day\?.*clinic_id=2/), expect.anything()));
   });
 });

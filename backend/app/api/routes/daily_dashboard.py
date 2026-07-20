@@ -154,6 +154,7 @@ def daily_dashboard(
                 "id": item.id,
                 "sequence": item.sequence,
                 "time": item.planned_start.time(),
+                "end_time": item.planned_end.time(),
                 "service_name": item.service.name,
                 "clinician_name": item.primary_provider.full_name if item.primary_provider else None,
                 "room_name": item.room.name if item.room else None,

@@ -18,6 +18,7 @@ class DailyDashboardActivity(BaseModel):
     id: int
     sequence: int
     time: time
+    end_time: time
     service_name: str
     clinician_name: str | None = None
     room_name: str | None = None
