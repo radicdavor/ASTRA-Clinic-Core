@@ -5,7 +5,7 @@ import { DateInput } from "../components/DateInput";
 import { useApi } from "../hooks/useApi";
 import type { ClinicalDocument, InventoryItem, Provider, Service } from "../types";
 import type { ActivityPreparationState, AIDiagnosisSuggestion, CheckInState, EncounterDraft, JourneyClosure, JourneyStageKey, PathologyCase, PatientJourneyDetail, PatientJourneySummary, PatientJourneyTimelineItem, PreparationState, PublicPilotConfig, VisitDocument } from "../types/program2";
-import { AISummaryPanel, BillingPanel, BlockerPanel, CheckInChecklist, ConsumablesPanel, DocumentReadinessPanel, EncounterPanel, PatientTimeline, PaymentPanel, PreparationPanel, SourceDocumentViewer } from "../components/program2/Program2Panels";
+import { AISummaryPanel, BillingPanel, BlockerPanel, CheckInChecklist, ConsumablesPanel, DocumentReadinessPanel, EncounterPanel, PatientTimeline, PaymentPanel, PreparationPanel, ReceptionMedicalHandoff, SourceDocumentViewer } from "../components/program2/Program2Panels";
 import { activityClockTime, journeyStatusLabel } from "../components/program2/journeyStatus";
 import { focusToStage, JourneyHeader, JourneyNextAction, JourneyStageStepper, stageForJourney } from "../components/program2/journey/JourneyChrome";
 import { JourneyClinicalContext } from "../components/program2/journey/JourneyClinicalContext";
@@ -130,6 +130,8 @@ export function PatientJourneyWorkspace() {
   const serviceName = j.appointment.service?.name ?? services.data.find(item => item.id === j.appointment.service_id)?.name;
   const clinicianName = j.appointment.provider?.full_name ?? providers.data.find(item => item.id === j.appointment.provider_id)?.full_name;
   const activities = j.activities ?? [];
+  const role = (getSessionUser()?.role ?? "").replace(/^demo_/, "");
+  const canRecordMedicalDisposition = ["admin", "physician", "nurse"].includes(role);
   const requestedActivityId = Number(searchParams.get("activity"));
   const selectedActivity = activities.find(item => item.id === requestedActivityId) ?? activities.find(item => item.status === "in_progress") ?? activities[0];
   const openBlockers = j.blockers.filter(item => item.status === "open");
@@ -237,6 +239,12 @@ export function PatientJourneyWorkspace() {
   async function confirmAdministrativeCheckIn() {
     await perform(async () => { checkin.setData(await api(`/api/patient-journeys/${id}/check-in/confirm-administrative`, { method: "POST" })); await refresh(); });
   }
+  async function recordCheckInMedicalDisposition(itemId: number, disposition: string, note: string) {
+    await perform(async () => {
+      checkin.setData(await api<CheckInState>(`/api/patient-journeys/${id}/check-in/items/${itemId}/medical-disposition`, { method: "POST", body: JSON.stringify({ disposition, note }) }));
+      await refresh();
+    });
+  }
   async function updatePreparation(requirementKey: string, state: string) {
     await perform(async () => { preparation.setData(await api(`/api/patient-journeys/${id}/preparation/requirements`, { method: "PATCH", body: JSON.stringify({ requirement_key: requirementKey, state }) })); await refresh(); });
   }
@@ -309,7 +317,7 @@ export function PatientJourneyWorkspace() {
     <main className="journey-active-stage" id={`journey-${activeStage}`} tabIndex={-1} aria-live="polite">
       {activeStage === "documents" && <><BlockerPanel items={j.blockers} onResolve={resolveBlocker}/><div className="journey-stage-pair"><DocumentReadinessPanel status={j.document_status}/><PreparationPanel status={j.preparation_status} data={preparation.data ?? undefined} activityData={activityPreparation.data ?? undefined} onUpdate={updatePreparation} onActivityUpdate={updateActivityPreparation}/></div><PathologyFollowUpPanel items={pathologyCases.data} onChanged={refresh}/><VisitDocumentCenter journeyId={j.id} items={visitDocuments.data} patientEmail={j.patient.email} emailVerified={Boolean(j.patient.email_verified_at)} onChanged={refresh}/></>}
       {activeStage === "arrival" && <><BlockerPanel items={j.blockers} onResolve={resolveBlocker}/>{!checkin.data && <section className="journey-panel journey-start-panel"><h2>Dolazak i prijem</h2><p>Kada se pacijent javi tajnici ili sestri, otvorite prijem i provjerite samo podatke nužne prije pregleda.</p><button type="button" className="primary" onClick={startCheckIn}>Otvori prijem</button></section>}<CheckInChecklist data={checkin.data} onUpdate={updateCheckIn} onConfirmAdministrative={confirmAdministrativeCheckIn}/></>}
-      {activeStage === "encounter" && <><BlockerPanel items={j.blockers} onResolve={resolveBlocker}/>{selectedActivity ? <><ClinicalActivityForm ref={clinicalFormRef} journeyId={j.id} activity={selectedActivity} serviceName={services.data.find(item => item.id === selectedActivity.service_id)?.name ?? selectedActivity.activity_key} onChanged={refresh}/><ActivityInterventionsPanel journeyId={j.id} activity={selectedActivity} onChanged={refresh}/></> : <EncounterPanel draft={draft} setDraft={setDraft} status={encounter.data?.status} aiDiagnoses={aiDiagnoses} aiDiagnosisCapability={publicConfig.data.ai_diagnosis_suggestions} diagnosisBusy={diagnosisBusy} onOpen={open} onSave={save} onComplete={complete} onSuggestDiagnoses={suggestDiagnoses} onDecideDiagnosis={decideDiagnosis}/>}</>}
+      {activeStage === "encounter" && <><BlockerPanel items={j.blockers} onResolve={resolveBlocker}/><ReceptionMedicalHandoff data={checkin.data} activities={activities} onMedicalDisposition={canRecordMedicalDisposition ? recordCheckInMedicalDisposition : undefined}/>{selectedActivity ? <><ClinicalActivityForm ref={clinicalFormRef} journeyId={j.id} activity={selectedActivity} serviceName={services.data.find(item => item.id === selectedActivity.service_id)?.name ?? selectedActivity.activity_key} onChanged={refresh}/><ActivityInterventionsPanel journeyId={j.id} activity={selectedActivity} onChanged={refresh}/></> : <EncounterPanel draft={draft} setDraft={setDraft} status={encounter.data?.status} aiDiagnoses={aiDiagnoses} aiDiagnosisCapability={publicConfig.data.ai_diagnosis_suggestions} diagnosisBusy={diagnosisBusy} onOpen={open} onSave={save} onComplete={complete} onSuggestDiagnoses={suggestDiagnoses} onDecideDiagnosis={decideDiagnosis}/>}</>}
       {activeStage === "consumables" && <ConsumablesPanel status={selectedActivity?.consumables_status ?? j.consumables_status} canConfirm={j.current_stage === "procedure_completed"} items={inventory.data} onConfirm={confirmConsumables}/>}
       {activeStage === "billing" && <div className="journey-stage-pair"><BillingPanel status={j.billing_status} invoice={closure.data?.invoice ?? undefined} onPrepare={prepareBilling}/><PaymentPanel status={j.payment_status} invoice={closure.data?.invoice ?? undefined} stage={j.current_stage} onPay={pay} onDefer={defer} onClose={close}/></div>}
       {activeStage === "completed" && <section className="journey-panel journey-completed"><h2>Dolazak je završen</h2><p>Pregled, materijal i naplata nemaju otvorenu operativnu radnju.</p><Link to={`/patients/${j.patient_id}`}>Otvori longitudinalni zapis pacijenta</Link></section>}

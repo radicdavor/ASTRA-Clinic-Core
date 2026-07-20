@@ -67,7 +67,11 @@ export type PatientJourneySummary = {
 
 export type CheckInState = {
   id: number; journey_id: number; status: string; arrived_at: string | null; completed_at: string | null;
-  items: Array<{ id: number; item_key: string; category: string; label: string; state: string; requires_clinician: boolean; note: string | null; position: number }>;
+  items: Array<{
+    id: number; item_key: string; category: string; label: string; state: string; requires_clinician: boolean; note: string | null; position: number;
+    details_json?: Record<string, unknown>; activity_ids_json?: number[];
+    medical_disposition?: string | null; medical_disposition_note?: string | null; medical_reviewed_at?: string | null;
+  }>;
 };
 
 export type PreparationState = {

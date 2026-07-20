@@ -102,7 +102,10 @@ function journeyResponse(id: number) {
     id, patient_id: 501, appointment_id: 106, intake_channel: "manual", current_stage: "ready_for_arrival",
     document_status: "complete", preparation_status: "complete", check_in_status: "not_arrived",
     encounter_status: "not_started", consumables_status: "not_ready", billing_status: "not_ready",
-    payment_status: "not_due", closed_at: null, blockers: [], activities: [],
+    payment_status: "not_due", closed_at: null, blockers: [], activities: [
+      { id: 601, journey_id: id, appointment_id: 106, service_id: 1, activity_key: "Prvi pregled", activity_kind: "consultation", specialty_key: "gastroenterology", clinic_id: 1, primary_provider_id: 1, room_id: 1, sequence: 1, depends_on_activity_id: null, required: true, planned_start: "2026-07-13T13:00:00", planned_end: "2026-07-13T13:30:00", actual_start: null, actual_end: null, status: "ready", not_performed_reason: null, form_resolution_status: "not_started", billing_status: "not_ready", consumables_status: "not_ready" },
+      { id: 602, journey_id: id, appointment_id: 106, service_id: 1, activity_key: "Gastroskopija", activity_kind: "procedure", specialty_key: "gastroenterology", clinic_id: 1, primary_provider_id: 1, room_id: 1, sequence: 2, depends_on_activity_id: null, required: true, planned_start: "2026-07-13T13:30:00", planned_end: "2026-07-13T14:00:00", actual_start: null, actual_end: null, status: "ready", not_performed_reason: null, form_resolution_status: "not_started", billing_status: "not_ready", consumables_status: "not_ready" },
+    ],
     patient: {
       id: 501, first_name: "Sintetički", last_name: "Čeka", date_of_birth: "1992-01-06",
       oib: null, email: "synthetic@example.com", phone: "0994477445", notes: null, email_verified_at: null,
@@ -178,12 +181,46 @@ describe("pojednostavljeni dnevni tijek pacijenata", () => {
     expect(fetch).not.toHaveBeenCalledWith(expect.stringContaining("/api/patient-journeys/16/check-in"), expect.objectContaining({ method: "POST" }));
   });
 
+  test("red flag prijem ima ciljane dropdownove i šalje activity provenance", async () => {
+    const user = userEvent.setup(); renderDashboard();
+    const row = (await screen.findByRole("link", { name: /Sinteti.*eka/ })).closest("tr") as HTMLTableRowElement;
+    await user.click(within(row).getByRole("button", { name: "Otvori prijem" }));
+    await user.click(await screen.findByRole("button", { name: "Podaci su točni" }));
+    await user.click(await screen.findByLabelText(/Problem s postom/));
+    await user.selectOptions(screen.getByLabelText("Zadnji unos"), "2–4 sata");
+    await user.selectOptions(screen.getByLabelText("Vrsta unosa"), "kava s mlijekom");
+    await user.selectOptions(screen.getByLabelText("Odnosi se na aktivnost"), "602");
+    await user.click(screen.getByRole("button", { name: "Provjereno" }));
+
+    await waitFor(() => expect(fetch).toHaveBeenCalledWith(expect.stringContaining("/api/patient-journeys/16/check-in/complete-reception"), expect.anything()));
+    const completionCall = vi.mocked(fetch).mock.calls.find(([url]) => String(url).includes("/api/patient-journeys/16/check-in/complete-reception"));
+    const body = JSON.parse(String(completionCall?.[1]?.body));
+    expect(body.items[0].item_key).toBe("fasting_6h");
+    expect(body.items[0].details).toMatchObject({ last_intake_timing: "2–4 sata", intake_type: "kava s mlijekom" });
+    expect(body.items[0].activity_ids).toEqual([602]);
+  });
+
+  test("zatvaranje prijema čuva filter, prikaz i fokus na istom retku", async () => {
+    const user = userEvent.setup(); renderDashboard();
+    const search = await screen.findByRole("textbox", { name: /Pretra/ });
+    await user.type(search, "Čeka");
+    await user.click(screen.getByRole("button", { name: "Po prostorijama" }));
+    await user.click(screen.getByRole("button", { name: "Po pacijentima" }));
+    const row = (await screen.findByRole("link", { name: /Sinteti.*eka/ })).closest("tr") as HTMLTableRowElement;
+    const button = within(row).getByRole("button", { name: "Otvori prijem" });
+    await user.click(button);
+    await user.click(await screen.findByRole("button", { name: "Zatvori prijem" }));
+    await waitFor(() => expect(document.activeElement).toBe(button));
+    expect((screen.getByRole("textbox", { name: /Pretra/ }) as HTMLInputElement).value).toBe("Čeka");
+    expect(screen.getByRole("button", { name: "Po pacijentima" }).classList.contains("active")).toBe(true);
+  });
+
   test("za pacijenta koji je stigao prikazuje samo Otvori prijem", async () => {
     renderDashboard();
     const row = (await screen.findByText("Sintetički Prijem")).closest("tr") as HTMLTableRowElement;
     expect(within(row).getByText("Stigao")).toBeTruthy();
     expect(within(row).getByRole("button", { name: "Otvori prijem" })).toBeTruthy();
-    expect(within(row).getByRole("button", { name: /Sinteti.*Prijem/ })).toBeTruthy();
+    expect(within(row).getByRole("link", { name: /Sinteti.*Prijem/ })).toBeTruthy();
   });
 
   test("nalaze koje pacijent donosi ne prikazuje kao uvjet za pregled", async () => {
@@ -227,7 +264,7 @@ describe("pojednostavljeni dnevni tijek pacijenata", () => {
 
   test("pretragu pacijenta šalje dnevnom API-ju", async () => {
     const user = userEvent.setup(); renderDashboard();
-    const search = await screen.findByRole("textbox", { name: "Pretraži pacijenta" });
+    const search = await screen.findByRole("textbox", { name: /Pretra/ });
     await user.type(search, "Dolazak");
     await waitFor(() => expect(fetch).toHaveBeenCalledWith(expect.stringMatching(/dashboard\/day\?.*q=Dolazak/), expect.anything()));
   });
@@ -256,7 +293,7 @@ describe("pojednostavljeni dnevni tijek pacijenata", () => {
   test("zadano prikazuje samo pretragu, problem i liječnika, a ostalo skriva", async () => {
     const user = userEvent.setup(); renderDashboard();
     await screen.findByText("Sintetički Dolazak");
-    expect(screen.getByRole("textbox", { name: "Pretraži pacijenta" })).toBeTruthy();
+    expect(screen.getByRole("textbox", { name: /Pretra/ })).toBeTruthy();
     expect(screen.getByRole("combobox", { name: "Problem" })).toBeTruthy();
     const advanced = screen.getByText("Dodatni filtri").closest("details") as HTMLDetailsElement;
     expect(advanced.open).toBe(false);

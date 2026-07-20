@@ -61,13 +61,15 @@ def test_start_check_in_from_booked_patient_opens_reception(client, db, auth_set
 def test_reception_complete_records_red_notes_but_sends_patient_to_clinician(client, db, auth_setup):
     journey, admin = ready_journey(client, db)
     client.post(f"/api/patient-journeys/{journey['id']}/check-in", headers=admin)
+    detail_before = client.get(f"/api/patient-journeys/{journey['id']}", headers=admin).json()
+    activity_id = detail_before["activities"][0]["id"]
     reception = reception_headers(client, db)
     response = client.post(
         f"/api/patient-journeys/{journey['id']}/check-in/complete-reception",
         headers=reception,
         json={
             "items": [
-                {"item_key": "fasting_6h", "note": "Post od 6 sati nije potvrđen."},
+                {"item_key": "fasting_6h", "note": "Post od 6 sati nije potvrđen.", "details": {"last_intake_timing": "2–4 sata", "intake_type": "kava s mlijekom"}, "activity_ids": [activity_id]},
                 {"item_key": "pacemaker", "note": "Pacijent navodi elektrostimulator."},
             ]
         },
@@ -78,14 +80,49 @@ def test_reception_complete_records_red_notes_but_sends_patient_to_clinician(cli
     assert response_items["patient_data_confirmed"]["state"] == "confirmed"
     assert response_items["consent_status"]["state"] == "not_applicable"
     assert response_items["fasting_6h"]["state"] == "requires_clinician_review"
+    assert response_items["fasting_6h"]["details_json"]["intake_type"] == "kava s mlijekom"
+    assert response_items["fasting_6h"]["activity_ids_json"] == [activity_id]
     assert response_items["pacemaker"]["state"] == "requires_clinician_review"
     detail = client.get(f"/api/patient-journeys/{journey['id']}", headers=admin).json()
     assert detail["current_stage"] == "ready_for_clinician"
+    assert detail["check_in_status"] == "ready"
     assert db.query(JourneyBlocker).filter_by(journey_id=journey["id"], status="open").count() == 0
     dashboard = client.get("/api/dashboard/day?selected_date=2026-07-06", headers=admin).json()
     row = next(item for item in dashboard["rows"] if item["journey_id"] == journey["id"])
     assert row["reception_warning"] is True
     assert "Pacijent navodi elektrostimulator." in row["reception_warning_details"]
+
+
+def test_medical_disposition_is_separate_from_reception_completion_and_requires_permission(client, db, auth_setup):
+    journey, admin = ready_journey(client, db)
+    client.post(f"/api/patient-journeys/{journey['id']}/check-in", headers=admin)
+    reception = reception_headers(client, db)
+    completed = client.post(
+        f"/api/patient-journeys/{journey['id']}/check-in/complete-reception",
+        headers=reception,
+        json={"items": [{"item_key": "fasting_6h", "note": "Post od 6 sati nije potvrđen."}]},
+    ).json()
+    item = next(item for item in completed["items"] if item["item_key"] == "fasting_6h")
+
+    forbidden = client.post(
+        f"/api/patient-journeys/{journey['id']}/check-in/items/{item['id']}/medical-disposition",
+        headers=reception,
+        json={"disposition": "proceed", "note": "Medicinska odluka."},
+    )
+    assert forbidden.status_code == 403
+
+    response = client.post(
+        f"/api/patient-journeys/{journey['id']}/check-in/items/{item['id']}/medical-disposition",
+        headers=admin,
+        json={"disposition": "proceed", "note": "Pregledano prije zahvata."},
+    )
+    assert response.status_code == 200
+    updated = next(item for item in response.json()["items"] if item["item_key"] == "fasting_6h")
+    assert updated["state"] == "confirmed"
+    assert updated["medical_disposition"] == "proceed"
+    assert updated["medical_disposition_note"] == "Pregledano prije zahvata."
+    detail = client.get(f"/api/patient-journeys/{journey['id']}", headers=admin).json()
+    assert detail["check_in_status"] == "ready"
 
 
 def test_reception_confirms_administrative_items_with_one_audited_action(client, db, auth_setup):

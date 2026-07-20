@@ -80,29 +80,60 @@ def update_item(db: Session, journey: PatientJourney, check_in: JourneyCheckIn, 
     add_event(db, journey, "check_in_item_updated", f"{item.label}: {state}", actor, request, journey.current_stage, journey.current_stage, {"item_id": item.id, "before": before, "after": state})
 
 
-def complete_reception_check_in(db: Session, journey: PatientJourney, check_in: JourneyCheckIn, notes_by_key: dict[str, str | None], actor: Actor, request: Request):
+def complete_reception_check_in(db: Session, journey: PatientJourney, check_in: JourneyCheckIn, items_by_key: dict[str, dict], actor: Actor, request: Request):
     red_flags = {
-        key: note.strip()
-        for key, note in notes_by_key.items()
-        if isinstance(note, str) and note.strip()
+        key: payload
+        for key, payload in items_by_key.items()
+        if isinstance(payload.get("note"), str) and payload["note"].strip()
     }
+    activity_ids = {activity.id for activity in journey.activities}
     changed = []
     for item in check_in.items:
         before = item.state
         if item.item_key == "patient_data_confirmed":
             item.state = "confirmed"
             item.note = None
+            item.details_json = {}
+            item.activity_ids_json = []
         elif item.item_key in red_flags:
+            payload = red_flags[item.item_key]
+            linked_activity_ids = [int(activity_id) for activity_id in payload.get("activity_ids", []) if int(activity_id) in activity_ids]
             item.state = "requires_clinician_review"
-            item.note = red_flags[item.item_key]
+            item.note = payload["note"].strip()
+            item.details_json = payload.get("details") or {}
+            item.activity_ids_json = linked_activity_ids
+            item.medical_disposition = None
+            item.medical_disposition_note = None
+            item.medical_reviewed_by = None
+            item.medical_reviewed_at = None
         else:
             item.state = "not_applicable"
             item.note = None
+            item.details_json = {}
+            item.activity_ids_json = []
         item.updated_by = actor.user_id
-        changed.append({"item_key": item.item_key, "before": before, "after": item.state, "note": item.note})
+        changed.append({"item_key": item.item_key, "before": before, "after": item.state, "note": item.note, "activity_ids": item.activity_ids_json})
     check_in.status = "ready"
     check_in.completed_at = datetime.now(timezone.utc)
     check_in.completed_by = actor.user_id
     journey.check_in_status = "ready"
     transition(db, journey, "ready_for_clinician", actor, request, "Prijem završen; pacijent čeka pregled/pretragu")
     add_event(db, journey, "check_in_reception_completed", "Prijem završen", actor, request, "check_in_review", journey.current_stage, {"items": changed})
+
+
+def record_medical_disposition(db: Session, journey: PatientJourney, item: JourneyCheckInItem, disposition: str, note: str, actor: Actor, request: Request):
+    if item.state != "requires_clinician_review":
+        raise HTTPException(409, detail="Stavka ne čeka liječničku provjeru")
+    before = {"state": item.state, "medical_disposition": item.medical_disposition}
+    item.medical_disposition = disposition
+    item.medical_disposition_note = note.strip()
+    item.medical_reviewed_by = actor.user_id
+    item.medical_reviewed_at = datetime.now(timezone.utc)
+    if disposition in {"accepted_for_review", "proceed"}:
+        item.state = "confirmed"
+    elif disposition == "modify_plan":
+        item.state = "requires_clinician_review"
+    else:
+        item.state = "blocked"
+    item.updated_by = actor.user_id
+    add_event(db, journey, "check_in_medical_disposition", f"{item.label}: {disposition}", actor, request, journey.current_stage, journey.current_stage, {"item_id": item.id, "before": before, "after": {"state": item.state, "medical_disposition": disposition}})
