@@ -23,6 +23,7 @@ class Settings(BaseSettings):
     ai_summary_provider_mode: str = "local_deterministic"
     document_storage_path: str = "/app/data/documents"
     document_max_upload_bytes: int = 15 * 1024 * 1024
+    schema_readiness_check_on_startup: bool = False
     openai_api_key: SecretStr | None = None
     openai_model: str = "gpt-4.1-mini"
     ai_diagnosis_suggestions_enabled: bool = False

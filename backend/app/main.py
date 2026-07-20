@@ -1,10 +1,15 @@
 from uuid import uuid4
+import logging
 
 from fastapi import FastAPI, Request
+from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.routes import ai, appointments, audit, auth, catalog, catalog_governance, clinical_documents, clinical_forms, daily_dashboard, document_ingestion, episodes, intake, inventory, journey_activities, journey_check_in, journey_closure, journey_encounter, journey_preparation, journey_timeline, knowledge, laboratory, pathology, patient_clinical_summary, patient_journeys, patients, readiness, reception, reports, search, system, therapies, workflow
 from app.core.config import get_settings
+from app.services.schema_readiness import check_configured_database_schema_readiness
+
+logger = logging.getLogger(__name__)
 
 settings = get_settings()
 settings.validate_production_safety()
@@ -58,6 +63,27 @@ app.include_router(readiness.router)
 app.include_router(ai.router)
 
 
+def log_schema_readiness() -> None:
+    if settings.app_env != "production" and not settings.schema_readiness_check_on_startup:
+        logger.info("Database schema readiness check is available at /ready.")
+        return
+    result = check_configured_database_schema_readiness()
+    if result.status == "ready":
+        logger.info("Database schema readiness: ready at Alembic revision %s.", result.database_revision)
+    else:
+        logger.warning(
+            "Database schema readiness: %s; database=%s schema=%s expected_revision=%s database_revision=%s.",
+            result.status,
+            result.checks.get("database"),
+            result.checks.get("schema"),
+            result.expected_revision,
+            result.database_revision,
+        )
+
+
+log_schema_readiness()
+
+
 @app.middleware("http")
 async def add_request_id(request: Request, call_next):
     request_id = request.headers.get("X-Request-ID", str(uuid4()))
@@ -71,3 +97,10 @@ async def add_request_id(request: Request, call_next):
 @app.get("/health")
 def health() -> dict[str, str]:
     return {"status": "ok", "service": settings.app_name}
+
+
+@app.get("/ready")
+def ready() -> JSONResponse:
+    result = check_configured_database_schema_readiness()
+    status_code = 200 if result.status == "ready" else 503
+    return JSONResponse(status_code=status_code, content=result.to_public_dict())
