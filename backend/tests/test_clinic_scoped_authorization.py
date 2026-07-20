@@ -88,7 +88,11 @@ def test_cross_clinic_patient_appointments_are_visible_for_conflict_check(client
     response = client.get(f"/api/patients/{patient_b.id}/appointments", headers=auth_headers(client))
 
     assert response.status_code == 200
-    assert [item["id"] for item in response.json()] == [appointment_b.id]
+    payload = response.json()
+    assert [item["appointment_id"] for item in payload] == [appointment_b.id]
+    assert payload[0]["clinic"]["id"] == clinic_b.id
+    assert "notes" not in payload[0]
+    assert "price" not in payload[0]
 
 
 def test_cross_clinic_patient_billing_context_remains_scoped(client, db, auth_setup):

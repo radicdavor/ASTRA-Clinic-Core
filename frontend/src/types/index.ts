@@ -217,6 +217,21 @@ export type Appointment = {
   episode?: ClinicalEpisode | null;
 };
 
+export type PatientAppointmentAvailability = {
+  appointment_id: number;
+  patient_id: number;
+  date: string;
+  start_time: string;
+  end_time: string;
+  status: string;
+  clinic: {
+    id?: number | null;
+    name?: string | null;
+  };
+  service_name?: string | null;
+  provider_name?: string | null;
+};
+
 export type ClinicalReadinessPreviewItem = {
   key: string;
   label: string;

@@ -1718,6 +1718,25 @@ class AppointmentOut(AppointmentCreate, ORMModel):
     episode: ClinicalEpisodeOut | None = None
 
 
+class AppointmentClinicSummary(BaseModel):
+    id: int | None = None
+    name: str | None = None
+
+
+class PatientAppointmentAvailabilityOut(BaseModel):
+    appointment_id: int
+    patient_id: int
+    date: DateType
+    start_time: TimeType
+    end_time: TimeType
+    status: str
+    clinic: AppointmentClinicSummary
+    service_name: str | None = None
+    provider_name: str | None = None
+
+    model_config = ConfigDict(extra="forbid")
+
+
 class ReceptionPatientUpdate(BaseModel):
     first_name: str | None = None
     last_name: str | None = None

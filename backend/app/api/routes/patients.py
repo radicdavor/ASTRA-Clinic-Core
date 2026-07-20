@@ -9,8 +9,9 @@ from app.audit.service import audit, snapshot
 from app.auth.dependencies import CurrentUserContext, get_scoped_patient, require_active_clinic
 from app.core.database import get_db
 from app.models.domain import Appointment, ClinicalEpisode, ClinicalFinding, ClinicalOpenQuestion, Invoice, Patient, PatientClinicAssociation
-from app.schemas.common import AppointmentOut, ClinicalEpisodeOut, ClinicalEvidenceTimelineListResponse, ClinicalFindingDetailResponse, ClinicalFindingListResponse, ClinicalFindingReadItem, ClinicalOpenQuestionDetailResponse, ClinicalOpenQuestionListResponse, ClinicalOpenQuestionReadItem, ErrorResponse, InvoiceOut, PatientCreate, PatientOut, PatientUpdate
+from app.schemas.common import ClinicalEpisodeOut, ClinicalEvidenceTimelineListResponse, ClinicalFindingDetailResponse, ClinicalFindingListResponse, ClinicalFindingReadItem, ClinicalOpenQuestionDetailResponse, ClinicalOpenQuestionListResponse, ClinicalOpenQuestionReadItem, ErrorResponse, InvoiceOut, PatientAppointmentAvailabilityOut, PatientCreate, PatientOut, PatientUpdate
 from app.services.clinical_evidence_timeline import list_patient_clinical_evidence_timeline
+from app.services.appointments import minimal_appointment_conflict, patient_appointment_availability_stmt
 
 ERROR_RESPONSES = {400: {"model": ErrorResponse}, 401: {"model": ErrorResponse}, 403: {"model": ErrorResponse}, 404: {"model": ErrorResponse}, 409: {"model": ErrorResponse}, 422: {"model": ErrorResponse}}
 
@@ -297,16 +298,15 @@ def patient_clinical_evidence_timeline(
     return ClinicalEvidenceTimelineListResponse(patient_id=patient_id, events=events, count=len(events))
 
 
-@router.get("/patients/{patient_id}/appointments", response_model=list[AppointmentOut])
-def patient_appointments(patient_id: int, db: Session = Depends(get_db), context: CurrentUserContext = Depends(require_active_clinic("appointments.read"))):
+@router.get("/patients/{patient_id}/appointments", response_model=list[PatientAppointmentAvailabilityOut])
+def patient_appointments(patient_id: int, db: Session = Depends(get_db), context: CurrentUserContext = Depends(require_active_clinic("appointments.patient_availability.read"))):
     if not db.get(Patient, patient_id):
         raise HTTPException(404, detail="Pacijent nije pronaden")
-    return db.scalars(
-        select(Appointment)
-        .options(joinedload(Appointment.patient), joinedload(Appointment.service), joinedload(Appointment.provider), joinedload(Appointment.room))
-        .where(Appointment.patient_id == patient_id)
-        .order_by(Appointment.date.desc(), Appointment.start_time.desc())
+    appointments = db.scalars(
+        patient_appointment_availability_stmt(patient_id)
+        .options(joinedload(Appointment.clinic), joinedload(Appointment.service), joinedload(Appointment.provider))
     ).all()
+    return [minimal_appointment_conflict(appointment) for appointment in appointments]
 
 
 @router.get("/patients/{patient_id}/episodes", response_model=list[ClinicalEpisodeOut])
