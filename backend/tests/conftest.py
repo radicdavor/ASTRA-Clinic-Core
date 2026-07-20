@@ -95,6 +95,7 @@ def auth_setup(db: Session) -> dict[str, User]:
         "billing.write",
         "billing.mark_paid",
         "audit.read",
+        "audit.access_events.write",
         "admin.manage_users",
         "clinical_readiness.snapshots.read",
         "clinical_readiness.snapshots.write",
