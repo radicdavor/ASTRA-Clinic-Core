@@ -10,10 +10,12 @@ from app.models.domain import (
     ClinicalFormDefinition,
     ClinicalFormVersion,
     Clinic,
+    ClinicMembership,
     InventoryBatch,
     InventoryItem,
     Module,
     Patient,
+    PatientClinicAssociation,
     Permission,
     Provider,
     Role,
@@ -58,6 +60,7 @@ PERMISSIONS = [
     "billing.mark_paid",
     "audit.read",
     "admin.manage_users",
+    "system.admin",
     "clinical_readiness.snapshots.read",
     "clinical_readiness.snapshots.write",
     "clinical_readiness.snapshots.supersede",
@@ -339,10 +342,31 @@ def seed_security(db: Session) -> None:
     db.flush()
 
 
+def seed_demo_memberships(db: Session) -> None:
+    clinics = db.scalars(select(Clinic)).all()
+    if not clinics:
+        return
+    admins = db.scalars(select(User).join(Role, User.role_id == Role.id).where(Role.name == "admin")).all()
+    for admin in admins:
+        for clinic in clinics:
+            membership = db.scalar(
+                select(ClinicMembership).where(
+                    ClinicMembership.user_id == admin.id,
+                    ClinicMembership.clinic_id == clinic.id,
+                )
+            )
+            if membership is None:
+                db.add(ClinicMembership(user_id=admin.id, clinic_id=clinic.id, active=True, created_by_user_id=admin.id))
+            else:
+                membership.active = True
+    db.flush()
+
+
 def seed(db: Session) -> None:
     if db.scalar(select(User).limit(1)):
         seed_security(db)
         seed_catalog(db)
+        seed_demo_memberships(db)
         seed_clinical_forms(db)
         seed_gastro_package(db)
         db.commit()
@@ -388,6 +412,13 @@ def seed(db: Session) -> None:
     provider = Provider(full_name="dr. Ana Kovač", specialty="Gastroenterologija", clinic_id=gastro_clinic.id)
     room = Room(name="Endoskopska sala 1", type="endoscopy_room", clinic_id=gastro_clinic.id)
     db.add_all([admin, provider, room])
+    db.flush()
+    db.add_all(
+        [
+            ClinicMembership(user_id=admin.id, clinic_id=gastro_clinic.id, active=True, created_by_user_id=admin.id),
+            ClinicMembership(user_id=admin.id, clinic_id=aesthetic_clinic.id, active=True, created_by_user_id=admin.id),
+        ]
+    )
 
     modules = [
         Module(key="scheduling", name="Naručivanje", description="Pacijenti, termini i dnevni raspored"),
@@ -416,6 +447,7 @@ def seed(db: Session) -> None:
     patient = Patient(first_name="Ivana", last_name="Horvat", date_of_birth=date(1984, 5, 12), phone="+385 91 234 5678", email="ivana.horvat@example.com")
     db.add(patient)
     db.flush()
+    db.add(PatientClinicAssociation(patient_id=patient.id, clinic_id=gastro_clinic.id, active=True, created_by_user_id=admin.id))
 
     db.add(
         Appointment(
@@ -423,6 +455,7 @@ def seed(db: Session) -> None:
             service_id=services[0].id,
             provider_id=provider.id,
             room_id=room.id,
+            clinic_id=gastro_clinic.id,
             date=date.today(),
             start_time=time(9, 0),
             end_time=time(9, 45),
