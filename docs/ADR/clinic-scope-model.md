@@ -57,6 +57,14 @@ Patient appointment visibility is also broader for scheduling safety. Staff must
 
 This broader scheduling visibility does not grant access to that patient's clinical documents, journeys, invoices, results, encounter notes, or other clinic-scoped context. When a clinic books or otherwise starts work with an existing patient identity, the association with that clinic must be created through a controlled service path.
 
+## Same-patient scheduling concurrency
+
+Patient-time conflict checks are intentionally global to the patient identity, not limited to the active clinic. A patient can be visible for booking in multiple clinics, but cannot physically attend overlapping appointments in different rooms or clinics.
+
+PostgreSQL scheduling writes acquire a transaction-scoped advisory lock keyed by patient ID before checking for overlapping blocking appointments. The lock serializes create and update attempts for the same patient across concurrent database transactions, so the conflict query and subsequent insert or update are evaluated as one critical section. The lock is released automatically on commit or rollback.
+
+SQLite local tests no-op this advisory lock because SQLite has no equivalent primitive. The PostgreSQL integration suite contains the authoritative regression coverage for concurrent same-patient booking.
+
 ## Backfill rule
 
 Migration `0057_clinic_scope_foundation` is additive and backfills only from unambiguous existing relationships:
