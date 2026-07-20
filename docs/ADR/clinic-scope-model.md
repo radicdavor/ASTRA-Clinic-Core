@@ -65,6 +65,18 @@ PostgreSQL scheduling writes acquire a transaction-scoped advisory lock keyed by
 
 SQLite local tests no-op this advisory lock because SQLite has no equivalent primitive. The PostgreSQL integration suite contains the authoritative regression coverage for concurrent same-patient booking.
 
+## `rescheduled` appointment semantics
+
+The current appointment model has a `rescheduled` status, but it does not store a replacement-link such as `rescheduled_from_id`, nor a separate old-slot/new-slot lifecycle. In the current implementation the record still carries the operative date, time, provider, room, patient, and clinic.
+
+For that reason, `rescheduled` remains a patient-time blocking status in scheduling, reception slot search, and overlap validation. Treating it as a non-blocking historical slot would be unsafe without an explicit replacement model and migration path, because the system could then double-book a patient into the same physical time window.
+
+If ASTRA later introduces a true rescheduling model, the safer shape is:
+
+- old appointment: terminal, non-blocking historical status with a reference to the replacement appointment;
+- replacement appointment: active blocking status such as `scheduled` or `confirmed`;
+- audit/event link preserving who moved the appointment, when, and why.
+
 ## Backfill rule
 
 Migration `0057_clinic_scope_foundation` is additive and backfills only from unambiguous existing relationships:

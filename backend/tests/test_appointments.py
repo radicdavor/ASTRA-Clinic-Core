@@ -179,6 +179,7 @@ def test_nonblocking_status_does_not_block_patient_time(db):
 
 def test_formal_patient_time_blocking_statuses_are_known():
     assert "confirmed" in APPOINTMENT_STATUSES_BLOCKING_PATIENT_TIME
+    assert "rescheduled" in APPOINTMENT_STATUSES_BLOCKING_PATIENT_TIME
     assert "cancelled" not in APPOINTMENT_STATUSES_BLOCKING_PATIENT_TIME
     assert "no_show" not in APPOINTMENT_STATUSES_BLOCKING_PATIENT_TIME
 
