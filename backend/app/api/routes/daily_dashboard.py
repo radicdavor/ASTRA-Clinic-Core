@@ -8,6 +8,7 @@ from app.auth.dependencies import CurrentUserContext, require_active_clinic
 from app.core.database import get_db
 from app.models.domain import Appointment, Clinic, JourneyActivity, JourneyCheckIn, Patient, PatientJourney, Provider, Room
 from app.schemas.daily_dashboard import DailyDashboardResponse, DailyDashboardRow
+from app.services.dashboard_operational_status import resolve_dashboard_operational_status
 
 
 router = APIRouter(prefix="/api/dashboard", tags=["daily-dashboard"])
@@ -117,6 +118,15 @@ def daily_dashboard(
         if current_activity is None and remaining:
             current_activity = remaining[0]
         next_activity = next((item for item in remaining if current_activity and item.sequence > current_activity.sequence), None)
+        operational_status = resolve_dashboard_operational_status(
+            workflow_stage=journey.current_stage,
+            payment_status=journey.payment_status,
+            billing_status=journey.billing_status,
+            consumables_status=journey.consumables_status,
+            activity_statuses=[item.status for item in activities],
+            has_open_blocker=bool(open_blockers),
+            has_reception_warning=bool(warning_details),
+        )
         allowed_actions = []
         if "checkin.update" in actor.permissions and journey.current_stage in {"booked", "awaiting_forms", "awaiting_documents", "preparation_in_progress", "ready_for_arrival", "arrived", "check_in_review"}:
             allowed_actions.append("open_check_in")
@@ -144,6 +154,10 @@ def daily_dashboard(
             check_in_status=journey.check_in_status, encounter_status=journey.encounter_status,
             consumables_status=journey.consumables_status, billing_status=journey.billing_status,
             payment_status=journey.payment_status,
+            operational_status=operational_status.status,
+            operational_status_label=operational_status.label,
+            operational_status_severity=operational_status.severity,
+            operational_status_reasons=[{"code": item.code, "label": item.label} for item in operational_status.reasons],
             blocker_status="blocked" if open_blockers else "clear",
             blocker_labels=[item.title for item in open_blockers],
             blockers=[{"id": item.id, "title": item.title, "details": item.details, "is_clinical": item.is_clinical} for item in open_blockers],

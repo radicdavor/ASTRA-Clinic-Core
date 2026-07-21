@@ -20,6 +20,8 @@ type DashboardRow = {
   document_status: string; preparation_status: string; arrival_status: string;
   check_in_status: string; encounter_status: string; consumables_status: string;
   billing_status: string; payment_status: string; blocker_status: string;
+  operational_status?: string; operational_status_label?: string; operational_status_severity?: string;
+  operational_status_reasons?: Array<{ code: string; label: string }>;
   blocker_labels: string[]; blockers: DashboardBlocker[]; allowed_actions: string[];
   reception_warning: boolean; reception_warning_details: string[];
   activity_count: number; current_activity_id: number | null; next_activity_id: number | null; activities: DashboardActivity[];
@@ -51,6 +53,15 @@ const documentContext: Record<string, string> = {
   requested: "Ranije nalaze pacijent može donijeti na pregled; to ne blokira početak pregleda.",
   partial: "Dio nalaza je zaprimljen; ostalo se može pregledati tijekom pregleda.",
   review_required: "Nalazi čekaju liječnički pregled, ali nisu administrativni uvjet za dolazak.",
+};
+
+const severityTone: Record<string, StatusTone> = {
+  neutral: "gray",
+  info: "blue",
+  active: "blue",
+  warning: "orange",
+  critical: "red",
+  success: "green",
 };
 
 function minutesFromTime(value?: string | null) {
@@ -85,6 +96,22 @@ function activityDurationLabel(activity: DashboardActivity) {
 }
 
 function operationalState(row: DashboardRow): OperationalState {
+  if (row.operational_status_label && row.operational_status_severity) {
+    const tone = severityTone[row.operational_status_severity] ?? "gray";
+    const detail = row.operational_status_reasons?.map(item => item.label).join("; ") || row.operational_status || "Operativni status dolaska.";
+    const canOpenEncounter = row.allowed_actions.includes("open_encounter") && ["ready_for_clinician", "in_encounter"].includes(row.workflow_stage);
+    if (tone === "green") return { tone, label: row.operational_status_label, detail };
+    if (tone === "orange") {
+      if (row.operational_status === "awaiting_consumables" && row.allowed_actions.includes("record_consumables")) {
+        return { tone, label: row.operational_status_label, detail, action: "consumables", actionLabel: "Evidentiraj materijal", icon: <PackageCheck size={15}/> };
+      }
+      return { tone, label: row.operational_status_label, detail, action: "billing", actionLabel: "Naplati", icon: <CreditCard size={15}/> };
+    }
+    if (canOpenEncounter) return { tone, label: row.operational_status_label, detail, action: "encounter", actionLabel: row.workflow_stage === "in_encounter" ? "Nastavi pregled" : "Otvori pregled", icon: <Stethoscope size={15}/> };
+    if (row.allowed_actions.includes("open_check_in")) return { tone, label: row.operational_status_label, detail, action: "reception", actionLabel: "Otvori prijem", icon: <ClipboardCheck size={15}/> };
+    return { tone, label: row.operational_status_label, detail, action: tone === "gray" ? "open" : undefined, actionLabel: tone === "gray" ? "Otvori" : undefined };
+  }
+  // Compatibility fallback for older API/mock payloads. Backend operational_status is the source of truth.
   const blocker = row.blockers[0];
   const redFlagCount = row.blockers.length + row.reception_warning_details.length;
   if (redFlagCount > 0) {
