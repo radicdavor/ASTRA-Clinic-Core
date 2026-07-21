@@ -38,13 +38,15 @@ AND ClinicalDocument.author_user_id == current_user.id
 AND clinical.documents.edit_own_draft
 ```
 
-Signed clinical documents are immutable through standard update paths. Corrections are recorded as separate addenda. Addenda preserve original document identity, patient, clinic, institution, author, signing user and timestamp. The original content is not overwritten.
+Signed clinical documents are immutable through standard update paths. Corrections are recorded as separate addenda. A signed-report addendum stores both the generated clinical-document reference and a direct foreign key to the exact `SignedClinicalReport` version. Addenda preserve patient, clinic, institution, author, signing user and timestamp. The original content is not overwritten, and addenda are returned in stable creation/ID order.
 
 ## Source document classification
 
 `ClinicalDocument.record_classification` separates institution-readable clinical source documents from administrative, financial, private internal and unclassified material.
 
 Only `clinical` is institution-readable in Module 3. Legacy/unknown source material should be treated restrictively unless explicitly classified by a trusted backend workflow.
+
+Human review permits only the initial transition from `unclassified` to `clinical`, `administrative` or `financial`. Later reclassification is rejected until a separately approved business workflow exists. Classification and reviewer source-open audit events store metadata only, never document/OCR/AI content.
 
 ## Timeline/list response rule
 

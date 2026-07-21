@@ -11,31 +11,32 @@ Implemented in the current increment:
 - medical professional category checks;
 - institution-wide clinical-document read policy;
 - author-controlled draft editing for canonical `ClinicalDocument`, including immediate permission revocation behavior;
-- signed/final document addenda and report-scoped addenda;
+- signed/final document addenda and report-scoped addenda with a direct exact-report FK;
 - signed-report snapshot integrity and API-level immutability checks;
 - metadata-first patient clinical record endpoint;
 - restrictive source-document classification policy for institution read/download;
-- human source classification endpoint for source uploads;
-- frontend clinical-document classification and addendum UI;
+- human source classification endpoint for the one-way `unclassified` review transition;
+- metadata-only classification audit payloads;
+- frontend clinical-document classification and separately listed addendum UI;
 - security matrix and ADR documentation.
 
 Validated in this increment:
 
-- backend compileall;
-- Alembic single-head check;
-- targeted institution clinical access tests;
-- targeted clinical document and document ingestion tests.
-- targeted signed-report and addendum tests;
-- frontend typecheck;
-- frontend tests;
-- frontend build.
+- backend compileall and the full isolated-PostgreSQL suite: 681 tests, exit code 0;
+- focused institution, ingestion and signed-report tests: 36 passed;
+- focused PostgreSQL integration and pilot flow: 7 passed;
+- Alembic single head `0062_signed_report_addendum_integrity`;
+- empty PostgreSQL upgrade to head, downgrade to `0060`, and re-upgrade to head;
+- exact signed-report foreign-key presence after migration;
+- generated OpenAPI contract drift check;
+- frontend typecheck, 54 Vitest tests and 4 contract tests;
+- frontend smoke and production build;
+- route-mocked Playwright: 1 passed;
+- isolated DB-backed Playwright: 10 passed;
+- development and production-example Docker Compose configuration validation.
 
-Environment-dependent or not rerun locally in this continuation:
-
-- full backend suite;
-- empty PostgreSQL Alembic upgrade;
-- route-mocked Playwright;
-- DB-backed Playwright;
-- Docker Compose validation.
+The remaining local warning is the existing third-party `python-jose` use of
+`datetime.utcnow()`; it does not fail the suite and is not introduced by this
+increment.
 
 Module 3 is closed for the authorized local/demo scope. Broader production validation remains separate from Module 3 functional closure.

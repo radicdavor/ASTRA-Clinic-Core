@@ -384,6 +384,7 @@ class ClinicalDocumentAddendum(TimestampMixin, Base):
     __tablename__ = "clinical_document_addenda"
     id: Mapped[int] = mapped_column(primary_key=True)
     original_document_id: Mapped[int] = mapped_column(ForeignKey("clinical_documents.id", ondelete="CASCADE"), index=True)
+    signed_report_id: Mapped[int | None] = mapped_column(ForeignKey("signed_clinical_reports.id", ondelete="RESTRICT"), index=True)
     original_document_type: Mapped[str] = mapped_column(String(80), default="clinical_document", index=True)
     patient_id: Mapped[int | None] = mapped_column(ForeignKey("patients.id"), index=True)
     institution_id: Mapped[int | None] = mapped_column(ForeignKey("institutions.id"), index=True)
@@ -395,6 +396,7 @@ class ClinicalDocumentAddendum(TimestampMixin, Base):
     signed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), index=True)
     signed_by_user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), index=True)
     original_document: Mapped[ClinicalDocument] = relationship()
+    signed_report: Mapped["SignedClinicalReport | None"] = relationship()
     patient: Mapped[Patient | None] = relationship()
     institution: Mapped[Institution | None] = relationship()
     clinic: Mapped[Clinic | None] = relationship()

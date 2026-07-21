@@ -12,10 +12,16 @@ from app.core.database import SessionLocal
 from app.core.security import hash_password
 from app.models.domain import (
     Appointment,
+    ClinicalDocument,
+    ClinicalDocumentAddendum,
+    ClinicalFormDefinition,
+    ClinicalFormInstance,
+    ClinicalFormVersion,
     Clinic,
     ClinicMembership,
     Invoice,
     InvoiceLine,
+    Institution,
     JourneyActivity,
     Patient,
     PatientClinicAssociation,
@@ -26,8 +32,10 @@ from app.models.domain import (
     Role,
     Room,
     Service,
+    SignedClinicalReport,
     User,
 )
+from app.services.reports import report_digest
 from app.services.seed import PERMISSIONS
 
 
@@ -56,13 +64,14 @@ def get_or_create_permission(db, name: str) -> Permission:
     return permission
 
 
-def role(db, name: str, permission_names: list[str]) -> Role:
+def role(db, name: str, permission_names: list[str], professional_category: str = "administrative_staff") -> Role:
     item = db.scalar(select(Role).where(Role.name == name))
     permissions = [get_or_create_permission(db, permission_name) for permission_name in permission_names]
     if item:
         item.permissions = permissions
+        item.professional_category = professional_category
         return item
-    item = Role(name=name, description=f"Synthetic E2E role {name}", permissions=permissions)
+    item = Role(name=name, description=f"Synthetic E2E role {name}", permissions=permissions, professional_category=professional_category)
     db.add(item)
     return item
 
@@ -96,14 +105,24 @@ def link_patient(db, patient: Patient, clinic: Clinic, creator: User) -> None:
     db.add(PatientClinicAssociation(patient_id=patient.id, clinic_id=clinic.id, active=True, created_by_user_id=creator.id))
 
 
-def clinic(db, name: str, timezone_name: str = "Europe/Zagreb") -> Clinic:
+def clinic(db, name: str, timezone_name: str = "Europe/Zagreb", institution: Institution | None = None) -> Clinic:
     item = db.scalar(select(Clinic).where(Clinic.name == name))
     if item:
         item.active = True
         item.visible_in_catalog = True
         item.timezone = timezone_name
+        if institution is not None:
+            item.institution = institution
+            item.institution_key = institution.code or "default"
         return item
-    item = Clinic(name=name, timezone=timezone_name, active=True, visible_in_catalog=True)
+    item = Clinic(
+        name=name,
+        timezone=timezone_name,
+        institution=institution,
+        institution_key=institution.code if institution and institution.code else "default",
+        active=True,
+        visible_in_catalog=True,
+    )
     db.add(item)
     return item
 
@@ -296,15 +315,59 @@ def seed() -> dict:
         all_permissions = role(db, "e2e_admin", PERMISSIONS)
         receptionist_role = role(db, "e2e_receptionist", ["patients.read", "patients.write", "appointments.read", "appointments.write", "appointments.patient_availability.read", "services.read", "journey.read", "journey.transition", "checkin.update", "encounter.read", "audit.access_events.write"])
         dual_role = role(db, "e2e_dual", ["patients.read", "appointments.read", "appointments.write", "appointments.patient_availability.read", "services.read", "journey.read", "checkin.update", "encounter.read"])
+        physician_role = role(
+            db,
+            "e2e_physician",
+            [
+                "clinical.documents.read_institution",
+                "clinical.documents.edit_own_draft",
+                "clinical.documents.add_addendum",
+                "documents.view_source",
+                "documents.review",
+                "reports.read",
+            ],
+            "medical_staff",
+        )
+        physician_reader_role = role(
+            db,
+            "e2e_physician_reader",
+            ["clinical.documents.read_institution", "clinical.documents.edit_own_draft", "reports.read"],
+            "medical_staff",
+        )
+        nurse_role = role(db, "e2e_nurse", ["clinical.documents.read_institution", "reports.read"], "medical_staff")
+        foreign_physician_role = role(db, "e2e_foreign_physician", ["clinical.documents.read_institution", "reports.read"], "medical_staff")
 
-        clinic_a = clinic(db, "E2E Klinika A")
-        clinic_b = clinic(db, "E2E Klinika B")
+        institution_a = db.scalar(select(Institution).where(Institution.code == "e2e-nura"))
+        if institution_a is None:
+            institution_a = Institution(code="e2e-nura", name="E2E NURA", active=True)
+            db.add(institution_a)
+        institution_other = db.scalar(select(Institution).where(Institution.code == "e2e-other"))
+        if institution_other is None:
+            institution_other = Institution(code="e2e-other", name="E2E Druga ustanova", active=True)
+            db.add(institution_other)
+        db.flush()
+        clinic_a = clinic(db, "E2E Klinika A", institution=institution_a)
+        clinic_b = clinic(db, "E2E Klinika B", institution=institution_a)
+        clinic_c = clinic(db, "E2E Druga ustanova", institution=institution_other)
         admin_a = user(db, "e2e.admin.a@example.invalid", "E2E Admin A", all_permissions)
         reception_a = user(db, "e2e.reception.a@example.invalid", "E2E Recepcija A", receptionist_role)
         dual = user(db, "e2e.dual@example.invalid", "E2E Dvije Klinike", dual_role)
         system_admin = user(db, "e2e.system@example.invalid", "E2E System Admin", all_permissions)
+        physician_a = user(db, "e2e.physician.a@example.invalid", "dr. E2E Klinički A", physician_role)
+        physician_b = user(db, "e2e.physician.b@example.invalid", "dr. E2E Klinički B", physician_reader_role)
+        nurse_a = user(db, "e2e.nurse.a@example.invalid", "E2E Medicinska sestra", nurse_role)
+        foreign_physician = user(db, "e2e.physician.foreign@example.invalid", "dr. E2E Druga ustanova", foreign_physician_role)
         db.flush()
-        for user_obj, clinic_obj in [(admin_a, clinic_a), (reception_a, clinic_a), (dual, clinic_a), (dual, clinic_b)]:
+        for user_obj, clinic_obj in [
+            (admin_a, clinic_a),
+            (reception_a, clinic_a),
+            (dual, clinic_a),
+            (dual, clinic_b),
+            (physician_a, clinic_a),
+            (physician_b, clinic_b),
+            (nurse_a, clinic_a),
+            (foreign_physician, clinic_c),
+        ]:
             link_membership(db, user_obj, clinic_obj)
 
         consult = service(db, "E2E prvi gastro pregled", "E2E-CONSULT", 30, "90.00")
@@ -320,11 +383,13 @@ def seed() -> dict:
         shared = patient(db, "E2E", "Zajednicki Pacijent", "e2e.patient.shared@example.invalid")
         only_b = patient(db, "E2E", "Samo B Pacijent", "e2e.patient.onlyb@example.invalid")
         paid_patient = patient(db, "E2E", "Placeni Pacijent", "e2e.patient.paid@example.invalid")
+        foreign_patient = patient(db, "E2E", "Druga Ustanova Pacijent", "e2e.patient.foreign@example.invalid")
         db.flush()
         link_patient(db, shared, clinic_a, admin_a)
         link_patient(db, shared, clinic_b, admin_a)
         link_patient(db, only_b, clinic_b, admin_a)
         link_patient(db, paid_patient, clinic_a, admin_a)
+        link_patient(db, foreign_patient, clinic_c, foreign_physician)
 
         b_appt = appointment(db, shared, consult, provider_b, room_b1, clinic_b, day, time(9, 0), time(9, 30), admin_a)
         a_appt = appointment(db, shared, consult, provider_a, room_a1, clinic_a, day, time(10, 0), time(10, 30), admin_a)
@@ -353,6 +418,170 @@ def seed() -> dict:
             db.add(InvoiceLine(invoice_id=invoice.id, service_id=gastro.id, activity_id=paid_journey.activities[0].id if paid_journey.activities else None, description="E2E gastroskopija", quantity=Decimal("1"), unit_price=Decimal("150.00"), total=Decimal("150.00")))
             db.add(PaymentTransaction(invoice_id=invoice.id, amount=Decimal("150.00"), method="card", reference="E2E", created_by=admin_a.id))
 
+        now = datetime.now(timezone.utc)
+        signed_document = ClinicalDocument(
+            patient_id=shared.id,
+            clinic_id=clinic_b.id,
+            source_type="generated_signed_report",
+            document_type="gastroscopy_report",
+            title="E2E potpisani nalaz Clinic B",
+            author=physician_b.full_name,
+            author_user_id=physician_b.id,
+            author_professional_role="physician",
+            raw_text="ORIGINAL_CONTENT",
+            review_status="signed",
+            physician_reviewed=True,
+            reviewed_by=physician_b.id,
+            reviewed_at=now,
+            is_clinical_record=True,
+            record_classification="clinical",
+            lifecycle_status="reviewed",
+            received_at=now,
+        )
+        own_draft = ClinicalDocument(
+            patient_id=shared.id,
+            clinic_id=clinic_b.id,
+            source_type="internal",
+            document_type="consultation",
+            title="E2E vlastiti klinički nacrt",
+            author=physician_a.full_name,
+            author_user_id=physician_a.id,
+            author_professional_role="physician",
+            raw_text="E2E DRAFT ORIGINAL",
+            review_status="draft",
+            physician_reviewed=False,
+            is_clinical_record=True,
+            record_classification="clinical",
+        )
+        unclassified_source = ClinicalDocument(
+            patient_id=shared.id,
+            clinic_id=clinic_b.id,
+            source_type="uploaded",
+            document_type="other",
+            title="E2E neklasificirani izvor",
+            raw_text="E2E UNCLASSIFIED CONTENT",
+            review_status="draft",
+            physician_reviewed=False,
+            is_clinical_record=False,
+            record_classification="unclassified",
+        )
+        financial_source = ClinicalDocument(
+            patient_id=shared.id,
+            clinic_id=clinic_b.id,
+            source_type="uploaded",
+            document_type="other",
+            title="E2E financijski izvor",
+            raw_text="E2E FINANCIAL CONTENT",
+            review_status="reviewed",
+            physician_reviewed=True,
+            is_clinical_record=False,
+            record_classification="financial",
+        )
+        foreign_document = ClinicalDocument(
+            patient_id=foreign_patient.id,
+            clinic_id=clinic_c.id,
+            source_type="internal",
+            document_type="consultation",
+            title="E2E dokument druge ustanove",
+            raw_text="E2E FOREIGN CONTENT",
+            review_status="reviewed",
+            physician_reviewed=True,
+            is_clinical_record=True,
+            record_classification="clinical",
+        )
+        db.add_all([signed_document, own_draft, unclassified_source, financial_source, foreign_document])
+        db.flush()
+
+        definition = ClinicalFormDefinition(
+            form_key="e2e-signed-snapshot",
+            name="E2E potpisani obrazac",
+            specialty_key="gastroenterology",
+            activity_kind="specialist_consultation",
+            active=True,
+        )
+        db.add(definition)
+        db.flush()
+        version = ClinicalFormVersion(
+            definition_id=definition.id,
+            version=1,
+            status="published",
+            sections_json=[{"section_key": "main", "fields": [{"field_key": "finding", "label": "Nalaz", "type": "long_text"}]}],
+            validation_schema_json={},
+            print_layout_json={"layout": "e2e-original"},
+            output_document_type="gastroscopy_report",
+        )
+        db.add(version)
+        db.flush()
+        report_activity = b_journey.activities[0]
+        instance = ClinicalFormInstance(
+            activity_id=report_activity.id,
+            form_version_id=version.id,
+            purpose="clinical_report",
+            status="signed",
+            data_json={"finding": "ORIGINAL_CONTENT"},
+            rendered_summary="Nalaz: ORIGINAL_CONTENT",
+            created_by=physician_b.id,
+            last_edited_by=physician_b.id,
+            completed_by=physician_b.id,
+            signed_by=physician_b.id,
+            completed_at=now,
+            signed_at=now,
+            binding_source="e2e",
+            resolved_at=now,
+        )
+        db.add(instance)
+        db.flush()
+        signed_report = SignedClinicalReport(
+            form_instance_id=instance.id,
+            form_version_id=version.id,
+            clinical_document_id=signed_document.id,
+            activity_id=report_activity.id,
+            journey_id=b_journey.id,
+            patient_id=shared.id,
+            document_type="gastroscopy_report",
+            title=signed_document.title,
+            structured_data_json={"finding": "ORIGINAL_CONTENT"},
+            rendered_content="Nalaz: ORIGINAL_CONTENT",
+            version_number=1,
+            signer_user_id=physician_b.id,
+            signer_name=physician_b.full_name,
+            signed_at=now,
+            content_hash=report_digest("Nalaz: ORIGINAL_CONTENT", {"finding": "ORIGINAL_CONTENT"}),
+            hash_algorithm="sha256",
+        )
+        db.add(signed_report)
+        db.flush()
+        existing_addendum = ClinicalDocumentAddendum(
+            original_document_id=signed_document.id,
+            signed_report_id=signed_report.id,
+            original_document_type="signed_clinical_report",
+            patient_id=shared.id,
+            institution_id=institution_a.id,
+            clinic_id=clinic_b.id,
+            author_user_id=physician_b.id,
+            reason="E2E početna dopuna",
+            content="E2E odvojena dopuna",
+            status="signed",
+            signed_at=now,
+            signed_by_user_id=physician_b.id,
+        )
+        db.add(existing_addendum)
+        db.flush()
+        instance.data_json = {"finding": "CHANGED_CONTENT"}
+        instance.rendered_summary = "Nalaz: CHANGED_CONTENT"
+        version.print_layout_json = {"layout": "changed-after-signing"}
+
+        clinic_b_invoice = Invoice(
+            patient_id=shared.id,
+            clinic_id=clinic_b.id,
+            invoice_number="E2E-CLINIC-B-SECRET",
+            invoice_date=day,
+            status="issued",
+            total_amount=Decimal("99.00"),
+            payment_status="unpaid",
+        )
+        db.add(clinic_b_invoice)
+
         db.commit()
 
         payload = {
@@ -363,14 +592,27 @@ def seed() -> dict:
                 "receptionA": reception_a.email,
                 "dual": dual.email,
                 "systemAdmin": system_admin.email,
+                "physicianA": physician_a.email,
+                "physicianB": physician_b.email,
+                "nurseA": nurse_a.email,
+                "foreignPhysician": foreign_physician.email,
             },
-            "clinics": {"a": clinic_a.id, "b": clinic_b.id},
-            "patients": {"shared": shared.id, "onlyB": only_b.id, "paid": paid_patient.id},
+            "clinics": {"a": clinic_a.id, "b": clinic_b.id, "foreign": clinic_c.id},
+            "patients": {"shared": shared.id, "onlyB": only_b.id, "paid": paid_patient.id, "foreign": foreign_patient.id},
             "journeys": {"a": a_journey.id, "b": b_journey.id, "onlyB": only_b_journey.id, "paid": paid_journey.id},
             "appointments": {"clinicBConflict": b_appt.id, "clinicAVisit": a_appt.id},
             "services": {"consult": consult.id, "gastro": gastro.id, "colon": colon.id},
             "providers": {"a": provider_a.id, "b": provider_b.id},
             "rooms": {"a1": room_a1.id, "a2": room_a2.id, "b1": room_b1.id},
+            "clinical": {
+                "signedDocument": signed_document.id,
+                "signedReport": signed_report.id,
+                "ownDraft": own_draft.id,
+                "unclassifiedSource": unclassified_source.id,
+                "financialSource": financial_source.id,
+                "foreignDocument": foreign_document.id,
+                "clinicBInvoice": clinic_b_invoice.id,
+            },
         }
         output = os.getenv("ASTRA_E2E_SEED_FILE")
         if output:

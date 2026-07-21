@@ -9,14 +9,14 @@ Current security posture:
 - billing remains clinic-scoped;
 - clinical read may span clinics only inside the same `Institution`;
 - institution-wide clinical read requires both `professional_category = medical_staff` and `clinical.documents.read_institution`;
-- source documents require explicit clinical classification before institution-wide source preview/download;
+- source documents require explicit one-time human classification before institution-wide source preview/download; later reclassification is blocked;
 - signed clinical documents are immutable through standard write paths;
-- corrections use addenda rather than overwriting the original document;
+- corrections use addenda rather than overwriting the original document, and signed-report addenda reference the exact signed report version;
 - audit events are backend-derived and do not trust frontend-supplied institution or clinic metadata.
 
 Module 3 migration assumption:
 
-Existing local/synthetic clinics with the same `institution_key` are backfilled into a matching `Institution`. If no clinics exist, migration creates a default `ASTRA` institution for future clinic assignment. `Clinic.institution_key` remains compatibility metadata; `Clinic.institution_id` is the durable institution relation.
+Existing local/synthetic clinics with the same `institution_key` are backfilled into a matching `Institution`. If no clinics exist, migration creates a default `ASTRA` institution for future clinic assignment. `Clinic.institution_key` remains compatibility metadata; `Clinic.institution_id` is the durable institution relation. Migration `0062` backfills a direct signed-report reference for existing report addenda while leaving generic clinical-document addenda nullable.
 
 Not production-authorized in this increment:
 

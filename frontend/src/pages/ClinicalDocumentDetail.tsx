@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { api } from "../api/client";
+import type { ClinicalDocumentAddendumOut } from "../api/generated-openapi";
 import { ActionButton } from "../components/ActionButton";
 import { AuditTimeline } from "../components/AuditTimeline";
 import { HelpHint } from "../components/HelpHint";
@@ -49,6 +50,7 @@ export function ClinicalDocumentDetail() {
   const document = useApi<ClinicalDocument | null>(`/api/clinical-documents/${id}`, null);
   const audit = useApi<AuditLog[]>(`/api/audit-log?entity_type=ClinicalDocument&entity_id=${id}`, []);
   const evidenceTimeline = useApi<ClinicalEvidenceTimelineItem[]>(`/api/clinical-documents/${id}/evidence-timeline`, []);
+  const addenda = useApi<ClinicalDocumentAddendumOut[]>(`/api/clinical-documents/${id}/addenda`, []);
   const [rawText, setRawText] = useState("");
   const [summaryDraft, setSummaryDraft] = useState("");
   const [findingsDraft, setFindingsDraft] = useState("");
@@ -105,10 +107,11 @@ export function ClinicalDocumentDetail() {
 
   async function createAddendum() {
     if (!document.data) return;
-    await api(`/api/clinical-documents/${document.data.id}/addenda`, {
+    const created = await api<ClinicalDocumentAddendumOut>(`/api/clinical-documents/${document.data.id}/addenda`, {
       method: "POST",
       body: JSON.stringify({ reason: addendumReason, content: addendumContent })
     });
+    addenda.setData([...addenda.data, created]);
     setAddendumReason("");
     setAddendumContent("");
     setAddendumMessage("Dopuna je spremljena kao odvojeni potpisani zapis. Originalni dokument nije promijenjen.");
@@ -126,15 +129,17 @@ export function ClinicalDocumentDetail() {
         badge={<span className={`readiness-badge ${current.review_status === "reviewed" ? "readiness-check-ok" : "readiness-check-warning"}`}>{reviewStatusLabel(current.review_status)}</span>}
         actions={
           <>
-            <ActionButton variant="ai" onClick={runExtraction} helpTitle="Pokreni AI ekstrakciju" help="Pokrece placeholder ekstrakciju iz teksta. Rezultat je samo prijedlog i nije sluzben dok ga lijecnik ne pregleda.">
-              Pokreni AI ekstrakciju
-            </ActionButton>
-            <ActionButton variant="update" onClick={review} helpTitle="Potvrdi lijecnicki pregled" help="Oznacava dokument kao lijecnicki pregledan. Tek tada dokument moze postati izvor za Patient Clinical Knowledge.">
-              Potvrdi lijecnicki pregled
-            </ActionButton>
-            <ActionButton variant="danger" requiresConfirm confirmMessage="Odbiti samo AI prijedlog dokumenta?" onClick={rejectSummary} helpTitle="Odbij AI prijedlog" help="Uklanja AI sazetak i strukturirane stavke. Izvorni dokument ostaje vidljiv i moze se rucno pregledati.">
-              Odbij AI prijedlog
-            </ActionButton>
+            {current.can_review && <>
+              <ActionButton variant="ai" onClick={runExtraction} helpTitle="Pokreni AI ekstrakciju" help="Pokrece placeholder ekstrakciju iz teksta. Rezultat je samo prijedlog i nije sluzben dok ga lijecnik ne pregleda.">
+                Pokreni AI ekstrakciju
+              </ActionButton>
+              <ActionButton variant="update" onClick={review} helpTitle="Potvrdi lijecnicki pregled" help="Oznacava dokument kao lijecnicki pregledan. Tek tada dokument moze postati izvor za Patient Clinical Knowledge.">
+                Potvrdi lijecnicki pregled
+              </ActionButton>
+              <ActionButton variant="danger" requiresConfirm confirmMessage="Odbiti samo AI prijedlog dokumenta?" onClick={rejectSummary} helpTitle="Odbij AI prijedlog" help="Uklanja AI sazetak i strukturirane stavke. Izvorni dokument ostaje vidljiv i moze se rucno pregledati.">
+                Odbij AI prijedlog
+              </ActionButton>
+            </>}
           </>
         }
       />
@@ -170,18 +175,30 @@ export function ClinicalDocumentDetail() {
         </div>
       </WorkspaceSection>
 
-      {(current.review_status === "signed" || current.review_status === "reviewed") && (
+      {(addenda.loading || addenda.data.length > 0 || current.can_add_addendum) && (
         <WorkspaceSection title={<>Dopuna dokumenta <HelpHint title="Dopuna dokumenta">Potpisani ili završni dokument se ne mijenja. Dopuna se sprema kao odvojeni zapis s razlogom i autorom.</HelpHint></>}>
           <div className="clinical-plan-card">
             <p><span>Pravilo</span><strong>Original ostaje nepromjenjiv; dopuna je odvojeni auditirani zapis.</strong></p>
-            {addendumMessage && <p className="success-text">{addendumMessage}</p>}
-            <label>Razlog dopune<input value={addendumReason} onChange={(event) => setAddendumReason(event.target.value)} placeholder="Npr. administrativna ispravka ili dodatno pojašnjenje" /></label>
-            <label>Sadržaj dopune<textarea rows={4} value={addendumContent} onChange={(event) => setAddendumContent(event.target.value)} /></label>
-            <div className="quick-actions">
-              <ActionButton variant="update" onClick={createAddendum} disabled={addendumReason.trim().length < 2 || addendumContent.trim().length < 2} helpTitle="Spremi dopunu" help="Sprema dopunu bez izmjene originalnog kliničkog dokumenta.">
-                Spremi dopunu
-              </ActionButton>
+            <div aria-label="Postojeće dopune dokumenta" className="timeline">
+              {addenda.data.map((addendum) => (
+                <article key={addendum.id}>
+                  <strong>{addendum.reason}</strong>
+                  <span>{formatDateTime(addendum.signed_at ?? addendum.created_at)} / autor #{addendum.author_user_id}</span>
+                  <p>{addendum.content}</p>
+                </article>
+              ))}
+              {!addenda.loading && addenda.data.length === 0 && <p>Nema dopuna dokumenta.</p>}
             </div>
+            {current.can_add_addendum && <>
+              {addendumMessage && <p className="success-text">{addendumMessage}</p>}
+              <label>Razlog dopune<input value={addendumReason} onChange={(event) => setAddendumReason(event.target.value)} placeholder="Npr. administrativna ispravka ili dodatno pojašnjenje" /></label>
+              <label>Sadržaj dopune<textarea rows={4} value={addendumContent} onChange={(event) => setAddendumContent(event.target.value)} /></label>
+              <div className="quick-actions">
+                <ActionButton variant="update" onClick={createAddendum} disabled={addendumReason.trim().length < 2 || addendumContent.trim().length < 2} helpTitle="Spremi dopunu" help="Sprema dopunu bez izmjene originalnog kliničkog dokumenta.">
+                  Spremi dopunu
+                </ActionButton>
+              </div>
+            </>}
           </div>
         </WorkspaceSection>
       )}
@@ -193,23 +210,23 @@ export function ClinicalDocumentDetail() {
             {current.ai_extraction_status === "rejected" && <p><span>Napomena</span><strong>AI prijedlog je odbijen. Izvorni dokument ostaje dostupan za rucni pregled.</strong></p>}
             <div><span>Lijecnicki pregled dokumenta</span><strong>{reviewStatusLabel(current.review_status)}</strong></div>
             <div><span>Zadnja AI izmjena</span><strong>{current.ai_extraction_updated_at ? formatDateTime(current.ai_extraction_updated_at) : "-"}</strong></div>
-            <label>AI sazetak<textarea rows={4} value={summaryDraft} onChange={(event) => setSummaryDraft(event.target.value)} /></label>
-            <label>Kljucni nalazi<textarea rows={5} value={findingsDraft} onChange={(event) => setFindingsDraft(event.target.value)} placeholder="Jedna stavka po retku" /></label>
-            <label>Preporuke<textarea rows={5} value={recommendationsDraft} onChange={(event) => setRecommendationsDraft(event.target.value)} placeholder="Jedna stavka po retku" /></label>
-            <div className="quick-actions">
+            <label>AI sazetak<textarea rows={4} readOnly={!current.can_edit} value={summaryDraft} onChange={(event) => setSummaryDraft(event.target.value)} /></label>
+            <label>Kljucni nalazi<textarea rows={5} readOnly={!current.can_edit} value={findingsDraft} onChange={(event) => setFindingsDraft(event.target.value)} placeholder="Jedna stavka po retku" /></label>
+            <label>Preporuke<textarea rows={5} readOnly={!current.can_edit} value={recommendationsDraft} onChange={(event) => setRecommendationsDraft(event.target.value)} placeholder="Jedna stavka po retku" /></label>
+            {current.can_edit && <div className="quick-actions">
               <ActionButton variant="update" onClick={saveExtractionEdits} helpTitle="Spremi AI prijedlog" help="Sprema uredjene strukturirane stavke i vraca dokument u stanje koje ceka lijecnicku potvrdu.">
                 Spremi izmjene
               </ActionButton>
-            </div>
+            </div>}
           </div>
         </WorkspaceSection>
         <WorkspaceSection title={<>Izvorni tekst <HelpHint title="Izvorni tekst">Ovdje je OCR placeholder ili rucno uneseni tekst izvora. Spremanje teksta vraca dokument na pregled.</HelpHint></>}>
-          <textarea rows={10} value={rawText} onChange={(event) => setRawText(event.target.value)} placeholder="Nema tekstualnog sadrzaja. Datoteka/OCR spremanje je jos placeholder." />
-          <div className="quick-actions">
+          <textarea aria-label="Izvorni tekst dokumenta" rows={10} readOnly={!current.can_edit} value={rawText} onChange={(event) => setRawText(event.target.value)} placeholder="Nema tekstualnog sadrzaja. Datoteka/OCR spremanje je jos placeholder." />
+          {current.can_edit && <div className="quick-actions">
             <ActionButton variant="update" onClick={updateText} helpTitle="Spremi tekst" help="Sprema OCR ili rucno uneseni tekst i vraca dokument u status koji ceka pregled.">
               Spremi tekst
             </ActionButton>
-          </div>
+          </div>}
         </WorkspaceSection>
       </div>
 

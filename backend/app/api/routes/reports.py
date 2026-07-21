@@ -62,7 +62,7 @@ def add_signed_report_addendum(
     report = report_or_404(db, report_id)
     get_institution_scoped_clinical_document_for_read(db, report.clinical_document_id, actor, request, "signed_report_viewed")
     verify_report_integrity(report)
-    addendum = create_document_addendum(db, report.clinical_document_id, payload.reason, payload.content, actor, request)
+    addendum = create_document_addendum(db, report.clinical_document_id, payload.reason, payload.content, actor, request, signed_report_id=report.id)
     db.commit()
     db.refresh(addendum)
     return addendum

@@ -212,8 +212,14 @@ export type ClinicalDocumentAddendumOut = {
   reason: string;
   signed_at?: string | null;
   signed_by_user_id?: number | null;
+  signed_report_id?: number | null;
   status: string;
   updated_at: string;
+};
+
+export type ClinicalDocumentClassificationReview = {
+  note?: string | null;
+  record_classification: string;
 };
 
 export type ClinicalDocumentCreate = {
@@ -244,6 +250,9 @@ export type ClinicalDocumentOut = {
   author?: string | null;
   author_professional_role?: string | null;
   author_user_id?: number | null;
+  can_add_addendum?: boolean;
+  can_edit?: boolean;
+  can_review?: boolean;
   clinic_id?: number | null;
   created_at: string;
   document_date?: string | null;
@@ -950,6 +959,7 @@ export type DocumentIngestionOut = {
   extraction_confidence: string | null;
   file_size_bytes: number | null;
   id: number;
+  is_clinical_record: boolean;
   journey_id: number | null;
   lifecycle_status: string;
   mime_type: string | null;
@@ -957,6 +967,7 @@ export type DocumentIngestionOut = {
   original_filename: string | null;
   patient_id: number;
   received_at: string | null;
+  record_classification: string;
   review_status: string;
   title: string;
   upload_channel: string | null;

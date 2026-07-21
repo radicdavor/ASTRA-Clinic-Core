@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session, joinedload
 from app.audit.service import audit, snapshot
 from app.auth.dependencies import Actor, active_clinic_memberships, get_current_actor, require_permission
 from app.core.database import get_db
-from app.models.domain import AuditLog, ClinicalDocument, Patient
+from app.models.domain import AuditLog, ClinicalDocument, ClinicalDocumentAddendum, Patient
 from app.schemas.common import ClinicalDocumentAddendumCreate, ClinicalDocumentAddendumOut, ClinicalDocumentCreate, ClinicalDocumentOut, ClinicalDocumentUpdate, ClinicalDocumentUpload, ClinicalEvidenceTimelineItem, ErrorResponse
 from app.services.clinical_document_access import create_document_addendum, ensure_institution_clinical_read, get_authored_draft_for_edit, get_institution_scoped_clinical_document_for_read, institution_scoped_clinical_documents_statement
 from app.services.clinical_documents import extract_document_knowledge, get_document_or_404, has_extracted_content, initial_ai_extraction_status, initial_document_review_status, mark_document_ai_extraction_edited, mark_document_needs_review, validate_document_links
@@ -170,9 +170,23 @@ def search_clinical_documents(q: str, db: Session = Depends(get_db), actor: Acto
 @router.get("/clinical-documents/{document_id}", response_model=ClinicalDocumentOut)
 def get_clinical_document(document_id: int, request: Request, db: Session = Depends(get_db), actor: Actor = Depends(get_current_actor)):
     document = get_institution_scoped_clinical_document_for_read(db, document_id, actor, request)
+    response = ClinicalDocumentOut.model_validate(document).model_copy(
+        update={
+            "can_edit": bool(
+                actor.user_id
+                and "clinical.documents.edit_own_draft" in actor.permissions
+                and document.author_user_id == actor.user_id
+                and document.review_status in {"draft", "needs_physician_review", "reviewed"}
+            ),
+            "can_review": bool("clinical_documents.review" in actor.permissions and document.review_status != "signed"),
+            "can_add_addendum": bool(
+                "clinical.documents.add_addendum" in actor.permissions
+                and document.review_status in {"signed", "reviewed"}
+            ),
+        }
+    )
     db.commit()
-    db.refresh(document)
-    return document
+    return response
 
 
 @router.get("/clinical-documents/{document_id}/evidence-timeline", response_model=list[ClinicalEvidenceTimelineItem])
@@ -250,6 +264,23 @@ def add_clinical_document_addendum(
     db.commit()
     db.refresh(addendum)
     return addendum
+
+
+@router.get("/clinical-documents/{document_id}/addenda", response_model=list[ClinicalDocumentAddendumOut])
+def list_clinical_document_addenda(
+    document_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+    actor: Actor = Depends(require_permission("clinical.documents.read_institution")),
+):
+    get_institution_scoped_clinical_document_for_read(db, document_id, actor, request, "clinical_document_addenda_viewed")
+    addenda = db.scalars(
+        select(ClinicalDocumentAddendum)
+        .where(ClinicalDocumentAddendum.original_document_id == document_id)
+        .order_by(ClinicalDocumentAddendum.created_at, ClinicalDocumentAddendum.id)
+    ).all()
+    db.commit()
+    return addenda
 
 
 @router.post("/clinical-documents/{document_id}/extract", response_model=ClinicalDocumentOut)

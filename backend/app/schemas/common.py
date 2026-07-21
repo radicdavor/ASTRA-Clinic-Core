@@ -1507,6 +1507,8 @@ class ClinicalDocumentBase(BaseModel):
     @field_validator("source_type")
     @classmethod
     def validate_source_type(cls, value: str) -> str:
+        if cls.__name__ == "ClinicalDocumentOut":
+            return value
         if value not in CLINICAL_DOCUMENT_SOURCE_TYPES:
             raise ValueError("Nepoznat izvor dokumenta")
         return value
@@ -1514,6 +1516,8 @@ class ClinicalDocumentBase(BaseModel):
     @field_validator("document_type")
     @classmethod
     def validate_document_type(cls, value: str) -> str:
+        if cls.__name__ == "ClinicalDocumentOut":
+            return value
         if value not in CLINICAL_DOCUMENT_TYPES:
             raise ValueError("Nepoznat tip dokumenta")
         return value
@@ -1555,7 +1559,7 @@ class ClinicalDocumentClassificationReview(BaseModel):
     @field_validator("record_classification")
     @classmethod
     def validate_record_classification(cls, value: str) -> str:
-        allowed = {"clinical", "administrative", "financial", "unclassified"}
+        allowed = {"clinical", "administrative", "financial"}
         if value not in allowed:
             raise ValueError("Nepoznata klasifikacija dokumenta")
         return value
@@ -1609,6 +1613,9 @@ class ClinicalDocumentOut(ClinicalDocumentBase, ORMModel):
     patient: PatientOut | None = None
     created_at: DateTimeType
     updated_at: DateTimeType
+    can_edit: bool = False
+    can_review: bool = False
+    can_add_addendum: bool = False
 
     @field_validator("review_status")
     @classmethod
@@ -1633,6 +1640,7 @@ class ClinicalDocumentAddendumCreate(BaseModel):
 class ClinicalDocumentAddendumOut(ORMModel):
     id: int
     original_document_id: int
+    signed_report_id: int | None = None
     original_document_type: str = "clinical_document"
     patient_id: int | None = None
     institution_id: int | None = None

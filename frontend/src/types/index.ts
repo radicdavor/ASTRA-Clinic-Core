@@ -111,6 +111,9 @@ export type ClinicalDocument = {
   patient?: Patient;
   created_at: string;
   updated_at: string;
+  can_edit?: boolean;
+  can_review?: boolean;
+  can_add_addendum?: boolean;
 };
 
 export type PatientKnowledgeSource = {

@@ -52,6 +52,10 @@ def test_signing_creates_immutable_clinical_document_and_print_history(client, d
     assert documents.status_code == 200
     assert documents.json()[0]["report"]["clinical_document_id"] == report.clinical_document_id
     assert documents.json()[0]["report"]["rendered_content"] == "Mišljenje: Isključivo ljudski uneseno mišljenje."
+    detail = client.get(f"/api/clinical-documents/{report.clinical_document_id}", headers=headers(client))
+    assert detail.status_code == 200
+    assert detail.json()["source_type"] == "generated_signed_report"
+    assert detail.json()["document_type"] == "specialist_report"
     printed = client.post(f"/api/signed-reports/{report.id}/print", headers=headers(client))
     assert printed.status_code == 200
     assert printed.json()["report_id"] == report.id
@@ -80,9 +84,16 @@ def test_signed_report_snapshot_survives_later_form_instance_changes(client, db,
     _, _, _, report = setup_signed_report(client, db)
     original_content = report.rendered_content
     original_data = dict(report.structured_data_json)
+    original_signer_user_id = report.signer_user_id
+    original_signer_name = report.signer_name
+    original_signed_at = report.signed_at
+    original_form_version_id = report.form_version_id
     instance = db.get(ClinicalFormInstance, report.form_instance_id)
+    template = db.get(ClinicalFormVersion, report.form_version_id)
     instance.rendered_summary = "Naknadna promjena obrasca koja ne smije izmijeniti potpisani nalaz"
     instance.data_json = {"opinion": "Naknadno promijenjeno"}
+    template.sections_json = [{"section_key": "changed", "fields": []}]
+    template.print_layout_json = {"layout": "naknadno-promijenjen-predlozak"}
     db.commit()
 
     preview = client.get(f"/api/signed-reports/{report.id}", headers=headers(client))
@@ -90,6 +101,11 @@ def test_signed_report_snapshot_survives_later_form_instance_changes(client, db,
     assert preview.status_code == 200
     assert preview.json()["rendered_content"] == original_content
     assert preview.json()["structured_data_json"] == original_data
+    assert "Naknadno" not in preview.json()["rendered_content"]
+    assert preview.json()["signer_user_id"] == original_signer_user_id
+    assert preview.json()["signer_name"] == original_signer_name
+    assert preview.json()["signed_at"] == original_signed_at.isoformat().replace("+00:00", "Z")
+    assert preview.json()["form_version_id"] == original_form_version_id
 
 
 def test_signed_report_addendum_is_separate_and_preserves_original_snapshot(client, db, auth_setup):
@@ -106,9 +122,34 @@ def test_signed_report_addendum_is_separate_and_preserves_original_snapshot(clie
     db.refresh(report)
     assert addendum.status_code == 200
     assert addendum.json()["original_document_id"] == report.clinical_document_id
+    assert addendum.json()["signed_report_id"] == report.id
+    assert addendum.json()["original_document_type"] == "signed_clinical_report"
     assert addendum.json()["status"] == "signed"
     assert report.rendered_content == original_content
     assert report.content_hash == original_hash
+
+
+def test_clinical_document_addendum_resolves_exact_signed_report_and_checks_integrity(client, db, auth_setup):
+    _, _, _, report = setup_signed_report(client, db)
+
+    linked = client.post(
+        f"/api/clinical-documents/{report.clinical_document_id}/addenda",
+        headers=headers(client),
+        json={"reason": "Dopuna iz prikaza dokumenta", "content": "Odvojena dopuna vezana na točan nalaz."},
+    )
+
+    assert linked.status_code == 200
+    assert linked.json()["signed_report_id"] == report.id
+    assert linked.json()["original_document_type"] == "signed_clinical_report"
+
+    report.rendered_content = "Neovlašteno promijenjen sadržaj"
+    db.commit()
+    rejected = client.post(
+        f"/api/clinical-documents/{report.clinical_document_id}/addenda",
+        headers=headers(client),
+        json={"reason": "Ne smije proći", "content": "Integritet mora biti provjeren."},
+    )
+    assert rejected.status_code == 409
 
 
 def test_signed_report_addendum_requires_intact_report_hash(client, db, auth_setup):

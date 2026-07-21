@@ -195,6 +195,9 @@ def test_author_controlled_draft_editing_and_signed_immutability(client, db):
     signed_doc = clinical_doc(db, patient, clinic_b, author_doctor, status="signed")
     db.commit()
 
+    author_detail = client.get(f"/api/clinical-documents/{doctor_draft.id}", headers=headers(client, author_doctor.email))
+    other_detail = client.get(f"/api/clinical-documents/{doctor_draft.id}", headers=headers(client, other_doctor.email))
+    nurse_detail = client.get(f"/api/clinical-documents/{doctor_draft.id}", headers=headers(client, author_nurse.email))
     denied_other = client.patch(f"/api/clinical-documents/{doctor_draft.id}", headers=headers(client, other_doctor.email), json={"title": "Tuđa izmjena"})
     denied_nurse = client.patch(f"/api/clinical-documents/{doctor_draft.id}", headers=headers(client, author_nurse.email), json={"title": "Sestrinska izmjena"})
     own_doctor = client.patch(f"/api/clinical-documents/{doctor_draft.id}", headers=headers(client, author_doctor.email), json={"title": "Vlastiti liječnički nacrt"})
@@ -202,6 +205,9 @@ def test_author_controlled_draft_editing_and_signed_immutability(client, db):
     signed_read = client.get(f"/api/clinical-documents/{signed_doc.id}", headers=headers(client, author_doctor.email))
     signed_denied = client.patch(f"/api/clinical-documents/{signed_doc.id}", headers=headers(client, author_doctor.email), json={"title": "Izmjena potpisanog"})
 
+    assert author_detail.json()["can_edit"] is True
+    assert other_detail.json()["can_edit"] is False
+    assert nurse_detail.json()["can_edit"] is False
     assert denied_other.status_code == 403
     assert denied_nurse.status_code == 403
     assert own_doctor.status_code == 200
@@ -260,12 +266,16 @@ def test_addendum_is_separate_audited_record_and_does_not_change_original(client
     original_text = document.raw_text
     db.commit()
 
+    detail = client.get(f"/api/clinical-documents/{document.id}", headers=headers(client, doctor.email))
     response = client.post(
         f"/api/clinical-documents/{document.id}/addenda",
         headers=headers(client, doctor.email),
         json={"reason": "Naknadna dopuna", "content": "Sintetička dopuna nalaza."},
     )
 
+    assert detail.status_code == 200
+    assert detail.json()["can_edit"] is False
+    assert detail.json()["can_add_addendum"] is True
     assert response.status_code == 200
     body = response.json()
     assert body["original_document_id"] == document.id
@@ -278,6 +288,44 @@ def test_addendum_is_separate_audited_record_and_does_not_change_original(client
     db.refresh(document)
     assert document.raw_text == original_text
     assert db.scalar(select(AuditLog).where(AuditLog.action == "clinical_document_addendum_created")) is not None
+
+
+def test_addendum_permissions_cross_institution_scope_and_stable_listing(client, db):
+    clinic_a, clinic_b, clinic_other, patient, _ = setup_scope(db)
+    doctor = user_with_role(db, "addendum-owner@test.local", MEDICAL_ADDENDUM, "medical_staff", clinic_a)
+    reception = user_with_role(db, "addendum-reception@test.local", ["clinical.documents.read_institution"], "administrative_staff", clinic_a)
+    foreign_doctor = user_with_role(db, "addendum-foreign@test.local", MEDICAL_ADDENDUM, "medical_staff", clinic_other)
+    document = clinical_doc(db, patient, clinic_b, doctor, status="signed")
+    db.commit()
+
+    first = client.post(
+        f"/api/clinical-documents/{document.id}/addenda",
+        headers=headers(client, doctor.email),
+        json={"reason": "Prva dopuna", "content": "Prvi sintetički sadržaj."},
+    )
+    second = client.post(
+        f"/api/clinical-documents/{document.id}/addenda",
+        headers=headers(client, doctor.email),
+        json={"reason": "Druga dopuna", "content": "Drugi sintetički sadržaj."},
+    )
+    denied_reception = client.post(
+        f"/api/clinical-documents/{document.id}/addenda",
+        headers=headers(client, reception.email),
+        json={"reason": "Nedopušteno", "content": "Nedopušteni sadržaj."},
+    )
+    denied_foreign = client.post(
+        f"/api/clinical-documents/{document.id}/addenda",
+        headers=headers(client, foreign_doctor.email),
+        json={"reason": "Druga ustanova", "content": "Nedopušteni sadržaj."},
+    )
+    listed = client.get(f"/api/clinical-documents/{document.id}/addenda", headers=headers(client, doctor.email))
+
+    assert first.status_code == 200
+    assert second.status_code == 200
+    assert denied_reception.status_code == 403
+    assert denied_foreign.status_code == 404
+    assert listed.status_code == 200
+    assert [item["id"] for item in listed.json()] == [first.json()["id"], second.json()["id"]]
 
 
 def test_institution_read_is_audited_and_does_not_open_finance_or_dashboard(client, db):

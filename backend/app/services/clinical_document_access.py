@@ -15,8 +15,10 @@ from app.models.domain import (
     Clinic,
     Institution,
     PatientClinicAssociation,
+    SignedClinicalReport,
 )
 from app.services.clinical_documents import get_document_or_404
+from app.services.reports import verify_report_integrity
 
 
 MEDICAL_STAFF_CATEGORY = "medical_staff"
@@ -237,6 +239,7 @@ def create_document_addendum(
     content: str,
     actor: Actor,
     request: Request | None = None,
+    signed_report_id: int | None = None,
 ) -> ClinicalDocumentAddendum:
     document = get_document_or_404(db, document_id)
     institution = ensure_institution_clinical_read(db, document, actor)
@@ -246,9 +249,18 @@ def create_document_addendum(
         raise HTTPException(status.HTTP_409_CONFLICT, detail="Dopuna se dodaje samo na potpisani ili završni dokument")
     if actor.user_id is None:
         raise HTTPException(status.HTTP_403_FORBIDDEN, detail="Dopuna zahtijeva prijavljenog korisnika")
+    report = db.get(SignedClinicalReport, signed_report_id) if signed_report_id is not None else db.scalar(
+        select(SignedClinicalReport).where(SignedClinicalReport.clinical_document_id == document.id)
+    )
+    if report is not None:
+        if report.clinical_document_id != document.id:
+            raise HTTPException(status.HTTP_409_CONFLICT, detail="Potpisani nalaz ne pripada izvornom dokumentu")
+        verify_report_integrity(report)
+        signed_report_id = report.id
     addendum = ClinicalDocumentAddendum(
         original_document_id=document.id,
-        original_document_type="clinical_document",
+        signed_report_id=signed_report_id,
+        original_document_type="signed_clinical_report" if signed_report_id is not None else "clinical_document",
         patient_id=document.patient_id,
         institution_id=institution if isinstance(institution, int) else clinic_institution_id(db, document.clinic_id),
         clinic_id=document.clinic_id,

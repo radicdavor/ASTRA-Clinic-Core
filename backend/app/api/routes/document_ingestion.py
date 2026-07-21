@@ -26,6 +26,18 @@ from app.services.patient_journeys import add_event
 router = APIRouter(prefix="/api", tags=["document-ingestion"])
 
 
+def classification_audit_snapshot(document: ClinicalDocument) -> dict:
+    """Return classification metadata only; source and derived content stay out of audit JSON."""
+    return {
+        "document_id": document.id,
+        "patient_id": document.patient_id,
+        "clinic_id": document.clinic_id,
+        "record_classification": document.record_classification,
+        "is_clinical_record": document.is_clinical_record,
+        "lifecycle_status": document.lifecycle_status,
+    }
+
+
 def get_journey(db: Session, journey_id: int) -> PatientJourney:
     journey = db.scalar(
         select(PatientJourney)
@@ -135,7 +147,7 @@ def open_document_source(
         document = get_institution_scoped_clinical_document_for_read(db, document_id, actor, request, "source_document_viewed")
     elif "documents.review" in actor.permissions:
         document = get_document_for_classification_review(db, document_id, actor)
-        audit(db, "source_document_viewed_for_classification", "ClinicalDocument", document.id, "Izvorni dokument otvoren radi ljudske klasifikacije", actor.user_id, actor.actor_type, actor.api_key_id, None, snapshot(document), request)
+        audit(db, "source_document_viewed_for_classification", "ClinicalDocument", document.id, "Izvorni dokument otvoren radi ljudske klasifikacije", actor.user_id, actor.actor_type, actor.api_key_id, None, classification_audit_snapshot(document), request)
     else:
         raise HTTPException(403, detail="Neklasificirani izvor zahtijeva ovlaštenje za pregled dokumenta")
     path = source_path(document)
@@ -229,7 +241,9 @@ def review_document_classification(
     actor: Actor = Depends(require_permission("documents.review")),
 ):
     document = get_document_for_classification_review(db, document_id, actor)
-    before = snapshot(document)
+    if document.record_classification != "unclassified":
+        raise HTTPException(409, detail="Već potvrđena klasifikacija ne može se naknadno mijenjati")
+    before = classification_audit_snapshot(document)
     document.record_classification = payload.record_classification
     document.is_clinical_record = payload.record_classification == "clinical"
     provenance = dict(document.provenance_json or {})
@@ -239,7 +253,7 @@ def review_document_classification(
         "reviewed_by": actor.user_id,
     }
     document.provenance_json = provenance
-    audit(db, "document_classification_reviewed", "ClinicalDocument", document.id, "Ljudski potvrđena klasifikacija izvornog dokumenta", actor.user_id, actor.actor_type, actor.api_key_id, before, snapshot(document), request)
+    audit(db, "document_classification_reviewed", "ClinicalDocument", document.id, "Ljudski potvrđena klasifikacija izvornog dokumenta", actor.user_id, actor.actor_type, actor.api_key_id, before, classification_audit_snapshot(document), request)
     db.commit()
     db.refresh(document)
     return document
