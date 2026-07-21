@@ -169,7 +169,7 @@ def ingest_source_document(
         physician_reviewed=False,
         author_user_id=actor_user_id,
         is_clinical_record=True,
-        record_classification="clinical",
+        record_classification="unclassified",
     )
     db.add(document)
     db.flush()

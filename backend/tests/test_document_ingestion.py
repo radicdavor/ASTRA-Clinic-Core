@@ -43,6 +43,7 @@ def test_ingestion_preserves_source_metadata_and_download(client, db, auth_setup
     assert body["mime_type"] == "text/plain"
     assert len(body["checksum_sha256"]) == 64
     assert body["file_size_bytes"] > 0
+    assert body["record_classification"] == "unclassified"
     source = client.get(f"/api/clinical-documents/{body['id']}/source", headers=headers(client))
     assert source.status_code == 200
     assert source.content == b"Synthetic source document\nKKS: test"
@@ -84,6 +85,7 @@ def test_image_ocr_fails_instead_of_simulating_success(client, db, auth_setup):
 def test_classification_is_candidate_and_requires_review(client, db, auth_setup):
     created = journey(client, db)
     document = ingest_text(client, created["id"], "laboratorij.txt").json()
+    assert client.get(f"/api/clinical-documents/{document['id']}", headers=headers(client)).status_code == 403
     queued = client.post(f"/api/clinical-documents/{document['id']}/classification", headers=headers(client))
     processed = client.post(
         f"/api/clinical-documents/{document['id']}/classification/{queued.json()['id']}/process",
@@ -91,12 +93,43 @@ def test_classification_is_candidate_and_requires_review(client, db, auth_setup)
     )
     assert processed.status_code == 200
     assert processed.json()["result_metadata_json"]["candidate_label"] == "laboratory"
+    db.refresh(db.get(DocumentProcessingJob, processed.json()["id"]).document)
+    assert db.get(DocumentProcessingJob, processed.json()["id"]).document.record_classification == "unclassified"
+    reviewed = client.post(
+        f"/api/clinical-documents/{document['id']}/classification/review",
+        headers=headers(client),
+        json={"record_classification": "clinical", "note": "Ljudski potvrđen laboratorijski nalaz."},
+    )
+    assert reviewed.status_code == 200
+    assert reviewed.json()["record_classification"] == "clinical"
+    assert client.get(f"/api/clinical-documents/{document['id']}", headers=headers(client)).status_code == 200
     assert db.query(DocumentProcessingJob).filter_by(clinical_document_id=document["id"], status="completed").count() == 1
+
+
+def test_nonclinical_classification_keeps_source_out_of_clinical_record(client, db, auth_setup):
+    created = journey(client, db)
+    document = ingest_text(client, created["id"], "racun.txt").json()
+
+    reviewed = client.post(
+        f"/api/clinical-documents/{document['id']}/classification/review",
+        headers=headers(client),
+        json={"record_classification": "financial", "note": "Administrativni financijski dokument."},
+    )
+
+    assert reviewed.status_code == 200
+    assert reviewed.json()["record_classification"] == "financial"
+    assert reviewed.json()["is_clinical_record"] is False
+    assert client.get(f"/api/clinical-documents/{document['id']}", headers=headers(client)).status_code == 403
 
 
 def test_ingested_source_path_is_immutable(client, db, auth_setup):
     created = journey(client, db)
     document = ingest_text(client, created["id"]).json()
+    assert client.post(
+        f"/api/clinical-documents/{document['id']}/classification/review",
+        headers=headers(client),
+        json={"record_classification": "clinical"},
+    ).status_code == 200
     response = client.patch(
         f"/api/clinical-documents/{document['id']}",
         headers=headers(client),

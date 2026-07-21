@@ -6,9 +6,10 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session, joinedload
 
 from app.audit.service import audit, snapshot
-from app.auth.dependencies import Actor, require_permission
+from app.auth.dependencies import Actor, active_clinic_memberships, require_permission
 from app.core.database import get_db
-from app.models.domain import DocumentProcessingJob, DocumentRequest, PatientJourney
+from app.models.domain import ClinicalDocument, DocumentProcessingJob, DocumentRequest, PatientJourney
+from app.schemas.common import ClinicalDocumentClassificationReview
 from app.schemas.document_ingestion import DocumentIngestionOut, DocumentJobOut
 from app.services.document_ingestion import (
     ingest_source_document,
@@ -18,7 +19,7 @@ from app.services.document_ingestion import (
     queue_ocr,
     source_path,
 )
-from app.services.clinical_document_access import get_institution_scoped_clinical_document_for_read
+from app.services.clinical_document_access import document_institution_ids, document_institution_keys, get_institution_scoped_clinical_document_for_read
 from app.services.patient_journeys import add_event
 
 
@@ -48,6 +49,20 @@ def get_job(db: Session, document_id: int, job_id: int) -> DocumentProcessingJob
     if not job:
         raise HTTPException(404, detail="Posao obrade dokumenta nije pronađen")
     return job
+
+
+def get_document_for_classification_review(db: Session, document_id: int, actor: Actor) -> ClinicalDocument:
+    document = db.get(ClinicalDocument, document_id)
+    if not document:
+        raise HTTPException(404, detail="Dokument nije pronađen")
+    if actor.user_id is None:
+        raise HTTPException(403, detail="Pregled dokumenta zahtijeva prijavljenog korisnika")
+    memberships = active_clinic_memberships(db, actor.user_id)
+    actor_ids = {membership.clinic.institution_id for membership in memberships if membership.clinic.institution_id is not None}
+    actor_keys = {membership.clinic.institution_key for membership in memberships}
+    if actor_ids.intersection(document_institution_ids(db, document)) or actor_keys.intersection(document_institution_keys(db, document)):
+        return document
+    raise HTTPException(404, detail="Dokument nije pronađen")
 
 
 @router.post("/patient-journeys/{journey_id}/documents/ingest", response_model=DocumentIngestionOut)
@@ -113,7 +128,16 @@ def open_document_source(
     db: Session = Depends(get_db),
     actor: Actor = Depends(require_permission("documents.view_source")),
 ):
-    document = get_institution_scoped_clinical_document_for_read(db, document_id, actor, request, "source_document_viewed")
+    document = db.get(ClinicalDocument, document_id)
+    if not document:
+        raise HTTPException(404, detail="Dokument nije pronađen")
+    if document.record_classification == "clinical" and document.is_clinical_record:
+        document = get_institution_scoped_clinical_document_for_read(db, document_id, actor, request, "source_document_viewed")
+    elif "documents.review" in actor.permissions:
+        document = get_document_for_classification_review(db, document_id, actor)
+        audit(db, "source_document_viewed_for_classification", "ClinicalDocument", document.id, "Izvorni dokument otvoren radi ljudske klasifikacije", actor.user_id, actor.actor_type, actor.api_key_id, None, snapshot(document), request)
+    else:
+        raise HTTPException(403, detail="Neklasificirani izvor zahtijeva ovlaštenje za pregled dokumenta")
     path = source_path(document)
     db.commit()
     return FileResponse(path, media_type=document.mime_type, filename=document.original_filename or path.name)
@@ -126,11 +150,7 @@ def create_ocr_job(
     db: Session = Depends(get_db),
     actor: Actor = Depends(require_permission("documents.review")),
 ):
-    from app.models.domain import ClinicalDocument
-
-    document = db.get(ClinicalDocument, document_id)
-    if not document:
-        raise HTTPException(404, detail="Klinički dokument nije pronađen")
+    document = get_document_for_classification_review(db, document_id, actor)
     job = queue_ocr(db, document)
     audit(db, "ocr_queued", "ClinicalDocument", document.id, "Dokument stavljen u OCR red", actor.user_id, actor.actor_type, actor.api_key_id, None, snapshot(job), request)
     db.commit()
@@ -175,11 +195,7 @@ def create_classification_job(
     db: Session = Depends(get_db),
     actor: Actor = Depends(require_permission("documents.review")),
 ):
-    from app.models.domain import ClinicalDocument
-
-    document = db.get(ClinicalDocument, document_id)
-    if not document:
-        raise HTTPException(404, detail="Klinički dokument nije pronađen")
+    document = get_document_for_classification_review(db, document_id, actor)
     job = queue_classification(db, document)
     audit(db, "classification_queued", "ClinicalDocument", document.id, "Dokument stavljen u red za klasifikaciju", actor.user_id, actor.actor_type, actor.api_key_id, None, snapshot(job), request)
     db.commit()
@@ -202,3 +218,28 @@ def run_classification_job(
     db.commit()
     db.refresh(job)
     return job
+
+
+@router.post("/clinical-documents/{document_id}/classification/review", response_model=DocumentIngestionOut)
+def review_document_classification(
+    document_id: int,
+    payload: ClinicalDocumentClassificationReview,
+    request: Request,
+    db: Session = Depends(get_db),
+    actor: Actor = Depends(require_permission("documents.review")),
+):
+    document = get_document_for_classification_review(db, document_id, actor)
+    before = snapshot(document)
+    document.record_classification = payload.record_classification
+    document.is_clinical_record = payload.record_classification == "clinical"
+    provenance = dict(document.provenance_json or {})
+    provenance["classification_review"] = {
+        "record_classification": payload.record_classification,
+        "note": payload.note,
+        "reviewed_by": actor.user_id,
+    }
+    document.provenance_json = provenance
+    audit(db, "document_classification_reviewed", "ClinicalDocument", document.id, "Ljudski potvrđena klasifikacija izvornog dokumenta", actor.user_id, actor.actor_type, actor.api_key_id, before, snapshot(document), request)
+    db.commit()
+    db.refresh(document)
+    return document

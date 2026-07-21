@@ -1548,6 +1548,19 @@ class ClinicalDocumentUpload(BaseModel):
         return ClinicalDocumentBase.validate_document_type(value)
 
 
+class ClinicalDocumentClassificationReview(BaseModel):
+    record_classification: str
+    note: str | None = Field(default=None, max_length=1000)
+
+    @field_validator("record_classification")
+    @classmethod
+    def validate_record_classification(cls, value: str) -> str:
+        allowed = {"clinical", "administrative", "financial", "unclassified"}
+        if value not in allowed:
+            raise ValueError("Nepoznata klasifikacija dokumenta")
+        return value
+
+
 class ClinicalDocumentUpdate(BaseModel):
     patient_id: int | None = None
     clinic_id: int | None = None

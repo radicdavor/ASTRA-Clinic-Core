@@ -146,6 +146,7 @@ def upload_clinical_document(
         author_user_id=actor.user_id,
         author_professional_role=actor.user.role.name if actor.user and actor.user.role else None,
         is_clinical_record=True,
+        record_classification="unclassified",
     )
     db.add(document)
     db.flush()
