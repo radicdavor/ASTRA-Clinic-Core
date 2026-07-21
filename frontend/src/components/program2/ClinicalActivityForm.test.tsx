@@ -2,7 +2,6 @@ import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
-import { setToken } from "../../api/client";
 import type { ClinicalFormInstance, JourneyActivity } from "../../types/program2";
 import { ClinicalActivityForm } from "./ClinicalActivityForm";
 
@@ -35,7 +34,7 @@ function renderForm(onChanged = vi.fn().mockResolvedValue(undefined)) {
   return render(<MemoryRouter><ClinicalActivityForm journeyId={12} activity={activity} serviceName="Gastroskopija" onChanged={onChanged}/></MemoryRouter>);
 }
 
-beforeEach(() => { localStorage.clear(); sessionStorage.clear(); setToken("synthetic-token"); });
+beforeEach(() => { localStorage.clear(); sessionStorage.clear(); });
 afterEach(() => { cleanup(); vi.restoreAllMocks(); localStorage.clear(); sessionStorage.clear(); });
 
 describe("atomsko dovršavanje kliničkog obrasca", () => {

@@ -1,0 +1,101 @@
+from __future__ import annotations
+
+from datetime import UTC, datetime, timedelta
+from hashlib import sha256
+from secrets import token_urlsafe
+
+from sqlalchemy import delete, select
+from sqlalchemy.orm import Session
+
+from app.core.config import get_settings
+from app.models.domain import AuditLog, User, UserSession
+
+
+def hash_session_secret(raw: str) -> str:
+    return sha256(raw.encode("utf-8")).hexdigest()
+
+
+def create_user_session(db: Session, user: User) -> tuple[UserSession, str, str]:
+    settings = get_settings()
+    raw_session_token = token_urlsafe(48)
+    raw_csrf_token = token_urlsafe(32)
+    now = datetime.now(UTC)
+    session = UserSession(
+        user_id=user.id,
+        token_hash=hash_session_secret(raw_session_token),
+        csrf_token_hash=hash_session_secret(raw_csrf_token),
+        created_at=now,
+        expires_at=now + timedelta(minutes=settings.browser_session_minutes),
+        last_seen_at=now,
+    )
+    db.add(session)
+    db.flush()
+    record_session_audit(db, "auth.browser_login_success", user_id=user.id, session_id=session.id)
+    return session, raw_session_token, raw_csrf_token
+
+
+def get_valid_session(db: Session, raw_session_token: str | None, *, touch: bool = True) -> UserSession | None:
+    if not raw_session_token:
+        return None
+    session = db.scalar(select(UserSession).where(UserSession.token_hash == hash_session_secret(raw_session_token)))
+    if not session:
+        return None
+    now = datetime.now(UTC)
+    revoked_at = session.revoked_at.replace(tzinfo=UTC) if session.revoked_at and session.revoked_at.tzinfo is None else session.revoked_at
+    expires_at = session.expires_at.replace(tzinfo=UTC) if session.expires_at.tzinfo is None else session.expires_at
+    if revoked_at is not None or expires_at <= now:
+        return None
+    if not session.user or not session.user.active:
+        return None
+    if touch:
+        session.last_seen_at = now
+        db.flush()
+    return session
+
+
+def revoke_session(db: Session, session: UserSession | None) -> bool:
+    if session is None or session.revoked_at is not None:
+        return False
+    session.revoked_at = datetime.now(UTC)
+    db.flush()
+    record_session_audit(db, "auth.browser_logout", user_id=session.user_id, session_id=session.id)
+    return True
+
+
+def revoke_all_user_sessions(db: Session, user_id: int, *, except_session_id: int | None = None) -> int:
+    sessions = db.scalars(
+        select(UserSession).where(
+            UserSession.user_id == user_id,
+            UserSession.revoked_at.is_(None),
+            *([] if except_session_id is None else [UserSession.id != except_session_id]),
+        )
+    ).all()
+    now = datetime.now(UTC)
+    for session in sessions:
+        session.revoked_at = now
+        record_session_audit(db, "auth.browser_session_revoked", user_id=user_id, session_id=session.id)
+    db.flush()
+    return len(sessions)
+
+
+def cleanup_expired_sessions(db: Session, *, older_than: datetime | None = None) -> int:
+    cutoff = older_than or datetime.now(UTC)
+    result = db.execute(delete(UserSession).where(UserSession.expires_at < cutoff, UserSession.revoked_at.is_not(None)))
+    return int(result.rowcount or 0)
+
+
+def csrf_token_matches(session: UserSession, raw_csrf_token: str | None) -> bool:
+    return bool(raw_csrf_token) and hash_session_secret(raw_csrf_token) == session.csrf_token_hash
+
+
+def record_session_audit(db: Session, action: str, *, user_id: int | None = None, session_id: int | None = None, summary: str | None = None) -> None:
+    db.add(
+        AuditLog(
+            actor_type="user" if user_id else "system",
+            actor_user_id=user_id,
+            action=action,
+            entity_type="user_session",
+            entity_id=session_id,
+            summary=summary,
+        )
+    )

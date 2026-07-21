@@ -1,8 +1,8 @@
-import { Fragment } from "react";
+import { Fragment, useEffect, useState } from "react";
 import { Location, Navigate, Route, Routes, useLocation } from "react-router-dom";
 import { AppShell } from "../components/AppShell";
 import { RouteModal } from "../components/RouteModal";
-import { getToken } from "../api/client";
+import { fetchSession, getSessionUser } from "../api/client";
 import { AppointmentForm } from "../pages/AppointmentForm";
 import { PackageBooking } from "../pages/PackageBooking";
 import { AppointmentDetail } from "../pages/AppointmentDetail";
@@ -40,7 +40,22 @@ import { SyntheticReviewWorkspace } from "../program1/pages/SyntheticReviewWorks
 import { SyntheticEvaluationRunner } from "../program1/pages/SyntheticEvaluationRunner";
 
 function Protected() {
-  return getToken() ? <AppShell /> : <Navigate to="/login" replace />;
+  const [status, setStatus] = useState<"loading" | "authenticated" | "unauthenticated">(() => getSessionUser() ? "authenticated" : "loading");
+  useEffect(() => {
+    let active = true;
+    fetchSession()
+      .then((session) => {
+        if (active) setStatus(session ? "authenticated" : "unauthenticated");
+      })
+      .catch(() => {
+        if (active) setStatus("unauthenticated");
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+  if (status === "loading") return <div className="page"><p>Provjera prijave…</p></div>;
+  return status === "authenticated" ? <AppShell /> : <Navigate to="/login" replace />;
 }
 
 export function AppRoutes() {
@@ -89,7 +104,7 @@ export function AppRoutes() {
           <Route path="/program1/synthetic-evaluation" element={<SyntheticEvaluationRunner />} />
         </Route>
       </Routes>
-      {backgroundLocation && getToken() && (
+      {backgroundLocation && getSessionUser() && (
         <Routes>
           <Route path="/appointments/new" element={<RouteModal title="Novi termin"><AppointmentForm /></RouteModal>} />
           <Route path="/appointments/:id" element={<RouteModal title="Detalj termina"><AppointmentDetail /></RouteModal>} />

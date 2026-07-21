@@ -1,5 +1,6 @@
 from uuid import uuid4
 import logging
+from urllib.parse import urlparse
 
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
@@ -25,8 +26,8 @@ app.add_middleware(
     allow_origins=settings.cors_origin_list,
     allow_origin_regex=settings.cors_origin_regex,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type", "X-ASTRA-API-Key", "X-CSRF-Token", "X-Clinic-Id", "X-Request-ID"],
 )
 
 app.include_router(auth.router)
@@ -82,6 +83,72 @@ def log_schema_readiness() -> None:
 
 
 log_schema_readiness()
+
+
+SAFE_METHODS = {"GET", "HEAD", "OPTIONS"}
+CSRF_EXEMPT_PATHS = {"/auth/browser/login", "/auth/login"}
+
+
+def _origin_allowed(origin: str | None) -> bool:
+    if not origin:
+        return True
+    allowed = set(settings.cors_origin_list)
+    if origin in allowed:
+        return True
+    if settings.cors_origin_regex:
+        import re
+
+        return re.match(settings.cors_origin_regex, origin) is not None
+    return False
+
+
+def _same_origin_from_referer(referer: str | None) -> str | None:
+    if not referer:
+        return None
+    parsed = urlparse(referer)
+    if not parsed.scheme or not parsed.netloc:
+        return None
+    return f"{parsed.scheme}://{parsed.netloc}"
+
+
+def _browser_forbidden(request: Request, detail: str) -> JSONResponse:
+    response = JSONResponse(status_code=403, content={"detail": detail})
+    origin = request.headers.get("Origin")
+    if origin and _origin_allowed(origin):
+        response.headers["Access-Control-Allow-Origin"] = origin
+        response.headers["Access-Control-Allow-Credentials"] = "true"
+        response.headers["Vary"] = "Origin"
+    response.headers.setdefault("X-Content-Type-Options", "nosniff")
+    response.headers.setdefault("Referrer-Policy", "same-origin")
+    response.headers.setdefault(
+        "Content-Security-Policy",
+        "default-src 'self'; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'",
+    )
+    response.headers.setdefault("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
+    return response
+
+
+@app.middleware("http")
+async def protect_browser_session_mutations(request: Request, call_next):
+    if (
+        request.method.upper() not in SAFE_METHODS
+        and request.url.path not in CSRF_EXEMPT_PATHS
+        and settings.session_cookie_name in request.cookies
+    ):
+        origin = request.headers.get("Origin")
+        referer_origin = _same_origin_from_referer(request.headers.get("Referer"))
+        if not _origin_allowed(origin) or (referer_origin and not _origin_allowed(referer_origin)):
+            return _browser_forbidden(request, "Nedopu?ten origin zahtjeva")
+        raw_csrf = request.headers.get("X-CSRF-Token")
+        cookie_csrf = request.cookies.get(settings.csrf_cookie_name)
+        if not raw_csrf or not cookie_csrf or raw_csrf != cookie_csrf:
+            return _browser_forbidden(request, "CSRF provjera nije uspjela")
+    response = await call_next(request)
+    response.headers.setdefault("X-Content-Type-Options", "nosniff")
+    response.headers.setdefault("Referrer-Policy", "same-origin")
+    response.headers.setdefault("Content-Security-Policy", "default-src 'self'; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'")
+    response.headers.setdefault("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
+    return response
 
 
 @app.middleware("http")

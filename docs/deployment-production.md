@@ -22,6 +22,10 @@ Use `.env.production.example` as the template. Required values include:
 - `POSTGRES_USER`
 - `POSTGRES_PASSWORD`
 - `JWT_SECRET`
+- `BROWSER_SESSION_MINUTES`
+- `SESSION_COOKIE_SECURE=true`
+- `CSRF_COOKIE_SECURE=true`
+- `SESSION_COOKIE_SAMESITE=lax` unless a reviewed cross-site deployment requires `none`
 - `CORS_ORIGINS`
 - `CORS_ORIGIN_REGEX=` empty
 - `DEBUG=false`
@@ -33,6 +37,14 @@ Use `.env.production.example` as the template. Required values include:
 - provider modes for fiscalization, OCR, reminders and AI summaries
 
 Never commit a filled production `.env` file.
+
+Browser users authenticate with an opaque server-side session in the httpOnly
+`astra_session` cookie. The browser must not receive or store an access token in
+`localStorage` or `sessionStorage`. The separate Bearer token endpoint remains
+for Swagger, CLI and integrations. HttpOnly cookies reduce token theft through
+JavaScript, but they do not eliminate XSS; injected JavaScript could still
+attempt actions in the active browser session, so CSP, escaping, CSRF and
+Origin checks remain part of the production boundary.
 
 ## 3. Generate strong secrets
 

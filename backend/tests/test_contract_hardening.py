@@ -48,6 +48,20 @@ def test_valid_production_configuration_passes():
     production_settings().validate_production_safety()
 
 
+def test_production_requires_secure_browser_session_cookies():
+    settings = production_settings(session_cookie_secure=False)
+
+    with pytest.raises(RuntimeError, match="Secure"):
+        settings.validate_production_safety()
+
+
+def test_samesite_none_requires_secure_cookies():
+    settings = production_settings(session_cookie_samesite="none", csrf_cookie_secure=False)
+
+    with pytest.raises(RuntimeError, match="SameSite=None"):
+        settings.validate_production_safety()
+
+
 def test_production_rejects_local_cors():
     settings = production_settings(cors_origins="http://localhost:5173")
 

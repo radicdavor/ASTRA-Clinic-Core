@@ -1175,7 +1175,7 @@ Final posture: `STOP AND HOLD`.
 - ORM: SQLAlchemy 2.x
 - Migracije: Alembic
 - Frontend: React, TypeScript, Vite
-- Auth: JWT prijava
+- Auth: browser httpOnly cookie sesija; Bearer JWT za Swagger, CLI i integracije
 - Deployment: Docker Compose
 
 ## Lokalno pokretanje
@@ -1248,7 +1248,7 @@ Backend testovi koriste izoliranu testnu bazu i ne ovise o ručnom seedanju razv
 
 PostgreSQL integration testovi koriste `TEST_DATABASE_URL`. Lokalno se preskaču ako ta varijabla nije postavljena; u CI-ju je postavljena na testni PostgreSQL servis.
 
-Za produkciju postavite `APP_ENV=production`, jak `JWT_SECRET`, kraći `ACCESS_TOKEN_MINUTES` i eksplicitni `CORS_ORIGINS`. Aplikacija namjerno odbija startup u produkciji ako su JWT ili CORS postavke nesigurne.
+Za produkciju postavite `APP_ENV=production`, jak `JWT_SECRET`, eksplicitni `CORS_ORIGINS` i sigurne browser cookie postavke (`SESSION_COOKIE_SECURE=true`, `CSRF_COOKIE_SECURE=true`). Aplikacija namjerno odbija startup u produkciji ako su JWT, CORS ili cookie postavke nesigurne.
 
 ## Što je uključeno
 
@@ -1263,7 +1263,7 @@ Za produkciju postavite `APP_ENV=production`, jak `JWT_SECRET`, kraći `ACCESS_T
 - Katalog usluga i modularni registar
 - Klinička knjižnica s draft protokolom "Priprema za gastroskopiju" za obvezni liječnički pregled
 - Sedam dodatnih gastroenteroloških operativnih draft protokola za pripremu, uzorke, oporavak, dekontaminaciju i sigurnost terapije
-- JWT prijava i osnovna kontrola uloga
+- Browser prijava preko opozive httpOnly cookie sesije s CSRF zaštitom; Bearer token ostaje odvojen za Swagger, CLI i integracije
 
 ## Gastroenterološki koordinirani dolazak
 

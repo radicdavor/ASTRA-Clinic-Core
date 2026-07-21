@@ -8,10 +8,10 @@ function defaultApiBaseUrl() {
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || defaultApiBaseUrl();
 const MUTATION_METHODS = new Set(["POST", "PATCH", "PUT", "DELETE"]);
-const TOKEN_KEY = "astra_token";
 const USER_KEY = "astra_user";
 const ACTIVE_CLINIC_ID_KEY = "astra_active_clinic_id";
 const ACTIVE_CLINIC_TIMEZONE_KEY = "astra_active_clinic_timezone";
+const CSRF_COOKIE_KEY = "astra_csrf";
 
 export type ToastTone = "success" | "error";
 
@@ -108,22 +108,8 @@ function apiErrorMessage(detail: unknown): string {
   return "Radnja nije spremljena. Provjerite unesene podatke.";
 }
 
-export function getToken() {
-  const sessionToken = sessionStorage.getItem(TOKEN_KEY);
-  if (sessionToken) return sessionToken;
-  const legacyToken = localStorage.getItem(TOKEN_KEY);
-  if (!legacyToken) return null;
-  sessionStorage.setItem(TOKEN_KEY, legacyToken);
-  localStorage.removeItem(TOKEN_KEY);
-  return legacyToken;
-}
-
-export function setToken(token: string) {
-  sessionStorage.setItem(TOKEN_KEY, token);
-  localStorage.removeItem(TOKEN_KEY);
-}
-
 export type SessionUser = { id: number; name: string; email: string; role: string };
+export type BrowserSession = { user: SessionUser; csrf_token: string; expires_at: string };
 
 export function setSessionUser(user: SessionUser) {
   localStorage.setItem(USER_KEY, JSON.stringify(user));
@@ -160,46 +146,45 @@ export function getSessionUser(): SessionUser | null {
   try {
     const value = localStorage.getItem(USER_KEY);
     if (value) return JSON.parse(value) as SessionUser;
-
-    // Existing sessions created before role-aware navigation do not have
-    // astra_user yet. The decoded role is presentation-only; API RBAC remains
-    // authoritative for every protected operation.
-    const token = getToken();
-    if (!token) return null;
-    const payload = JSON.parse(atob(token.split(".")[1].replace(/-/g, "+").replace(/_/g, "/"))) as { sub?: string; role?: string };
-    if (!payload.role) return null;
-    return { id: Number(payload.sub) || 0, name: "", email: "", role: payload.role };
+    return null;
   } catch {
     return null;
   }
 }
 
-export function clearToken() {
-  sessionStorage.removeItem(TOKEN_KEY);
-  localStorage.removeItem(TOKEN_KEY);
+export function clearSessionState() {
   localStorage.removeItem(USER_KEY);
   localStorage.removeItem(ACTIVE_CLINIC_ID_KEY);
   localStorage.removeItem(ACTIVE_CLINIC_TIMEZONE_KEY);
 }
 
 function handleUnauthorized() {
-  clearToken();
+  clearSessionState();
   notifyUser("Prijava je istekla ili vise nije valjana. Prijavite se ponovno.", "error", "Potrebna prijava");
   if (typeof window !== "undefined" && window.location.pathname !== "/login") {
     window.location.href = "/login";
   }
 }
 
+function cookieValue(name: string) {
+  if (typeof document === "undefined") return null;
+  const prefix = `${name}=`;
+  const item = document.cookie.split("; ").find((entry) => entry.startsWith(prefix));
+  return item ? decodeURIComponent(item.slice(prefix.length)) : null;
+}
+
 export async function api<T>(path: string, options: ApiRequestOptions = {}): Promise<T> {
   const { suppressErrorToast = false, ...requestOptions } = options;
   const headers = new Headers(requestOptions.headers);
   headers.set("Content-Type", "application/json");
-  const token = getToken();
-  if (token) headers.set("Authorization", `Bearer ${token}`);
   const activeClinicId = getActiveClinicId();
   if (activeClinicId) headers.set("X-Clinic-Id", activeClinicId);
   const method = requestOptions.method ?? "GET";
-  const response = await fetch(`${API_BASE_URL}${path}`, { ...requestOptions, headers });
+  if (MUTATION_METHODS.has(method.toUpperCase())) {
+    const csrf = cookieValue(CSRF_COOKIE_KEY);
+    if (csrf) headers.set("X-CSRF-Token", csrf);
+  }
+  const response = await fetch(`${API_BASE_URL}${path}`, { ...requestOptions, headers, credentials: "include" });
   if (response.status === 401) {
     handleUnauthorized();
     throw new Error("Potrebna je ponovna prijava.");
@@ -215,20 +200,44 @@ export async function api<T>(path: string, options: ApiRequestOptions = {}): Pro
 }
 
 export async function login(email: string, password: string) {
-  const response = await fetch(`${API_BASE_URL}/auth/login`, {
+  const response = await fetch(`${API_BASE_URL}/auth/browser/login`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
+    credentials: "include",
     body: JSON.stringify({ email, password })
   });
   if (!response.ok) {
     const error = await response.json().catch(() => ({ detail: "Prijava nije uspjela" }));
     throw new Error(error.detail ?? "Prijava nije uspjela");
   }
-  const result = await response.json() as { access_token: string; user: SessionUser };
+  const result = await response.json() as BrowserSession;
   setActiveClinicId(null);
-  setToken(result.access_token);
   setSessionUser(result.user);
   return result;
+}
+
+export async function fetchSession() {
+  const response = await fetch(`${API_BASE_URL}/auth/session`, { credentials: "include" });
+  if (response.status === 401) {
+    clearSessionState();
+    return null;
+  }
+  if (!response.ok) throw new Error("Sesija nije učitana");
+  const session = await response.json() as BrowserSession;
+  setSessionUser(session.user);
+  return session;
+}
+
+export async function logout() {
+  const csrf = cookieValue(CSRF_COOKIE_KEY);
+  const headers = new Headers({ "Content-Type": "application/json" });
+  if (csrf) headers.set("X-CSRF-Token", csrf);
+  await fetch(`${API_BASE_URL}/auth/browser/logout`, {
+    method: "POST",
+    headers,
+    credentials: "include",
+  }).catch(() => undefined);
+  clearSessionState();
 }
 
 export async function getClinicalReadinessSnapshotHistory(appointmentId: number) {

@@ -31,14 +31,17 @@ async function login(page: Page, email: string, clinicId?: number) {
 async function api(page: Page, path: string, options: RequestInit = {}) {
   return page.evaluate(
     async ({ path, options, backendUrl }) => {
-      const token = sessionStorage.getItem("astra_token");
       const activeClinicId = localStorage.getItem("astra_active_clinic_id");
+      const csrf = document.cookie.split("; ").find((entry) => entry.startsWith("astra_csrf="))?.split("=")[1];
+      const method = options.method ?? "GET";
       const response = await fetch(`${backendUrl}${path}`, {
         ...options,
+        method,
+        credentials: "include",
         headers: {
           "Content-Type": "application/json",
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
           ...(activeClinicId ? { "X-Clinic-Id": activeClinicId } : {}),
+          ...(csrf && method !== "GET" ? { "X-CSRF-Token": decodeURIComponent(csrf) } : {}),
           ...(options.headers ?? {}),
         },
       });
@@ -110,6 +113,8 @@ test("DB-backed workflow uses real backend, PostgreSQL and persistent dashboard 
 
   await page.reload();
   await expect(page.getByText("13:00").first()).toBeVisible();
+  await expect.poll(() => page.evaluate(() => sessionStorage.getItem("astra_token"))).toBeNull();
+  await expect.poll(() => page.evaluate(() => localStorage.getItem("astra_token"))).toBeNull();
 
   await page.getByRole("button", { name: "Otvori prijem" }).first().click();
   await expect(page.getByRole("dialog", { name: /Opći podaci pacijenta|Op.*podaci pacijenta/ })).toBeVisible();
@@ -128,6 +133,20 @@ test("DB-backed workflow uses real backend, PostgreSQL and persistent dashboard 
   await expect(page.getByRole("heading", { name: /E2E Zajednicki Pacijent/ })).toBeVisible();
 });
 
+test("DB-backed browser session survives refresh and logout revokes protected access", async ({ page }) => {
+  await login(page, seed.users.receptionA);
+  await expect(page.getByText("Danas u poliklinici")).toBeVisible();
+  await page.reload();
+  await expect(page.getByText("Danas u poliklinici")).toBeVisible();
+  await expect.poll(() => page.evaluate(() => sessionStorage.getItem("astra_token"))).toBeNull();
+  await expect.poll(() => page.evaluate(() => localStorage.getItem("astra_token"))).toBeNull();
+
+  await page.getByTitle("Odjava").click();
+  await expect(page).toHaveURL(/\/login$/);
+  await page.goto("/");
+  await expect(page).toHaveURL(/\/login$/);
+});
+
 test("DB-backed clinic isolation blocks direct journey access outside active clinic", async ({ page }) => {
   await login(page, seed.users.receptionA);
 
@@ -138,6 +157,26 @@ test("DB-backed clinic isolation blocks direct journey access outside active cli
   const forbiddenPatientClinical = await api(page, `/api/patients/${seed.patients.onlyB}/invoices`);
   expect([403, 404]).toContain(forbiddenPatientClinical.status);
   expect(JSON.stringify(forbiddenPatientClinical.body)).not.toContain("Samo B Pacijent");
+});
+
+test("DB-backed CSRF protection blocks manual cookie-auth mutations without token", async ({ page }) => {
+  await login(page, seed.users.receptionA);
+  const result = await page.evaluate(
+    async ({ backendUrl, journeyId }) => {
+      const response = await fetch(`${backendUrl}/api/patient-journeys/${journeyId}/check-in`, {
+        method: "POST",
+        credentials: "include",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Clinic-Id": String(localStorage.getItem("astra_active_clinic_id") ?? ""),
+        },
+      });
+      return { status: response.status, body: await response.text() };
+    },
+    { backendUrl: process.env.ASTRA_E2E_BACKEND_URL ?? "http://127.0.0.1:8011", journeyId: seed.journeys.a },
+  );
+  expect(result.status).toBe(403);
+  expect(result.body).toContain("CSRF");
 });
 
 test("DB-backed clinic switching clears stale clinic data and reloads authorized dataset", async ({ page }) => {

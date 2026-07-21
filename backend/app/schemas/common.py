@@ -1089,6 +1089,12 @@ class TokenResponse(BaseModel):
     user: dict
 
 
+class BrowserSessionResponse(BaseModel):
+    user: dict
+    csrf_token: str
+    expires_at: DateTimeType
+
+
 class ApiKeyCreate(BaseModel):
     name: str
     scopes: list[str]

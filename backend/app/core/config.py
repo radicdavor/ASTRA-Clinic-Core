@@ -26,6 +26,12 @@ class Settings(BaseSettings):
     jwt_secret: str = "change-me-in-production"
     jwt_algorithm: str = "HS256"
     access_token_minutes: int = 480
+    browser_session_minutes: int = 480
+    session_cookie_name: str = "astra_session"
+    csrf_cookie_name: str = "astra_csrf"
+    session_cookie_samesite: Literal["lax", "strict", "none"] = "lax"
+    session_cookie_secure: bool | None = None
+    csrf_cookie_secure: bool | None = None
     cors_origins: str = "http://localhost:5173,http://127.0.0.1:5173"
     cors_origin_regex: str | None = r"^https?://(localhost|127\.0\.0\.1|10\.\d{1,3}\.\d{1,3}\.\d{1,3}|192\.168\.\d{1,3}\.\d{1,3}|172\.(1[6-9]|2\d|3[0-1])\.\d{1,3}\.\d{1,3})(:\d+)?$"
     debug: bool = False
@@ -59,6 +65,10 @@ class Settings(BaseSettings):
         errors: list[str] = []
         if self.jwt_secret in FORBIDDEN_DEVELOPMENT_SECRET_VALUES or len(self.jwt_secret) < 32:
             errors.append("JWT secret is missing or uses a forbidden development value.")
+        if self.session_cookie_secure is False or self.csrf_cookie_secure is False:
+            errors.append("Production browser session and CSRF cookies must be Secure.")
+        if self.session_cookie_samesite == "none" and (self.session_cookie_secure is False or self.csrf_cookie_secure is False):
+            errors.append("SameSite=None requires Secure cookies.")
         try:
             database_url = make_url(self.database_url)
             database_password = database_url.password or ""
@@ -97,6 +107,14 @@ class Settings(BaseSettings):
         if configured_stubs:
             errors.append(f"Production cannot start with demo/stub providers: {', '.join(configured_stubs)}.")
         return errors
+
+    @property
+    def effective_session_cookie_secure(self) -> bool:
+        return self.session_cookie_secure if self.session_cookie_secure is not None else self.app_env == "production"
+
+    @property
+    def effective_csrf_cookie_secure(self) -> bool:
+        return self.csrf_cookie_secure if self.csrf_cookie_secure is not None else self.app_env == "production"
 
     def validate_production_safety(self) -> None:
         errors = self.production_safety_errors()

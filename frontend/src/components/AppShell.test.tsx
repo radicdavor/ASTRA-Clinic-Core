@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { cleanup, render, screen } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
-import { setSessionUser, setToken } from "../api/client";
+import { setSessionUser } from "../api/client";
 import { AppShell } from "./AppShell";
 
 function mockShellFetch(clinics = [{ id: 1, name: "Demo klinika" }]) {
@@ -15,7 +15,6 @@ function mockShellFetch(clinics = [{ id: 1, name: "Demo klinika" }]) {
 }
 
 function renderShell(role: string) {
-  setToken("test-token");
   setSessionUser({ id: 1, name: "Test", email: "test@example.invalid", role });
   mockShellFetch();
   return render(<MemoryRouter initialEntries={["/"]}><Routes><Route element={<AppShell/>}><Route index element={<p>Početna</p>}/></Route></Routes></MemoryRouter>);
@@ -46,15 +45,13 @@ describe("navigacija prema zadatku i ulozi", () => {
   });
 
   test("postojeća prijava čita ulogu iz tokena kada zapis korisnika još ne postoji", () => {
-    const payload = btoa(JSON.stringify({ sub: "1", role: "demo_admin" })).replace(/=/g, "").replace(/\+/g, "-").replace(/\//g, "_");
-    setToken(`header.${payload}.signature`);
+    setSessionUser({ id: 1, name: "Admin", email: "admin@example.invalid", role: "demo_admin" });
     mockShellFetch();
     render(<MemoryRouter initialEntries={["/"]}><Routes><Route element={<AppShell/>}><Route index element={<p>Početna</p>}/></Route></Routes></MemoryRouter>);
     expect(screen.getByText("Administracija")).toBeTruthy();
   });
 
   test("korisnik s vise klinika bira aktivnu kliniku u topbaru", async () => {
-    setToken("test-token");
     setSessionUser({ id: 1, name: "Admin", email: "admin@example.invalid", role: "demo_admin" });
     mockShellFetch([{ id: 1, name: "Gastroenterologija" }, { id: 2, name: "Estetika" }]);
     render(<MemoryRouter initialEntries={["/"]}><Routes><Route element={<AppShell/>}><Route index element={<p>Početna</p>}/></Route></Routes></MemoryRouter>);

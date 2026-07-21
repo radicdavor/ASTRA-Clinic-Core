@@ -1,7 +1,7 @@
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import { useEffect, useState } from "react";
 import { BookOpenCheck, Boxes, Building2, CalendarDays, CheckSquare2, ChevronDown, ClipboardCheck, ClipboardList, FileSearch, FileText, KeyRound, LayoutDashboard, LogOut, MoreHorizontal, PackageSearch, Pill, Settings, ShieldCheck, Stethoscope, TestTube, Users } from "lucide-react";
-import { clearToken, getActiveClinicId, getSessionUser, setActiveClinicId, setActiveClinicTimezone, type UserClinicsResponse } from "../api/client";
+import { getActiveClinicId, getSessionUser, logout, setActiveClinicId, setActiveClinicTimezone, type UserClinicsResponse } from "../api/client";
 import { useApi } from "../hooks/useApi";
 import { ToastHost } from "./ToastHost";
 
@@ -144,8 +144,8 @@ export function AppShell() {
           <button
             className="icon-button"
             title="Odjava"
-            onClick={() => {
-              clearToken();
+            onClick={async () => {
+              await logout();
               navigate("/login");
             }}
           >

@@ -2,7 +2,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from hashlib import sha256
 
-from fastapi import Depends, Header, HTTPException, status
+from fastapi import Depends, Header, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jose import JWTError, jwt
 from sqlalchemy import select
@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 from app.core.config import get_settings
 from app.core.database import get_db
 from app.models.domain import ApiKey, Clinic, ClinicMembership, Patient, PatientClinicAssociation, PatientJourney, User
+from app.services.sessions import get_valid_session, record_session_audit
 
 bearer = HTTPBearer(auto_error=False)
 
@@ -59,12 +60,22 @@ def hash_api_key(raw_key: str) -> str:
 
 
 def get_current_user(
+    request: Request,
     credentials: HTTPAuthorizationCredentials | None = Depends(bearer),
     db: Session = Depends(get_db),
 ) -> User:
+    settings = get_settings()
+    astra_session = request.cookies.get(settings.session_cookie_name)
+    if astra_session:
+        if credentials is not None:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Konfliktni podaci prijave")
+        session = get_valid_session(db, astra_session)
+        if not session:
+            record_session_audit(db, "auth.browser_session_invalid", summary="Invalid, expired or revoked browser session was used.")
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Prijava je istekla")
+        return session.user
     if credentials is None:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Nedostaje prijava")
-    settings = get_settings()
     try:
         payload = jwt.decode(credentials.credentials, settings.jwt_secret, algorithms=[settings.jwt_algorithm])
         user_id = int(payload["sub"])
@@ -77,18 +88,31 @@ def get_current_user(
 
 
 def get_current_actor(
+    request: Request,
     credentials: HTTPAuthorizationCredentials | None = Depends(bearer),
     x_astra_api_key: str | None = Header(default=None, alias="X-ASTRA-API-Key"),
     db: Session = Depends(get_db),
 ) -> Actor:
+    settings = get_settings()
+    astra_session = request.cookies.get(settings.session_cookie_name)
     if x_astra_api_key:
+        if astra_session or credentials is not None:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Konfliktni podaci prijave")
         api_key = db.scalar(select(ApiKey).where(ApiKey.key_hash == hash_api_key(x_astra_api_key), ApiKey.active.is_(True)))
         if not api_key or (api_key.expires_at and api_key.expires_at <= datetime.now(UTC)):
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Neispravan API ključ")
         api_key.last_used_at = datetime.now(UTC)
         db.flush()
         return Actor(actor_type="api_key", api_key=api_key)
-    return Actor(actor_type="user", user=get_current_user(credentials, db))
+    if astra_session:
+        if credentials is not None:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Konfliktni podaci prijave")
+        session = get_valid_session(db, astra_session)
+        if not session:
+            record_session_audit(db, "auth.browser_session_invalid", summary="Invalid, expired or revoked browser session was used.")
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Prijava je istekla")
+        return Actor(actor_type="user", user=session.user)
+    return Actor(actor_type="user", user=get_current_user(request, credentials, db))
 
 
 def require_permission(permission_name: str):

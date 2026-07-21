@@ -124,6 +124,13 @@ export type Body_ingest_document_api_patient_journeys__journey_id__documents_ing
   upload_channel?: string;
 };
 
+export type BrowserSessionResponse = {
+  csrf_token: string;
+  expires_at: string;
+  user: {
+};
+};
+
 export type CheckInItemOut = {
   activity_ids_json?: Array<number>;
   category: string;

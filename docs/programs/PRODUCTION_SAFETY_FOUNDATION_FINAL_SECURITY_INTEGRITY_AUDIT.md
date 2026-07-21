@@ -109,17 +109,17 @@ Residual risk:
 
 ### Auth storage hardening
 
-Implemented:
+Superseded by Module 2 browser-session authentication:
 
-- New frontend access tokens are stored in `sessionStorage`, not `localStorage`.
-- Legacy `localStorage` tokens are migrated to `sessionStorage` on first read and then removed.
-- Logout clears both session and legacy token locations.
-- Tests cover new-token storage, legacy migration and clearing.
+- Browser login now uses a revocable server-side session stored in an `HttpOnly` `astra_session` cookie.
+- The frontend no longer stores authentication tokens in `localStorage` or `sessionStorage`.
+- Browser mutations require CSRF protection through the separate `astra_csrf` cookie and `X-CSRF-Token` header.
+- Bearer JWT auth remains available only for Swagger, CLI, integrations and backend test clients.
 
 Residual risk:
 
-- This reduces token persistence but does not make browser tokens immune to active XSS.
-- A future production hardening track should consider HttpOnly secure cookies and CSRF protection if deployment architecture supports it.
+- HttpOnly cookies reduce direct token theft from JavaScript, but active XSS can still attempt actions in the current browser session.
+- React escaping, CSP, Origin/CSRF checks and careful rendering of clinical text remain required controls.
 
 ### Frontend build warnings
 

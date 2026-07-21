@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
-import { setSessionUser, setToken } from "../api/client";
+import { setSessionUser } from "../api/client";
 import { PatientJourneyWorkspace } from "./PatientJourneyWorkspace";
 
 const journey = {
@@ -30,7 +30,7 @@ function installFetch() {
   });
 }
 
-beforeEach(() => { localStorage.clear(); sessionStorage.clear(); setToken("test-token"); setSessionUser({ id: 1, name: "Liječnik", email: "doctor@example.invalid", role: "demo_physician" }); installFetch(); });
+beforeEach(() => { localStorage.clear(); sessionStorage.clear(); setSessionUser({ id: 1, name: "Liječnik", email: "doctor@example.invalid", role: "demo_physician" }); installFetch(); });
 afterEach(() => { cleanup(); vi.restoreAllMocks(); localStorage.clear(); sessionStorage.clear(); });
 
 describe("fokusirani radni prostor tijeka pacijenta", () => {

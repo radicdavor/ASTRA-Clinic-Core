@@ -140,6 +140,7 @@ async function installApiMocks(page: Page) {
     });
 
     if (url.pathname === "/api/public-config") return json({ demo_mode: true, real_data_allowed: false, warnings: ["Demo/development okruženje - ne unositi stvarne podatke pacijenata."] });
+    if (url.pathname === "/auth/session") return json({ user: { id: 1, name: "Admin", email: "admin@example.com", role: "admin" }, csrf_token: "mock-csrf", expires_at: "2026-07-19T20:00:00Z" });
     if (url.pathname === "/auth/me/clinics") return json({ clinics: [{ id: 1, name: "Demo klinika", timezone: "Europe/Zagreb" }], default_clinic_id: 1, requires_selection: false });
     if (url.pathname === "/api/dashboard/day") return json({
       date: "2026-07-19",
@@ -191,7 +192,6 @@ async function installApiMocks(page: Page) {
 
 test.beforeEach(async ({ page }) => {
   await page.addInitScript(() => {
-    window.sessionStorage.setItem("astra_token", "synthetic-e2e-token");
     window.localStorage.setItem("astra_user", JSON.stringify({ id: 1, name: "Admin", email: "admin@example.com", role: "admin" }));
     window.localStorage.setItem("astra_active_clinic_id", "1");
     window.localStorage.setItem("astra_active_clinic_timezone", "Europe/Zagreb");
