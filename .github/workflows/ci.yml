@@ -37,6 +37,8 @@ jobs:
       - name: Install backend dependencies
         working-directory: backend
         run: pip install -r requirements.txt
+      - name: Check generated OpenAPI frontend types
+        run: python scripts/generate_openapi_types.py --check
       - name: Run database migrations
         working-directory: backend
         run: |

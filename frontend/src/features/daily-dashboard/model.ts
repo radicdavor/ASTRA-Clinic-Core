@@ -1,67 +1,35 @@
-export type DashboardBlocker = { id: number; title: string; details: string | null; is_clinical: boolean };
+import type {
+  DailyDashboardActivity as OpenApiDailyDashboardActivity,
+  DailyDashboardBlocker as OpenApiDailyDashboardBlocker,
+  DailyDashboardClinic as OpenApiDailyDashboardClinic,
+  DailyDashboardResponse as OpenApiDailyDashboardResponse,
+  DailyDashboardRow as OpenApiDailyDashboardRow,
+} from "../../api/generated-openapi";
 
-export type DashboardActivity = {
-  id: number;
-  sequence: number;
-  time: string;
-  end_time?: string;
-  service_name: string;
-  clinician_name: string | null;
-  room_name: string | null;
-  status: string;
-};
+export type DashboardBlocker = OpenApiDailyDashboardBlocker & { details: string | null; is_clinical: boolean };
 
-export type DashboardRow = {
-  journey_id: number;
-  appointment_id: number;
-  time: string;
-  patient_name: string;
-  service_id: number;
-  service_name: string;
-  clinician_id: number;
-  clinician_name: string;
-  room_id: number;
-  room_name: string;
-  clinic_id: number | null;
-  clinic_name: string | null;
-  intake_channel: string;
-  workflow_stage: string;
-  document_status: string;
-  preparation_status: string;
-  arrival_status: string;
-  check_in_status: string;
-  encounter_status: string;
-  consumables_status: string;
-  billing_status: string;
-  payment_status: string;
-  blocker_status: string;
-  operational_status?: string;
-  operational_status_label?: string;
-  operational_status_severity?: string;
-  operational_status_reasons?: Array<{ code: string; label: string }>;
+export type DashboardActivity = Omit<OpenApiDailyDashboardActivity, "end_time"> & { end_time?: string };
+
+export type DashboardRow = Omit<
+  OpenApiDailyDashboardRow,
+  "activities" | "allowed_actions" | "blocker_labels" | "blockers" | "reception_warning" | "reception_warning_details"
+> & {
+  activities: DashboardActivity[];
+  allowed_actions: string[];
   blocker_labels: string[];
   blockers: DashboardBlocker[];
-  allowed_actions: string[];
   reception_warning: boolean;
   reception_warning_details: string[];
-  activity_count: number;
-  current_activity_id: number | null;
-  next_activity_id: number | null;
-  activities: DashboardActivity[];
 };
 
-export type DashboardClinic = { id: number; name: string };
+export type DashboardClinic = OpenApiDailyDashboardClinic;
 
-export type DashboardResponse = {
-  date: string;
-  refreshed_at: string;
-  visible_sections: string[];
-  viewer_role: string;
-  scope: string;
-  scope_label: string;
-  scoped_clinician_id: number | null;
-  can_filter_clinician: boolean;
+export type DashboardResponse = Omit<
+  OpenApiDailyDashboardResponse,
+  "available_clinics" | "can_filter_clinician" | "rows"
+> & {
   available_clinics: DashboardClinic[];
+  can_filter_clinician: boolean;
   rows: DashboardRow[];
 };
 

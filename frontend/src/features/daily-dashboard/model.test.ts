@@ -13,11 +13,13 @@ import {
 } from "./model";
 
 function row(overrides: Partial<DashboardRow> = {}): DashboardRow {
-  return {
+  const base: DashboardRow = {
     journey_id: 1,
     appointment_id: 101,
     time: "08:00:00",
+    patient_id: 501,
     patient_name: "Test Pacijent",
+    patient_date_of_birth: "1992-01-06",
     service_id: 1,
     service_name: "Prvi pregled",
     clinician_id: 1,
@@ -37,6 +39,10 @@ function row(overrides: Partial<DashboardRow> = {}): DashboardRow {
     billing_status: "not_ready",
     payment_status: "not_due",
     blocker_status: "clear",
+    operational_status: "waiting_arrival",
+    operational_status_label: "Čeka dolazak",
+    operational_status_severity: "neutral",
+    operational_status_reasons: [{ code: "patient_not_arrived", label: "Pacijent još nije stigao." }],
     blocker_labels: [],
     blockers: [],
     allowed_actions: ["open_check_in"],
@@ -46,8 +52,8 @@ function row(overrides: Partial<DashboardRow> = {}): DashboardRow {
     current_activity_id: null,
     next_activity_id: null,
     activities: [{ id: 11, sequence: 1, time: "08:00:00", end_time: "08:30:00", service_name: "Prvi pregled", clinician_name: "dr. Test", room_name: "Ordinacija 1", status: "ready" }],
-    ...overrides,
   };
+  return { ...base, ...overrides };
 }
 
 describe("daily dashboard model", () => {
@@ -119,7 +125,15 @@ describe("daily dashboard model", () => {
   });
 
   test("keeps completed but unpaid patients orange, not green", () => {
-    const state = operationalState(row({ workflow_stage: "completed", payment_status: "unpaid", allowed_actions: ["open_payment"] }));
+    const state = operationalState(row({
+      workflow_stage: "completed",
+      payment_status: "unpaid",
+      allowed_actions: ["open_payment"],
+      operational_status: "awaiting_payment",
+      operational_status_label: "Čeka plaćanje",
+      operational_status_severity: "warning",
+      operational_status_reasons: [{ code: "invoice_unpaid", label: "Klinički dio je završen; plaćanje još nije riješeno." }],
+    }));
     expect(state.tone).toBe("orange");
     expect(state.label).toBe("Čeka plaćanje");
   });
