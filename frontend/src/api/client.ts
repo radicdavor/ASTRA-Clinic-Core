@@ -8,6 +8,10 @@ function defaultApiBaseUrl() {
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || defaultApiBaseUrl();
 const MUTATION_METHODS = new Set(["POST", "PATCH", "PUT", "DELETE"]);
+const TOKEN_KEY = "astra_token";
+const USER_KEY = "astra_user";
+const ACTIVE_CLINIC_ID_KEY = "astra_active_clinic_id";
+const ACTIVE_CLINIC_TIMEZONE_KEY = "astra_active_clinic_timezone";
 
 export type ToastTone = "success" | "error";
 
@@ -105,28 +109,62 @@ function apiErrorMessage(detail: unknown): string {
 }
 
 export function getToken() {
-  return localStorage.getItem("astra_token");
+  const sessionToken = sessionStorage.getItem(TOKEN_KEY);
+  if (sessionToken) return sessionToken;
+  const legacyToken = localStorage.getItem(TOKEN_KEY);
+  if (!legacyToken) return null;
+  sessionStorage.setItem(TOKEN_KEY, legacyToken);
+  localStorage.removeItem(TOKEN_KEY);
+  return legacyToken;
 }
 
 export function setToken(token: string) {
-  localStorage.setItem("astra_token", token);
+  sessionStorage.setItem(TOKEN_KEY, token);
+  localStorage.removeItem(TOKEN_KEY);
 }
 
 export type SessionUser = { id: number; name: string; email: string; role: string };
 
 export function setSessionUser(user: SessionUser) {
-  localStorage.setItem("astra_user", JSON.stringify(user));
+  localStorage.setItem(USER_KEY, JSON.stringify(user));
+}
+
+export type UserClinic = { id: number; name: string; timezone: string };
+export type UserClinicsResponse = { clinics: UserClinic[]; default_clinic_id: number | null; requires_selection: boolean };
+
+export function getActiveClinicId() {
+  return localStorage.getItem(ACTIVE_CLINIC_ID_KEY);
+}
+
+export function setActiveClinicId(clinicId: number | string | null) {
+  if (clinicId === null || clinicId === "") {
+    localStorage.removeItem(ACTIVE_CLINIC_ID_KEY);
+    return;
+  }
+  localStorage.setItem(ACTIVE_CLINIC_ID_KEY, String(clinicId));
+}
+
+export function getActiveClinicTimezone() {
+  return localStorage.getItem(ACTIVE_CLINIC_TIMEZONE_KEY) || "Europe/Zagreb";
+}
+
+export function setActiveClinicTimezone(timezone: string | null) {
+  if (!timezone) {
+    localStorage.removeItem(ACTIVE_CLINIC_TIMEZONE_KEY);
+    return;
+  }
+  localStorage.setItem(ACTIVE_CLINIC_TIMEZONE_KEY, timezone);
 }
 
 export function getSessionUser(): SessionUser | null {
   try {
-    const value = localStorage.getItem("astra_user");
+    const value = localStorage.getItem(USER_KEY);
     if (value) return JSON.parse(value) as SessionUser;
 
     // Existing sessions created before role-aware navigation do not have
     // astra_user yet. The decoded role is presentation-only; API RBAC remains
     // authoritative for every protected operation.
-    const token = localStorage.getItem("astra_token");
+    const token = getToken();
     if (!token) return null;
     const payload = JSON.parse(atob(token.split(".")[1].replace(/-/g, "+").replace(/_/g, "/"))) as { sub?: string; role?: string };
     if (!payload.role) return null;
@@ -137,8 +175,11 @@ export function getSessionUser(): SessionUser | null {
 }
 
 export function clearToken() {
-  localStorage.removeItem("astra_token");
-  localStorage.removeItem("astra_user");
+  sessionStorage.removeItem(TOKEN_KEY);
+  localStorage.removeItem(TOKEN_KEY);
+  localStorage.removeItem(USER_KEY);
+  localStorage.removeItem(ACTIVE_CLINIC_ID_KEY);
+  localStorage.removeItem(ACTIVE_CLINIC_TIMEZONE_KEY);
 }
 
 function handleUnauthorized() {
@@ -155,6 +196,8 @@ export async function api<T>(path: string, options: ApiRequestOptions = {}): Pro
   headers.set("Content-Type", "application/json");
   const token = getToken();
   if (token) headers.set("Authorization", `Bearer ${token}`);
+  const activeClinicId = getActiveClinicId();
+  if (activeClinicId) headers.set("X-Clinic-Id", activeClinicId);
   const method = requestOptions.method ?? "GET";
   const response = await fetch(`${API_BASE_URL}${path}`, { ...requestOptions, headers });
   if (response.status === 401) {
@@ -182,6 +225,7 @@ export async function login(email: string, password: string) {
     throw new Error(error.detail ?? "Prijava nije uspjela");
   }
   const result = await response.json() as { access_token: string; user: SessionUser };
+  setActiveClinicId(null);
   setToken(result.access_token);
   setSessionUser(result.user);
   return result;

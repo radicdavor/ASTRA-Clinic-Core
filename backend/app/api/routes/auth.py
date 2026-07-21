@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 
 from app.core.database import get_db
 from app.core.security import create_access_token, verify_password
-from app.auth.dependencies import Actor, hash_api_key, require_permission
+from app.auth.dependencies import Actor, active_clinic_memberships, get_current_actor, hash_api_key, require_permission
 from app.models.domain import ApiKey, User
 from app.schemas.common import ApiKeyCreate, ApiKeyCreated, ApiKeyOut, ErrorResponse, LoginRequest, TokenResponse
 
@@ -40,6 +40,19 @@ def login(payload: LoginRequest, db: Session = Depends(get_db)) -> TokenResponse
         raise HTTPException(status_code=401, detail="Neispravna e-pošta ili lozinka")
     token = create_access_token(str(user.id), {"role": user.role.name})
     return TokenResponse(access_token=token, user={"id": user.id, "name": user.full_name, "email": user.email, "role": user.role.name})
+
+
+@router.get("/me/clinics")
+def my_clinics(db: Session = Depends(get_db), actor: Actor = Depends(get_current_actor)):
+    if actor.actor_type != "user" or actor.user is None:
+        raise HTTPException(status_code=403, detail="Odabir klinike zahtijeva prijavljenog korisnika")
+    memberships = active_clinic_memberships(db, actor.user.id)
+    clinics = [{"id": membership.clinic.id, "name": membership.clinic.name, "timezone": membership.clinic.timezone} for membership in memberships]
+    return {
+        "clinics": clinics,
+        "default_clinic_id": clinics[0]["id"] if len(clinics) == 1 else None,
+        "requires_selection": len(clinics) > 1,
+    }
 
 
 @router.post("/api-keys", response_model=ApiKeyCreated)

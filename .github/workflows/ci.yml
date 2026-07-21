@@ -37,6 +37,8 @@ jobs:
       - name: Install backend dependencies
         working-directory: backend
         run: pip install -r requirements.txt
+      - name: Check generated OpenAPI frontend types
+        run: python scripts/generate_openapi_types.py --check
       - name: Run database migrations
         working-directory: backend
         run: |
@@ -80,6 +82,12 @@ jobs:
       - name: Test frontend interactions
         working-directory: frontend
         run: npm test -- --run
+      - name: Install Playwright browsers
+        working-directory: frontend
+        run: npx playwright install --with-deps chromium
+      - name: Run browser E2E smoke
+        working-directory: frontend
+        run: npm run e2e
       - name: Frontend pilot smoke
         working-directory: frontend
         run: npm run smoke

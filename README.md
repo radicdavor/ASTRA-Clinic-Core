@@ -1211,6 +1211,17 @@ docker compose up --build
 - Aplikacija: http://localhost:5173
 - API dokumentacija: http://localhost:8000/docs
 - Health check: http://localhost:8000/health
+- Readiness check: http://localhost:8000/ready
+
+`/health` potvrđuje da je proces živ. `/ready` dodatno provjerava može li
+servis sigurno primati promet i vraća `503` ako baza nije na očekivanom
+Alembic head revisionu. U production deploymentu migracije se pokreću
+kontrolirano, prije preusmjeravanja prometa:
+
+```bash
+cd backend
+alembic upgrade head
+```
 
 Za pristup s drugog uredaja u istoj mrezi otvorite:
 

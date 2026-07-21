@@ -30,8 +30,8 @@ function installFetch() {
   });
 }
 
-beforeEach(() => { localStorage.clear(); setToken("test-token"); setSessionUser({ id: 1, name: "Liječnik", email: "doctor@example.invalid", role: "demo_physician" }); installFetch(); });
-afterEach(() => { cleanup(); vi.restoreAllMocks(); localStorage.clear(); });
+beforeEach(() => { localStorage.clear(); sessionStorage.clear(); setToken("test-token"); setSessionUser({ id: 1, name: "Liječnik", email: "doctor@example.invalid", role: "demo_physician" }); installFetch(); });
+afterEach(() => { cleanup(); vi.restoreAllMocks(); localStorage.clear(); sessionStorage.clear(); });
 
 describe("fokusirani radni prostor tijeka pacijenta", () => {
   test("prikazuje sljedeću radnju i samo trenutačnu fazu", async () => {

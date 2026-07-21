@@ -35,8 +35,8 @@ function renderForm(onChanged = vi.fn().mockResolvedValue(undefined)) {
   return render(<MemoryRouter><ClinicalActivityForm journeyId={12} activity={activity} serviceName="Gastroskopija" onChanged={onChanged}/></MemoryRouter>);
 }
 
-beforeEach(() => { localStorage.clear(); setToken("synthetic-token"); });
-afterEach(() => { cleanup(); vi.restoreAllMocks(); localStorage.clear(); });
+beforeEach(() => { localStorage.clear(); sessionStorage.clear(); setToken("synthetic-token"); });
+afterEach(() => { cleanup(); vi.restoreAllMocks(); localStorage.clear(); sessionStorage.clear(); });
 
 describe("atomsko dovršavanje kliničkog obrasca", () => {
   test("šalje trenutačni lokalni unos bez prethodnog spremanja skice", async () => {

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import date as DateType, datetime as DateTimeType, time as TimeType
 from decimal import Decimal
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 
@@ -1197,6 +1198,7 @@ class ServiceUpdate(BaseModel):
 class ClinicOut(ORMModel):
     id: int
     name: str
+    timezone: str = "Europe/Zagreb"
     active: bool
     visible_in_catalog: bool = True
     created_at: DateTimeType
@@ -1205,6 +1207,16 @@ class ClinicOut(ORMModel):
 
 class ClinicCreate(BaseModel):
     name: str = Field(min_length=2, max_length=120)
+    timezone: str = Field(default="Europe/Zagreb", min_length=1, max_length=80)
+
+    @field_validator("timezone")
+    @classmethod
+    def validate_timezone(cls, value: str) -> str:
+        try:
+            ZoneInfo(value)
+        except ZoneInfoNotFoundError as exc:
+            raise ValueError("Timezone mora biti valjana IANA zona, npr. Europe/Zagreb") from exc
+        return value
 
 
 class ProviderOut(ORMModel):
@@ -1716,6 +1728,25 @@ class AppointmentOut(AppointmentCreate, ORMModel):
     provider: ProviderOut | None = None
     room: RoomOut | None = None
     episode: ClinicalEpisodeOut | None = None
+
+
+class AppointmentClinicSummary(BaseModel):
+    id: int | None = None
+    name: str | None = None
+
+
+class PatientAppointmentAvailabilityOut(BaseModel):
+    appointment_id: int
+    patient_id: int
+    date: DateType
+    start_time: TimeType
+    end_time: TimeType
+    status: str
+    clinic: AppointmentClinicSummary
+    service_name: str | None = None
+    provider_name: str | None = None
+
+    model_config = ConfigDict(extra="forbid")
 
 
 class ReceptionPatientUpdate(BaseModel):
