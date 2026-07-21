@@ -11,7 +11,7 @@ import { useApi } from "../hooks/useApi";
 import { AuditLog, ClinicalDocument, ClinicalEvidenceTimelineItem } from "../types";
 import { formatDate, formatDateTime } from "../utils/date";
 import { formatPatientName } from "../utils/patientIdentity";
-import { aiExtractionStatusLabel, documentTypeLabel, reviewStatusLabel, sourceTypeLabel } from "./ClinicalDocuments";
+import { aiExtractionStatusLabel, documentTypeLabel, recordClassificationLabel, reviewStatusLabel, sourceTypeLabel } from "./ClinicalDocuments";
 
 function documentContributionText(document: ClinicalDocument) {
   if (document.review_status === "reviewed" && document.physician_reviewed) {
@@ -53,6 +53,9 @@ export function ClinicalDocumentDetail() {
   const [summaryDraft, setSummaryDraft] = useState("");
   const [findingsDraft, setFindingsDraft] = useState("");
   const [recommendationsDraft, setRecommendationsDraft] = useState("");
+  const [addendumReason, setAddendumReason] = useState("");
+  const [addendumContent, setAddendumContent] = useState("");
+  const [addendumMessage, setAddendumMessage] = useState("");
 
   useEffect(() => {
     if (!document.data) return;
@@ -100,6 +103,18 @@ export function ClinicalDocumentDetail() {
     await refresh(await api<ClinicalDocument>(`/api/clinical-documents/${document.data.id}/reject-summary`, { method: "POST" }));
   }
 
+  async function createAddendum() {
+    if (!document.data) return;
+    await api(`/api/clinical-documents/${document.data.id}/addenda`, {
+      method: "POST",
+      body: JSON.stringify({ reason: addendumReason, content: addendumContent })
+    });
+    setAddendumReason("");
+    setAddendumContent("");
+    setAddendumMessage("Dopuna je spremljena kao odvojeni potpisani zapis. Originalni dokument nije promijenjen.");
+    audit.setData(await api<AuditLog[]>(`/api/audit-log?entity_type=ClinicalDocument&entity_id=${id}`));
+  }
+
   if (document.loading || !document.data) return <WorkspaceLayout><p>Ucitavanje dokumenta...</p></WorkspaceLayout>;
   const current = document.data;
 
@@ -136,6 +151,8 @@ export function ClinicalDocumentDetail() {
           <p><span>Datoteka</span><strong>{current.attachment_path ?? "Nema datoteke"}</strong></p>
           <p><span>Pregledano</span><strong>{current.reviewed_at ? formatDateTime(current.reviewed_at) : "-"}</strong></p>
           <p><span>Status pregleda</span><strong>{reviewStatusLabel(current.review_status)}</strong></p>
+          <p><span>Klasifikacija</span><strong>{recordClassificationLabel(current.record_classification)}</strong></p>
+          <p><span>Klinički karton</span><strong>{current.is_clinical_record === false ? "Ne" : "Da"}</strong></p>
           <p><span>Status AI ekstrakcije</span><strong>{aiExtractionStatusLabel(current.ai_extraction_status)}</strong></p>
         </div>
       </WorkspaceSection>
@@ -152,6 +169,22 @@ export function ClinicalDocumentDetail() {
           <p><span>Pravilo</span><strong>Izvor istine su pregledani, source-linked klinicki dokumenti.</strong></p>
         </div>
       </WorkspaceSection>
+
+      {(current.review_status === "signed" || current.review_status === "reviewed") && (
+        <WorkspaceSection title={<>Dopuna dokumenta <HelpHint title="Dopuna dokumenta">Potpisani ili završni dokument se ne mijenja. Dopuna se sprema kao odvojeni zapis s razlogom i autorom.</HelpHint></>}>
+          <div className="clinical-plan-card">
+            <p><span>Pravilo</span><strong>Original ostaje nepromjenjiv; dopuna je odvojeni auditirani zapis.</strong></p>
+            {addendumMessage && <p className="success-text">{addendumMessage}</p>}
+            <label>Razlog dopune<input value={addendumReason} onChange={(event) => setAddendumReason(event.target.value)} placeholder="Npr. administrativna ispravka ili dodatno pojašnjenje" /></label>
+            <label>Sadržaj dopune<textarea rows={4} value={addendumContent} onChange={(event) => setAddendumContent(event.target.value)} /></label>
+            <div className="quick-actions">
+              <ActionButton variant="update" onClick={createAddendum} disabled={addendumReason.trim().length < 2 || addendumContent.trim().length < 2} helpTitle="Spremi dopunu" help="Sprema dopunu bez izmjene originalnog kliničkog dokumenta.">
+                Spremi dopunu
+              </ActionButton>
+            </div>
+          </div>
+        </WorkspaceSection>
+      )}
 
       <div className="dashboard-grid">
         <WorkspaceSection title={<>AI prijedlog ekstrakcije <HelpHint title="AI prijedlog ekstrakcije">Ovo je prijedlog za strukturiranje dokumenta. Nije sluzbena klinicka cinjenica dok lijecnik ne pregleda dokument.</HelpHint></>}>

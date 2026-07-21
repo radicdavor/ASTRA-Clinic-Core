@@ -101,7 +101,9 @@ export type ClinicalDocument = {
   ai_extraction_generated_at?: string | null;
   ai_extraction_updated_at?: string | null;
   physician_reviewed: boolean;
-  review_status: "draft" | "extracted" | "needs_physician_review" | "reviewed" | "rejected" | "superseded";
+  review_status: "draft" | "extracted" | "needs_physician_review" | "reviewed" | "rejected" | "superseded" | "signed";
+  is_clinical_record?: boolean;
+  record_classification?: "clinical" | "administrative" | "financial" | "unclassified" | string;
   reviewed_by?: number | null;
   reviewed_at?: string | null;
   attachment_path?: string | null;

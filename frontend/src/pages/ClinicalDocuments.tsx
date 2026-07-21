@@ -41,9 +41,20 @@ export function reviewStatusLabel(value: ClinicalDocument["review_status"]) {
     needs_physician_review: "Ceka lijecnicki pregled",
     reviewed: "Lijecnicki pregledano",
     rejected: "Dokument odbijen",
-    superseded: "Zamijenjeno"
+    superseded: "Zamijenjeno",
+    signed: "Potpisano"
   };
   return labels[value] ?? value;
+}
+
+export function recordClassificationLabel(value?: ClinicalDocument["record_classification"]) {
+  const labels: Record<string, string> = {
+    clinical: "Klinički karton",
+    administrative: "Administrativno",
+    financial: "Financijsko",
+    unclassified: "Čeka klasifikaciju"
+  };
+  return labels[value ?? "clinical"] ?? value;
 }
 
 export function aiExtractionStatusLabel(value: ClinicalDocument["ai_extraction_status"]) {
@@ -190,6 +201,7 @@ export function ClinicalDocuments() {
         { header: "Datum", render: (row) => formatDate(row.document_date) },
         { header: "Tip", render: (row) => documentTypeLabel(row.document_type) },
         { header: "Izvor", render: (row) => sourceTypeLabel(row.source_type) },
+        { header: "Klasifikacija", render: (row) => recordClassificationLabel(row.record_classification) },
         { header: "Pregled", render: (row) => reviewStatusLabel(row.review_status) },
         { header: "AI ekstrakcija", render: (row) => aiExtractionStatusLabel(row.ai_extraction_status) }
       ]} />
