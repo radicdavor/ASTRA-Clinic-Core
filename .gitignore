@@ -8,6 +8,8 @@ __pycache__/
 frontend/node_modules/
 frontend/dist/
 frontend/.vite/
+frontend/test-results/
+frontend/playwright-report/
 
 backend/.venv/
 backend/__pycache__/
