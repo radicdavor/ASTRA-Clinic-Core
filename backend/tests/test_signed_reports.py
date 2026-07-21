@@ -92,6 +92,39 @@ def test_signed_report_snapshot_survives_later_form_instance_changes(client, db,
     assert preview.json()["structured_data_json"] == original_data
 
 
+def test_signed_report_addendum_is_separate_and_preserves_original_snapshot(client, db, auth_setup):
+    _, _, _, report = setup_signed_report(client, db)
+    original_content = report.rendered_content
+    original_hash = report.content_hash
+
+    addendum = client.post(
+        f"/api/signed-reports/{report.id}/addenda",
+        headers=headers(client),
+        json={"reason": "Tipfeler u preporuci", "content": "Dopuna: pacijent dobiva ispravljenu administrativnu napomenu."},
+    )
+
+    db.refresh(report)
+    assert addendum.status_code == 200
+    assert addendum.json()["original_document_id"] == report.clinical_document_id
+    assert addendum.json()["status"] == "signed"
+    assert report.rendered_content == original_content
+    assert report.content_hash == original_hash
+
+
+def test_signed_report_addendum_requires_intact_report_hash(client, db, auth_setup):
+    _, _, _, report = setup_signed_report(client, db)
+    report.content_hash = "tampered"
+    db.commit()
+
+    addendum = client.post(
+        f"/api/signed-reports/{report.id}/addenda",
+        headers=headers(client),
+        json={"reason": "Pokušaj dopune", "content": "Ovo ne smije proći jer integritet nije potvrđen."},
+    )
+
+    assert addendum.status_code == 409
+
+
 def test_delivery_is_explicit_stub_and_amendment_preserves_original(client, db, auth_setup):
     visit, _, base, report = setup_signed_report(client, db)
     delivered = client.post(

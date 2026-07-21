@@ -6,8 +6,9 @@ from app.audit.service import audit, snapshot
 from app.auth.dependencies import Actor, require_permission
 from app.core.database import get_db
 from app.models.domain import Patient, PatientJourney, ReportDeliveryEvent, SignedClinicalReport
+from app.schemas.common import ClinicalDocumentAddendumCreate, ClinicalDocumentAddendumOut
 from app.schemas.reports import ReportDeliveryOut, ReportDeliveryRequest, ReportPrintOut, SignedReportOut, VisitDocumentOut
-from app.services.clinical_document_access import get_institution_scoped_clinical_document_for_read
+from app.services.clinical_document_access import create_document_addendum, get_institution_scoped_clinical_document_for_read
 from app.services.reports import queue_stub_deliveries, record_print, verify_report_integrity, visit_documents
 
 router = APIRouter(prefix="/api", tags=["signed-reports"])
@@ -48,6 +49,23 @@ def print_report(report_id: int, request: Request, db: Session = Depends(get_db)
     db.commit()
     db.refresh(event)
     return event
+
+
+@router.post("/signed-reports/{report_id}/addenda", response_model=ClinicalDocumentAddendumOut)
+def add_signed_report_addendum(
+    report_id: int,
+    payload: ClinicalDocumentAddendumCreate,
+    request: Request,
+    db: Session = Depends(get_db),
+    actor: Actor = Depends(require_permission("clinical.documents.add_addendum")),
+):
+    report = report_or_404(db, report_id)
+    get_institution_scoped_clinical_document_for_read(db, report.clinical_document_id, actor, request, "signed_report_viewed")
+    verify_report_integrity(report)
+    addendum = create_document_addendum(db, report.clinical_document_id, payload.reason, payload.content, actor, request)
+    db.commit()
+    db.refresh(addendum)
+    return addendum
 
 
 @router.post("/patient-journeys/{journey_id}/visit-documents/deliver", response_model=list[ReportDeliveryOut])
