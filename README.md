@@ -18,7 +18,7 @@ UX simplification track vizualno je provjeren sa sintetičkim administratorskim 
 
 ## Module 3 institution-aware clinical access
 
-Module 3 introduces `Institution -> Clinic` authorization for clinical record continuity. Patient identity remains global, authorized medical staff may read clinical documents across clinics of the same institution, and operations/billing remain clinic-scoped. Draft editing is author-controlled, signed clinical documents are immutable, and corrections use separate addenda. See [Institution clinical access ADR](docs/ADR/institution-clinical-access.md) and [access matrix](docs/security/institution-clinical-access-matrix.md).
+Module 3 introduces `Institution -> Clinic` authorization for clinical record continuity. Patient identity remains global, authorized medical staff may read clinical documents across clinics of the same institution, and operations/billing remain clinic-scoped. Draft editing is author-controlled, signed clinical documents are immutable, source uploads require human classification, and corrections use separate addenda. See [Institution clinical access ADR](docs/ADR/institution-clinical-access.md), [access matrix](docs/security/institution-clinical-access-matrix.md), and [Module 3 closure report](docs/programs/MODULE_3_INSTITUTION_CLINICAL_ACCESS_CLOSURE_REPORT.md).
 
 Workflow Engine MVP is documented in [`docs/WORKFLOW_ENGINE_MVP.md`](docs/WORKFLOW_ENGINE_MVP.md). It adds audited patient/episode tasks, responsibility, due dates, templates, and completion checklists without automated clinical decision-making.
 
