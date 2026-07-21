@@ -7,7 +7,7 @@ from sqlalchemy.exc import DBAPIError
 
 from app.auth.dependencies import hash_api_key
 from app.core.security import hash_password
-from app.models.domain import ApiKey, Appointment, AuditLog, ClinicalDocument, ClinicalFormDefinition, ClinicalFormInstance, ClinicalFormVersion, Invoice, InvoiceLine, JourneyActivity, JourneyCheckIn, Patient, PatientJourney, Permission, Provider, Role, Room, Service, SignedClinicalReport, User
+from app.models.domain import ApiKey, Appointment, AuditLog, ClinicalDocument, ClinicalFormDefinition, ClinicalFormInstance, ClinicalFormVersion, Clinic, ClinicMembership, Institution, Invoice, InvoiceLine, JourneyActivity, JourneyCheckIn, Patient, PatientJourney, Permission, Provider, Role, Room, Service, SignedClinicalReport, User
 from app.services.reports import report_digest
 
 
@@ -34,6 +34,31 @@ def create_user_with_permissions(db, email: str, permission_names: list[str]) ->
     role = Role(name=email.split("@")[0], description=email, permissions=permissions)
     user = User(email=email, full_name=email, password_hash=hash_password("secret"), role=role)
     db.add_all([*permissions, role, user])
+    db.flush()
+    return user
+
+
+def permission(db, name: str) -> Permission:
+    existing = db.scalar(select(Permission).where(Permission.name == name))
+    if existing:
+        return existing
+    item = Permission(name=name, description=name)
+    db.add(item)
+    db.flush()
+    return item
+
+
+def create_institution_user(db, email: str, permission_names: list[str], clinic: Clinic, category: str = "medical_staff") -> User:
+    role = Role(
+        name=email.split("@")[0],
+        description=email,
+        professional_category=category,
+        permissions=[permission(db, name) for name in permission_names],
+    )
+    user = User(email=email, full_name=email, password_hash=hash_password("secret"), role=role)
+    db.add_all([role, user])
+    db.flush()
+    db.add(ClinicMembership(user_id=user.id, clinic_id=clinic.id, created_by_user_id=user.id))
     db.flush()
     return user
 
@@ -88,6 +113,57 @@ def test_postgresql_rejects_signed_report_content_update_and_delete(pg_db):
             pg_db.execute(text("DELETE FROM signed_clinical_reports WHERE id = :id"), {"id": report.id})
     pg_db.refresh(report)
     assert report.rendered_content == "Nalaz: Sintetički nalaz"
+
+
+def test_postgresql_institution_clinical_record_role_boundaries(pg_client, pg_db):
+    institution = Institution(code="pg-nura", name="PG NURA", active=True)
+    other_institution = Institution(code="pg-other", name="PG Other", active=True)
+    clinic_a = Clinic(name="PG Gastro", institution_key="pg-nura", institution=institution)
+    clinic_b = Clinic(name="PG Endoscopy", institution_key="pg-nura", institution=institution)
+    other_clinic = Clinic(name="PG Foreign", institution_key="pg-other", institution=other_institution)
+    patient = Patient(first_name="PG", last_name="Record")
+    pg_db.add_all([institution, other_institution, clinic_a, clinic_b, other_clinic, patient])
+    pg_db.flush()
+    physician = create_institution_user(pg_db, "pg-physician-record@test.local", ["clinical.documents.read_institution"], clinic_a)
+    nurse = create_institution_user(pg_db, "pg-nurse-record@test.local", ["clinical.documents.read_institution"], clinic_b)
+    administrator = create_institution_user(pg_db, "pg-admin-record@test.local", ["clinical.documents.read_institution"], clinic_a, "administrative_staff")
+    foreign_physician = create_institution_user(pg_db, "pg-foreign-record@test.local", ["clinical.documents.read_institution"], other_clinic)
+    clinical = ClinicalDocument(
+        patient_id=patient.id,
+        clinic_id=clinic_b.id,
+        source_type="external",
+        document_type="gastroscopy",
+        title="PG klinički nalaz",
+        raw_text="Sintetički klinički tekst",
+        review_status="reviewed",
+        physician_reviewed=True,
+        is_clinical_record=True,
+        record_classification="clinical",
+    )
+    financial = ClinicalDocument(
+        patient_id=patient.id,
+        clinic_id=clinic_b.id,
+        source_type="uploaded",
+        document_type="other",
+        title="PG financijski prilog",
+        review_status="reviewed",
+        physician_reviewed=True,
+        is_clinical_record=False,
+        record_classification="financial",
+    )
+    pg_db.add_all([clinical, financial])
+    pg_db.commit()
+
+    physician_headers = {"Authorization": f"Bearer {login(pg_client, physician.email)}"}
+    nurse_headers = {"Authorization": f"Bearer {login(pg_client, nurse.email)}"}
+    admin_headers = {"Authorization": f"Bearer {login(pg_client, administrator.email)}"}
+    foreign_headers = {"Authorization": f"Bearer {login(pg_client, foreign_physician.email)}"}
+
+    assert pg_client.get(f"/api/clinical-documents/{clinical.id}", headers=physician_headers).status_code == 200
+    assert pg_client.get(f"/api/clinical-documents/{clinical.id}", headers=nurse_headers).status_code == 200
+    assert pg_client.get(f"/api/clinical-documents/{clinical.id}", headers=admin_headers).status_code == 403
+    assert pg_client.get(f"/api/clinical-documents/{clinical.id}", headers=foreign_headers).status_code == 404
+    assert pg_client.get(f"/api/clinical-documents/{financial.id}", headers=physician_headers).status_code == 403
 
 
 def test_api_permission_boundaries_and_api_key_actor(pg_client, pg_db):
