@@ -11,7 +11,7 @@ def headers(client):
 def create_journey(client, appt):
     response = client.post(
         "/api/patient-journeys",
-        headers=headers(client),
+        headers={**headers(client), "X-Clinic-Id": str(appt.clinic_id)},
         json={"appointment_id": appt.id, "intake_channel": "manual", "initial_stage": "booked"},
     )
     assert response.status_code == 200
@@ -22,6 +22,8 @@ def scope_appointment(db, auth_setup, appt, clinic_obj=None):
     clinic_obj = clinic_obj or auth_setup["clinic"]
     appt.clinic_id = clinic_obj.id
     appt.room.clinic_id = clinic_obj.id
+    if not db.query(ClinicMembership).filter_by(user_id=auth_setup["admin"].id, clinic_id=clinic_obj.id).first():
+        db.add(ClinicMembership(user_id=auth_setup["admin"].id, clinic_id=clinic_obj.id, created_by_user_id=auth_setup["admin"].id))
     if not db.query(PatientClinicAssociation).filter_by(patient_id=appt.patient_id, clinic_id=clinic_obj.id).first():
         db.add(PatientClinicAssociation(patient_id=appt.patient_id, clinic_id=clinic_obj.id, created_by_user_id=auth_setup["admin"].id))
     db.commit()

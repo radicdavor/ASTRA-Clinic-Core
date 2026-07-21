@@ -256,3 +256,36 @@ def test_dashboard_returns_only_active_clinic_journeys(client, db, auth_setup):
     names = {row["patient_name"] for row in response.json()["rows"]}
     assert "Dashboard Visible" in names
     assert "Dashboard Hidden" not in names
+
+
+def test_direct_patient_journey_detail_is_scoped_to_active_clinic(client, db, auth_setup):
+    clinic_a = auth_setup["clinic"]
+    clinic_b = Clinic(name="Journey Detail Other Clinic")
+    provider = Provider(full_name="Dr. Journey Scope", active=True)
+    service = Service(name="Journey Scope Service", duration_minutes=30, price=Decimal("120.00"), active=True)
+    room_b = Room(name="Journey Scope Room B", clinic_id=clinic_b.id, active=True)
+    patient_b = Patient(first_name="Journey", last_name="Hidden")
+    db.add_all([clinic_b, provider, service, room_b, patient_b])
+    db.flush()
+    db.add(PatientClinicAssociation(patient_id=patient_b.id, clinic_id=clinic_b.id))
+    appointment_b = Appointment(
+        patient_id=patient_b.id,
+        service_id=service.id,
+        provider_id=provider.id,
+        room_id=room_b.id,
+        clinic_id=clinic_b.id,
+        date=date(2026, 7, 20),
+        start_time=time(11, 0),
+        end_time=time(11, 30),
+        duration_minutes=30,
+    )
+    db.add(appointment_b)
+    db.flush()
+    journey_b = PatientJourney(patient_id=patient_b.id, appointment_id=appointment_b.id, clinic_id=clinic_b.id, intake_channel="manual", current_stage="booked")
+    db.add(journey_b)
+    db.commit()
+
+    response = client.get(f"/api/patient-journeys/{journey_b.id}", headers=auth_headers(client, {"X-Clinic-Id": str(clinic_a.id)}))
+
+    assert response.status_code == 404
+    assert response.json()["detail"] == "Tijek pacijenta nije pronađen"

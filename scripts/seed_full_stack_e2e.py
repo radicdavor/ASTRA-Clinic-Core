@@ -1,0 +1,387 @@
+from __future__ import annotations
+
+import json
+import os
+from datetime import date, datetime, time, timedelta, timezone
+from decimal import Decimal
+from pathlib import Path
+
+from sqlalchemy import select
+
+from app.core.database import SessionLocal
+from app.core.security import hash_password
+from app.models.domain import (
+    Appointment,
+    Clinic,
+    ClinicMembership,
+    Invoice,
+    InvoiceLine,
+    JourneyActivity,
+    Patient,
+    PatientClinicAssociation,
+    PatientJourney,
+    PaymentTransaction,
+    Permission,
+    Provider,
+    Role,
+    Room,
+    Service,
+    User,
+)
+from app.services.seed import PERMISSIONS
+
+
+PASSWORD = "E2e-local-only-123!"
+_PERMISSION_CACHE: dict[str, Permission] = {}
+
+
+def clinic_today() -> date:
+    override = os.getenv("ASTRA_E2E_DATE")
+    if override:
+        return date.fromisoformat(override)
+    return datetime.now(timezone.utc).date()
+
+
+def get_or_create_permission(db, name: str) -> Permission:
+    cached = _PERMISSION_CACHE.get(name)
+    if cached is not None:
+        return cached
+    permission = db.scalar(select(Permission).where(Permission.name == name))
+    if permission:
+        _PERMISSION_CACHE[name] = permission
+        return permission
+    permission = Permission(name=name, description=name)
+    db.add(permission)
+    _PERMISSION_CACHE[name] = permission
+    return permission
+
+
+def role(db, name: str, permission_names: list[str]) -> Role:
+    item = db.scalar(select(Role).where(Role.name == name))
+    permissions = [get_or_create_permission(db, permission_name) for permission_name in permission_names]
+    if item:
+        item.permissions = permissions
+        return item
+    item = Role(name=name, description=f"Synthetic E2E role {name}", permissions=permissions)
+    db.add(item)
+    return item
+
+
+def user(db, email: str, full_name: str, role_obj: Role) -> User:
+    item = db.scalar(select(User).where(User.email == email))
+    if item:
+        item.full_name = full_name
+        item.password_hash = hash_password(PASSWORD)
+        item.role = role_obj
+        item.active = True
+        return item
+    item = User(email=email, full_name=full_name, password_hash=hash_password(PASSWORD), role=role_obj, active=True)
+    db.add(item)
+    return item
+
+
+def link_membership(db, user_obj: User, clinic: Clinic) -> None:
+    existing = db.scalar(select(ClinicMembership).where(ClinicMembership.user_id == user_obj.id, ClinicMembership.clinic_id == clinic.id))
+    if existing:
+        existing.active = True
+        return
+    db.add(ClinicMembership(user_id=user_obj.id, clinic_id=clinic.id, active=True, created_by_user_id=user_obj.id))
+
+
+def link_patient(db, patient: Patient, clinic: Clinic, creator: User) -> None:
+    existing = db.scalar(select(PatientClinicAssociation).where(PatientClinicAssociation.patient_id == patient.id, PatientClinicAssociation.clinic_id == clinic.id))
+    if existing:
+        existing.active = True
+        return
+    db.add(PatientClinicAssociation(patient_id=patient.id, clinic_id=clinic.id, active=True, created_by_user_id=creator.id))
+
+
+def clinic(db, name: str, timezone_name: str = "Europe/Zagreb") -> Clinic:
+    item = db.scalar(select(Clinic).where(Clinic.name == name))
+    if item:
+        item.active = True
+        item.visible_in_catalog = True
+        item.timezone = timezone_name
+        return item
+    item = Clinic(name=name, timezone=timezone_name, active=True, visible_in_catalog=True)
+    db.add(item)
+    return item
+
+
+def service(db, name: str, code: str, duration: int, price: str) -> Service:
+    item = db.scalar(select(Service).where(Service.code == code))
+    if item:
+        item.name = name
+        item.duration_minutes = duration
+        item.price = Decimal(price)
+        item.active = True
+        item.visible_in_catalog = True
+        return item
+    item = Service(name=name, code=code, duration_minutes=duration, price=Decimal(price), active=True, visible_in_catalog=True)
+    db.add(item)
+    return item
+
+
+def room(db, name: str, clinic_obj: Clinic, allowed_services: list[Service]) -> Room:
+    item = db.scalar(select(Room).where(Room.name == name))
+    if not item:
+        item = Room(name=name, type="e2e", clinic=clinic_obj, active=True, visible_in_catalog=True)
+        db.add(item)
+    item.clinic = clinic_obj
+    item.active = True
+    item.visible_in_catalog = True
+    item.allowed_services = allowed_services
+    return item
+
+
+def provider(db, full_name: str, email: str, clinic_obj: Clinic) -> Provider:
+    item = db.scalar(select(Provider).where(Provider.email == email))
+    weekly = {str(day): {"enabled": True, "start": "07:00", "end": "20:00"} for day in range(5)}
+    if item:
+        item.full_name = full_name
+        item.clinic = clinic_obj
+        item.active = True
+        item.available_for_work = True
+        item.weekly_working_hours = weekly
+        return item
+    item = Provider(
+        full_name=full_name,
+        specialty="Gastroenterologija",
+        email=email,
+        staff_role="physician",
+        clinic=clinic_obj,
+        active=True,
+        available_for_work=True,
+        weekly_working_hours=weekly,
+    )
+    db.add(item)
+    return item
+
+
+def patient(db, first_name: str, last_name: str, email: str) -> Patient:
+    item = db.scalar(select(Patient).where(Patient.email == email))
+    if item:
+        return item
+    item = Patient(first_name=first_name, last_name=last_name, date_of_birth=date(1990, 1, 2), email=email, phone="099000000")
+    db.add(item)
+    return item
+
+
+def appointment(
+    db,
+    patient_obj: Patient,
+    service_obj: Service,
+    provider_obj: Provider,
+    room_obj: Room,
+    clinic_obj: Clinic,
+    day: date,
+    start: time,
+    end: time,
+    creator: User,
+    status: str = "scheduled",
+) -> Appointment:
+    item = db.scalar(
+        select(Appointment).where(
+            Appointment.patient_id == patient_obj.id,
+            Appointment.clinic_id == clinic_obj.id,
+            Appointment.date == day,
+            Appointment.start_time == start,
+        )
+    )
+    duration = int((datetime.combine(day, end) - datetime.combine(day, start)).total_seconds() // 60)
+    if item:
+        item.service = service_obj
+        item.provider = provider_obj
+        item.room = room_obj
+        item.end_time = end
+        item.duration_minutes = duration
+        item.status = status
+        return item
+    item = Appointment(
+        patient=patient_obj,
+        service=service_obj,
+        provider=provider_obj,
+        room=room_obj,
+        clinic=clinic_obj,
+        date=day,
+        start_time=start,
+        end_time=end,
+        duration_minutes=duration,
+        status=status,
+        source="manual",
+        created_by=creator.id,
+    )
+    db.add(item)
+    return item
+
+
+def journey(db, appointment_obj: Appointment, stage: str, creator: User, payment_status: str = "not_due") -> PatientJourney:
+    item = db.scalar(select(PatientJourney).where(PatientJourney.appointment_id == appointment_obj.id))
+    if item:
+        item.current_stage = stage
+        item.clinic_id = appointment_obj.clinic_id
+        item.payment_status = payment_status
+        return item
+    item = PatientJourney(
+        patient_id=appointment_obj.patient_id,
+        appointment=appointment_obj,
+        clinic_id=appointment_obj.clinic_id,
+        intake_channel="manual",
+        current_stage=stage,
+        document_status="complete",
+        preparation_status="complete",
+        check_in_status="not_arrived" if stage in {"booked", "ready_for_arrival"} else "ready",
+        encounter_status="completed" if stage in {"awaiting_payment", "completed"} else "not_started",
+        consumables_status="not_applicable" if stage in {"awaiting_payment", "completed"} else "not_ready",
+        billing_status="closed" if stage == "completed" else ("invoice_created" if stage == "awaiting_payment" else "not_ready"),
+        payment_status=payment_status,
+        created_by=creator.id,
+    )
+    db.add(item)
+    return item
+
+
+def activity(
+    db,
+    journey_obj: PatientJourney,
+    appointment_obj: Appointment,
+    service_obj: Service,
+    provider_obj: Provider,
+    room_obj: Room,
+    key: str,
+    sequence: int,
+    status: str = "planned",
+    offset_minutes: int = 0,
+    duration_minutes: int | None = None,
+) -> JourneyActivity:
+    item = db.scalar(select(JourneyActivity).where(JourneyActivity.journey_id == journey_obj.id, JourneyActivity.activity_key == key))
+    start_dt = datetime.combine(appointment_obj.date, appointment_obj.start_time) + timedelta(minutes=offset_minutes)
+    end_dt = start_dt + timedelta(minutes=duration_minutes or service_obj.duration_minutes)
+    if item:
+        item.status = status
+        item.planned_start = start_dt
+        item.planned_end = end_dt
+        item.appointment = appointment_obj if sequence == 1 else item.appointment
+        item.form_resolution_status = "not_required"
+        return item
+    item = JourneyActivity(
+        journey=journey_obj,
+        appointment=appointment_obj if sequence == 1 else None,
+        service=service_obj,
+        activity_key=key,
+        activity_kind="procedure" if "gastroscopy" in key or "colonoscopy" in key else "specialist_consultation",
+        specialty_key="gastroenterology",
+        clinic_id=appointment_obj.clinic_id,
+        primary_provider=provider_obj,
+        room=room_obj,
+        sequence=sequence,
+        required=True,
+        planned_start=start_dt,
+        planned_end=end_dt,
+        status=status,
+        form_resolution_status="not_required",
+        consumables_status="not_applicable" if status == "completed" else "not_ready",
+        billing_status="ready" if status == "completed" else "not_ready",
+        created_by=journey_obj.created_by,
+    )
+    db.add(item)
+    return item
+
+
+def seed() -> dict:
+    day = clinic_today()
+    with SessionLocal() as db:
+        _PERMISSION_CACHE.clear()
+        _PERMISSION_CACHE.update({item.name: item for item in db.scalars(select(Permission)).all()})
+        all_permissions = role(db, "e2e_admin", PERMISSIONS)
+        receptionist_role = role(db, "e2e_receptionist", ["patients.read", "patients.write", "appointments.read", "appointments.write", "appointments.patient_availability.read", "services.read", "journey.read", "journey.transition", "checkin.update", "encounter.read", "audit.access_events.write"])
+        dual_role = role(db, "e2e_dual", ["patients.read", "appointments.read", "appointments.write", "appointments.patient_availability.read", "services.read", "journey.read", "checkin.update", "encounter.read"])
+
+        clinic_a = clinic(db, "E2E Klinika A")
+        clinic_b = clinic(db, "E2E Klinika B")
+        admin_a = user(db, "e2e.admin.a@example.invalid", "E2E Admin A", all_permissions)
+        reception_a = user(db, "e2e.reception.a@example.invalid", "E2E Recepcija A", receptionist_role)
+        dual = user(db, "e2e.dual@example.invalid", "E2E Dvije Klinike", dual_role)
+        system_admin = user(db, "e2e.system@example.invalid", "E2E System Admin", all_permissions)
+        db.flush()
+        for user_obj, clinic_obj in [(admin_a, clinic_a), (reception_a, clinic_a), (dual, clinic_a), (dual, clinic_b)]:
+            link_membership(db, user_obj, clinic_obj)
+
+        consult = service(db, "E2E prvi gastro pregled", "E2E-CONSULT", 30, "90.00")
+        gastro = service(db, "E2E gastroskopija", "E2E-GASTRO", 30, "150.00")
+        colon = service(db, "E2E kolonoskopija", "E2E-COLON", 45, "220.00")
+        room_a1 = room(db, "E2E A ordinacija", clinic_a, [consult, gastro, colon])
+        room_a2 = room(db, "E2E A endoskopija", clinic_a, [gastro, colon])
+        room_b1 = room(db, "E2E B ordinacija", clinic_b, [consult, gastro, colon])
+        provider_a = provider(db, "dr. E2E A", "e2e.doctor.a@example.invalid", clinic_a)
+        provider_b = provider(db, "dr. E2E B", "e2e.doctor.b@example.invalid", clinic_b)
+        db.flush()
+
+        shared = patient(db, "E2E", "Zajednicki Pacijent", "e2e.patient.shared@example.invalid")
+        only_b = patient(db, "E2E", "Samo B Pacijent", "e2e.patient.onlyb@example.invalid")
+        paid_patient = patient(db, "E2E", "Placeni Pacijent", "e2e.patient.paid@example.invalid")
+        db.flush()
+        link_patient(db, shared, clinic_a, admin_a)
+        link_patient(db, shared, clinic_b, admin_a)
+        link_patient(db, only_b, clinic_b, admin_a)
+        link_patient(db, paid_patient, clinic_a, admin_a)
+
+        b_appt = appointment(db, shared, consult, provider_b, room_b1, clinic_b, day, time(9, 0), time(9, 30), admin_a)
+        a_appt = appointment(db, shared, consult, provider_a, room_a1, clinic_a, day, time(10, 0), time(10, 30), admin_a)
+        paid_appt = appointment(db, paid_patient, gastro, provider_a, room_a2, clinic_a, day, time(12, 0), time(12, 30), admin_a)
+        only_b_appt = appointment(db, only_b, gastro, provider_b, room_b1, clinic_b, day, time(11, 0), time(11, 30), admin_a)
+        db.flush()
+
+        a_journey = journey(db, a_appt, "booked", admin_a)
+        b_journey = journey(db, b_appt, "booked", admin_a)
+        paid_journey = journey(db, paid_appt, "completed", admin_a, payment_status="paid")
+        only_b_journey = journey(db, only_b_appt, "booked", admin_a)
+        db.flush()
+
+        activity(db, a_journey, a_appt, consult, provider_a, room_a1, "consultation", 1, status="planned", offset_minutes=0, duration_minutes=30)
+        activity(db, a_journey, a_appt, gastro, provider_a, room_a2, "gastroscopy", 2, status="planned", offset_minutes=30, duration_minutes=30)
+        activity(db, b_journey, b_appt, consult, provider_b, room_b1, "clinic-b-consultation", 1, status="planned")
+        activity(db, only_b_journey, only_b_appt, gastro, provider_b, room_b1, "clinic-b-hidden", 1, status="planned")
+        activity(db, paid_journey, paid_appt, gastro, provider_a, room_a2, "paid-gastroscopy", 1, status="completed")
+        db.flush()
+
+        invoice = db.scalar(select(Invoice).where(Invoice.journey_id == paid_journey.id))
+        if not invoice:
+            invoice = Invoice(patient_id=paid_patient.id, clinic_id=clinic_a.id, appointment_id=paid_appt.id, journey_id=paid_journey.id, invoice_number="E2E-PAID-001", invoice_date=day, status="issued", total_amount=Decimal("150.00"), payment_status="paid")
+            db.add(invoice)
+            db.flush()
+            db.add(InvoiceLine(invoice_id=invoice.id, service_id=gastro.id, activity_id=paid_journey.activities[0].id if paid_journey.activities else None, description="E2E gastroskopija", quantity=Decimal("1"), unit_price=Decimal("150.00"), total=Decimal("150.00")))
+            db.add(PaymentTransaction(invoice_id=invoice.id, amount=Decimal("150.00"), method="card", reference="E2E", created_by=admin_a.id))
+
+        db.commit()
+
+        payload = {
+            "date": day.isoformat(),
+            "password": PASSWORD,
+            "users": {
+                "adminA": admin_a.email,
+                "receptionA": reception_a.email,
+                "dual": dual.email,
+                "systemAdmin": system_admin.email,
+            },
+            "clinics": {"a": clinic_a.id, "b": clinic_b.id},
+            "patients": {"shared": shared.id, "onlyB": only_b.id, "paid": paid_patient.id},
+            "journeys": {"a": a_journey.id, "b": b_journey.id, "onlyB": only_b_journey.id, "paid": paid_journey.id},
+            "appointments": {"clinicBConflict": b_appt.id, "clinicAVisit": a_appt.id},
+            "services": {"consult": consult.id, "gastro": gastro.id, "colon": colon.id},
+            "providers": {"a": provider_a.id, "b": provider_b.id},
+            "rooms": {"a1": room_a1.id, "a2": room_a2.id, "b1": room_b1.id},
+        }
+        output = os.getenv("ASTRA_E2E_SEED_FILE")
+        if output:
+            Path(output).write_text(json.dumps(payload, indent=2), encoding="utf-8")
+        return payload
+
+
+if __name__ == "__main__":
+    result = seed()
+    output_file = os.getenv("ASTRA_E2E_SEED_FILE")
+    if output_file:
+        print(json.dumps({"seed_file": output_file, "date": result["date"]}, indent=2))
+    else:
+        print(json.dumps(result, indent=2))

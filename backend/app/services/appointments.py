@@ -5,7 +5,7 @@ from sqlalchemy import and_, select, text
 from sqlalchemy.orm import Session
 
 from app.audit.service import audit, snapshot
-from app.auth.dependencies import Actor
+from app.auth.dependencies import Actor, active_clinic_memberships
 from app.models.domain import (
     Appointment,
     AppointmentSource,
@@ -140,6 +140,10 @@ def create_appointment_with_journey(db: Session, data: dict, actor: Actor, reque
     if data.get("clinic_id") is None:
         room = db.get(Room, data["room_id"])
         data["clinic_id"] = room.clinic_id if room else None
+    if data.get("clinic_id") is None and actor.user_id is not None:
+        memberships = active_clinic_memberships(db, actor.user_id)
+        if len(memberships) == 1:
+            data["clinic_id"] = memberships[0].clinic_id
     appointment = Appointment(**data, created_by=actor.user_id)
     db.add(appointment)
     db.flush()

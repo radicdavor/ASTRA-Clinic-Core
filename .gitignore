@@ -10,6 +10,8 @@ frontend/dist/
 frontend/.vite/
 frontend/test-results/
 frontend/playwright-report/
+frontend/e2e-db/.seed.json
+frontend/.e2e-tmp/
 
 backend/.venv/
 backend/__pycache__/
