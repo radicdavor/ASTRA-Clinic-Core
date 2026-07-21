@@ -26,7 +26,7 @@ CLINICAL_PLAN_NEXT_ACTIONS = {
 }
 CLINICAL_DOCUMENT_SOURCE_TYPES = {"internal", "external", "scanned", "uploaded"}
 CLINICAL_DOCUMENT_TYPES = {"consultation", "gastroscopy", "colonoscopy", "pathology", "laboratory", "radiology", "discharge", "referral", "other"}
-CLINICAL_DOCUMENT_REVIEW_STATUSES = {"draft", "extracted", "needs_physician_review", "reviewed", "rejected", "superseded"}
+CLINICAL_DOCUMENT_REVIEW_STATUSES = {"draft", "extracted", "needs_physician_review", "reviewed", "rejected", "superseded", "signed"}
 CLINICAL_DOCUMENT_AI_EXTRACTION_STATUSES = {"not_run", "generated", "edited", "accepted", "rejected", "superseded"}
 PATIENT_CLINICAL_SUMMARY_STATUSES = {"draft_ai", "needs_review", "reviewed", "stale", "rejected", "superseded"}
 CLINICAL_READINESS_STATUSES = {
@@ -1204,6 +1204,7 @@ class ServiceUpdate(BaseModel):
 class ClinicOut(ORMModel):
     id: int
     name: str
+    institution_key: str = "default"
     timezone: str = "Europe/Zagreb"
     active: bool
     visible_in_catalog: bool = True
@@ -1478,6 +1479,7 @@ class ClinicalDecisionTimelineItem(BaseModel):
 
 class ClinicalDocumentBase(BaseModel):
     patient_id: int
+    clinic_id: int | None = None
     source_type: str = "uploaded"
     document_type: str = "other"
     origin: str | None = None
@@ -1513,6 +1515,7 @@ class ClinicalDocumentCreate(ClinicalDocumentBase):
 
 class ClinicalDocumentUpload(BaseModel):
     patient_id: int
+    clinic_id: int | None = None
     title: str
     source_type: str = "uploaded"
     document_type: str = "other"
@@ -1536,6 +1539,8 @@ class ClinicalDocumentUpload(BaseModel):
 
 
 class ClinicalDocumentUpdate(BaseModel):
+    patient_id: int | None = None
+    clinic_id: int | None = None
     source_type: str | None = None
     document_type: str | None = None
     origin: str | None = None
@@ -1567,6 +1572,9 @@ class ClinicalDocumentUpdate(BaseModel):
 
 class ClinicalDocumentOut(ClinicalDocumentBase, ORMModel):
     id: int
+    author_user_id: int | None = None
+    author_professional_role: str | None = None
+    is_clinical_record: bool = True
     review_status: str
     ai_extraction_status: str
     ai_extraction_generated_at: DateTimeType | None = None
@@ -1591,6 +1599,23 @@ class ClinicalDocumentOut(ClinicalDocumentBase, ORMModel):
         if value not in CLINICAL_DOCUMENT_AI_EXTRACTION_STATUSES:
             raise ValueError("Nepoznat status AI ekstrakcije")
         return value
+
+
+class ClinicalDocumentAddendumCreate(BaseModel):
+    reason: str = Field(min_length=2, max_length=1000)
+    content: str = Field(min_length=2, max_length=10000)
+
+
+class ClinicalDocumentAddendumOut(ORMModel):
+    id: int
+    original_document_id: int
+    author_user_id: int
+    reason: str
+    content: str
+    status: str
+    signed_at: DateTimeType | None = None
+    created_at: DateTimeType
+    updated_at: DateTimeType
 
 
 class ClinicalEvidenceTimelineItem(BaseModel):

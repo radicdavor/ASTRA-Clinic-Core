@@ -5,10 +5,11 @@ from sqlalchemy import or_, select
 from sqlalchemy.orm import Session, joinedload
 
 from app.audit.service import audit, snapshot
-from app.auth.dependencies import Actor, require_permission
+from app.auth.dependencies import Actor, active_clinic_memberships, get_current_actor, require_permission
 from app.core.database import get_db
 from app.models.domain import AuditLog, ClinicalDocument, Patient
-from app.schemas.common import ClinicalDocumentCreate, ClinicalDocumentOut, ClinicalDocumentUpdate, ClinicalDocumentUpload, ClinicalEvidenceTimelineItem, ErrorResponse
+from app.schemas.common import ClinicalDocumentAddendumCreate, ClinicalDocumentAddendumOut, ClinicalDocumentCreate, ClinicalDocumentOut, ClinicalDocumentUpdate, ClinicalDocumentUpload, ClinicalEvidenceTimelineItem, ErrorResponse
+from app.services.clinical_document_access import create_document_addendum, get_authored_draft_for_edit, get_institution_scoped_clinical_document_for_read, institution_scoped_clinical_documents_statement
 from app.services.clinical_documents import extract_document_knowledge, get_document_or_404, has_extracted_content, initial_ai_extraction_status, initial_document_review_status, mark_document_ai_extraction_edited, mark_document_needs_review, validate_document_links
 from app.services.clinical_evidence_timeline import classify_audit_log
 
@@ -22,6 +23,29 @@ def patch_model(obj, data: dict) -> None:
         setattr(obj, key, value)
 
 
+def default_document_clinic_id(db: Session, payload_clinic_id: int | None, appointment_id: int | None, actor: Actor) -> int | None:
+    if payload_clinic_id is not None:
+        from app.models.domain import Clinic
+
+        clinic = db.get(Clinic, payload_clinic_id)
+        if not clinic or not clinic.active:
+            raise HTTPException(404, detail="Klinika nije pronađena")
+        if actor.user_id is not None:
+            institution_keys = {membership.clinic.institution_key for membership in active_clinic_memberships(db, actor.user_id)}
+            if clinic.institution_key not in institution_keys:
+                raise HTTPException(403, detail="Korisnik nema pristup ustanovi odabrane klinike")
+        return payload_clinic_id
+    if appointment_id is not None:
+        from app.models.domain import Appointment
+
+        appointment = db.get(Appointment, appointment_id)
+        return appointment.clinic_id if appointment else None
+    if actor.user_id is None:
+        return None
+    memberships = active_clinic_memberships(db, actor.user_id)
+    return memberships[0].clinic_id if memberships else None
+
+
 @router.get("/clinical-documents", response_model=list[ClinicalDocumentOut])
 def list_clinical_documents(
     patient_id: int | None = None,
@@ -31,9 +55,9 @@ def list_clinical_documents(
     review_status: str | None = None,
     q: str | None = None,
     db: Session = Depends(get_db),
-    actor: Actor = Depends(require_permission("clinical_documents.read")),
+    actor: Actor = Depends(get_current_actor),
 ):
-    stmt = select(ClinicalDocument).options(joinedload(ClinicalDocument.patient)).order_by(ClinicalDocument.document_date.desc().nulls_last(), ClinicalDocument.id.desc())
+    stmt = institution_scoped_clinical_documents_statement(db, actor).order_by(ClinicalDocument.document_date.desc().nulls_last(), ClinicalDocument.id.desc())
     if patient_id:
         stmt = stmt.where(ClinicalDocument.patient_id == patient_id)
     if document_type:
@@ -59,6 +83,7 @@ def create_clinical_document(
 ):
     validate_document_links(db, payload.patient_id, payload.appointment_id)
     values = payload.model_dump()
+    values["clinic_id"] = default_document_clinic_id(db, values.get("clinic_id"), values.get("appointment_id"), actor)
     now = datetime.now(timezone.utc)
     initial_ai_status = initial_ai_extraction_status(values)
     document = ClinicalDocument(
@@ -68,6 +93,9 @@ def create_clinical_document(
         ai_extraction_generated_at=now if initial_ai_status != "not_run" else None,
         ai_extraction_updated_at=now if initial_ai_status != "not_run" else None,
         physician_reviewed=False,
+        author_user_id=actor.user_id,
+        author_professional_role=actor.user.role.name if actor.user and actor.user.role else None,
+        is_clinical_record=True,
     )
     db.add(document)
     db.flush()
@@ -101,6 +129,7 @@ def upload_clinical_document(
     attachment_path = f"local-placeholder/{payload.attachment_name}" if payload.attachment_name else None
     document = ClinicalDocument(
         patient_id=payload.patient_id,
+        clinic_id=default_document_clinic_id(db, payload.clinic_id, payload.appointment_id, actor),
         title=payload.title,
         source_type=payload.source_type,
         document_type=payload.document_type,
@@ -114,6 +143,9 @@ def upload_clinical_document(
         review_status="draft",
         ai_extraction_status="not_run",
         physician_reviewed=False,
+        author_user_id=actor.user_id,
+        author_professional_role=actor.user.role.name if actor.user and actor.user.role else None,
+        is_clinical_record=True,
     )
     db.add(document)
     db.flush()
@@ -124,11 +156,10 @@ def upload_clinical_document(
 
 
 @router.get("/clinical-documents/search", response_model=list[ClinicalDocumentOut])
-def search_clinical_documents(q: str, db: Session = Depends(get_db), actor: Actor = Depends(require_permission("clinical_documents.read"))):
+def search_clinical_documents(q: str, db: Session = Depends(get_db), actor: Actor = Depends(get_current_actor)):
     like = f"%{q}%"
     return db.scalars(
-        select(ClinicalDocument)
-        .options(joinedload(ClinicalDocument.patient))
+        institution_scoped_clinical_documents_statement(db, actor)
         .where(or_(ClinicalDocument.title.ilike(like), ClinicalDocument.origin.ilike(like), ClinicalDocument.institution.ilike(like), ClinicalDocument.raw_text.ilike(like), ClinicalDocument.ai_summary.ilike(like)))
         .order_by(ClinicalDocument.document_date.desc().nulls_last(), ClinicalDocument.id.desc())
         .limit(50)
@@ -136,16 +167,22 @@ def search_clinical_documents(q: str, db: Session = Depends(get_db), actor: Acto
 
 
 @router.get("/clinical-documents/{document_id}", response_model=ClinicalDocumentOut)
-def get_clinical_document(document_id: int, db: Session = Depends(get_db), actor: Actor = Depends(require_permission("clinical_documents.read"))):
-    return get_document_or_404(db, document_id)
+def get_clinical_document(document_id: int, request: Request, db: Session = Depends(get_db), actor: Actor = Depends(get_current_actor)):
+    document = get_institution_scoped_clinical_document_for_read(db, document_id, actor, request)
+    db.commit()
+    db.refresh(document)
+    return document
 
 
 @router.get("/clinical-documents/{document_id}/evidence-timeline", response_model=list[ClinicalEvidenceTimelineItem])
-def clinical_document_evidence_timeline(document_id: int, db: Session = Depends(get_db), actor: Actor = Depends(require_permission("clinical_documents.read"))):
-    get_document_or_404(db, document_id)
+def clinical_document_evidence_timeline(document_id: int, request: Request, db: Session = Depends(get_db), actor: Actor = Depends(get_current_actor)):
+    get_institution_scoped_clinical_document_for_read(db, document_id, actor, request, "source_document_viewed")
     logs = db.scalars(select(AuditLog).where(AuditLog.entity_type == "ClinicalDocument", AuditLog.entity_id == document_id).order_by(AuditLog.created_at.desc(), AuditLog.id.desc())).all()
     items: list[ClinicalEvidenceTimelineItem] = []
+    access_only_actions = {"clinical_document_viewed", "source_document_viewed", "signed_report_viewed", "source_document_printed"}
     for log in logs:
+        if log.action in access_only_actions:
+            continue
         classification = classify_audit_log(log)
         items.append(
             ClinicalEvidenceTimelineItem(
@@ -173,9 +210,9 @@ def update_clinical_document(
     payload: ClinicalDocumentUpdate,
     request: Request,
     db: Session = Depends(get_db),
-    actor: Actor = Depends(require_permission("clinical_documents.review")),
+    actor: Actor = Depends(get_current_actor),
 ):
-    document = get_document_or_404(db, document_id)
+    document = get_authored_draft_for_edit(db, document_id, actor)
     update_data = payload.model_dump(exclude_unset=True)
     if document.checksum_sha256 and "attachment_path" in update_data and update_data["attachment_path"] != document.attachment_path:
         raise HTTPException(409, detail="Putanja pohranjenog izvornog dokumenta je nepromjenjiva")
@@ -199,6 +236,20 @@ def update_clinical_document(
     return get_document_or_404(db, document.id)
 
 
+@router.post("/clinical-documents/{document_id}/addenda", response_model=ClinicalDocumentAddendumOut)
+def add_clinical_document_addendum(
+    document_id: int,
+    payload: ClinicalDocumentAddendumCreate,
+    request: Request,
+    db: Session = Depends(get_db),
+    actor: Actor = Depends(get_current_actor),
+):
+    addendum = create_document_addendum(db, document_id, payload.reason, payload.content, actor, request)
+    db.commit()
+    db.refresh(addendum)
+    return addendum
+
+
 @router.post("/clinical-documents/{document_id}/extract", response_model=ClinicalDocumentOut)
 def extract_clinical_document(
     document_id: int,
@@ -206,7 +257,7 @@ def extract_clinical_document(
     db: Session = Depends(get_db),
     actor: Actor = Depends(require_permission("clinical_documents.review")),
 ):
-    document = get_document_or_404(db, document_id)
+    document = get_institution_scoped_clinical_document_for_read(db, document_id, actor, request)
     before = snapshot(document)
     now = datetime.now(timezone.utc)
     patch_model(document, extract_document_knowledge(document))
@@ -231,7 +282,7 @@ def review_clinical_document(
     db: Session = Depends(get_db),
     actor: Actor = Depends(require_permission("clinical_documents.write")),
 ):
-    document = get_document_or_404(db, document_id)
+    document = get_institution_scoped_clinical_document_for_read(db, document_id, actor, request)
     before = snapshot(document)
     now = datetime.now(timezone.utc)
     document.review_status = "reviewed"
@@ -255,7 +306,7 @@ def reject_clinical_document_summary(
     db: Session = Depends(get_db),
     actor: Actor = Depends(require_permission("clinical_documents.write")),
 ):
-    document = get_document_or_404(db, document_id)
+    document = get_institution_scoped_clinical_document_for_read(db, document_id, actor, request)
     before = snapshot(document)
     document.ai_summary = None
     document.key_findings = []
@@ -274,7 +325,7 @@ def reject_clinical_document_summary(
 
 
 @router.get("/patients/{patient_id}/clinical-documents", response_model=list[ClinicalDocumentOut])
-def patient_clinical_documents(patient_id: int, db: Session = Depends(get_db), actor: Actor = Depends(require_permission("clinical_documents.read"))):
+def patient_clinical_documents(patient_id: int, db: Session = Depends(get_db), actor: Actor = Depends(get_current_actor)):
     if not db.get(Patient, patient_id):
         raise HTTPException(404, detail="Pacijent nije pronaden")
-    return db.scalars(select(ClinicalDocument).options(joinedload(ClinicalDocument.patient)).where(ClinicalDocument.patient_id == patient_id).order_by(ClinicalDocument.document_date.desc().nulls_last(), ClinicalDocument.id.desc())).all()
+    return db.scalars(institution_scoped_clinical_documents_statement(db, actor).where(ClinicalDocument.patient_id == patient_id).order_by(ClinicalDocument.document_date.desc().nulls_last(), ClinicalDocument.id.desc())).all()

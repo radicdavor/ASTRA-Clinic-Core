@@ -12,7 +12,7 @@ Clinic access to a patient is explicit through `PatientClinicAssociation(patient
 
 Users receive clinic scope through `ClinicMembership(user_id, clinic_id)`. A user may work in multiple clinics, but deactivated memberships do not grant access.
 
-For clinic-scoped clinical and financial data, authorization requires all three conditions:
+For clinic-scoped operational and financial data, authorization requires all three conditions:
 
 1. the required permission;
 2. an active membership in the selected clinic;
@@ -50,6 +50,48 @@ Aggregate clinical and financial objects belong to one clinic. The current addit
 Direct object access across clinics should return `404` for object reads when possible, so the API does not reveal whether the object exists in another clinic.
 
 Clinical, scheduling, document, billing, and dashboard list/search endpoints must return only data from the active clinic.
+
+## Institution-wide clinical read
+
+Accepted model name:
+
+```text
+Institution-wide clinical read with clinic-scoped operations and author-controlled writes
+```
+
+Clinical reading is intentionally broader than operational clinic scope. Medical staff inside the same institution may read clinical records created in any clinic, location, or specialty of that institution when all conditions are true:
+
+1. the actor is authenticated as a user;
+2. the actor has an active `ClinicMembership` in at least one clinic in the same institution;
+3. the actor role has `professional_category = medical_staff`;
+4. the actor has `clinical.documents.read_institution`;
+5. the document is marked as clinical record material;
+6. the document/patient belongs to the same institution.
+
+This permits continuity of care: a nurse in Clinic A may read a gastroenterology report from Clinic B of the same institution, and a physician may read nursing documentation when needed for care.
+
+This does not grant access to invoices, payments, discounts, commercial notes, HR data, system configuration, or clinic-local operational dashboards.
+
+Implementation note: this phase uses additive `Clinic.institution_key` as the institution boundary. Existing legacy documents without clinic scope are treated as `default` institution data only for backward-compatible local/synthetic behavior; new generated and uploaded clinical documents should carry `clinic_id`.
+
+## Author-controlled clinical writes
+
+Institution-wide read is not edit permission. Standard draft editing is restricted to the document author through `author_user_id` and `clinical.documents.edit_own_draft`.
+
+Signed clinical documents are immutable. Standard `PATCH`/`PUT` paths must reject signed documents. Corrections are recorded as separate addenda with:
+
+- their own ID;
+- `original_document_id`;
+- `author_user_id`;
+- timestamp;
+- reason;
+- content;
+- status/signature state;
+- audit event.
+
+The original document remains unchanged and readable.
+
+## Patient identity and scheduling visibility
 
 The patient identity directory is intentionally broader: patient lookup during scheduling and exam entry may search the shared patient identity table to avoid duplicate entry and speed up form filling.
 

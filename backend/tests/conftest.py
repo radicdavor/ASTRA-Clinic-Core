@@ -82,6 +82,12 @@ def auth_setup(db: Session) -> dict[str, User]:
         "clinical_documents.read",
         "clinical_documents.write",
         "clinical_documents.review",
+        "clinical.documents.read_institution",
+        "clinical.documents.edit_own_draft",
+        "clinical.documents.add_addendum",
+        "clinical.documents.sign_own",
+        "clinical.documents.print",
+        "clinical.documents.download",
         "services.read",
         "services.write",
         "inventory.read",
@@ -154,7 +160,7 @@ def auth_setup(db: Session) -> dict[str, User]:
         "system.admin",
     ]
     permissions = {name: Permission(name=name, description=name) for name in permission_names}
-    admin_role = Role(name="admin", description="Admin", permissions=list(permissions.values()))
+    admin_role = Role(name="admin", description="Admin", professional_category="medical_staff", permissions=list(permissions.values()))
     limited_role = Role(name="limited", description="Limited", permissions=[permissions["inventory.read"], permissions["billing.read"]])
     admin = User(email="admin@test.local", full_name="Admin", password_hash=hash_password("secret"), role=admin_role)
     limited = User(email="limited@test.local", full_name="Limited", password_hash=hash_password("secret"), role=limited_role)

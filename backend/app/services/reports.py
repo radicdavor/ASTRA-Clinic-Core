@@ -53,12 +53,16 @@ def create_signed_report(db: Session, instance: ClinicalFormInstance, actor_user
     title = f"{instance.form_version.definition.name} — potpisani nalaz"
     document = ClinicalDocument(
         patient_id=journey.patient_id,
+        clinic_id=activity.clinic_id or journey.clinic_id,
         source_type="generated_signed_report",
         document_type=document_type,
         origin="ASTRA Clinic Core",
         document_date=date.today(),
         title=title,
         author=signer.full_name,
+        author_user_id=actor_user_id,
+        author_professional_role=signer.role.name if signer.role else None,
+        is_clinical_record=True,
         institution="ASTRA Clinic",
         raw_text=instance.rendered_summary or "",
         review_status="signed",

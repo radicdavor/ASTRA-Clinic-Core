@@ -20,16 +20,17 @@ def get_document_or_404(db: Session, document_id: int) -> ClinicalDocument:
     return document
 
 
-def validate_document_links(db: Session, patient_id: int, appointment_id: int | None) -> None:
+def validate_document_links(db: Session, patient_id: int, appointment_id: int | None) -> Appointment | None:
     if not db.get(Patient, patient_id):
         raise HTTPException(404, detail="Pacijent nije pronaden")
     if appointment_id is None:
-        return
+        return None
     appointment = db.get(Appointment, appointment_id)
     if not appointment:
         raise HTTPException(404, detail="Termin nije pronaden")
     if appointment.patient_id != patient_id:
         raise HTTPException(422, detail="Dokument i termin moraju pripadati istom pacijentu")
+    return appointment
 
 
 def extract_document_knowledge(document: ClinicalDocument) -> dict:

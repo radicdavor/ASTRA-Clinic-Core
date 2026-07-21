@@ -68,6 +68,7 @@ class Role(Base):
     __tablename__ = "roles"
     id: Mapped[int] = mapped_column(primary_key=True)
     name: Mapped[str] = mapped_column(String(80), unique=True)
+    professional_category: Mapped[str] = mapped_column(String(60), default="administrative", index=True)
     description: Mapped[str | None] = mapped_column(Text)
     permissions: Mapped[list["Permission"]] = relationship(secondary=role_permissions, back_populates="roles")
 
@@ -155,6 +156,7 @@ class Clinic(TimestampMixin, Base):
     __tablename__ = "clinics"
     id: Mapped[int] = mapped_column(primary_key=True)
     name: Mapped[str] = mapped_column(String(120), unique=True, index=True)
+    institution_key: Mapped[str] = mapped_column(String(120), default="default", index=True)
     timezone: Mapped[str] = mapped_column(String(80), default="Europe/Zagreb")
     active: Mapped[bool] = mapped_column(Boolean, default=True, index=True)
     visible_in_catalog: Mapped[bool] = mapped_column(Boolean, default=True, index=True)
@@ -329,6 +331,9 @@ class ClinicalDocument(TimestampMixin, Base):
     document_date: Mapped[date | None] = mapped_column(Date, index=True)
     title: Mapped[str] = mapped_column(String(220), index=True)
     author: Mapped[str | None] = mapped_column(String(160))
+    author_user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), index=True)
+    author_professional_role: Mapped[str | None] = mapped_column(String(80))
+    is_clinical_record: Mapped[bool] = mapped_column(Boolean, default=True, index=True)
     institution: Mapped[str | None] = mapped_column(String(180))
     raw_text: Mapped[str | None] = mapped_column(Text)
     ai_summary: Mapped[str | None] = mapped_column(Text)
@@ -359,7 +364,21 @@ class ClinicalDocument(TimestampMixin, Base):
     patient: Mapped[Patient] = relationship()
     clinic: Mapped[Clinic | None] = relationship()
     appointment: Mapped[Appointment | None] = relationship()
-    reviewer: Mapped[User | None] = relationship()
+    author_user: Mapped[User | None] = relationship(foreign_keys=[author_user_id])
+    reviewer: Mapped[User | None] = relationship(foreign_keys=[reviewed_by])
+
+
+class ClinicalDocumentAddendum(TimestampMixin, Base):
+    __tablename__ = "clinical_document_addenda"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    original_document_id: Mapped[int] = mapped_column(ForeignKey("clinical_documents.id", ondelete="CASCADE"), index=True)
+    author_user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    reason: Mapped[str] = mapped_column(Text)
+    content: Mapped[str] = mapped_column(Text)
+    status: Mapped[str] = mapped_column(String(40), default="draft", index=True)
+    signed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), index=True)
+    original_document: Mapped[ClinicalDocument] = relationship()
+    author_user: Mapped[User] = relationship()
 
 
 class PatientClinicalSummaryRecord(TimestampMixin, Base):

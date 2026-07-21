@@ -40,6 +40,13 @@ def instance(db: Session, journey_id: int, activity_id: int, instance_id: int | 
     return item
 
 
+def ensure_form_author_edit(item: ClinicalFormInstance, actor: Actor) -> None:
+    if actor.user_id is None:
+        raise HTTPException(403, detail="Uređivanje kliničkog obrasca zahtijeva prijavljenog korisnika")
+    if item.created_by is not None and item.created_by != actor.user_id:
+        raise HTTPException(403, detail="Nacrt kliničkog obrasca smije uređivati samo njegov autor")
+
+
 @router.get("/clinical-forms/definitions", response_model=list[ClinicalFormDefinitionOut])
 def definitions(db: Session = Depends(get_db), actor: Actor = Depends(require_permission("clinical_forms.read"))):
     return db.scalars(select(ClinicalFormDefinition).where(ClinicalFormDefinition.active.is_(True)).order_by(ClinicalFormDefinition.name)).all()
@@ -66,6 +73,7 @@ def edit_activity_form(journey_id: int, activity_id: int, payload: ClinicalFormD
     item = instance(db, journey_id, activity_id, lock_for_update=True)
     if item.id != payload.expected_instance_id:
         raise HTTPException(409, detail={"code": "stale_form_instance", "message": "Aktivna verzija obrasca je promijenjena. Lokalni unos nije prepisan.", "actual_instance_id": item.id})
+    ensure_form_author_edit(item, actor)
     before = snapshot(item)
     update_instance(db, item, payload.data, actor.user_id, payload.expected_revision_number)
     audit(db, "form_edited", "ClinicalFormInstance", item.id, "Klinički obrazac je izmijenjen", actor.user_id, actor.actor_type, actor.api_key_id, before, snapshot(item), request)
@@ -79,6 +87,7 @@ def complete_activity_form(journey_id: int, activity_id: int, payload: ClinicalF
     if item.id != payload.expected_instance_id:
         raise HTTPException(409, detail={"code": "stale_form_instance", "message": "Aktivna verzija obrasca je promijenjena. Lokalni unos nije dovršen.", "actual_instance_id": item.id})
     before = snapshot(item)
+    ensure_form_author_edit(item, actor)
     created = save_and_complete_instance(db, item, payload.data, actor.user_id, payload.expected_revision_number, payload.idempotency_key)
     if created:
         audit(db, "form_completed", "ClinicalFormInstance", item.id, "Klinički obrazac je spremljen i dovršen", actor.user_id, actor.actor_type, actor.api_key_id, before, snapshot(item), request)

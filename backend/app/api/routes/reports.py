@@ -7,6 +7,7 @@ from app.auth.dependencies import Actor, require_permission
 from app.core.database import get_db
 from app.models.domain import Patient, PatientJourney, ReportDeliveryEvent, SignedClinicalReport
 from app.schemas.reports import ReportDeliveryOut, ReportDeliveryRequest, ReportPrintOut, SignedReportOut, VisitDocumentOut
+from app.services.clinical_document_access import get_institution_scoped_clinical_document_for_read
 from app.services.reports import queue_stub_deliveries, record_print, verify_report_integrity, visit_documents
 
 router = APIRouter(prefix="/api", tags=["signed-reports"])
@@ -27,9 +28,11 @@ def list_visit_documents(journey_id: int, db: Session = Depends(get_db), actor: 
 
 
 @router.get("/signed-reports/{report_id}", response_model=SignedReportOut)
-def preview_report(report_id: int, db: Session = Depends(get_db), actor: Actor = Depends(require_permission("reports.read"))):
+def preview_report(report_id: int, request: Request, db: Session = Depends(get_db), actor: Actor = Depends(require_permission("reports.read"))):
     report = report_or_404(db, report_id)
+    get_institution_scoped_clinical_document_for_read(db, report.clinical_document_id, actor, request, "signed_report_viewed")
     verify_report_integrity(report)
+    db.commit()
     return report
 
 
@@ -38,6 +41,7 @@ def print_report(report_id: int, request: Request, db: Session = Depends(get_db)
     if actor.user_id is None:
         raise HTTPException(403, detail="Ispis zahtijeva prijavljenog korisnika")
     report = report_or_404(db, report_id)
+    get_institution_scoped_clinical_document_for_read(db, report.clinical_document_id, actor, request, "source_document_printed")
     verify_report_integrity(report)
     event = record_print(db, report, actor.user_id, getattr(request.state, "request_id", None))
     audit(db, "signed_report_printed", "SignedClinicalReport", report.id, "Ispisana je točna potpisana verzija nalaza", actor.user_id, actor.actor_type, actor.api_key_id, None, {"print_event_id": event.id}, request)

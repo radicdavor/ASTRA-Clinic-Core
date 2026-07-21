@@ -177,6 +177,7 @@ export type ClinicOut = {
   active: boolean;
   created_at: string;
   id: number;
+  institution_key?: string;
   name: string;
   timezone?: string;
   updated_at: string;
@@ -192,11 +193,29 @@ export type ClinicalDecisionTimelineItem = {
   summary?: string | null;
 };
 
+export type ClinicalDocumentAddendumCreate = {
+  content: string;
+  reason: string;
+};
+
+export type ClinicalDocumentAddendumOut = {
+  author_user_id: number;
+  content: string;
+  created_at: string;
+  id: number;
+  original_document_id: number;
+  reason: string;
+  signed_at?: string | null;
+  status: string;
+  updated_at: string;
+};
+
 export type ClinicalDocumentCreate = {
   ai_summary?: string | null;
   appointment_id?: number | null;
   attachment_path?: string | null;
   author?: string | null;
+  clinic_id?: number | null;
   document_date?: string | null;
   document_type?: string;
   institution?: string | null;
@@ -217,11 +236,15 @@ export type ClinicalDocumentOut = {
   appointment_id?: number | null;
   attachment_path?: string | null;
   author?: string | null;
+  author_professional_role?: string | null;
+  author_user_id?: number | null;
+  clinic_id?: number | null;
   created_at: string;
   document_date?: string | null;
   document_type?: string;
   id: number;
   institution?: string | null;
+  is_clinical_record?: boolean;
   key_findings?: Array<string> | null;
   origin?: string | null;
   patient?: PatientOut | null;
@@ -242,11 +265,13 @@ export type ClinicalDocumentUpdate = {
   appointment_id?: number | null;
   attachment_path?: string | null;
   author?: string | null;
+  clinic_id?: number | null;
   document_date?: string | null;
   document_type?: string | null;
   institution?: string | null;
   key_findings?: Array<string> | null;
   origin?: string | null;
+  patient_id?: number | null;
   raw_text?: string | null;
   recommendations?: Array<string> | null;
   source_type?: string | null;
@@ -257,6 +282,7 @@ export type ClinicalDocumentUpload = {
   appointment_id?: number | null;
   attachment_name?: string | null;
   author?: string | null;
+  clinic_id?: number | null;
   document_date?: string | null;
   document_type?: string;
   institution?: string | null;

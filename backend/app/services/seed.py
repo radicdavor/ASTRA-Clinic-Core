@@ -46,6 +46,12 @@ PERMISSIONS = [
     "clinical_documents.read",
     "clinical_documents.write",
     "clinical_documents.review",
+    "clinical.documents.read_institution",
+    "clinical.documents.edit_own_draft",
+    "clinical.documents.add_addendum",
+    "clinical.documents.sign_own",
+    "clinical.documents.print",
+    "clinical.documents.download",
     "services.read",
     "services.write",
     "modules.read",
@@ -132,6 +138,26 @@ ROLE_PERMISSIONS = {
     "ai_agent": ["ai.appointments.create", "ai.patients.create", "ai.free_slots.read", "journey.read", "journey.create"],
     "document_reviewer": ["patients.read", "clinical_documents.read", "clinical_documents.review", "journey.read", "documents.view_source", "documents.review", "pathology_cases.read", "pathology_results.receive", "reports.read", "audit.access_events.write"],
 }
+
+ROLE_PROFESSIONAL_CATEGORIES = {
+    "physician": "medical_staff",
+    "nurse": "medical_staff",
+    "document_reviewer": "medical_staff",
+}
+
+MEDICAL_CLINICAL_DOCUMENT_PERMISSIONS = [
+    "clinical.documents.read_institution",
+    "clinical.documents.edit_own_draft",
+    "clinical.documents.add_addendum",
+    "clinical.documents.sign_own",
+    "clinical.documents.print",
+    "clinical.documents.download",
+]
+
+for _role_name in ROLE_PROFESSIONAL_CATEGORIES:
+    for _permission_name in MEDICAL_CLINICAL_DOCUMENT_PERMISSIONS:
+        if _permission_name not in ROLE_PERMISSIONS[_role_name]:
+            ROLE_PERMISSIONS[_role_name].append(_permission_name)
 
 MODULE_SEEDS = [
     {"key": "scheduling", "name": "Narucivanje", "description": "Pacijenti, termini i dnevni raspored"},
@@ -340,6 +366,7 @@ def seed_security(db: Session) -> None:
             role = Role(name=role_name, description=role_name.replace("_", " ").title())
             db.add(role)
             roles[role_name] = role
+        role.professional_category = ROLE_PROFESSIONAL_CATEGORIES.get(role_name, "administrative")
         role.permissions = [permissions[name] for name in permission_names]
     db.flush()
 
@@ -383,7 +410,7 @@ def seed(db: Session) -> None:
     db.flush()
 
     roles = {
-        name: Role(name=name, description=name.replace("_", " ").title())
+        name: Role(name=name, description=name.replace("_", " ").title(), professional_category=ROLE_PROFESSIONAL_CATEGORIES.get(name, "administrative"))
         for name in ROLE_PERMISSIONS
     }
     for role_name, permission_names in ROLE_PERMISSIONS.items():
