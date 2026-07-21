@@ -1,7 +1,7 @@
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import { useEffect, useState } from "react";
 import { BookOpenCheck, Boxes, Building2, CalendarDays, CheckSquare2, ChevronDown, ClipboardCheck, ClipboardList, FileSearch, FileText, KeyRound, LayoutDashboard, LogOut, MoreHorizontal, PackageSearch, Pill, Settings, ShieldCheck, Stethoscope, TestTube, Users } from "lucide-react";
-import { clearToken, getActiveClinicId, getSessionUser, setActiveClinicId, type UserClinicsResponse } from "../api/client";
+import { clearToken, getActiveClinicId, getSessionUser, setActiveClinicId, setActiveClinicTimezone, type UserClinicsResponse } from "../api/client";
 import { useApi } from "../hooks/useApi";
 import { ToastHost } from "./ToastHost";
 
@@ -62,15 +62,20 @@ export function AppShell() {
     const availableIds = clinicAccess.data.clinics.map((clinic) => String(clinic.id));
     const stored = getActiveClinicId();
     if (stored && availableIds.includes(stored)) {
+      const clinic = clinicAccess.data.clinics.find((item) => String(item.id) === stored);
+      setActiveClinicTimezone(clinic?.timezone ?? null);
       setActiveClinic(stored);
       return;
     }
     if (clinicAccess.data.default_clinic_id) {
       const next = String(clinicAccess.data.default_clinic_id);
+      const clinic = clinicAccess.data.clinics.find((item) => String(item.id) === next);
       setActiveClinicId(next);
+      setActiveClinicTimezone(clinic?.timezone ?? null);
       setActiveClinic(next);
     } else {
       setActiveClinicId(null);
+      setActiveClinicTimezone(null);
       setActiveClinic("");
     }
   }, [clinicAccess.data]);
@@ -121,8 +126,11 @@ export function AppShell() {
                 <select
                   value={activeClinic}
                   onChange={(event) => {
-                    setActiveClinicId(event.target.value);
-                    setActiveClinic(event.target.value);
+                    const next = event.target.value;
+                    const clinic = clinicAccess.data?.clinics.find((item) => String(item.id) === next);
+                    setActiveClinicId(next);
+                    setActiveClinicTimezone(clinic?.timezone ?? null);
+                    setActiveClinic(next);
                     window.location.reload();
                   }}
                 >

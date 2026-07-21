@@ -6,7 +6,7 @@ from sqlalchemy import select
 
 from app.models.domain import Appointment, Clinic, ClinicMembership, Permission, Role, User
 from app.core.security import hash_password
-from app.services.appointments import APPOINTMENT_STATUSES_BLOCKING_PATIENT_TIME, validate_appointment_payload
+from app.services.appointments import APPOINTMENT_STATUSES_BLOCKING_PATIENT_TIME, calculate_duration_minutes, validate_appointment_payload
 from tests.conftest import login_token
 from tests.factories import appointment, patient, provider, room, service
 
@@ -34,6 +34,22 @@ def test_reject_end_time_before_start_time(db):
         validate_appointment_payload(db, date(2026, 7, 6), time(10, 0), time(9, 0), p.id, r.id, "scheduled", "manual")
 
     assert exc.value.status_code == 422
+
+
+def test_appointment_duration_rejects_ambiguous_clinic_local_time():
+    with pytest.raises(HTTPException) as exc:
+        calculate_duration_minutes(date(2026, 10, 25), time(2, 30), time(3, 30), "Europe/Zagreb")
+
+    assert exc.value.status_code == 422
+    assert "dvosmisleno" in exc.value.detail
+
+
+def test_appointment_duration_rejects_nonexistent_clinic_local_time():
+    with pytest.raises(HTTPException) as exc:
+        calculate_duration_minutes(date(2026, 3, 29), time(2, 30), time(3, 30), "Europe/Zagreb")
+
+    assert exc.value.status_code == 422
+    assert "ne postoji" in exc.value.detail
 
 
 def test_reject_provider_overlap(db):

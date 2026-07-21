@@ -5,6 +5,7 @@ import { DateInput } from "../components/DateInput";
 import { ReceptionFloatingModal } from "../components/program2/ReceptionFloatingModal";
 import { useApi } from "../hooks/useApi";
 import type { Provider, Room, Service } from "../types";
+import { formatUtcTimestampInClinic, getClinicToday } from "../utils/clinicTime";
 
 type DashboardBlocker = { id: number; title: string; details: string | null; is_clinical: boolean };
 type DashboardActivity = {
@@ -40,7 +41,7 @@ type TimelineBlock = {
   lane: number; laneCount: number; roomName: string;
 };
 
-const today = new Date().toISOString().slice(0, 10);
+const today = getClinicToday();
 const dayStart = 7 * 60;
 const dayEnd = 20 * 60;
 const slotMinutes = 30;
@@ -335,7 +336,7 @@ export function DailyClinicDashboard() {
       <div><span className="eyebrow">Dnevni operativni pregled</span><h1>Danas u poliklinici</h1><p>Tko je sljedeći, postoji li problem i što sada treba napraviti.</p><span className="clinic-day-scope">Prikaz: {board.data.scope_label || "učitavanje…"}</span></div>
       <div className="clinic-day-date"><DateInput value={day} onChange={setDay} required/><button type="button" onClick={() => setRefresh(value => value + 1)}><RefreshCw size={16}/>Osvježi</button></div>
     </header>
-    <div className="clinic-day-summary"><span><b>{counts.total}</b> dolazaka</span><span><b>{counts.active}</b> u tijeku</span><span className={counts.problems ? "attention" : ""}><b>{counts.problems}</b> s problemom</span><small>Zadnje osvježenje: {board.data.refreshed_at ? new Date(board.data.refreshed_at).toLocaleTimeString("hr-HR", { hour: "2-digit", minute: "2-digit" }) : "—"}</small></div>
+    <div className="clinic-day-summary"><span><b>{counts.total}</b> dolazaka</span><span><b>{counts.active}</b> u tijeku</span><span className={counts.problems ? "attention" : ""}><b>{counts.problems}</b> s problemom</span><small>Zadnje osvježenje: {formatUtcTimestampInClinic(board.data.refreshed_at)}</small></div>
     <div className="clinic-day-view-toggle" role="group" aria-label="Način prikaza"><button type="button" className={view === "patients" ? "active" : ""} onClick={() => setView("patients")}>Po pacijentima</button><button type="button" className={view === "rooms" ? "active" : ""} onClick={() => setView("rooms")}>Po prostorijama</button></div>
     <div className="clinic-day-filter-bar"><label className="clinic-day-search"><Search size={16}/><input aria-label="Pretraži pacijenta" placeholder="Pretraži pacijenta" value={query} onChange={event => setQuery(event.target.value)}/></label>{board.data.can_filter_clinician && <select aria-label="Liječnik" value={clinician} onChange={event => { setClinician(event.target.value); setClinic(""); setRoom(""); }}><option value="">Svi liječnici</option>{providers.data.filter(item => item.staff_role === "physician").map(item => <option key={item.id} value={item.id}>{item.full_name}</option>)}</select>}<select aria-label="Problem" value={blocker} onChange={event => setBlocker(event.target.value)}><option value="">Sva stanja</option><option value="true">S problemom</option><option value="false">Bez problema</option></select><details className="clinic-day-advanced"><summary><Filter size={15}/>Dodatni filtri{advancedFilterCount > 0 && <b aria-label={`${advancedFilterCount} aktivna dodatna filtra`}>{advancedFilterCount}</b>}</summary><div className="clinic-day-filters">{board.data.available_clinics.length > 1 && <select aria-label="Klinika" value={clinic} onChange={event => { setClinic(event.target.value); setRoom(""); }}><option value="">Sve klinike</option>{board.data.available_clinics.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select>}<select aria-label="Prostorija" value={room} onChange={event => setRoom(event.target.value)}><option value="">Sve prostorije</option>{rooms.data.filter(item => !clinic || String(item.clinic_id ?? "") === clinic).map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select><select aria-label="Usluga" value={service} onChange={event => setService(event.target.value)}><option value="">Sve usluge</option>{services.data.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select><select aria-label="Faza" value={stage} onChange={event => setStage(event.target.value)}><option value="">Sve faze</option><option value="ready_for_arrival">Čeka dolazak</option><option value="check_in_review">Stigao</option><option value="ready_for_clinician">Čeka pregled/pretragu</option><option value="in_encounter">Pregled u tijeku</option><option value="awaiting_payment">Čeka naplatu</option></select></div></details>{[clinician, clinic, room, service, stage, blocker, query].some(Boolean) && <button type="button" className="clear-filters" onClick={clearFilters}><X size={15}/>Očisti filtre</button>}</div>
     {board.error && <p className="form-error">Dnevni pregled nije učitan: {board.error}</p>}

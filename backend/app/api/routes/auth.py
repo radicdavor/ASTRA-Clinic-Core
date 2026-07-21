@@ -47,7 +47,7 @@ def my_clinics(db: Session = Depends(get_db), actor: Actor = Depends(get_current
     if actor.actor_type != "user" or actor.user is None:
         raise HTTPException(status_code=403, detail="Odabir klinike zahtijeva prijavljenog korisnika")
     memberships = active_clinic_memberships(db, actor.user.id)
-    clinics = [{"id": membership.clinic.id, "name": membership.clinic.name} for membership in memberships]
+    clinics = [{"id": membership.clinic.id, "name": membership.clinic.name, "timezone": membership.clinic.timezone} for membership in memberships]
     return {
         "clinics": clinics,
         "default_clinic_id": clinics[0]["id"] if len(clinics) == 1 else None,

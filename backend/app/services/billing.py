@@ -1,4 +1,4 @@
-from datetime import date, datetime
+from datetime import UTC, date
 from decimal import Decimal
 from uuid import uuid4
 
@@ -10,6 +10,7 @@ from app.models.domain import Appointment, Invoice, InvoiceLine, InvoiceNumberSe
 from app.schemas.common import InvoiceLineCreate, InvoiceLineUpdate, PaymentTransactionCreate
 from app.services.fiscalization import FiscalizationProvider, get_fiscalization_provider
 from app.services.inventory import ensure_positive
+from app.services.clinic_time import utc_now
 
 
 def calculate_line_total(quantity: Decimal, unit_price: Decimal) -> Decimal:
@@ -190,12 +191,16 @@ def record_payment(invoice: Invoice, payload: PaymentTransactionCreate, created_
     paid = sum((payment.amount for payment in invoice.payments), Decimal("0"))
     if paid + payload.amount > invoice.total_amount:
         raise HTTPException(status_code=409, detail="Uplata prelazi ukupni iznos racuna")
+    paid_at = payload.paid_at or utc_now()
+    if paid_at.tzinfo is None:
+        raise HTTPException(status_code=422, detail="Vrijeme plaćanja mora sadržavati vremensku zonu")
+    paid_at = paid_at.astimezone(UTC)
     payment = PaymentTransaction(
         invoice_id=invoice.id,
         amount=payload.amount,
         method=payload.method,
         reference=payload.reference,
-        paid_at=payload.paid_at or datetime.now(),
+        paid_at=paid_at,
         created_by=created_by,
     )
     invoice.payments.append(payment)

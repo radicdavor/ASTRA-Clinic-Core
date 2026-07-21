@@ -17,6 +17,7 @@ from app.models.domain import (
     Service,
     room_services,
 )
+from app.services.clinic_time import clinic_datetime_to_utc, combine_clinic_date_time
 from app.services.patient_journeys import create_journey
 
 APPOINTMENT_STATUSES_BLOCKING_PATIENT_TIME = {
@@ -149,9 +150,13 @@ def create_appointment_with_journey(db: Session, data: dict, actor: Actor, reque
     return appointment
 
 
-def calculate_duration_minutes(appointment_date, start_time, end_time) -> int:
-    start = datetime.combine(appointment_date, start_time)
-    end = datetime.combine(appointment_date, end_time)
+def calculate_duration_minutes(appointment_date, start_time, end_time, timezone_name: str | None = None) -> int:
+    if timezone_name:
+        start = clinic_datetime_to_utc(combine_clinic_date_time(appointment_date, start_time, timezone_name))
+        end = clinic_datetime_to_utc(combine_clinic_date_time(appointment_date, end_time, timezone_name))
+    else:
+        start = datetime.combine(appointment_date, start_time)
+        end = datetime.combine(appointment_date, end_time)
     minutes = int((end - start).total_seconds() // 60)
     if minutes <= 0:
         raise HTTPException(status_code=422, detail="Vrijeme zavrsetka mora biti nakon vremena pocetka")
@@ -182,10 +187,16 @@ def validate_appointment_payload(
     validate_status_and_source(status_value, source_value)
     if appointment_date.weekday() == 6:
         raise HTTPException(status_code=422, detail="Nedjelja je neradni dan; unos termina nije dopusten")
-    duration_minutes = calculate_duration_minutes(appointment_date, start_time, end_time)
     provider = db.get(Provider, provider_id)
     if not provider:
         raise HTTPException(status_code=404, detail="Lijecnik nije pronaden")
+    room = db.get(Room, room_id)
+    clinic_timezone = None
+    if room and room.clinic and room.clinic.timezone:
+        clinic_timezone = room.clinic.timezone
+    elif provider.clinic and provider.clinic.timezone:
+        clinic_timezone = provider.clinic.timezone
+    duration_minutes = calculate_duration_minutes(appointment_date, start_time, end_time, clinic_timezone)
     if provider.staff_role != "physician":
         raise HTTPException(status_code=422, detail="Termin se može dodijeliti samo liječniku")
     if not provider.active or not provider.available_for_work:
@@ -203,7 +214,6 @@ def validate_appointment_payload(
         raise HTTPException(status_code=409, detail=f"Termin je izvan radnog vremena liječnika ({provider_start.strftime('%H:%M')}-{provider_end.strftime('%H:%M')})")
     if service_id is not None:
         service = db.get(Service, service_id)
-        room = db.get(Room, room_id)
         if not service:
             raise HTTPException(status_code=404, detail="Usluga nije pronadena")
         if not room:

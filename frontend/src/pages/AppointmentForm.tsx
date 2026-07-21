@@ -9,6 +9,7 @@ import { useApi } from "../hooks/useApi";
 import { Clinic, ClinicalEpisode, Patient, Provider, Room, Service } from "../types";
 import { formatPatientIdentity, formatPatientName, hasStrongPatientIdentifier } from "../utils/patientIdentity";
 import { providerHoursForDate } from "../utils/providerSchedule";
+import { getClinicToday } from "../utils/clinicTime";
 
 function endTimeFrom(startTime: string, duration: number) {
   const [hours, minutes] = startTime.split(":").map(Number);
@@ -27,7 +28,7 @@ export function AppointmentForm() {
   const requestedClinicId = params.get("clinic_id") ?? "";
   const requestedProviderId = params.get("provider_id") ?? "";
   const requestedRoomId = params.get("room_id") ?? "";
-  const initialDate = requestedDate && /^\d{4}-\d{2}-\d{2}$/.test(requestedDate) ? requestedDate : new Date().toISOString().slice(0, 10);
+  const initialDate = requestedDate && /^\d{4}-\d{2}-\d{2}$/.test(requestedDate) ? requestedDate : getClinicToday();
   const initialStartTime = requestedStartTime && /^([01]\d|2[0-3]):[0-5]\d$/.test(requestedStartTime) ? requestedStartTime : "09:00";
   const [patientQuery, setPatientQuery] = useState("");
   const patientSearchPath = patientQuery.trim().length >= 2 ? `/api/patients?q=${encodeURIComponent(patientQuery.trim())}` : "/api/patients?q=__no_initial_results__";

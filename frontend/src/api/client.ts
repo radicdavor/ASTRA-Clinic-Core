@@ -118,7 +118,7 @@ export function setSessionUser(user: SessionUser) {
   localStorage.setItem("astra_user", JSON.stringify(user));
 }
 
-export type UserClinic = { id: number; name: string };
+export type UserClinic = { id: number; name: string; timezone: string };
 export type UserClinicsResponse = { clinics: UserClinic[]; default_clinic_id: number | null; requires_selection: boolean };
 
 export function getActiveClinicId() {
@@ -131,6 +131,18 @@ export function setActiveClinicId(clinicId: number | string | null) {
     return;
   }
   localStorage.setItem("astra_active_clinic_id", String(clinicId));
+}
+
+export function getActiveClinicTimezone() {
+  return localStorage.getItem("astra_active_clinic_timezone") || "Europe/Zagreb";
+}
+
+export function setActiveClinicTimezone(timezone: string | null) {
+  if (!timezone) {
+    localStorage.removeItem("astra_active_clinic_timezone");
+    return;
+  }
+  localStorage.setItem("astra_active_clinic_timezone", timezone);
 }
 
 export function getSessionUser(): SessionUser | null {
@@ -155,6 +167,7 @@ export function clearToken() {
   localStorage.removeItem("astra_token");
   localStorage.removeItem("astra_user");
   localStorage.removeItem("astra_active_clinic_id");
+  localStorage.removeItem("astra_active_clinic_timezone");
 }
 
 function handleUnauthorized() {
