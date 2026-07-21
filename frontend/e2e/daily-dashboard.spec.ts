@@ -191,7 +191,7 @@ async function installApiMocks(page: Page) {
 
 test.beforeEach(async ({ page }) => {
   await page.addInitScript(() => {
-    window.localStorage.setItem("astra_token", "synthetic-e2e-token");
+    window.sessionStorage.setItem("astra_token", "synthetic-e2e-token");
     window.localStorage.setItem("astra_user", JSON.stringify({ id: 1, name: "Admin", email: "admin@example.com", role: "admin" }));
     window.localStorage.setItem("astra_active_clinic_id", "1");
     window.localStorage.setItem("astra_active_clinic_timezone", "Europe/Zagreb");

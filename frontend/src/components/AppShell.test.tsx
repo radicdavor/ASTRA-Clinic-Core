@@ -21,8 +21,8 @@ function renderShell(role: string) {
   return render(<MemoryRouter initialEntries={["/"]}><Routes><Route element={<AppShell/>}><Route index element={<p>Početna</p>}/></Route></Routes></MemoryRouter>);
 }
 
-beforeEach(() => localStorage.clear());
-afterEach(() => { cleanup(); vi.restoreAllMocks(); localStorage.clear(); });
+beforeEach(() => { localStorage.clear(); sessionStorage.clear(); });
+afterEach(() => { cleanup(); vi.restoreAllMocks(); localStorage.clear(); sessionStorage.clear(); });
 
 describe("navigacija prema zadatku i ulozi", () => {
   test("recepcija ima tri primarna zadatka i nema administraciju", () => {
