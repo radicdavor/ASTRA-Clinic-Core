@@ -177,6 +177,7 @@ export type ClinicOut = {
   active: boolean;
   created_at: string;
   id: number;
+  institution_id?: number | null;
   institution_key?: string;
   name: string;
   timezone?: string;
@@ -200,12 +201,17 @@ export type ClinicalDocumentAddendumCreate = {
 
 export type ClinicalDocumentAddendumOut = {
   author_user_id: number;
+  clinic_id?: number | null;
   content: string;
   created_at: string;
   id: number;
+  institution_id?: number | null;
   original_document_id: number;
+  original_document_type?: string;
+  patient_id?: number | null;
   reason: string;
   signed_at?: string | null;
+  signed_by_user_id?: number | null;
   status: string;
   updated_at: string;
 };
@@ -252,6 +258,7 @@ export type ClinicalDocumentOut = {
   physician_reviewed: boolean;
   raw_text?: string | null;
   recommendations?: Array<string> | null;
+  record_classification?: string;
   review_status: string;
   reviewed_at?: string | null;
   reviewed_by?: number | null;
@@ -1690,6 +1697,32 @@ export type PatientAppointmentAvailabilityOut = {
   service_name?: string | null;
   start_time: string;
   status: string;
+};
+
+export type PatientClinicalRecordItem = {
+  addendum_count?: number;
+  author?: string | null;
+  author_professional_role?: string | null;
+  can_add_addendum?: boolean;
+  can_edit?: boolean;
+  clinic_id?: number | null;
+  clinic_name?: string | null;
+  created_at: string;
+  date?: string | null;
+  document_id: number;
+  document_type: string;
+  patient_id: number;
+  signed_at?: string | null;
+  specialty?: string | null;
+  status: string;
+  title: string;
+};
+
+export type PatientClinicalRecordResponse = {
+  count: number;
+  institution_id?: number | null;
+  items: Array<PatientClinicalRecordItem>;
+  patient_id: number;
 };
 
 export type PatientClinicalSummary = {

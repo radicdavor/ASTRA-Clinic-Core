@@ -72,7 +72,7 @@ This permits continuity of care: a nurse in Clinic A may read a gastroenterology
 
 This does not grant access to invoices, payments, discounts, commercial notes, HR data, system configuration, or clinic-local operational dashboards.
 
-Implementation note: this phase uses additive `Clinic.institution_key` as the institution boundary. Existing legacy documents without clinic scope are treated as `default` institution data only for backward-compatible local/synthetic behavior; new generated and uploaded clinical documents should carry `clinic_id`.
+Implementation note: Module 3 introduces a real `Institution` aggregate and `Clinic.institution_id`. The previous additive `Clinic.institution_key` remains only as a compatibility/backfill key for legacy local and synthetic data. New institution-aware policies should use `Institution -> Clinic -> document/patient` first and fall back to `institution_key` only where older fixtures have not yet been migrated.
 
 ## Author-controlled clinical writes
 

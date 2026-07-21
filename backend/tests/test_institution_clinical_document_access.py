@@ -9,6 +9,7 @@ from app.models.domain import (
     ClinicalDocument,
     Clinic,
     ClinicMembership,
+    Institution,
     Patient,
     PatientClinicAssociation,
     Permission,
@@ -51,9 +52,11 @@ def user_with_role(db, email: str, permissions: list[str], category: str, clinic
 
 
 def setup_scope(db):
-    clinic_a = Clinic(name="Clinic A", institution_key="nura")
-    clinic_b = Clinic(name="Clinic B", institution_key="nura")
-    clinic_other = Clinic(name="Other Institution Clinic", institution_key="other")
+    institution = Institution(code="nura", name="NURA", active=True)
+    other_institution = Institution(code="other", name="Other Institution", active=True)
+    clinic_a = Clinic(name="Clinic A", institution_key="nura", institution=institution)
+    clinic_b = Clinic(name="Clinic B", institution_key="nura", institution=institution)
+    clinic_other = Clinic(name="Other Institution Clinic", institution_key="other", institution=other_institution)
     patient = Patient(first_name="Synthetic", last_name="Patient")
     provider = Provider(full_name="dr. Synthetic", specialty="Gastroenterology", clinic=clinic_b)
     room = Room(name="Institution Room", type="ordination", clinic=clinic_b)
@@ -89,7 +92,16 @@ MEDICAL_EDIT = MEDICAL_READ + ["clinical.documents.edit_own_draft", "clinical_do
 MEDICAL_ADDENDUM = MEDICAL_READ + ["clinical.documents.add_addendum"]
 
 
-def clinical_doc(db, patient: Patient, clinic: Clinic, author: User | None = None, status: str = "draft", document_type: str = "gastroscopy", is_clinical_record: bool = True) -> ClinicalDocument:
+def clinical_doc(
+    db,
+    patient: Patient,
+    clinic: Clinic,
+    author: User | None = None,
+    status: str = "draft",
+    document_type: str = "gastroscopy",
+    is_clinical_record: bool = True,
+    record_classification: str = "clinical",
+) -> ClinicalDocument:
     document = ClinicalDocument(
         patient_id=patient.id,
         clinic_id=clinic.id,
@@ -102,6 +114,7 @@ def clinical_doc(db, patient: Patient, clinic: Clinic, author: User | None = Non
         author_user_id=author.id if author else None,
         author_professional_role=author.role.name if author else None,
         is_clinical_record=is_clinical_record,
+        record_classification=record_classification,
     )
     db.add(document)
     db.flush()
@@ -121,19 +134,55 @@ def test_physician_and_nurse_read_clinical_documents_across_clinics_same_institu
     assert client.get(f"/api/clinical-documents/{nursing_doc.id}", headers=headers(client, nurse.email)).status_code == 200
 
 
+def test_institution_entity_and_membership_context_are_resolved_from_clinic_memberships(client, db):
+    clinic_a, clinic_b, clinic_other, _, _ = setup_scope(db)
+    physician = user_with_role(db, "institution-map@test.local", MEDICAL_READ, "medical_staff", clinic_a)
+    db.add(ClinicMembership(user_id=physician.id, clinic_id=clinic_b.id, active=True, created_by_user_id=physician.id))
+    db.add(ClinicMembership(user_id=physician.id, clinic_id=clinic_other.id, active=False, created_by_user_id=physician.id))
+    db.commit()
+
+    assert clinic_a.institution_id == clinic_b.institution_id
+    assert clinic_a.institution_id != clinic_other.institution_id
+    assert {membership.clinic.institution_id for membership in physician.clinic_memberships if membership.active} == {clinic_a.institution_id}
+
+
+def test_medical_category_and_permission_are_both_required_for_institution_read(client, db):
+    clinic_a, clinic_b, _, patient, _ = setup_scope(db)
+    permission_without_category = user_with_role(db, "permission-admin@test.local", MEDICAL_READ, "administrative_staff", clinic_a)
+    category_without_permission = user_with_role(db, "category-doctor@test.local", ["clinical_documents.read"], "medical_staff", clinic_a)
+    document = clinical_doc(db, patient, clinic_b, status="reviewed")
+    db.commit()
+
+    assert client.get(f"/api/clinical-documents/{document.id}", headers=headers(client, permission_without_category.email)).status_code == 403
+    assert client.get(f"/api/clinical-documents/{document.id}", headers=headers(client, category_without_permission.email)).status_code == 403
+
+
 def test_administrative_and_other_institution_users_cannot_read_full_clinical_document(client, db):
     clinic_a, clinic_b, clinic_other, patient, _ = setup_scope(db)
     admin = user_with_role(db, "system-admin@test.local", ["system.admin", "clinical.documents.read_institution"], "administrative", clinic_a)
     other_doctor = user_with_role(db, "doctor-other@test.local", MEDICAL_READ, "medical_staff", clinic_other)
     other_nurse = user_with_role(db, "nurse-other@test.local", MEDICAL_READ, "medical_staff", clinic_other)
     document = clinical_doc(db, patient, clinic_b, status="reviewed")
-    source_nonclinical = clinical_doc(db, patient, clinic_b, status="reviewed", document_type="invoice_attachment", is_clinical_record=False)
+    source_nonclinical = clinical_doc(db, patient, clinic_b, status="reviewed", document_type="invoice_attachment", is_clinical_record=False, record_classification="financial")
     db.commit()
 
     assert client.get(f"/api/clinical-documents/{document.id}", headers=headers(client, admin.email)).status_code == 403
     assert client.get(f"/api/clinical-documents/{document.id}", headers=headers(client, other_doctor.email)).status_code == 404
     assert client.get(f"/api/clinical-documents/{document.id}", headers=headers(client, other_nurse.email)).status_code == 404
     assert client.get(f"/api/clinical-documents/{source_nonclinical.id}", headers=headers(client, admin.email)).status_code == 403
+
+
+def test_unclassified_and_financial_source_documents_are_not_institution_readable(client, db):
+    clinic_a, clinic_b, _, patient, _ = setup_scope(db)
+    doctor = user_with_role(db, "source-policy-doctor@test.local", MEDICAL_READ + ["documents.view_source"], "medical_staff", clinic_a)
+    clinical = clinical_doc(db, patient, clinic_b, status="reviewed", record_classification="clinical")
+    financial = clinical_doc(db, patient, clinic_b, status="reviewed", record_classification="financial")
+    unclassified = clinical_doc(db, patient, clinic_b, status="reviewed", record_classification="unclassified")
+    db.commit()
+
+    assert client.get(f"/api/clinical-documents/{clinical.id}", headers=headers(client, doctor.email)).status_code == 200
+    assert client.get(f"/api/clinical-documents/{financial.id}", headers=headers(client, doctor.email)).status_code == 403
+    assert client.get(f"/api/clinical-documents/{unclassified.id}", headers=headers(client, doctor.email)).status_code == 403
 
 
 def test_author_controlled_draft_editing_and_signed_immutability(client, db):
@@ -178,6 +227,10 @@ def test_addendum_is_separate_audited_record_and_does_not_change_original(client
     body = response.json()
     assert body["original_document_id"] == document.id
     assert body["author_user_id"] == doctor.id
+    assert body["patient_id"] == patient.id
+    assert body["clinic_id"] == clinic_b.id
+    assert body["institution_id"] == clinic_b.institution_id
+    assert body["signed_by_user_id"] == doctor.id
     assert body["signed_at"]
     db.refresh(document)
     assert document.raw_text == original_text
@@ -200,6 +253,46 @@ def test_institution_read_is_audited_and_does_not_open_finance_or_dashboard(clie
     audit_log = db.scalar(select(AuditLog).where(AuditLog.action == "clinical_document_viewed", AuditLog.entity_id == document.id))
     assert audit_log is not None
     assert audit_log.after_json["document_clinic_id"] == clinic_b.id
+
+
+def test_patient_clinical_record_lists_metadata_without_full_document_content(client, db):
+    clinic_a, clinic_b, _, patient, _ = setup_scope(db)
+    physician = user_with_role(db, "timeline-doctor@test.local", MEDICAL_READ + ["clinical.documents.add_addendum", "clinical.documents.edit_own_draft"], "medical_staff", clinic_a)
+    own_draft = clinical_doc(db, patient, clinic_b, physician, status="draft", document_type="other")
+    signed = clinical_doc(db, patient, clinic_b, status="signed")
+    billing_like = clinical_doc(db, patient, clinic_b, status="reviewed", record_classification="financial")
+    db.commit()
+
+    response = client.get(f"/api/patients/{patient.id}/clinical-record", headers=headers(client, physician.email))
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["institution_id"] == clinic_a.institution_id
+    document_ids = {item["document_id"] for item in body["items"]}
+    assert own_draft.id in document_ids
+    assert signed.id in document_ids
+    assert billing_like.id not in document_ids
+    assert "Sintetički klinički tekst" not in str(body)
+    draft_item = next(item for item in body["items"] if item["document_id"] == own_draft.id)
+    signed_item = next(item for item in body["items"] if item["document_id"] == signed.id)
+    assert draft_item["can_edit"] is True
+    assert signed_item["can_add_addendum"] is True
+    assert db.scalar(select(AuditLog).where(AuditLog.action == "clinical_history.opened", AuditLog.entity_id == patient.id)) is not None
+
+
+def test_patient_clinical_record_denies_admin_and_other_institution(client, db):
+    clinic_a, clinic_b, clinic_other, patient, _ = setup_scope(db)
+    admin = user_with_role(db, "timeline-admin@test.local", ["clinical.documents.read_institution"], "administrative_staff", clinic_a)
+    other_doctor = user_with_role(db, "timeline-other@test.local", MEDICAL_READ, "medical_staff", clinic_other)
+    document = clinical_doc(db, patient, clinic_b, status="reviewed")
+    db.commit()
+
+    admin_response = client.get(f"/api/patients/{patient.id}/clinical-record", headers=headers(client, admin.email))
+    other_response = client.get(f"/api/patients/{patient.id}/clinical-record?institution_id={clinic_a.institution_id}", headers=headers(client, other_doctor.email))
+
+    assert document.id
+    assert admin_response.status_code == 403
+    assert other_response.status_code == 404
 
 
 def test_patient_appointment_availability_remains_minimal(client, db):

@@ -16,6 +16,10 @@ Glavna navigacija organizirana je oko zadataka **Danas**, **Pacijenti**, **Naru�
 
 UX simplification track vizualno je provjeren sa sintetičkim administratorskim i liječničkim scenarijima na standardnom i 1024 px prikazu te je formalno zatvoren. Daljnji razvoj ostaje u stanju `STOP AND HOLD` bez nove izričite autorizacije.
 
+## Module 3 institution-aware clinical access
+
+Module 3 introduces `Institution -> Clinic` authorization for clinical record continuity. Patient identity remains global, authorized medical staff may read clinical documents across clinics of the same institution, and operations/billing remain clinic-scoped. Draft editing is author-controlled, signed clinical documents are immutable, and corrections use separate addenda. See [Institution clinical access ADR](docs/ADR/institution-clinical-access.md) and [access matrix](docs/security/institution-clinical-access-matrix.md).
+
 Workflow Engine MVP is documented in [`docs/WORKFLOW_ENGINE_MVP.md`](docs/WORKFLOW_ENGINE_MVP.md). It adds audited patient/episode tasks, responsibility, due dates, templates, and completion checklists without automated clinical decision-making.
 
 > Sigurnosna napomena: zadani korisnik, lozinka i lokalne Docker postavke su samo za razvoj. Prije stvarne uporabe promijenite admin lozinku, postavite jak `JWT_SECRET`, ogranicite CORS, koristite HTTPS, podesite backup PostgreSQL baze i napravite GDPR/access-control provjeru. ASTRA Clinic Core nije certificirani EMR i nije certificirani medicinski uredaj.

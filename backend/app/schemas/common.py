@@ -1201,10 +1201,20 @@ class ServiceUpdate(BaseModel):
         return value
 
 
+class InstitutionOut(ORMModel):
+    id: int
+    code: str | None = None
+    name: str
+    active: bool
+    created_at: DateTimeType
+    updated_at: DateTimeType
+
+
 class ClinicOut(ORMModel):
     id: int
     name: str
     institution_key: str = "default"
+    institution_id: int | None = None
     timezone: str = "Europe/Zagreb"
     active: bool
     visible_in_catalog: bool = True
@@ -1575,6 +1585,7 @@ class ClinicalDocumentOut(ClinicalDocumentBase, ORMModel):
     author_user_id: int | None = None
     author_professional_role: str | None = None
     is_clinical_record: bool = True
+    record_classification: str = "clinical"
     review_status: str
     ai_extraction_status: str
     ai_extraction_generated_at: DateTimeType | None = None
@@ -1609,13 +1620,44 @@ class ClinicalDocumentAddendumCreate(BaseModel):
 class ClinicalDocumentAddendumOut(ORMModel):
     id: int
     original_document_id: int
+    original_document_type: str = "clinical_document"
+    patient_id: int | None = None
+    institution_id: int | None = None
+    clinic_id: int | None = None
     author_user_id: int
     reason: str
     content: str
     status: str
     signed_at: DateTimeType | None = None
+    signed_by_user_id: int | None = None
     created_at: DateTimeType
     updated_at: DateTimeType
+
+
+class PatientClinicalRecordItem(BaseModel):
+    document_id: int
+    patient_id: int
+    date: DateType | None = None
+    created_at: DateTimeType
+    clinic_id: int | None = None
+    clinic_name: str | None = None
+    specialty: str | None = None
+    document_type: str
+    title: str
+    author: str | None = None
+    author_professional_role: str | None = None
+    status: str
+    signed_at: DateTimeType | None = None
+    addendum_count: int = 0
+    can_edit: bool = False
+    can_add_addendum: bool = False
+
+
+class PatientClinicalRecordResponse(BaseModel):
+    patient_id: int
+    institution_id: int | None = None
+    count: int
+    items: list[PatientClinicalRecordItem]
 
 
 class ClinicalEvidenceTimelineItem(BaseModel):

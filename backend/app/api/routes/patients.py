@@ -6,12 +6,13 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, joinedload
 
 from app.audit.service import audit, snapshot
-from app.auth.dependencies import CurrentUserContext, get_scoped_patient, require_active_clinic
+from app.auth.dependencies import Actor, CurrentUserContext, get_current_actor, get_scoped_patient, require_active_clinic
 from app.core.database import get_db
-from app.models.domain import Appointment, ClinicalEpisode, ClinicalFinding, ClinicalOpenQuestion, Invoice, Patient, PatientClinicAssociation
-from app.schemas.common import ClinicalEpisodeOut, ClinicalEvidenceTimelineListResponse, ClinicalFindingDetailResponse, ClinicalFindingListResponse, ClinicalFindingReadItem, ClinicalOpenQuestionDetailResponse, ClinicalOpenQuestionListResponse, ClinicalOpenQuestionReadItem, ErrorResponse, InvoiceOut, PatientAppointmentAvailabilityOut, PatientCreate, PatientOut, PatientUpdate
+from app.models.domain import Appointment, ClinicalDocument, ClinicalDocumentAddendum, ClinicalEpisode, ClinicalFinding, ClinicalOpenQuestion, Invoice, Patient, PatientClinicAssociation
+from app.schemas.common import ClinicalEpisodeOut, ClinicalEvidenceTimelineListResponse, ClinicalFindingDetailResponse, ClinicalFindingListResponse, ClinicalFindingReadItem, ClinicalOpenQuestionDetailResponse, ClinicalOpenQuestionListResponse, ClinicalOpenQuestionReadItem, ErrorResponse, InvoiceOut, PatientAppointmentAvailabilityOut, PatientClinicalRecordItem, PatientClinicalRecordResponse, PatientCreate, PatientOut, PatientUpdate
 from app.services.clinical_evidence_timeline import list_patient_clinical_evidence_timeline
 from app.services.appointments import minimal_appointment_conflict, patient_appointment_availability_stmt
+from app.services.clinical_document_access import CLINICAL_ADDENDUM_PERMISSION, CLINICAL_EDIT_PERMISSION, resolve_actor_institution_context, institution_scoped_clinical_documents_statement
 
 ERROR_RESPONSES = {400: {"model": ErrorResponse}, 401: {"model": ErrorResponse}, 403: {"model": ErrorResponse}, 404: {"model": ErrorResponse}, 409: {"model": ErrorResponse}, 422: {"model": ErrorResponse}}
 
@@ -188,6 +189,94 @@ def get_patient(patient_id: int, db: Session = Depends(get_db), context: Current
     if not patient:
         raise HTTPException(404, detail="Pacijent nije pronađen")
     return patient
+
+
+@router.get("/patients/{patient_id}/clinical-record", response_model=PatientClinicalRecordResponse)
+def patient_clinical_record(
+    patient_id: int,
+    request: Request,
+    institution_id: int | None = None,
+    document_type: str | None = None,
+    clinic_id: int | None = None,
+    date_from: date | None = None,
+    date_to: date | None = None,
+    limit: int = 50,
+    offset: int = 0,
+    db: Session = Depends(get_db),
+    actor: Actor = Depends(get_current_actor),
+):
+    patient = db.get(Patient, patient_id)
+    if not patient:
+        raise HTTPException(404, detail="Pacijent nije pronađen")
+    resolved_institution_id = resolve_actor_institution_context(db, actor, institution_id)
+    limit = max(1, min(limit, 100))
+    offset = max(0, offset)
+    stmt = institution_scoped_clinical_documents_statement(db, actor).where(ClinicalDocument.patient_id == patient_id)
+    if resolved_institution_id is not None:
+        stmt = stmt.where(ClinicalDocument.clinic.has(institution_id=resolved_institution_id))
+    if document_type:
+        stmt = stmt.where(ClinicalDocument.document_type == document_type)
+    if clinic_id:
+        stmt = stmt.where(ClinicalDocument.clinic_id == clinic_id)
+    if date_from:
+        stmt = stmt.where(or_(ClinicalDocument.document_date >= date_from, ClinicalDocument.document_date.is_(None)))
+    if date_to:
+        stmt = stmt.where(or_(ClinicalDocument.document_date <= date_to, ClinicalDocument.document_date.is_(None)))
+    total = scalar_count(db, select(func.count()).select_from(stmt.subquery()))
+    documents = db.scalars(
+        stmt.order_by(
+            ClinicalDocument.document_date.desc().nulls_last(),
+            ClinicalDocument.created_at.desc(),
+            ClinicalDocument.id.desc(),
+        )
+        .offset(offset)
+        .limit(limit)
+    ).all()
+    addendum_counts = dict(
+        db.execute(
+            select(ClinicalDocumentAddendum.original_document_id, func.count(ClinicalDocumentAddendum.id))
+            .where(ClinicalDocumentAddendum.original_document_id.in_([item.id for item in documents] or [-1]))
+            .group_by(ClinicalDocumentAddendum.original_document_id)
+        ).all()
+    )
+    can_add_addendum = CLINICAL_ADDENDUM_PERMISSION in actor.permissions
+    can_edit = CLINICAL_EDIT_PERMISSION in actor.permissions
+    items = [
+        PatientClinicalRecordItem(
+            document_id=document.id,
+            patient_id=document.patient_id,
+            date=document.document_date,
+            created_at=document.created_at,
+            clinic_id=document.clinic_id,
+            clinic_name=document.clinic.name if document.clinic else None,
+            specialty=None,
+            document_type=document.document_type,
+            title=document.title,
+            author=document.author,
+            author_professional_role=document.author_professional_role,
+            status=document.review_status,
+            signed_at=document.reviewed_at if document.review_status == "signed" else None,
+            addendum_count=int(addendum_counts.get(document.id, 0)),
+            can_edit=bool(can_edit and document.review_status != "signed" and document.author_user_id == actor.user_id),
+            can_add_addendum=bool(can_add_addendum and document.review_status in {"signed", "reviewed"}),
+        )
+        for document in documents
+    ]
+    audit(
+        db,
+        "clinical_history.opened",
+        "Patient",
+        patient.id,
+        "Otvoren je klinički karton ustanove",
+        actor.user_id,
+        actor.actor_type,
+        actor.api_key_id,
+        None,
+        {"patient_id": patient.id, "institution_id": resolved_institution_id, "count": len(items), "limit": limit, "offset": offset},
+        request,
+    )
+    db.commit()
+    return PatientClinicalRecordResponse(patient_id=patient.id, institution_id=resolved_institution_id, count=total, items=items)
 
 
 @router.get("/patients/{patient_id}/clinical-findings", response_model=ClinicalFindingListResponse)

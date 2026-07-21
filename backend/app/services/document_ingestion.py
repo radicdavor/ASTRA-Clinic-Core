@@ -147,6 +147,7 @@ def ingest_source_document(
     now = datetime.now(timezone.utc)
     document = ClinicalDocument(
         patient_id=journey.patient_id,
+        clinic_id=journey.clinic_id,
         appointment_id=journey.appointment_id,
         journey_id=journey.id,
         clinical_episode_id=journey.appointment.episode_id,
@@ -166,6 +167,9 @@ def ingest_source_document(
         review_status="draft",
         ai_extraction_status="not_run",
         physician_reviewed=False,
+        author_user_id=actor_user_id,
+        is_clinical_record=True,
+        record_classification="clinical",
     )
     db.add(document)
     db.flush()

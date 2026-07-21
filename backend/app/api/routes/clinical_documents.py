@@ -9,7 +9,7 @@ from app.auth.dependencies import Actor, active_clinic_memberships, get_current_
 from app.core.database import get_db
 from app.models.domain import AuditLog, ClinicalDocument, Patient
 from app.schemas.common import ClinicalDocumentAddendumCreate, ClinicalDocumentAddendumOut, ClinicalDocumentCreate, ClinicalDocumentOut, ClinicalDocumentUpdate, ClinicalDocumentUpload, ClinicalEvidenceTimelineItem, ErrorResponse
-from app.services.clinical_document_access import create_document_addendum, get_authored_draft_for_edit, get_institution_scoped_clinical_document_for_read, institution_scoped_clinical_documents_statement
+from app.services.clinical_document_access import create_document_addendum, ensure_institution_clinical_read, get_authored_draft_for_edit, get_institution_scoped_clinical_document_for_read, institution_scoped_clinical_documents_statement
 from app.services.clinical_documents import extract_document_knowledge, get_document_or_404, has_extracted_content, initial_ai_extraction_status, initial_document_review_status, mark_document_ai_extraction_edited, mark_document_needs_review, validate_document_links
 from app.services.clinical_evidence_timeline import classify_audit_log
 
@@ -176,7 +176,8 @@ def get_clinical_document(document_id: int, request: Request, db: Session = Depe
 
 @router.get("/clinical-documents/{document_id}/evidence-timeline", response_model=list[ClinicalEvidenceTimelineItem])
 def clinical_document_evidence_timeline(document_id: int, request: Request, db: Session = Depends(get_db), actor: Actor = Depends(get_current_actor)):
-    get_institution_scoped_clinical_document_for_read(db, document_id, actor, request, "source_document_viewed")
+    document = get_document_or_404(db, document_id)
+    ensure_institution_clinical_read(db, document, actor)
     logs = db.scalars(select(AuditLog).where(AuditLog.entity_type == "ClinicalDocument", AuditLog.entity_id == document_id).order_by(AuditLog.created_at.desc(), AuditLog.id.desc())).all()
     items: list[ClinicalEvidenceTimelineItem] = []
     access_only_actions = {"clinical_document_viewed", "source_document_viewed", "signed_report_viewed", "source_document_printed"}

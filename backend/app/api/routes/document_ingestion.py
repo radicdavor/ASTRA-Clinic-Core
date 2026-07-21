@@ -18,6 +18,7 @@ from app.services.document_ingestion import (
     queue_ocr,
     source_path,
 )
+from app.services.clinical_document_access import get_institution_scoped_clinical_document_for_read
 from app.services.patient_journeys import add_event
 
 
@@ -108,15 +109,13 @@ async def ingest_document(
 @router.get("/clinical-documents/{document_id}/source")
 def open_document_source(
     document_id: int,
+    request: Request,
     db: Session = Depends(get_db),
     actor: Actor = Depends(require_permission("documents.view_source")),
 ):
-    from app.models.domain import ClinicalDocument
-
-    document = db.get(ClinicalDocument, document_id)
-    if not document:
-        raise HTTPException(404, detail="Klinički dokument nije pronađen")
+    document = get_institution_scoped_clinical_document_for_read(db, document_id, actor, request, "source_document_viewed")
     path = source_path(document)
+    db.commit()
     return FileResponse(path, media_type=document.mime_type, filename=document.original_filename or path.name)
 
 

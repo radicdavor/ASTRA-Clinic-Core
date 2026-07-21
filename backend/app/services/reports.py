@@ -63,6 +63,7 @@ def create_signed_report(db: Session, instance: ClinicalFormInstance, actor_user
         author_user_id=actor_user_id,
         author_professional_role=signer.role.name if signer.role else None,
         is_clinical_record=True,
+        record_classification="clinical",
         institution="ASTRA Clinic",
         raw_text=instance.rendered_summary or "",
         review_status="signed",
