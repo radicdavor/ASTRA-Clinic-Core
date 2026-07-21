@@ -315,6 +315,8 @@ def reject_clinical_document_summary(
     document.ai_extraction_status = "rejected"
     document.ai_extraction_updated_at = datetime.now(timezone.utc)
     document.review_status = "draft"
+    if document.author_user_id is None:
+        document.author_user_id = actor.user_id
     document.physician_reviewed = False
     document.reviewed_by = None
     document.reviewed_at = None

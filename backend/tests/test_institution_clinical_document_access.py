@@ -210,6 +210,49 @@ def test_author_controlled_draft_editing_and_signed_immutability(client, db):
     assert signed_denied.status_code == 409
 
 
+def test_foreign_drafts_are_readable_but_not_editable_and_legacy_unknown_author_is_read_only(client, db):
+    clinic_a, clinic_b, _, patient, _ = setup_scope(db)
+    author_doctor = user_with_role(db, "foreign-author@test.local", MEDICAL_EDIT, "medical_staff", clinic_b)
+    reader_doctor = user_with_role(db, "foreign-reader@test.local", MEDICAL_EDIT, "medical_staff", clinic_a)
+    reader_nurse = user_with_role(db, "foreign-nurse@test.local", MEDICAL_EDIT, "medical_staff", clinic_a)
+    reception = user_with_role(db, "foreign-reception@test.local", ["clinical.documents.read_institution", "clinical.documents.edit_own_draft"], "administrative_staff", clinic_a)
+    other_clinic = Clinic(name="Foreign Institution Draft Clinic", institution_key="foreign")
+    db.add(other_clinic)
+    db.flush()
+    other_doctor = user_with_role(db, "foreign-other-inst@test.local", MEDICAL_EDIT, "medical_staff", other_clinic)
+    doctor_draft = clinical_doc(db, patient, clinic_b, author_doctor, status="draft")
+    legacy_unknown_author = clinical_doc(db, patient, clinic_b, None, status="draft")
+    db.commit()
+
+    assert client.get(f"/api/clinical-documents/{doctor_draft.id}", headers=headers(client, reader_doctor.email)).status_code == 200
+    assert client.get(f"/api/clinical-documents/{doctor_draft.id}", headers=headers(client, reader_nurse.email)).status_code == 200
+    assert client.patch(f"/api/clinical-documents/{doctor_draft.id}", headers=headers(client, reader_doctor.email), json={"title": "Tuđi nacrt"}).status_code == 403
+    assert client.patch(f"/api/clinical-documents/{doctor_draft.id}", headers=headers(client, reader_nurse.email), json={"title": "Sestrinska izmjena tuđeg nacrta"}).status_code == 403
+    assert client.get(f"/api/clinical-documents/{doctor_draft.id}", headers=headers(client, reception.email)).status_code == 403
+    assert client.patch(f"/api/clinical-documents/{doctor_draft.id}", headers=headers(client, reception.email), json={"title": "Administrativna izmjena"}).status_code == 403
+    assert client.get(f"/api/clinical-documents/{doctor_draft.id}", headers=headers(client, other_doctor.email)).status_code == 404
+    assert client.patch(f"/api/clinical-documents/{doctor_draft.id}", headers=headers(client, other_doctor.email), json={"title": "Druga ustanova"}).status_code == 404
+    assert client.get(f"/api/clinical-documents/{legacy_unknown_author.id}", headers=headers(client, reader_doctor.email)).status_code == 200
+    assert client.patch(f"/api/clinical-documents/{legacy_unknown_author.id}", headers=headers(client, reader_doctor.email), json={"title": "Legacy edit"}).status_code == 403
+
+
+def test_permission_revocation_affects_existing_session_immediately(client, db):
+    clinic_a, clinic_b, _, patient, _ = setup_scope(db)
+    doctor = user_with_role(db, "revoked-editor@test.local", MEDICAL_EDIT, "medical_staff", clinic_a)
+    document = clinical_doc(db, patient, clinic_b, doctor, status="draft")
+    token = login_token(client, doctor.email)
+    auth = {"Authorization": f"Bearer {token}"}
+    db.commit()
+
+    assert client.patch(f"/api/clinical-documents/{document.id}", headers=auth, json={"title": "Prva izmjena"}).status_code == 200
+    doctor.role.permissions = [permission for permission in doctor.role.permissions if permission.name != "clinical.documents.edit_own_draft"]
+    db.commit()
+
+    denied = client.patch(f"/api/clinical-documents/{document.id}", headers=auth, json={"title": "Nakon opoziva"})
+
+    assert denied.status_code == 403
+
+
 def test_addendum_is_separate_audited_record_and_does_not_change_original(client, db):
     clinic_a, clinic_b, _, patient, _ = setup_scope(db)
     doctor = user_with_role(db, "addendum-doctor@test.local", MEDICAL_ADDENDUM, "medical_staff", clinic_a)

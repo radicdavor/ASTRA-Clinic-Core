@@ -25,6 +25,7 @@ CLINICAL_EDIT_PERMISSION = "clinical.documents.edit_own_draft"
 CLINICAL_ADDENDUM_PERMISSION = "clinical.documents.add_addendum"
 SIGNED_OR_FINAL_DOCUMENT_STATUSES = {"signed", "reviewed"}
 INSTITUTION_READABLE_RECORD_CLASSIFICATIONS = {"clinical"}
+EDITABLE_CLINICAL_DOCUMENT_STATUSES = {"draft", "needs_physician_review", "reviewed"}
 
 
 def actor_is_medical_staff(actor: Actor) -> bool:
@@ -208,15 +209,25 @@ def institution_scoped_clinical_documents_statement(db: Session, actor: Actor):
 def get_authored_draft_for_edit(db: Session, document_id: int, actor: Actor) -> ClinicalDocument:
     document = get_document_or_404(db, document_id)
     ensure_institution_clinical_read(db, document, actor)
+    can_edit_clinical_draft(actor, document)
+    return document
+
+
+def can_edit_clinical_draft(actor: Actor, document: ClinicalDocument) -> bool:
     if CLINICAL_EDIT_PERMISSION not in actor.permissions:
         raise HTTPException(status.HTTP_403_FORBIDDEN, detail=f"Nedostaje dozvola: {CLINICAL_EDIT_PERMISSION}")
     if document.review_status == "signed":
-        raise HTTPException(status.HTTP_409_CONFLICT, detail="Potpisani dokument je nepromjenjiv; koristite dopunu/addendum")
-    if document.review_status not in {"draft", "needs_physician_review", "reviewed"}:
-        raise HTTPException(status.HTTP_409_CONFLICT, detail="Samo nepotpisani dokument može se standardno uređivati")
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            detail={"code": "signed_document_immutable", "message": "Potpisani dokument je nepromjenjiv; koristite dopunu/addendum"},
+        )
+    if document.review_status not in EDITABLE_CLINICAL_DOCUMENT_STATUSES:
+        raise HTTPException(status.HTTP_409_CONFLICT, detail="Samo nacrt kliničkog dokumenta može se standardno uređivati")
+    if document.review_status == "draft" and document.author_user_id is None:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, detail="Legacy nacrt bez pouzdanog autora je samo za čitanje")
     if document.author_user_id is not None and document.author_user_id != actor.user_id:
         raise HTTPException(status.HTTP_403_FORBIDDEN, detail="Nacrt smije uređivati samo autor dokumenta")
-    return document
+    return True
 
 
 def create_document_addendum(
