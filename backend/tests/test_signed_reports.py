@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
 
-from app.models.domain import ClinicalFormDefinition, ClinicalFormVersion, Patient, ServiceFormBinding, SignedClinicalReport
+from app.models.domain import ClinicalFormDefinition, ClinicalFormInstance, ClinicalFormVersion, Patient, ServiceFormBinding, SignedClinicalReport
 from tests.conftest import login_token
 from tests.factories import appointment
 
@@ -57,6 +57,39 @@ def test_signing_creates_immutable_clinical_document_and_print_history(client, d
     assert printed.json()["report_id"] == report.id
     refreshed = client.get(f"/api/patient-journeys/{visit['id']}/visit-documents", headers=headers(client)).json()
     assert refreshed[0]["print_count"] == 1
+
+
+def test_signed_report_has_no_mutation_api_and_generated_source_document_is_locked(client, db, auth_setup):
+    _, _, _, report = setup_signed_report(client, db)
+
+    patched_report = client.patch(f"/api/signed-reports/{report.id}", headers=headers(client), json={"title": "Nedopušteno"})
+    deleted_report = client.delete(f"/api/signed-reports/{report.id}", headers=headers(client))
+    patched_source = client.patch(
+        f"/api/clinical-documents/{report.clinical_document_id}",
+        headers=headers(client),
+        json={"title": "Izmjena potpisanog izvora"},
+    )
+
+    assert patched_report.status_code == 405
+    assert deleted_report.status_code == 405
+    assert patched_source.status_code == 409
+    assert patched_source.json()["detail"]["code"] == "signed_document_immutable"
+
+
+def test_signed_report_snapshot_survives_later_form_instance_changes(client, db, auth_setup):
+    _, _, _, report = setup_signed_report(client, db)
+    original_content = report.rendered_content
+    original_data = dict(report.structured_data_json)
+    instance = db.get(ClinicalFormInstance, report.form_instance_id)
+    instance.rendered_summary = "Naknadna promjena obrasca koja ne smije izmijeniti potpisani nalaz"
+    instance.data_json = {"opinion": "Naknadno promijenjeno"}
+    db.commit()
+
+    preview = client.get(f"/api/signed-reports/{report.id}", headers=headers(client))
+
+    assert preview.status_code == 200
+    assert preview.json()["rendered_content"] == original_content
+    assert preview.json()["structured_data_json"] == original_data
 
 
 def test_delivery_is_explicit_stub_and_amendment_preserves_original(client, db, auth_setup):
