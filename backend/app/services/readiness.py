@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 from app.core.config import get_settings
 from app.models.domain import ApiKey, Appointment, AuditLog, ClinicalDocument, ClinicalEpisode, Institution, InventoryBatch, InventoryItem, Invoice, Module, Patient, PatientClinicalSummaryRecord, Provider, Room, Service, room_services
 from app.schemas.common import ReadinessCheck
-from app.services.patient_knowledge import DOCUMENT_REVIEW_AWAITING_STATUSES, latest_summary_records_by_patient, official_patient_documents_statement
+from app.services.patient_knowledge import DOCUMENT_REVIEW_AWAITING_STATUSES, official_patient_documents_statement
 
 
 def scalar_count(db: Session, stmt) -> int:
@@ -53,12 +53,21 @@ def build_operational_readiness(db: Session) -> dict:
         .where(PatientClinicalSummaryRecord.status == "reviewed")
         .order_by(PatientClinicalSummaryRecord.patient_id, PatientClinicalSummaryRecord.updated_at.desc(), PatientClinicalSummaryRecord.id.desc())
     ).all()
-    reviewed_summary_by_patient = latest_summary_records_by_patient(reviewed_summaries)
+    reviewed_summaries_by_patient: dict[int, list[PatientClinicalSummaryRecord]] = {}
+    for summary in reviewed_summaries:
+        reviewed_summaries_by_patient.setdefault(summary.patient_id, []).append(summary)
     stale_summary_patients = {
         document.patient_id
         for document in reviewed_documents
-        if document.patient_id not in reviewed_summary_by_patient
-        or document.updated_at > reviewed_summary_by_patient[document.patient_id].updated_at
+        if not any(
+            document.id in {
+                source_id
+                for source_id in (summary.source_document_ids or [])
+                if isinstance(source_id, int) and not isinstance(source_id, bool)
+            }
+            and (document.updated_at is None or (summary.updated_at is not None and summary.updated_at >= document.updated_at))
+            for summary in reviewed_summaries_by_patient.get(document.patient_id, [])
+        )
     }
 
     checks = [

@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from app.models.domain import AuditLog, PatientClinicalSummaryRecord
+from app.models.domain import AuditLog, Clinic, ClinicalDocument, Institution, PatientClinicalSummaryRecord
 from tests.conftest import login_token
 from tests.factories import appointment, clinical_document, patient
 
@@ -902,6 +902,51 @@ def test_readiness_does_not_warn_when_reviewed_summary_current(client, db, auth_
     check = next(item for item in response.json()["checks"] if item["key"] == "patient_summary_stale")
     assert check["status"] == "ok"
     assert check["count"] == 0
+
+
+def test_readiness_requires_summary_to_cover_each_institution_document_source(client, db, auth_setup):
+    headers = auth_headers(client)
+    p = patient(db)
+    local_document = clinical_document(db, p, physician_reviewed=True)
+    local_document.updated_at = datetime(2026, 7, 1, 9, 0)
+    foreign_institution = Institution(code="summary-foreign", name="Summary Foreign", active=True)
+    foreign_clinic = Clinic(name="Summary Foreign Clinic", institution_key="summary-foreign", institution=foreign_institution)
+    db.add(foreign_clinic)
+    db.flush()
+    foreign_document = ClinicalDocument(
+        patient_id=p.id,
+        clinic_id=foreign_clinic.id,
+        institution_id=foreign_institution.id,
+        source_type="external",
+        document_type="laboratory",
+        title="Foreign institution source",
+        review_status="reviewed",
+        physician_reviewed=True,
+        is_clinical_record=True,
+        record_classification="clinical",
+    )
+    db.add(foreign_document)
+    db.flush()
+    foreign_document.updated_at = datetime(2026, 7, 2, 9, 0)
+    summary = PatientClinicalSummaryRecord(
+        patient_id=p.id,
+        summary_text="Covers only the local institution source",
+        source_document_ids=[local_document.id],
+        status="reviewed",
+        generated_by="physician",
+        reviewed_by=auth_setup["admin"].id,
+    )
+    db.add(summary)
+    db.flush()
+    summary.updated_at = datetime(2026, 7, 3, 9, 0)
+    db.commit()
+
+    response = client.get("/api/readiness", headers=headers)
+
+    assert response.status_code == 200
+    check = next(item for item in response.json()["checks"] if item["key"] == "patient_summary_stale")
+    assert check["status"] == "warning"
+    assert check["count"] == 1
 
 
 def test_review_stale_draft_is_blocked(client, db, auth_setup):

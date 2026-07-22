@@ -8,7 +8,13 @@ from app.core.database import get_db
 from app.models.domain import Patient, PatientJourney, ReportDeliveryEvent, SignedClinicalReport
 from app.schemas.common import ClinicalDocumentAddendumCreate, ClinicalDocumentAddendumOut
 from app.schemas.reports import ReportDeliveryOut, ReportDeliveryRequest, ReportPrintOut, SignedReportOut, VisitDocumentOut
-from app.services.clinical_document_access import create_document_addendum, get_institution_scoped_clinical_document_for_read
+from app.services.clinical_document_access import (
+    actor_institution_scope,
+    actor_is_medical_staff,
+    create_document_addendum,
+    get_institution_scoped_clinical_document_for_read,
+    institution_id_for_clinic,
+)
 from app.services.reports import queue_stub_deliveries, record_print, verify_report_integrity, visit_documents
 
 router = APIRouter(prefix="/api", tags=["signed-reports"])
@@ -21,18 +27,42 @@ def report_or_404(db: Session, report_id: int) -> SignedClinicalReport:
     return report
 
 
-@router.get("/patient-journeys/{journey_id}/visit-documents", response_model=list[VisitDocumentOut])
-def list_visit_documents(journey_id: int, db: Session = Depends(get_db), actor: Actor = Depends(require_permission("documents.view_source"))):
-    if not db.get(PatientJourney, journey_id):
+def institution_scoped_journey_or_404(db: Session, journey_id: int, actor: Actor) -> PatientJourney:
+    if not actor_is_medical_staff(actor):
+        raise HTTPException(403, detail="Kliničke nalaze smije čitati samo ovlašteno medicinsko osoblje")
+    journey = db.get(PatientJourney, journey_id)
+    scope = actor_institution_scope(db, actor)
+    if not journey or institution_id_for_clinic(db, journey.clinic_id) not in scope.institution_ids:
         raise HTTPException(404, detail="Dolazak nije pronađen")
+    return journey
+
+
+def scoped_report_or_404(
+    db: Session,
+    report_id: int,
+    actor: Actor,
+    request: Request | None = None,
+    action: str = "signed_report_viewed",
+) -> SignedClinicalReport:
+    report = report_or_404(db, report_id)
+    get_institution_scoped_clinical_document_for_read(db, report.clinical_document_id, actor, request, action)
+    verify_report_integrity(report)
+    return report
+
+
+@router.get("/patient-journeys/{journey_id}/visit-documents", response_model=list[VisitDocumentOut])
+def list_visit_documents(journey_id: int, request: Request, db: Session = Depends(get_db), actor: Actor = Depends(require_permission("documents.view_source"))):
+    institution_scoped_journey_or_404(db, journey_id, actor)
+    reports = db.scalars(select(SignedClinicalReport).where(SignedClinicalReport.journey_id == journey_id)).all()
+    for report in reports:
+        scoped_report_or_404(db, report.id, actor, request)
+    db.commit()
     return visit_documents(db, journey_id)
 
 
 @router.get("/signed-reports/{report_id}", response_model=SignedReportOut)
 def preview_report(report_id: int, request: Request, db: Session = Depends(get_db), actor: Actor = Depends(require_permission("reports.read"))):
-    report = report_or_404(db, report_id)
-    get_institution_scoped_clinical_document_for_read(db, report.clinical_document_id, actor, request, "signed_report_viewed")
-    verify_report_integrity(report)
+    report = scoped_report_or_404(db, report_id, actor, request)
     db.commit()
     return report
 
@@ -41,9 +71,7 @@ def preview_report(report_id: int, request: Request, db: Session = Depends(get_d
 def print_report(report_id: int, request: Request, db: Session = Depends(get_db), actor: Actor = Depends(require_permission("reports.print"))):
     if actor.user_id is None:
         raise HTTPException(403, detail="Ispis zahtijeva prijavljenog korisnika")
-    report = report_or_404(db, report_id)
-    get_institution_scoped_clinical_document_for_read(db, report.clinical_document_id, actor, request, "source_document_printed")
-    verify_report_integrity(report)
+    report = scoped_report_or_404(db, report_id, actor, request, "source_document_printed")
     event = record_print(db, report, actor.user_id, getattr(request.state, "request_id", None))
     audit(db, "signed_report_printed", "SignedClinicalReport", report.id, "Ispisana je točna potpisana verzija nalaza", actor.user_id, actor.actor_type, actor.api_key_id, None, {"print_event_id": event.id}, request)
     db.commit()
@@ -59,9 +87,7 @@ def add_signed_report_addendum(
     db: Session = Depends(get_db),
     actor: Actor = Depends(require_permission("clinical.documents.add_addendum")),
 ):
-    report = report_or_404(db, report_id)
-    get_institution_scoped_clinical_document_for_read(db, report.clinical_document_id, actor, request, "signed_report_viewed")
-    verify_report_integrity(report)
+    report = scoped_report_or_404(db, report_id, actor, request)
     addendum = create_document_addendum(db, report.clinical_document_id, payload.reason, payload.content, actor, request, signed_report_id=report.id)
     db.commit()
     db.refresh(addendum)
@@ -72,10 +98,12 @@ def add_signed_report_addendum(
 def deliver_reports(journey_id: int, payload: ReportDeliveryRequest, request: Request, db: Session = Depends(get_db), actor: Actor = Depends(require_permission("reports.send"))):
     if actor.user_id is None:
         raise HTTPException(403, detail="Dostava zahtijeva prijavljenog ovlaštenog korisnika")
+    journey = institution_scoped_journey_or_404(db, journey_id, actor)
     reports = db.scalars(select(SignedClinicalReport).where(SignedClinicalReport.id.in_(payload.report_ids), SignedClinicalReport.journey_id == journey_id)).all()
     if len(reports) != len(set(payload.report_ids)):
         raise HTTPException(404, detail="Jedan ili više potpisanih nalaza ne pripadaju ovom dolasku")
-    journey = db.get(PatientJourney, journey_id)
+    for report in reports:
+        scoped_report_or_404(db, report.id, actor, request)
     patient = db.get(Patient, journey.patient_id)
     if payload.recipient_source == "patient_verified":
         if not patient.email or not patient.email_verified_at or str(payload.recipient).lower() != patient.email.lower():
@@ -97,11 +125,13 @@ def deliver_reports(journey_id: int, payload: ReportDeliveryRequest, request: Re
 @router.get("/signed-reports/{report_id}/delivery-history", response_model=list[ReportDeliveryOut])
 def delivery_history(
     report_id: int,
+    request: Request,
     limit: int = Query(default=100, ge=1, le=100),
     db: Session = Depends(get_db),
     actor: Actor = Depends(require_permission("reports.delivery_history")),
 ):
-    report_or_404(db, report_id)
+    scoped_report_or_404(db, report_id, actor, request)
+    db.commit()
     return db.scalars(
         select(ReportDeliveryEvent)
         .where(ReportDeliveryEvent.report_id == report_id)

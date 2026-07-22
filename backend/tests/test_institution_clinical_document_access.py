@@ -3,7 +3,9 @@ from datetime import date, time
 from sqlalchemy import select
 
 from app.core.security import hash_password
+from app.auth.dependencies import hash_api_key
 from app.models.domain import (
+    ApiKey,
     Appointment,
     AuditLog,
     ClinicalDocument,
@@ -302,6 +304,95 @@ def test_new_manual_document_persists_canonical_institution_provenance(client, d
     document = db.get(ClinicalDocument, response.json()["id"])
     assert document is not None
     assert document.institution_id == clinic_a.institution_id
+
+
+def test_document_write_rejects_foreign_clinic_appointment_and_api_key_provenance(client, db):
+    clinic_a, _, clinic_other, patient, _ = setup_scope(db)
+    doctor = user_with_role(db, "bounded-write@test.local", MEDICAL_EDIT + ["clinical_documents.write"], "medical_staff", clinic_a)
+    foreign_provider = Provider(full_name="Foreign provider", specialty="Other", clinic=clinic_other)
+    foreign_room = Room(name="Foreign room", type="ordination", clinic=clinic_other)
+    service = Service(name="Foreign service", duration_minutes=30, price=100)
+    db.add_all([foreign_provider, foreign_room, service])
+    db.flush()
+    foreign_appointment = Appointment(
+        patient_id=patient.id,
+        provider_id=foreign_provider.id,
+        room_id=foreign_room.id,
+        service_id=service.id,
+        clinic_id=clinic_other.id,
+        date=date(2026, 7, 22),
+        start_time=time(10, 0),
+        end_time=time(10, 30),
+        duration_minutes=30,
+        status="scheduled",
+        source="manual",
+    )
+    raw_key = "foreign-write-key"
+    db.add(foreign_appointment)
+    db.add(ApiKey(name="Document writer", key_hash=hash_api_key(raw_key), scopes=["clinical_documents.write"], active=True))
+    db.commit()
+    base_payload = {
+        "patient_id": patient.id,
+        "source_type": "external",
+        "document_type": "laboratory",
+        "title": "Rejected foreign provenance",
+    }
+    doctor_headers = headers(client, doctor.email)
+
+    direct = client.post("/api/clinical-documents", headers=doctor_headers, json={**base_payload, "clinic_id": clinic_other.id})
+    via_appointment = client.post(
+        "/api/clinical-documents",
+        headers=doctor_headers,
+        json={**base_payload, "appointment_id": foreign_appointment.id},
+    )
+    via_api_key = client.post(
+        "/api/clinical-documents",
+        headers={"X-ASTRA-API-Key": raw_key},
+        json={**base_payload, "clinic_id": clinic_other.id},
+    )
+    upload_direct = client.post(
+        "/api/clinical-documents/upload",
+        headers=doctor_headers,
+        json={**base_payload, "clinic_id": clinic_other.id, "attachment_name": "foreign.pdf"},
+    )
+    upload_via_appointment = client.post(
+        "/api/clinical-documents/upload",
+        headers=doctor_headers,
+        json={**base_payload, "appointment_id": foreign_appointment.id, "attachment_name": "foreign.pdf"},
+    )
+    upload_via_api_key = client.post(
+        "/api/clinical-documents/upload",
+        headers={"X-ASTRA-API-Key": raw_key},
+        json={**base_payload, "clinic_id": clinic_other.id, "attachment_name": "foreign.pdf"},
+    )
+
+    assert direct.status_code == 404
+    assert via_appointment.status_code == 404
+    assert via_api_key.status_code == 403
+    assert upload_direct.status_code == 404
+    assert upload_via_appointment.status_code == 404
+    assert upload_via_api_key.status_code == 403
+    assert db.scalar(select(ClinicalDocument).where(ClinicalDocument.title == "Rejected foreign provenance")) is None
+
+
+def test_document_patch_cannot_change_patient_clinic_or_appointment_provenance(client, db):
+    clinic_a, clinic_b, _, patient, appointment = setup_scope(db)
+    author = user_with_role(db, "immutable-provenance@test.local", MEDICAL_EDIT, "medical_staff", clinic_a)
+    document = clinical_doc(db, patient, clinic_b, author, status="draft")
+    document.appointment_id = appointment.id
+    other_patient = Patient(first_name="Other", last_name="Patient")
+    db.add(other_patient)
+    db.commit()
+    auth = headers(client, author.email)
+
+    assert client.patch(f"/api/clinical-documents/{document.id}", headers=auth, json={"patient_id": other_patient.id}).status_code == 409
+    assert client.patch(f"/api/clinical-documents/{document.id}", headers=auth, json={"clinic_id": clinic_a.id}).status_code == 409
+    assert client.patch(f"/api/clinical-documents/{document.id}", headers=auth, json={"appointment_id": None}).status_code == 409
+
+    db.refresh(document)
+    assert document.patient_id == patient.id
+    assert document.clinic_id == clinic_b.id
+    assert document.appointment_id == appointment.id
 
 
 def test_physician_and_nurse_read_clinical_documents_across_clinics_same_institution(client, db):
