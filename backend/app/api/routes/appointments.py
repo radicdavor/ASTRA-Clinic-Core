@@ -593,11 +593,21 @@ def update_appointment(
     )
     db.flush()
     actor = context.actor
-    audit(db, "update", "Appointment", appointment.id, "Azuriran termin", actor.user_id, actor.actor_type, actor.api_key_id, before, snapshot(appointment), request)
+    audit(
+        db, "update", "Appointment", appointment.id, "Azuriran termin",
+        actor.user_id, actor.actor_type, actor.api_key_id, before, snapshot(appointment), request,
+        scope_type="clinic", clinic_id=context.active_clinic_id,
+        institution_id=context.active_clinic.institution_id if context.active_clinic else None,
+    )
     if "episode_id" in update_data and old_episode_id != appointment.episode_id:
         action = "link_episode" if appointment.episode_id else "unlink_episode"
         summary = f"Termin povezan s epizodom #{appointment.episode_id}" if appointment.episode_id else "Termin odvojen od klinicke epizode"
-        audit(db, action, "Appointment", appointment.id, summary, actor.user_id, actor.actor_type, actor.api_key_id, before, snapshot(appointment), request)
+        audit(
+            db, action, "Appointment", appointment.id, summary,
+            actor.user_id, actor.actor_type, actor.api_key_id, before, snapshot(appointment), request,
+            scope_type="clinic", clinic_id=context.active_clinic_id,
+            institution_id=context.active_clinic.institution_id if context.active_clinic else None,
+        )
     db.commit()
     db.refresh(appointment)
     return appointment
@@ -616,7 +626,12 @@ def delete_appointment(
     before = snapshot(appointment)
     db.delete(appointment)
     actor = context.actor
-    audit(db, "delete", "Appointment", appointment_id, "Obrisan termin", actor.user_id, actor.actor_type, actor.api_key_id, before, None, request)
+    audit(
+        db, "delete", "Appointment", appointment_id, "Obrisan termin",
+        actor.user_id, actor.actor_type, actor.api_key_id, before, None, request,
+        scope_type="clinic", clinic_id=context.active_clinic_id,
+        institution_id=context.active_clinic.institution_id if context.active_clinic else None,
+    )
     db.commit()
     return {"ok": True}
 

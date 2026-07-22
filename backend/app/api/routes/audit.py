@@ -1,4 +1,7 @@
+from datetime import datetime
+
 from fastapi import APIRouter, Depends, Request
+from pydantic import BaseModel, ConfigDict
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -20,6 +23,51 @@ ERROR_RESPONSES = {
 router = APIRouter(prefix="/api", tags=["audit"], responses=ERROR_RESPONSES)
 
 
+class ClinicAuditEventOut(BaseModel):
+    """PHI-safe clinic audit projection; raw snapshots are intentionally excluded."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    id: int
+    scope_type: str
+    clinic_id: int
+    institution_id: int | None
+    actor_type: str
+    actor_user_id: int | None
+    action: str
+    entity_type: str
+    entity_id: int | None
+    request_id: str | None
+    changed_fields: list[str]
+    status: str | None
+    reason_code: str | None
+    created_at: datetime
+
+
+def clinic_audit_projection(event: AuditLog) -> ClinicAuditEventOut:
+    before_fields = set((event.before_json or {}).keys())
+    after_fields = set((event.after_json or {}).keys())
+    after = event.after_json or {}
+    status = after.get("status")
+    reason_code = after.get("reason_code")
+    return ClinicAuditEventOut(
+        id=event.id,
+        scope_type="clinic",
+        clinic_id=event.clinic_id,
+        institution_id=event.institution_id,
+        actor_type=event.actor_type,
+        actor_user_id=event.actor_user_id,
+        action=event.action,
+        entity_type=event.entity_type,
+        entity_id=event.entity_id,
+        request_id=event.request_id,
+        changed_fields=sorted(before_fields | after_fields),
+        status=status if isinstance(status, str) else None,
+        reason_code=reason_code if isinstance(reason_code, str) else None,
+        created_at=event.created_at,
+    )
+
+
 @router.post("/audit/access-events", response_model=SensitiveAccessEventOut)
 def record_sensitive_access_event(
     payload: SensitiveAccessEventIn,
@@ -33,7 +81,7 @@ def record_sensitive_access_event(
     return event
 
 
-@router.get("/audit-log")
+@router.get("/audit-log", response_model=list[ClinicAuditEventOut])
 def audit_log(
     request: Request,
     entity_type: str | None = None,
@@ -43,7 +91,16 @@ def audit_log(
     db: Session = Depends(get_db),
     context: CurrentUserContext = Depends(require_active_clinic("audit.read")),
 ):
-    stmt = select(AuditLog).order_by(AuditLog.created_at.desc(), AuditLog.id.desc()).limit(200)
+    stmt = (
+        select(AuditLog)
+        .where(
+            AuditLog.scope_type == "clinic",
+            AuditLog.clinic_id == context.active_clinic_id,
+            AuditLog.clinic_id.is_not(None),
+        )
+        .order_by(AuditLog.created_at.desc(), AuditLog.id.desc())
+        .limit(200)
+    )
     if entity_type:
         stmt = stmt.where(AuditLog.entity_type == entity_type)
     if entity_id:
@@ -61,4 +118,4 @@ def audit_log(
         internal=True,
     )
     db.commit()
-    return items
+    return [clinic_audit_projection(item) for item in items]

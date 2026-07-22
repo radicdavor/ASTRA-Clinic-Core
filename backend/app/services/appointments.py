@@ -147,10 +147,20 @@ def create_appointment_with_journey(db: Session, data: dict, actor: Actor, reque
     appointment = Appointment(**data, created_by=actor.user_id)
     db.add(appointment)
     db.flush()
-    audit(db, "create", "Appointment", appointment.id, f"Termin {appointment.date}", actor.user_id, actor.actor_type, actor.api_key_id, None, snapshot(appointment), request)
+    audit(
+        db, "create", "Appointment", appointment.id, f"Termin {appointment.date}",
+        actor.user_id, actor.actor_type, actor.api_key_id, None, snapshot(appointment), request,
+        scope_type="clinic", clinic_id=appointment.clinic_id,
+        institution_id=appointment.clinic.institution_id if appointment.clinic else None,
+    )
     channel = SOURCE_TO_INTAKE.get(appointment.source, "manual")
     journey = create_journey(db, appointment, channel, "booked", actor, request)
-    audit(db, "create", "PatientJourney", journey.id, "Kanonski tijek pacijenta stvoren uz termin", actor.user_id, actor.actor_type, actor.api_key_id, None, snapshot(journey), request)
+    audit(
+        db, "create", "PatientJourney", journey.id, "Kanonski tijek pacijenta stvoren uz termin",
+        actor.user_id, actor.actor_type, actor.api_key_id, None, snapshot(journey), request,
+        scope_type="clinic", clinic_id=appointment.clinic_id,
+        institution_id=appointment.clinic.institution_id if appointment.clinic else None,
+    )
     return appointment
 
 

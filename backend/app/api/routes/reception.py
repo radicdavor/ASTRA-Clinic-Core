@@ -5,7 +5,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session, joinedload
 
 from app.audit.service import audit, snapshot
-from app.auth.dependencies import Actor, require_permission
+from app.auth.dependencies import CurrentUserContext, require_active_clinic
 from app.core.database import get_db
 from app.models.domain import Appointment, ClinicalEpisode, Provider, Room
 from app.schemas.common import AppointmentOut, ErrorResponse, ReceptionArrivalRequest, ReceptionSlot
@@ -77,8 +77,10 @@ def reception_day(
     service_id: int | None = None,
     status: str | None = None,
     db: Session = Depends(get_db),
-    actor: Actor = Depends(require_permission("appointments.read")),
+    context: CurrentUserContext = Depends(require_active_clinic("appointments.read")),
 ):
+    if clinic_id is not None and clinic_id != context.active_clinic_id:
+        raise HTTPException(403, detail="Prijem je dostupan samo za aktivnu kliniku")
     stmt = (
         select(Appointment)
         .options(
@@ -88,7 +90,7 @@ def reception_day(
             joinedload(Appointment.room).joinedload(Room.clinic),
         )
         .join(Appointment.room)
-        .where(Appointment.date == date)
+        .where(Appointment.date == date, Appointment.clinic_id == context.active_clinic_id)
         .order_by(Appointment.start_time)
     )
     if clinic_id:
@@ -110,12 +112,12 @@ def mark_appointment_arrived(
     payload: ReceptionArrivalRequest,
     request: Request,
     db: Session = Depends(get_db),
-    actor: Actor = Depends(require_permission("appointments.write")),
+    context: CurrentUserContext = Depends(require_active_clinic("appointments.write")),
 ):
     appointment = db.scalar(
         select(Appointment)
         .options(joinedload(Appointment.patient))
-        .where(Appointment.id == appointment_id)
+        .where(Appointment.id == appointment_id, Appointment.clinic_id == context.active_clinic_id)
     )
     if not appointment:
         raise HTTPException(404, detail="Termin nije pronaden")
@@ -124,19 +126,25 @@ def mark_appointment_arrived(
     if not payload.identity_verified:
         raise HTTPException(422, detail="Prije evidencije dolaska potrebno je potvrditi identitet pacijenta")
     before = snapshot(appointment)
+    actor = context.actor
+    audit_scope = {
+        "scope_type": "clinic",
+        "clinic_id": context.active_clinic_id,
+        "institution_id": context.active_clinic.institution_id if context.active_clinic else None,
+    }
     if payload.patient:
         patient_before = snapshot(appointment.patient)
         patch_model(appointment.patient, payload.patient.model_dump(exclude_unset=True))
-        audit(db, "reception_patient_updated", "Patient", appointment.patient_id, "Recepcija je dopunila podatke pacijenta", actor.user_id, actor.actor_type, actor.api_key_id, patient_before, snapshot(appointment.patient), request)
+        audit(db, "reception_patient_updated", "Patient", appointment.patient_id, "Recepcija je dopunila podatke pacijenta", actor.user_id, actor.actor_type, actor.api_key_id, patient_before, snapshot(appointment.patient), request, **audit_scope)
     now = datetime.now(timezone.utc)
     appointment.status = "arrived"
     appointment.arrived_at = now
     if payload.identity_verified:
         appointment.identity_verified_at = now
         appointment.identity_verified_by = actor.user_id
-        audit(db, "identity_verified", "Appointment", appointment.id, "Identitet pacijenta je provjeren na prijemu", actor.user_id, actor.actor_type, actor.api_key_id, before, snapshot(appointment), request)
+        audit(db, "identity_verified", "Appointment", appointment.id, "Identitet pacijenta je provjeren na prijemu", actor.user_id, actor.actor_type, actor.api_key_id, before, snapshot(appointment), request, **audit_scope)
     db.flush()
-    audit(db, "mark_arrived", "Appointment", appointment.id, "Pacijent je oznacen kao pristigao", actor.user_id, actor.actor_type, actor.api_key_id, before, snapshot(appointment), request)
+    audit(db, "mark_arrived", "Appointment", appointment.id, "Pacijent je oznacen kao pristigao", actor.user_id, actor.actor_type, actor.api_key_id, before, snapshot(appointment), request, **audit_scope)
     db.commit()
     db.refresh(appointment)
     return db.scalar(
@@ -151,12 +159,12 @@ def start_appointment_service(
     appointment_id: int,
     request: Request,
     db: Session = Depends(get_db),
-    actor: Actor = Depends(require_permission("appointments.write")),
+    context: CurrentUserContext = Depends(require_active_clinic("appointments.write")),
 ):
     appointment = db.scalar(
         select(Appointment)
         .options(*appointment_load_options())
-        .where(Appointment.id == appointment_id)
+        .where(Appointment.id == appointment_id, Appointment.clinic_id == context.active_clinic_id)
     )
     if not appointment:
         raise HTTPException(404, detail="Termin nije pronaden")
@@ -166,6 +174,7 @@ def start_appointment_service(
         raise HTTPException(409, detail="Usluga se ne moze zapoceti bez provjere identiteta pacijenta")
 
     before = snapshot(appointment)
+    actor = context.actor
     appointment.status = "in_progress"
     db.flush()
     audit(
@@ -180,6 +189,9 @@ def start_appointment_service(
         before,
         snapshot(appointment),
         request,
+        scope_type="clinic",
+        clinic_id=context.active_clinic_id,
+        institution_id=context.active_clinic.institution_id if context.active_clinic else None,
     )
     db.commit()
     db.refresh(appointment)

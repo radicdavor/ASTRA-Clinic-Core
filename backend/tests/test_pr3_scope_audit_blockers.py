@@ -430,15 +430,14 @@ def test_unresolved_legacy_derived_clinical_data_is_hidden(client, db, auth_setu
     assert timeline.json()["events"] == []
 
 
-@BLOCKER_XFAIL
 def test_audit_log_is_clinic_scoped_and_returns_phi_safe_projection(client, db, auth_setup):
     clinic_a, clinic_b, _ = _two_institution_patient(db, auth_setup)
     common = {"action": "update", "entity_type": "ClinicalDocument", "entity_id": 999}
     local_kwargs = dict(common)
     foreign_kwargs = dict(common)
     if hasattr(AuditLog, "clinic_id"):
-        local_kwargs.update(clinic_id=clinic_a.id, institution_id=clinic_a.institution_id)
-        foreign_kwargs.update(clinic_id=clinic_b.id, institution_id=clinic_b.institution_id)
+        local_kwargs.update(scope_type="clinic", clinic_id=clinic_a.id, institution_id=clinic_a.institution_id)
+        foreign_kwargs.update(scope_type="clinic", clinic_id=clinic_b.id, institution_id=clinic_b.institution_id)
     local = AuditLog(
         **local_kwargs,
         summary="Local safe event",

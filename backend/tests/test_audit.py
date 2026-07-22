@@ -26,7 +26,9 @@ def test_appointment_update_audit_contains_before_and_after(client, db, auth_set
     log = db.query(AuditLog).filter(AuditLog.entity_type == "Appointment", AuditLog.entity_id == appt.id, AuditLog.action == "update").one()
     assert log.before_json["status"] == "scheduled"
     assert log.after_json["status"] == "arrived"
-    assert log.after_json["notes"] == "Pacijent stigao"
+    assert "notes" not in log.after_json
+    assert log.scope_type == "clinic"
+    assert log.clinic_id == auth_setup["clinic"].id
 
 
 def test_sensitive_access_event_records_safe_payload(client, db, auth_setup):
@@ -248,6 +250,63 @@ def test_audit_log_view_is_itself_audited(client, db, auth_setup):
     assert log.entity_id is None
     assert log.request_id == "audit-log-opened"
     assert log.after_json == {"surface": "audit_viewer", "clinic_id": auth_setup["clinic"].id, "interaction_id": None}
+    assert log.scope_type == "clinic"
+    assert log.clinic_id == auth_setup["clinic"].id
+
+
+def test_audit_log_returns_only_safe_active_clinic_projection(client, db, auth_setup):
+    token = login_token(client, "admin@test.local")
+    local = AuditLog(
+        scope_type="clinic",
+        clinic_id=auth_setup["clinic"].id,
+        institution_id=auth_setup["clinic"].institution_id,
+        action="update",
+        entity_type="ClinicalDocument",
+        entity_id=11,
+        summary="AUDIT_PHI_SENTINEL",
+        before_json={"status": "draft", "raw_text": "AUDIT_PHI_SENTINEL"},
+        after_json={"status": "reviewed", "token": "AUDIT_TOKEN_SENTINEL"},
+    )
+    foreign_clinic = Clinic(name="Foreign audit clinic")
+    db.add(foreign_clinic)
+    db.flush()
+    foreign = AuditLog(
+        scope_type="clinic",
+        clinic_id=foreign_clinic.id,
+        action="update",
+        entity_type="ClinicalDocument",
+        entity_id=12,
+        after_json={"report_content": "AUDIT_REPORT_SENTINEL"},
+    )
+    system = AuditLog(
+        scope_type="system_security",
+        action="auth.invalid_session",
+        entity_type="user_session",
+        after_json={"reason_code": "AUDIT_SECURITY_SENTINEL"},
+    )
+    legacy = AuditLog(action="legacy", entity_type="Patient", summary="AUDIT_LEGACY_SENTINEL")
+    db.add_all([local, foreign, system, legacy])
+    db.flush()
+
+    response = client.get("/api/audit-log", headers={"Authorization": f"Bearer {token}"})
+
+    assert response.status_code == 200
+    body = response.json()
+    assert [item["id"] for item in body] == [local.id]
+    assert body[0]["changed_fields"] == ["raw_text", "status", "token"]
+    assert body[0]["status"] == "reviewed"
+    assert "before_json" not in body[0]
+    assert "after_json" not in body[0]
+    assert "summary" not in body[0]
+    serialized = response.text
+    for sentinel in (
+        "AUDIT_PHI_SENTINEL",
+        "AUDIT_TOKEN_SENTINEL",
+        "AUDIT_REPORT_SENTINEL",
+        "AUDIT_SECURITY_SENTINEL",
+        "AUDIT_LEGACY_SENTINEL",
+    ):
+        assert sentinel not in serialized
 
 
 def test_audit_log_view_does_not_recursively_audit_itself(client, db, auth_setup):
