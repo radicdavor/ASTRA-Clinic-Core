@@ -47,6 +47,24 @@ clinical document ingestion, summaries, and evidence timelines.
 | Shared patient search | identity/dedup fields | authenticated scheduling permission | global identity only; no child clinical data | intentional |
 | Patient appointment availability | time-conflict metadata | scheduling permission | global patient conflict visibility | intentional |
 
+## Independent review follow-up
+
+The first independent review of this remediation found four additional
+same-pattern blockers. They are closed as follows:
+
+- changing a patient on an appointment already linked to an episode or patient
+  journey is rejected, preventing cross-patient clinical provenance;
+- global patient directory, duplicate-search, and identity-detail responses use
+  a dedicated identity projection that never includes free-text notes;
+- direct journey-activity creation accepts only the parent journey clinic's
+  provider and room and writes that clinic to the child appointment;
+- financial audit projections include invoice total and payment amount, method,
+  and timestamp while continuing to exclude notes and payment references.
+
+These restrictions preserve the intentional global patient identity and
+appointment-conflict workflows without making clinic-owned narrative or
+clinical data global.
+
 ## Migration behavior
 
 ### `0064_pr3_scope_provenance`
@@ -91,6 +109,11 @@ user-agent strings, tokens, document content, clinical notes, or patient
 payloads. Audit provenance is derived from validated request context or the
 authoritative object, never trusted from a client body.
 
+Financial write events retain the material structured values needed to explain
+a transaction: invoice total, payment amount, controlled payment method, and
+payment timestamp. Free-text invoice notes and payment references remain
+excluded from the generic audit projection.
+
 ## API-key rules
 
 - each newly issued key is fixed to one clinic and one institution;
@@ -104,7 +127,9 @@ authoritative object, never trusted from a client body.
 At the remediation HEAD before GitHub publication:
 
 - backend fast gate: 147 passed;
-- full non-integration backend: 737 passed, 2 skipped, 16 deselected;
+- full non-integration backend: 741 passed, 2 skipped, 16 deselected;
+- focused appointment, activity, patient-identity, and audit regressions: 86
+  passed;
 - PostgreSQL integration: 16 passed;
 - frontend: 57 Vitest tests and 4 contract tests passed;
 - route-mocked Playwright: 1 passed;
