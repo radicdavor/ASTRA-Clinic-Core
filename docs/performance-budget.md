@@ -1,7 +1,9 @@
 # ASTRA Clinic Core performance budget
 
-Status: Module 3.5 Increment A baseline  
-Measured: 22 July 2026  
+Status: Module 3.5 Increment A baseline
+
+Measured: 22 July 2026
+
 Scope: synthetic/demo data only
 
 ## Purpose
