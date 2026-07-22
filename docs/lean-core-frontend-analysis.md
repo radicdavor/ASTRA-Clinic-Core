@@ -93,4 +93,3 @@ framework was added.
 - full frontend contract and Vitest suite
 - Vite production build and emitted preload inspection
 - frontend smoke test
-
