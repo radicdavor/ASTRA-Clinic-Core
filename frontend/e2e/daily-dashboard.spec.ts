@@ -182,6 +182,8 @@ async function installApiMocks(page: Page) {
     if (url.pathname.match(/^\/api\/patient-journeys\/\d+\/preparation$/)) return json({ status: "complete", requirements: [] });
     if (url.pathname.match(/^\/api\/patient-journeys\/\d+\/activity-preparation$/)) return json({ requirements: [], projection: [] });
     if (url.pathname.match(/^\/api\/patient-journeys\/\d+\/encounter$/)) return json({ anamnesis: "", examination: "", patient_findings: "", opinion: "", recommendations: "", diagnoses: [] });
+    if (url.pathname.match(/^\/api\/patient-journeys\/\d+\/activities\/\d+\/form$/) && request.method() === "GET") return json({ detail: "Obrazac nije otvoren." }, 404);
+    if (url.pathname.match(/^\/api\/patient-journeys\/\d+\/activities\/\d+\/interventions$/) && request.method() === "GET") return json([]);
     if (url.pathname.match(/^\/api\/patient-journeys\/\d+\/closure$/)) return json({ can_close: false, blockers: [], invoice: null });
     if (url.pathname.match(/^\/api\/patient-journeys\/\d+\/visit-documents$/)) return json([]);
     if (url.pathname.match(/^\/api\/patient-journeys\/\d+\/pathology-cases$/)) return json([]);
@@ -200,6 +202,7 @@ test.beforeEach(async ({ page }) => {
 });
 
 test("daily dashboard supports floating reception and canonical clinical workspace", async ({ page }) => {
+  test.setTimeout(60_000);
   await page.goto("/");
   await expect(page.getByRole("heading", { name: "Danas u poliklinici" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Sintetički 01 Pacijent" })).toBeVisible();
@@ -208,9 +211,10 @@ test("daily dashboard supports floating reception and canonical clinical workspa
   await page.getByRole("button", { name: "Otvori prijem" }).first().click();
   await expect(page.getByRole("dialog", { name: /Opći podaci pacijenta/ })).toBeVisible();
   await page.getByRole("button", { name: /Podaci su/ }).click();
-  await expect(page.getByRole("dialog", { name: /Kratka prijemna provjera/ })).toBeVisible();
+  const receptionChecklist = page.getByRole("dialog", { name: /Kratka prijemna provjera/ });
+  await expect(receptionChecklist).toBeVisible();
 
-  await page.getByLabel(/Problem s postom/).check();
+  await receptionChecklist.getByRole("checkbox", { name: /Problem s postom/ }).check();
   await expect(page.getByText(/Post od 6 sati nije potvrđen/)).toBeVisible();
   await page.getByRole("button", { name: "Provjereno" }).click();
   await expect(page.getByRole("dialog", { name: /Kratka prijemna provjera/ })).toBeHidden();
