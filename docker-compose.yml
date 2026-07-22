@@ -36,6 +36,8 @@ services:
       AI_DIAGNOSIS_SUGGESTIONS_PRODUCTION_AUTHORIZED: ${AI_DIAGNOSIS_SUGGESTIONS_PRODUCTION_AUTHORIZED:-false}
     ports:
       - "0.0.0.0:8000:8000"
+    volumes:
+      - document_storage:/app/data/documents
     depends_on:
       db:
         condition: service_healthy
@@ -54,3 +56,4 @@ services:
 
 volumes:
   postgres_data:
+  document_storage:

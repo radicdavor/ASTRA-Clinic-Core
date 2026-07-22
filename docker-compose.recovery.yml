@@ -1,0 +1,19 @@
+services:
+  recovery:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile.recovery
+    environment:
+      DATABASE_URL: ${DATABASE_URL:-postgresql+psycopg://astra:astra@db:5432/astra_clinic}
+      TARGET_DATABASE_URL: ${TARGET_DATABASE_URL:-}
+      ASTRA_APPLICATION_COMMIT: ${ASTRA_APPLICATION_COMMIT:-}
+    volumes:
+      - document_storage:/app/data/documents
+      - ./backups:/backups
+    depends_on:
+      db:
+        condition: service_healthy
+    profiles: ["recovery"]
+
+volumes:
+  document_storage:

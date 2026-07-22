@@ -13,6 +13,9 @@ from sqlalchemy.engine import Connection, Engine
 from sqlalchemy.exc import SQLAlchemyError
 
 
+RECOVERY_INCOMPLETE_TABLE = "_astra_recovery_incomplete"
+
+
 @dataclass(frozen=True)
 class SchemaReadiness:
     status: str
@@ -125,6 +128,13 @@ def check_database_schema_readiness_connection(
 
     inspector = inspect(connection)
     table_names = set(inspector.get_table_names())
+    if RECOVERY_INCOMPLETE_TABLE in table_names:
+        return SchemaReadiness(
+            status="not_ready",
+            checks={"database": "reachable", "schema": "recovery_incomplete"},
+            database_revision=None,
+            expected_revision=expected_revision,
+        )
     if "alembic_version" not in table_names:
         schema_status = "not_migrated" if not table_names else "missing_revision_table"
         return SchemaReadiness(

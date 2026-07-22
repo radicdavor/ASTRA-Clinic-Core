@@ -19,11 +19,49 @@ def test_session_cleanup_command_commits_and_reports_deleted_rows(monkeypatch, c
 
     session = FakeSession()
     monkeypatch.setattr(cli, "SessionLocal", lambda: session)
-    monkeypatch.setattr(cli, "cleanup_expired_sessions", lambda db: 3 if db is session else 0)
+    calls = []
+
+    def fake_cleanup(db, **kwargs):
+        calls.append(kwargs)
+        return 3 if db is session else 0
+
+    monkeypatch.setattr(cli, "cleanup_expired_sessions", fake_cleanup)
 
     assert cli.main(["session-cleanup"]) == 0
     assert session.committed is True
-    assert json.loads(capsys.readouterr().out) == {"deleted_sessions": 3}
+    assert json.loads(capsys.readouterr().out) == {
+        "deleted_sessions": 3,
+        "dry_run": False,
+        "retention_days": 0,
+    }
+    assert calls[0]["max_rows"] == 1000
+    assert calls[0]["dry_run"] is False
+
+
+def test_session_cleanup_dry_run_does_not_commit(monkeypatch, capsys):
+    class FakeSession:
+        committed = False
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return None
+
+        def commit(self):
+            self.committed = True
+
+    session = FakeSession()
+    monkeypatch.setattr(cli, "SessionLocal", lambda: session)
+    monkeypatch.setattr(cli, "cleanup_expired_sessions", lambda _db, **_kwargs: 7)
+
+    assert cli.main(["session-cleanup", "--dry-run", "--retention-days", "30", "--max-rows", "50"]) == 0
+    assert session.committed is False
+    assert json.loads(capsys.readouterr().out) == {
+        "dry_run": True,
+        "matched_sessions": 7,
+        "retention_days": 30,
+    }
 
 
 def test_schema_status_returns_nonzero_when_database_is_not_ready(monkeypatch, capsys):

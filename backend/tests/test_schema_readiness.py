@@ -84,6 +84,17 @@ def test_schema_readiness_reports_unknown_database_revision():
     assert result.database_revision == "future123"
 
 
+def test_schema_readiness_reports_incomplete_recovery_marker():
+    engine = sqlite_engine()
+    with engine.begin() as connection:
+        connection.execute(text("CREATE TABLE _astra_recovery_incomplete (operation_id TEXT NOT NULL)"))
+        result = check_database_schema_readiness_connection(connection, expected_heads=("head123",))
+
+    assert result.status == "not_ready"
+    assert result.checks == {"database": "reachable", "schema": "recovery_incomplete"}
+    assert result.database_revision is None
+
+
 def test_schema_readiness_reports_multiple_database_revisions():
     engine = sqlite_engine()
     with engine.begin() as connection:

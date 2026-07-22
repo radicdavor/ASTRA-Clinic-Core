@@ -13,6 +13,11 @@ frontend/playwright-report/
 frontend/e2e-db/.seed.json
 frontend/.e2e-tmp/
 
+# Local backup/recovery output must never enter version control.
+/backups/
+*.dump
+*.backup
+
 backend/.venv/
 backend/__pycache__/
 

@@ -9,7 +9,18 @@ migration/maintenance from API startup, and adding explicit fast, integration
 and full test gates. Measured results and limitations are documented in the
 [Lean Core optimization report](docs/lean-core-optimization.md),
 [performance budget](docs/performance-budget.md), and
-[test strategy](docs/test-strategy.md). Module 4 is not part of this work.
+[test strategy](docs/test-strategy.md).
+
+## Module 4 recovery
+
+Module 4 adds synthetic/CI-validated PostgreSQL and canonical document-storage
+backup/restore, strict manifests and checksums, safe incomplete-recovery
+readiness, session revocation and older-revision migration recovery. See the
+[backup/restore runbook](docs/backup-and-restore.md),
+[disaster-recovery procedure](docs/disaster-recovery.md) and
+[validation report](docs/module-4-recovery-report.md). Platform encryption,
+off-site retention, RPO/RTO approval and production-host recovery drills remain
+deployment responsibilities.
 
 ## Multi-service visit
 

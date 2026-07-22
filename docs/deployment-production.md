@@ -159,9 +159,14 @@ docker compose --env-file .env.production -f docker-compose.prod.example.yml exe
 ```
 
 Schedule session cleanup with cron or the host task scheduler at an interval
-appropriate to the installation. It must not become a loop inside the API
-process. Backup and restore remain outside this module and require the separate
-Module 4 workflow.
+appropriate to the installation. Use the bounded dry-run, retention, batch and
+maximum-row options documented in `backup-and-restore.md`. It must not become a
+loop inside the API process.
+
+The Module 4 recovery tooling and checklist are documented in
+`backup-and-restore.md` and `disaster-recovery.md`. The production platform must
+still provide encrypted, restricted, off-site retention and measured restore
+exercises.
 
 For pre-deployment performance checks, apply the budgets in
 `performance-budget.md` with authenticated requests on a controlled host. A
@@ -216,10 +221,12 @@ database restore instead of destructive schema downgrade.
 If data integrity is affected:
 
 1. stop application writes;
-2. restore the verified backup;
-3. run `alembic current`;
-4. start the compatible application version;
-5. verify `/ready`.
+2. restore into a new empty database and empty document storage using
+   `backup-and-restore.md`;
+3. run `alembic current` and the integrity checklist;
+4. confirm old browser sessions are revoked;
+5. start the compatible application version;
+6. verify `/health`, `/ready` and application/security smoke before cutover.
 
 ## 17. Secret rotation
 
