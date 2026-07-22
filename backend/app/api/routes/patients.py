@@ -9,7 +9,7 @@ from app.audit.service import audit, snapshot
 from app.auth.dependencies import Actor, CurrentUserContext, get_current_actor, get_scoped_patient, require_active_clinic
 from app.core.database import get_db
 from app.models.domain import Appointment, ClinicalDocument, ClinicalDocumentAddendum, ClinicalEpisode, ClinicalFinding, ClinicalOpenQuestion, Invoice, Patient, PatientClinicAssociation
-from app.schemas.common import ClinicalEpisodeOut, ClinicalEvidenceTimelineListResponse, ClinicalFindingDetailResponse, ClinicalFindingListResponse, ClinicalFindingReadItem, ClinicalOpenQuestionDetailResponse, ClinicalOpenQuestionListResponse, ClinicalOpenQuestionReadItem, ErrorResponse, InvoiceOut, PatientAppointmentAvailabilityOut, PatientClinicalRecordItem, PatientClinicalRecordResponse, PatientCreate, PatientOut, PatientUpdate
+from app.schemas.common import ClinicalEpisodeOut, ClinicalEvidenceTimelineListResponse, ClinicalFindingDetailResponse, ClinicalFindingListResponse, ClinicalFindingReadItem, ClinicalOpenQuestionDetailResponse, ClinicalOpenQuestionListResponse, ClinicalOpenQuestionReadItem, ErrorResponse, InvoiceOut, PatientAppointmentAvailabilityOut, PatientClinicalRecordItem, PatientClinicalRecordResponse, PatientCreate, PatientIdentityOut, PatientOut, PatientUpdate
 from app.services.clinical_evidence_timeline import list_patient_clinical_evidence_timeline
 from app.services.appointments import minimal_appointment_conflict, patient_appointment_availability_stmt
 from app.services.clinical_document_access import clinical_document_capabilities, institution_scoped_clinical_record_metadata_statement, resolve_actor_institution_context
@@ -171,7 +171,7 @@ def create_patient(
     return patient
 
 
-@router.get("/patients", response_model=list[PatientOut])
+@router.get("/patients", response_model=list[PatientIdentityOut])
 def list_patients(
     q: str | None = None,
     limit: int = Query(default=50, ge=1, le=50),
@@ -185,7 +185,7 @@ def list_patients(
     return db.scalars(stmt).all()
 
 
-@router.get("/patients/possible-duplicates", response_model=list[PatientOut])
+@router.get("/patients/possible-duplicates", response_model=list[PatientIdentityOut])
 def possible_patient_duplicates(
     first_name: str | None = None,
     last_name: str | None = None,
@@ -215,7 +215,7 @@ def possible_patient_duplicates(
     return db.scalars(stmt).all()
 
 
-@router.get("/patients/{patient_id}", response_model=PatientOut)
+@router.get("/patients/{patient_id}", response_model=PatientIdentityOut)
 def get_patient(patient_id: int, db: Session = Depends(get_db), context: CurrentUserContext = Depends(require_active_clinic("patients.read"))):
     patient = db.get(Patient, patient_id)
     if not patient:

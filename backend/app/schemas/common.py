@@ -1174,6 +1174,20 @@ class PatientOut(PatientCreate, ORMModel):
     updated_at: DateTimeType
 
 
+class PatientIdentityOut(ORMModel):
+    """Global patient-directory projection. Free-text clinical/operational notes are never identity data."""
+
+    id: int
+    first_name: str
+    last_name: str
+    date_of_birth: DateType | None = None
+    oib: str | None = None
+    email: str | None = None
+    phone: str | None = None
+    created_at: DateTimeType
+    updated_at: DateTimeType
+
+
 class ServiceCreate(BaseModel):
     name: str
     code: str | None = None

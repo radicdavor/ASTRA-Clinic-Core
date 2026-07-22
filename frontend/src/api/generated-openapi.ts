@@ -1817,6 +1817,18 @@ export type PatientCreate = {
   phone?: string | null;
 };
 
+export type PatientIdentityOut = {
+  created_at: string;
+  date_of_birth?: string | null;
+  email?: string | null;
+  first_name: string;
+  id: number;
+  last_name: string;
+  oib?: string | null;
+  phone?: string | null;
+  updated_at: string;
+};
+
 export type PatientKnowledgeItem = {
   display_kind?: string | null;
   requires_attention?: boolean;
