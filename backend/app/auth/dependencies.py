@@ -159,6 +159,7 @@ def active_clinic_memberships(db: Session, user_id: int) -> list[ClinicMembershi
 
 def require_active_clinic(permission_name: str):
     def dependency(
+        request: Request,
         actor: Actor = Depends(require_permission(permission_name)),
         x_clinic_id: int | None = Header(default=None, alias="X-Clinic-Id"),
         db: Session = Depends(get_db),
@@ -177,6 +178,8 @@ def require_active_clinic(permission_name: str):
             membership = next((item for item in memberships if item.clinic_id == x_clinic_id), None)
             if membership is None:
                 raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Korisnik nema pristup odabranoj klinici")
+        request.state.audit_clinic_id = membership.clinic_id
+        request.state.audit_institution_id = membership.clinic.institution_id
         return CurrentUserContext(
             actor=actor,
             user=actor.user,

@@ -1,6 +1,6 @@
-from datetime import date
+from datetime import date, datetime, time
 
-from app.models.domain import ClinicalEpisode, Clinic, Institution, LabOrder, Patient, PatientClinicAssociation, Therapy, WorkflowTask
+from app.models.domain import Appointment, ClinicalEpisode, Clinic, Institution, JourneyActivity, LabOrder, Patient, PatientClinicAssociation, PatientJourney, Provider, Room, Service, Therapy, WorkflowTask
 from tests.conftest import login_token
 
 
@@ -95,3 +95,68 @@ def test_workflow_tasks_are_not_global_patient_scoped(client, db, auth_setup):
     assert listed.json() == []
     assert detail.status_code == 404
     assert mutated.status_code == 404
+
+
+def test_journey_child_surfaces_require_active_clinic_scope(client, db, auth_setup):
+    institution = Institution(name="Foreign journey institution")
+    clinic = Clinic(name="Foreign journey clinic", institution=institution)
+    patient = Patient(first_name="Foreign", last_name="Journey")
+    provider = Provider(full_name="Foreign Provider", specialty="Test", clinic=clinic)
+    room = Room(name="Foreign Room", type="test", clinic=clinic)
+    service = Service(name="Foreign Service", duration_minutes=30, price=100)
+    db.add_all([institution, clinic, patient, provider, room, service])
+    db.flush()
+    appointment = Appointment(
+        patient_id=patient.id,
+        clinic_id=clinic.id,
+        provider_id=provider.id,
+        room_id=room.id,
+        service_id=service.id,
+        date=date(2026, 7, 22),
+        start_time=time(9, 0),
+        end_time=time(9, 30),
+        duration_minutes=30,
+        status="scheduled",
+    )
+    db.add(appointment)
+    db.flush()
+    journey = PatientJourney(
+        patient_id=patient.id,
+        appointment_id=appointment.id,
+        clinic_id=clinic.id,
+        current_stage="booked",
+        intake_channel="manual",
+    )
+    db.add(journey)
+    db.flush()
+    activity = JourneyActivity(
+        journey_id=journey.id,
+        appointment_id=appointment.id,
+        service_id=service.id,
+        activity_key="primary",
+        activity_kind="procedure",
+        specialty_key="test",
+        clinic_id=clinic.id,
+        primary_provider_id=provider.id,
+        room_id=room.id,
+        sequence=1,
+        required=True,
+        planned_start=datetime(2026, 7, 22, 9, 0),
+        planned_end=datetime(2026, 7, 22, 9, 30),
+        status="planned",
+    )
+    db.add(activity)
+    db.flush()
+    auth = headers(client, auth_setup)
+
+    urls = [
+        f"/api/patient-journeys/{journey.id}/activities",
+        f"/api/patient-journeys/{journey.id}/check-in",
+        f"/api/patient-journeys/{journey.id}/preparation",
+        f"/api/patient-journeys/{journey.id}/encounter",
+        f"/api/patient-journeys/{journey.id}/pathology-cases",
+        f"/api/patient-journeys/{journey.id}/activities/{activity.id}/form",
+        f"/api/appointments/{appointment.id}/clinical-readiness-preview",
+    ]
+    for url in urls:
+        assert client.get(url, headers=auth).status_code == 404

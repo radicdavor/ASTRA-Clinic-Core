@@ -3,7 +3,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session, joinedload
 
 from app.audit.service import audit, snapshot
-from app.auth.dependencies import Actor, require_permission
+from app.auth.dependencies import Actor, CurrentUserContext, require_active_clinic, require_permission
 from app.core.database import get_db
 from app.models.domain import ClinicalFormDefinition, ClinicalFormInstance, JourneyActivity, PatientJourney
 from app.schemas.clinical_forms import ClinicalFormCompleteRequest, ClinicalFormDataUpdate, ClinicalFormDefinitionOut, ClinicalFormInstanceOut
@@ -16,8 +16,8 @@ from app.services.reports import create_signed_report
 router = APIRouter(prefix="/api", tags=["clinical-forms"])
 
 
-def journey(db: Session, journey_id: int) -> PatientJourney:
-    item = db.get(PatientJourney, journey_id)
+def journey(db: Session, journey_id: int, clinic_id: int) -> PatientJourney:
+    item = db.scalar(select(PatientJourney).where(PatientJourney.id == journey_id, PatientJourney.clinic_id == clinic_id))
     if not item:
         raise HTTPException(404, detail="Tijek pacijenta nije pronađen")
     return item
@@ -53,8 +53,9 @@ def definitions(db: Session = Depends(get_db), actor: Actor = Depends(require_pe
 
 
 @router.post("/patient-journeys/{journey_id}/activities/{activity_id}/form/resolve", response_model=ClinicalFormInstanceOut)
-def resolve_activity_form(journey_id: int, activity_id: int, request: Request, db: Session = Depends(get_db), actor: Actor = Depends(require_permission("encounter.write"))):
-    visit = journey(db, journey_id)
+def resolve_activity_form(journey_id: int, activity_id: int, request: Request, db: Session = Depends(get_db), context: CurrentUserContext = Depends(require_active_clinic("encounter.write"))):
+    actor = context.actor
+    visit = journey(db, journey_id, context.active_clinic_id)
     activity = get_activity(db, journey_id, activity_id)
     item = resolve_instance(db, activity, actor.user_id)
     audit(db, "form_binding_resolved", "ClinicalFormInstance", item.id, f"Obrazac razriješen putem {item.binding_source}", actor.user_id, actor.actor_type, actor.api_key_id, None, snapshot(item), request)
@@ -64,12 +65,15 @@ def resolve_activity_form(journey_id: int, activity_id: int, request: Request, d
 
 
 @router.get("/patient-journeys/{journey_id}/activities/{activity_id}/form", response_model=ClinicalFormInstanceOut)
-def activity_form(journey_id: int, activity_id: int, db: Session = Depends(get_db), actor: Actor = Depends(require_permission("encounter.read"))):
+def activity_form(journey_id: int, activity_id: int, db: Session = Depends(get_db), context: CurrentUserContext = Depends(require_active_clinic("encounter.read"))):
+    journey(db, journey_id, context.active_clinic_id)
     return instance(db, journey_id, activity_id)
 
 
 @router.patch("/patient-journeys/{journey_id}/activities/{activity_id}/form", response_model=ClinicalFormInstanceOut)
-def edit_activity_form(journey_id: int, activity_id: int, payload: ClinicalFormDataUpdate, request: Request, db: Session = Depends(get_db), actor: Actor = Depends(require_permission("encounter.write"))):
+def edit_activity_form(journey_id: int, activity_id: int, payload: ClinicalFormDataUpdate, request: Request, db: Session = Depends(get_db), context: CurrentUserContext = Depends(require_active_clinic("encounter.write"))):
+    journey(db, journey_id, context.active_clinic_id)
+    actor = context.actor
     item = instance(db, journey_id, activity_id, lock_for_update=True)
     if item.id != payload.expected_instance_id:
         raise HTTPException(409, detail={"code": "stale_form_instance", "message": "Aktivna verzija obrasca je promijenjena. Lokalni unos nije prepisan.", "actual_instance_id": item.id})
@@ -82,7 +86,9 @@ def edit_activity_form(journey_id: int, activity_id: int, payload: ClinicalFormD
 
 
 @router.post("/patient-journeys/{journey_id}/activities/{activity_id}/form/complete", response_model=ClinicalFormInstanceOut)
-def complete_activity_form(journey_id: int, activity_id: int, payload: ClinicalFormCompleteRequest, request: Request, db: Session = Depends(get_db), actor: Actor = Depends(require_permission("encounter.complete"))):
+def complete_activity_form(journey_id: int, activity_id: int, payload: ClinicalFormCompleteRequest, request: Request, db: Session = Depends(get_db), context: CurrentUserContext = Depends(require_active_clinic("encounter.complete"))):
+    journey(db, journey_id, context.active_clinic_id)
+    actor = context.actor
     item = instance(db, journey_id, activity_id, lock_for_update=True)
     if item.id != payload.expected_instance_id:
         raise HTTPException(409, detail={"code": "stale_form_instance", "message": "Aktivna verzija obrasca je promijenjena. Lokalni unos nije dovršen.", "actual_instance_id": item.id})
@@ -96,8 +102,9 @@ def complete_activity_form(journey_id: int, activity_id: int, payload: ClinicalF
 
 
 @router.post("/patient-journeys/{journey_id}/activities/{activity_id}/form/sign", response_model=ClinicalFormInstanceOut)
-def sign_activity_form(journey_id: int, activity_id: int, request: Request, db: Session = Depends(get_db), actor: Actor = Depends(require_permission("clinical_forms.sign"))):
-    visit = journey(db, journey_id)
+def sign_activity_form(journey_id: int, activity_id: int, request: Request, db: Session = Depends(get_db), context: CurrentUserContext = Depends(require_active_clinic("clinical_forms.sign"))):
+    actor = context.actor
+    visit = journey(db, journey_id, context.active_clinic_id)
     item = instance(db, journey_id, activity_id)
     sign_instance(db, item, actor.user_id)
     report = create_signed_report(db, item, actor.user_id)
@@ -109,7 +116,9 @@ def sign_activity_form(journey_id: int, activity_id: int, request: Request, db: 
 
 
 @router.post("/patient-journeys/{journey_id}/activities/{activity_id}/form/amend", response_model=ClinicalFormInstanceOut)
-def amend_activity_form(journey_id: int, activity_id: int, request: Request, db: Session = Depends(get_db), actor: Actor = Depends(require_permission("clinical_forms.sign"))):
+def amend_activity_form(journey_id: int, activity_id: int, request: Request, db: Session = Depends(get_db), context: CurrentUserContext = Depends(require_active_clinic("clinical_forms.sign"))):
+    journey(db, journey_id, context.active_clinic_id)
+    actor = context.actor
     old = instance(db, journey_id, activity_id)
     amended = amend_instance(db, old, actor.user_id)
     audit(db, "form_amended", "ClinicalFormInstance", old.id, "Otvoren je kontrolirani ispravak potpisanog obrasca", actor.user_id, actor.actor_type, actor.api_key_id, snapshot(old), {"amendment_instance_id": amended.id}, request)

@@ -78,6 +78,12 @@ def audit(
     clinic_id: int | None = None,
     institution_id: int | None = None,
 ) -> None:
+    if request is not None and scope_type == "unscoped":
+        request_clinic_id = getattr(request.state, "audit_clinic_id", None)
+        if request_clinic_id is not None:
+            scope_type = "clinic"
+            clinic_id = request_clinic_id
+            institution_id = getattr(request.state, "audit_institution_id", None)
     db.add(
         AuditLog(
             scope_type=scope_type,
