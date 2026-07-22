@@ -55,14 +55,16 @@ def test_duplicate_oib_is_rejected(client, auth_setup):
     assert second.status_code == 409
 
 
-def test_patient_search_includes_oib(client, auth_setup):
+def test_patient_search_includes_oib(client, auth_setup, sql_query_counter):
     headers = auth_headers(client)
     client.post("/api/patients", headers=headers, json={"first_name": "Search", "last_name": "Oib", "oib": "33333333333"})
 
-    response = client.get("/api/patients?q=33333333333", headers=headers)
+    with sql_query_counter.track() as query_count:
+        response = client.get("/api/patients?q=33333333333", headers=headers)
 
     assert response.status_code == 200
     assert [patient["oib"] for patient in response.json()] == ["33333333333"]
+    assert query_count.count <= 8
 
 
 def test_possible_duplicates_returns_identity_candidates(client, auth_setup):

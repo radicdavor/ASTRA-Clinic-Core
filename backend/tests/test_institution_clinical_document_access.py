@@ -346,7 +346,7 @@ def test_institution_read_is_audited_and_does_not_open_finance_or_dashboard(clie
     assert audit_log.after_json["document_clinic_id"] == clinic_b.id
 
 
-def test_patient_clinical_record_lists_metadata_without_full_document_content(client, db):
+def test_patient_clinical_record_lists_metadata_without_full_document_content(client, db, sql_query_counter):
     clinic_a, clinic_b, _, patient, _ = setup_scope(db)
     physician = user_with_role(db, "timeline-doctor@test.local", MEDICAL_READ + ["clinical.documents.add_addendum", "clinical.documents.edit_own_draft"], "medical_staff", clinic_a)
     own_draft = clinical_doc(db, patient, clinic_b, physician, status="draft", document_type="other")
@@ -354,7 +354,9 @@ def test_patient_clinical_record_lists_metadata_without_full_document_content(cl
     billing_like = clinical_doc(db, patient, clinic_b, status="reviewed", record_classification="financial")
     db.commit()
 
-    response = client.get(f"/api/patients/{patient.id}/clinical-record", headers=headers(client, physician.email))
+    request_headers = headers(client, physician.email)
+    with sql_query_counter.track() as query_count:
+        response = client.get(f"/api/patients/{patient.id}/clinical-record", headers=request_headers)
 
     assert response.status_code == 200
     body = response.json()
@@ -369,6 +371,14 @@ def test_patient_clinical_record_lists_metadata_without_full_document_content(cl
     assert draft_item["can_edit"] is True
     assert signed_item["can_add_addendum"] is True
     assert db.scalar(select(AuditLog).where(AuditLog.action == "clinical_history.opened", AuditLog.entity_id == patient.id)) is not None
+    assert query_count.count <= 12
+    metadata_selects = [
+        statement.lower()
+        for statement in query_count.statements
+        if "clinical_documents" in statement.lower() and statement.lstrip().lower().startswith("select")
+    ]
+    assert metadata_selects
+    assert all("raw_text" not in statement and "ai_summary" not in statement for statement in metadata_selects)
 
 
 def test_patient_clinical_record_denies_admin_and_other_institution(client, db):

@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 
 from fastapi import HTTPException, Request, status
 from sqlalchemy import or_, select
-from sqlalchemy.orm import Session, joinedload
+from sqlalchemy.orm import Session, joinedload, load_only
 
 from app.audit.service import audit, snapshot
 from app.auth.dependencies import Actor, active_clinic_memberships
@@ -37,6 +37,13 @@ class ClinicalDocumentCapabilities:
     can_edit: bool
     can_review: bool
     can_add_addendum: bool
+
+
+@dataclass(frozen=True)
+class ActorInstitutionScope:
+    clinic_ids: tuple[int, ...]
+    institution_ids: frozenset[int]
+    institution_keys: frozenset[str]
 
 
 def clinical_document_capabilities(actor: Actor, document: ClinicalDocument) -> ClinicalDocumentCapabilities:
@@ -73,23 +80,31 @@ def actor_is_medical_staff(actor: Actor) -> bool:
 
 
 def actor_institution_keys(db: Session, actor: Actor) -> set[str]:
-    if not actor.user:
-        return set()
-    return {membership.clinic.institution_key for membership in active_clinic_memberships(db, actor.user.id)}
+    return set(actor_institution_scope(db, actor).institution_keys)
 
 
 def actor_institution_ids(db: Session, actor: Actor) -> set[int]:
+    return set(actor_institution_scope(db, actor).institution_ids)
+
+
+def actor_institution_scope(db: Session, actor: Actor) -> ActorInstitutionScope:
     if not actor.user:
-        return set()
-    return {
-        membership.clinic.institution_id
-        for membership in active_clinic_memberships(db, actor.user.id)
-        if membership.clinic.institution_id is not None
-    }
+        return ActorInstitutionScope((), frozenset(), frozenset())
+    memberships = active_clinic_memberships(db, actor.user.id)
+    return ActorInstitutionScope(
+        clinic_ids=tuple(membership.clinic_id for membership in memberships),
+        institution_ids=frozenset(
+            membership.clinic.institution_id
+            for membership in memberships
+            if membership.clinic.institution_id is not None
+        ),
+        institution_keys=frozenset(membership.clinic.institution_key for membership in memberships),
+    )
 
 
 def actor_institution_context(db: Session, actor: Actor) -> tuple[set[int], set[str]]:
-    return actor_institution_ids(db, actor), actor_institution_keys(db, actor)
+    scope = actor_institution_scope(db, actor)
+    return set(scope.institution_ids), set(scope.institution_keys)
 
 
 def clinic_institution_id(db: Session, clinic_id: int | None) -> int | None:
@@ -137,20 +152,25 @@ def document_institution_ids(db: Session, document: ClinicalDocument) -> set[int
     return {item for item in rows if item is not None}
 
 
-def ensure_institution_clinical_read(db: Session, document: ClinicalDocument, actor: Actor) -> int | str:
+def ensure_institution_clinical_read(
+    db: Session,
+    document: ClinicalDocument,
+    actor: Actor,
+    actor_scope: ActorInstitutionScope | None = None,
+) -> int | str:
     if not document.is_clinical_record:
         raise HTTPException(status.HTTP_403_FORBIDDEN, detail="Dokument nije dio kliničkog kartona")
     if document.record_classification not in INSTITUTION_READABLE_RECORD_CLASSIFICATIONS:
         raise HTTPException(status.HTTP_403_FORBIDDEN, detail="Izvorni dokument nije klasificiran kao klinički")
     if not actor_is_medical_staff(actor):
         raise HTTPException(status.HTTP_403_FORBIDDEN, detail="Klinički dokument smije čitati samo ovlašteno medicinsko osoblje")
-    actor_ids, actor_keys = actor_institution_context(db, actor)
+    scope = actor_scope or actor_institution_scope(db, actor)
     document_ids = document_institution_ids(db, document)
-    id_overlap = actor_ids.intersection(document_ids)
+    id_overlap = scope.institution_ids.intersection(document_ids)
     if id_overlap:
         return sorted(id_overlap)[0]
     document_keys = document_institution_keys(db, document)
-    key_overlap = actor_keys.intersection(document_keys)
+    key_overlap = scope.institution_keys.intersection(document_keys)
     if key_overlap:
         return sorted(key_overlap)[0]
     raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Klinicki dokument nije pronaden")
@@ -159,7 +179,8 @@ def ensure_institution_clinical_read(db: Session, document: ClinicalDocument, ac
 def resolve_actor_institution_context(db: Session, actor: Actor, requested_institution_id: int | None = None) -> int | None:
     if not actor_is_medical_staff(actor):
         raise HTTPException(status.HTTP_403_FORBIDDEN, detail="Klinički karton smije čitati samo ovlašteno medicinsko osoblje")
-    institution_ids = actor_institution_ids(db, actor)
+    scope = actor_institution_scope(db, actor)
+    institution_ids = scope.institution_ids
     if requested_institution_id is not None:
         institution = db.get(Institution, requested_institution_id)
         if requested_institution_id not in institution_ids or not institution or not institution.active:
@@ -169,7 +190,7 @@ def resolve_actor_institution_context(db: Session, actor: Actor, requested_insti
         return next(iter(institution_ids))
     if len(institution_ids) > 1:
         raise HTTPException(status.HTTP_409_CONFLICT, detail="Potreban je odabir ustanove")
-    if actor_institution_keys(db, actor):
+    if scope.institution_keys:
         return None
     raise HTTPException(status.HTTP_403_FORBIDDEN, detail="Korisnik nema aktivno članstvo ni u jednoj ustanovi")
 
@@ -182,7 +203,8 @@ def get_institution_scoped_clinical_document_for_read(
     action: str = "clinical_document_viewed",
 ) -> ClinicalDocument:
     document = get_document_or_404(db, document_id)
-    institution = ensure_institution_clinical_read(db, document, actor)
+    actor_scope = actor_institution_scope(db, actor)
+    institution = ensure_institution_clinical_read(db, document, actor, actor_scope)
     existing_read_audit = db.scalar(
         select(AuditLog.id)
         .where(
@@ -209,7 +231,7 @@ def get_institution_scoped_clinical_document_for_read(
         {
             "institution_id": institution if isinstance(institution, int) else None,
             "institution_key": institution if isinstance(institution, str) else None,
-            "actor_clinic_ids": [membership.clinic_id for membership in active_clinic_memberships(db, actor.user_id)] if actor.user_id else [],
+            "actor_clinic_ids": list(actor_scope.clinic_ids),
             "document_clinic_id": document.clinic_id,
             "patient_id": document.patient_id,
         },
@@ -221,7 +243,9 @@ def get_institution_scoped_clinical_document_for_read(
 def institution_scoped_clinical_documents_statement(db: Session, actor: Actor):
     if not actor_is_medical_staff(actor):
         raise HTTPException(status.HTTP_403_FORBIDDEN, detail="Kliničke dokumente smije čitati samo ovlašteno medicinsko osoblje")
-    institution_ids, institution_keys = actor_institution_context(db, actor)
+    scope = actor_institution_scope(db, actor)
+    institution_ids = scope.institution_ids
+    institution_keys = scope.institution_keys
     if not institution_ids and not institution_keys:
         raise HTTPException(status.HTTP_403_FORBIDDEN, detail="Korisnik nema aktivno članstvo ni u jednoj ustanovi")
     institution_filter = []
@@ -237,6 +261,52 @@ def institution_scoped_clinical_documents_statement(db: Session, actor: Actor):
             ClinicalDocument.is_clinical_record.is_(True),
             ClinicalDocument.record_classification.in_(INSTITUTION_READABLE_RECORD_CLASSIFICATIONS),
             or_(*institution_filter, ClinicalDocument.clinic_id.is_(None)),
+        )
+    )
+
+
+def institution_scoped_clinical_record_metadata_statement(
+    db: Session,
+    actor: Actor,
+    resolved_institution_id: int | None,
+):
+    """Return only columns required by the paginated clinical-record directory."""
+    if not actor_is_medical_staff(actor):
+        raise HTTPException(status.HTTP_403_FORBIDDEN, detail="Klinicke dokumente smije citati samo ovlasteno medicinsko osoblje")
+    if resolved_institution_id is not None:
+        scope_filter = Clinic.institution_id == resolved_institution_id
+    else:
+        scope = actor_institution_scope(db, actor)
+        if not scope.institution_keys:
+            raise HTTPException(status.HTTP_403_FORBIDDEN, detail="Korisnik nema aktivno clanstvo ni u jednoj ustanovi")
+        scope_filter = or_(
+            Clinic.institution_key.in_(scope.institution_keys),
+            ClinicalDocument.clinic_id.is_(None),
+        )
+    return (
+        select(ClinicalDocument)
+        .options(
+            load_only(
+                ClinicalDocument.id,
+                ClinicalDocument.patient_id,
+                ClinicalDocument.document_date,
+                ClinicalDocument.created_at,
+                ClinicalDocument.clinic_id,
+                ClinicalDocument.document_type,
+                ClinicalDocument.title,
+                ClinicalDocument.author,
+                ClinicalDocument.author_professional_role,
+                ClinicalDocument.review_status,
+                ClinicalDocument.reviewed_at,
+                ClinicalDocument.author_user_id,
+            ),
+            joinedload(ClinicalDocument.clinic).load_only(Clinic.id, Clinic.name),
+        )
+        .outerjoin(Clinic, ClinicalDocument.clinic_id == Clinic.id)
+        .where(
+            ClinicalDocument.is_clinical_record.is_(True),
+            ClinicalDocument.record_classification.in_(INSTITUTION_READABLE_RECORD_CLASSIFICATIONS),
+            scope_filter,
         )
     )
 

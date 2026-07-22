@@ -6,7 +6,7 @@ from fastapi import Depends, Header, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jose import JWTError, jwt
 from sqlalchemy import select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, contains_eager
 
 from app.core.config import get_settings
 from app.core.database import get_db
@@ -127,6 +127,7 @@ def require_permission(permission_name: str):
 def active_clinic_memberships(db: Session, user_id: int) -> list[ClinicMembership]:
     return db.scalars(
         select(ClinicMembership)
+        .options(contains_eager(ClinicMembership.clinic))
         .where(ClinicMembership.user_id == user_id, ClinicMembership.active.is_(True))
         .join(Clinic, Clinic.id == ClinicMembership.clinic_id)
         .where(Clinic.active.is_(True))

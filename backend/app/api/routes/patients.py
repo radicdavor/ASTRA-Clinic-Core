@@ -12,7 +12,7 @@ from app.models.domain import Appointment, ClinicalDocument, ClinicalDocumentAdd
 from app.schemas.common import ClinicalEpisodeOut, ClinicalEvidenceTimelineListResponse, ClinicalFindingDetailResponse, ClinicalFindingListResponse, ClinicalFindingReadItem, ClinicalOpenQuestionDetailResponse, ClinicalOpenQuestionListResponse, ClinicalOpenQuestionReadItem, ErrorResponse, InvoiceOut, PatientAppointmentAvailabilityOut, PatientClinicalRecordItem, PatientClinicalRecordResponse, PatientCreate, PatientOut, PatientUpdate
 from app.services.clinical_evidence_timeline import list_patient_clinical_evidence_timeline
 from app.services.appointments import minimal_appointment_conflict, patient_appointment_availability_stmt
-from app.services.clinical_document_access import clinical_document_capabilities, resolve_actor_institution_context, institution_scoped_clinical_documents_statement
+from app.services.clinical_document_access import clinical_document_capabilities, institution_scoped_clinical_record_metadata_statement, resolve_actor_institution_context
 
 ERROR_RESPONSES = {400: {"model": ErrorResponse}, 401: {"model": ErrorResponse}, 403: {"model": ErrorResponse}, 404: {"model": ErrorResponse}, 409: {"model": ErrorResponse}, 422: {"model": ErrorResponse}}
 
@@ -237,9 +237,7 @@ def patient_clinical_record(
     resolved_institution_id = resolve_actor_institution_context(db, actor, institution_id)
     limit = max(1, min(limit, 100))
     offset = max(0, offset)
-    stmt = institution_scoped_clinical_documents_statement(db, actor).where(ClinicalDocument.patient_id == patient_id)
-    if resolved_institution_id is not None:
-        stmt = stmt.where(ClinicalDocument.clinic.has(institution_id=resolved_institution_id))
+    stmt = institution_scoped_clinical_record_metadata_statement(db, actor, resolved_institution_id).where(ClinicalDocument.patient_id == patient_id)
     if document_type:
         stmt = stmt.where(ClinicalDocument.document_type == document_type)
     if clinic_id:
@@ -248,7 +246,10 @@ def patient_clinical_record(
         stmt = stmt.where(or_(ClinicalDocument.document_date >= date_from, ClinicalDocument.document_date.is_(None)))
     if date_to:
         stmt = stmt.where(or_(ClinicalDocument.document_date <= date_to, ClinicalDocument.document_date.is_(None)))
-    total = scalar_count(db, select(func.count()).select_from(stmt.subquery()))
+    total = scalar_count(
+        db,
+        stmt.with_only_columns(func.count(ClinicalDocument.id), maintain_column_froms=True).order_by(None),
+    )
     documents = db.scalars(
         stmt.order_by(
             ClinicalDocument.document_date.desc().nulls_last(),

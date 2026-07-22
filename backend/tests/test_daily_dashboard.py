@@ -30,11 +30,13 @@ def scope_appointment(db, auth_setup, appt, clinic_obj=None):
     return appt
 
 
-def test_daily_dashboard_returns_one_aggregated_row_per_journey(client, db, auth_setup):
+def test_daily_dashboard_returns_one_aggregated_row_per_journey(client, db, auth_setup, sql_query_counter):
     appt = appointment(db)
     scope_appointment(db, auth_setup, appt)
     journey = create_journey(client, appt)
-    response = client.get("/api/dashboard/day?selected_date=2026-07-06", headers=headers(client))
+    request_headers = headers(client)
+    with sql_query_counter.track() as query_count:
+        response = client.get("/api/dashboard/day?selected_date=2026-07-06", headers=request_headers)
     assert response.status_code == 200
     body = response.json()
     assert body["date"] == "2026-07-06"
@@ -50,6 +52,7 @@ def test_daily_dashboard_returns_one_aggregated_row_per_journey(client, db, auth
     assert isinstance(body["rows"][0]["allowed_actions"], list)
     assert body["rows"][0]["activity_count"] == 1
     assert body["rows"][0]["activities"][0]["service_name"] == appt.service.name
+    assert query_count.count <= 12
 
 
 def test_daily_dashboard_shows_consultation_and_gastroscopy_as_one_arrival(client, db, auth_setup):

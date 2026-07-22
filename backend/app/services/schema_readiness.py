@@ -1,13 +1,14 @@
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass
+from functools import lru_cache
 from pathlib import Path
 from typing import Callable
 
 from alembic.config import Config
 from alembic.migration import MigrationContext
 from alembic.script import ScriptDirectory
-from sqlalchemy import create_engine, inspect
+from sqlalchemy import inspect
 from sqlalchemy.engine import Connection, Engine
 from sqlalchemy.exc import SQLAlchemyError
 
@@ -34,12 +35,28 @@ def _alembic_config() -> Config:
 
 
 def get_expected_alembic_heads(config: Config | None = None) -> tuple[str, ...]:
-    script = ScriptDirectory.from_config(config or _alembic_config())
+    if config is None:
+        return _cached_expected_alembic_heads()
+    script = ScriptDirectory.from_config(config)
     return tuple(script.get_heads())
 
 
 def get_known_alembic_revisions(config: Config | None = None) -> frozenset[str]:
-    script = ScriptDirectory.from_config(config or _alembic_config())
+    if config is None:
+        return _cached_known_alembic_revisions()
+    script = ScriptDirectory.from_config(config)
+    return frozenset(revision.revision for revision in script.walk_revisions())
+
+
+@lru_cache(maxsize=1)
+def _cached_expected_alembic_heads() -> tuple[str, ...]:
+    script = ScriptDirectory.from_config(_alembic_config())
+    return tuple(script.get_heads())
+
+
+@lru_cache(maxsize=1)
+def _cached_known_alembic_revisions() -> frozenset[str]:
+    script = ScriptDirectory.from_config(_alembic_config())
     return frozenset(revision.revision for revision in script.walk_revisions())
 
 
@@ -159,10 +176,6 @@ def check_database_schema_readiness_connection(
 
 
 def check_configured_database_schema_readiness() -> SchemaReadiness:
-    from app.core.config import get_settings
+    from app.core.database import engine
 
-    engine = create_engine(get_settings().database_url, pool_pre_ping=True)
-    try:
-        return check_database_schema_readiness(engine)
-    finally:
-        engine.dispose()
+    return check_database_schema_readiness(engine)

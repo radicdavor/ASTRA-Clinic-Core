@@ -1,9 +1,11 @@
 from collections.abc import Generator
+from contextlib import contextmanager
+from dataclasses import dataclass, field
 import os
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine, text
+from sqlalchemy import create_engine, event, text
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
@@ -13,6 +15,33 @@ from app.core.security import hash_password
 from app.main import app
 from app.models import domain  # noqa: F401
 from app.models.domain import Clinic, ClinicMembership, Institution, Permission, Role, User
+
+
+@dataclass
+class SqlQueryCount:
+    statements: list[str] = field(default_factory=list)
+
+    @property
+    def count(self) -> int:
+        return len(self.statements)
+
+
+class SqlQueryCounter:
+    def __init__(self, bind) -> None:
+        self.bind = bind
+
+    @contextmanager
+    def track(self):
+        result = SqlQueryCount()
+
+        def before_cursor_execute(_conn, _cursor, statement, _parameters, _context, _executemany):
+            result.statements.append(statement)
+
+        event.listen(self.bind, "before_cursor_execute", before_cursor_execute)
+        try:
+            yield result
+        finally:
+            event.remove(self.bind, "before_cursor_execute", before_cursor_execute)
 
 
 @pytest.fixture()
@@ -38,6 +67,11 @@ def client(db: Session) -> Generator[TestClient, None, None]:
     with TestClient(app) as test_client:
         yield test_client
     app.dependency_overrides.clear()
+
+
+@pytest.fixture()
+def sql_query_counter(db: Session) -> SqlQueryCounter:
+    return SqlQueryCounter(db.get_bind())
 
 
 @pytest.fixture()

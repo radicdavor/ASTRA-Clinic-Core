@@ -80,7 +80,7 @@ def test_signed_report_has_no_mutation_api_and_generated_source_document_is_lock
     assert patched_source.json()["detail"]["code"] == "signed_document_immutable"
 
 
-def test_signed_report_snapshot_survives_later_form_instance_changes(client, db, auth_setup):
+def test_signed_report_snapshot_survives_later_form_instance_changes(client, db, auth_setup, sql_query_counter):
     _, _, _, report = setup_signed_report(client, db)
     original_content = report.rendered_content
     original_data = dict(report.structured_data_json)
@@ -96,7 +96,9 @@ def test_signed_report_snapshot_survives_later_form_instance_changes(client, db,
     template.print_layout_json = {"layout": "naknadno-promijenjen-predlozak"}
     db.commit()
 
-    preview = client.get(f"/api/signed-reports/{report.id}", headers=headers(client))
+    request_headers = headers(client)
+    with sql_query_counter.track() as query_count:
+        preview = client.get(f"/api/signed-reports/{report.id}", headers=request_headers)
 
     assert preview.status_code == 200
     assert preview.json()["rendered_content"] == original_content
@@ -106,6 +108,7 @@ def test_signed_report_snapshot_survives_later_form_instance_changes(client, db,
     assert preview.json()["signer_name"] == original_signer_name
     assert preview.json()["signed_at"] == original_signed_at.isoformat().replace("+00:00", "Z")
     assert preview.json()["form_version_id"] == original_form_version_id
+    assert query_count.count <= 12
 
 
 def test_signed_report_addendum_is_separate_and_preserves_original_snapshot(client, db, auth_setup):
