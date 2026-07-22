@@ -14,7 +14,7 @@ from app.models.domain import (
 )
 from app.services.seed import PERMISSIONS
 from tests.conftest import login_token
-from tests.factories import appointment, patient
+from tests.factories import appointment, default_clinic, patient
 
 
 FORBIDDEN_RESPONSE_FIELDS = {
@@ -42,8 +42,10 @@ def timeline_endpoint(client, patient_id, headers, **params):
 
 
 def create_finding(db, patient_obj, **overrides):
+    clinic = default_clinic(db)
     payload = {
         "patient_id": patient_obj.id,
+        "institution_id": clinic.institution_id if clinic else None,
         "source_document_id": None,
         "source_type": "clinical_document",
         "source_label": "Pathology report",
@@ -65,8 +67,10 @@ def create_finding(db, patient_obj, **overrides):
 
 
 def create_question(db, patient_obj, **overrides):
+    clinic = default_clinic(db)
     payload = {
         "patient_id": patient_obj.id,
+        "institution_id": clinic.institution_id if clinic else None,
         "finding_id": None,
         "source_document_id": None,
         "source_type": "clinical_document",

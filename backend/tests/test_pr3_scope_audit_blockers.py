@@ -360,7 +360,6 @@ def _foreign_derived_data(db, auth_setup):
     return patient, finding, question
 
 
-@BLOCKER_XFAIL
 @pytest.mark.parametrize("operation", ["finding_list", "finding_detail", "question_list", "question_detail", "timeline"])
 def test_foreign_institution_derived_clinical_data_is_hidden(client, db, auth_setup, operation):
     patient, finding, question = _foreign_derived_data(db, auth_setup)
@@ -384,6 +383,51 @@ def test_foreign_institution_derived_clinical_data_is_hidden(client, db, auth_se
         assert f"clinical_open_question:{question.id}" not in keys
         return
     assert response.status_code == 404
+
+
+def test_unresolved_legacy_derived_clinical_data_is_hidden(client, db, auth_setup):
+    patient = Patient(first_name="Legacy", last_name="Derived")
+    db.add(patient)
+    db.flush()
+    db.add(PatientClinicAssociation(patient_id=patient.id, clinic_id=auth_setup["clinic"].id))
+    finding = ClinicalFinding(
+        patient_id=patient.id,
+        institution_id=None,
+        source_type="legacy",
+        source_label="Unresolved legacy source",
+        source_reference="legacy:unresolved",
+        finding_key="unresolved_legacy_finding",
+        label="UNRESOLVED_FINDING_SENTINEL",
+        category="test",
+        lifecycle_status="awaiting_review",
+        requires_review=True,
+    )
+    db.add(finding)
+    db.flush()
+    question = ClinicalOpenQuestion(
+        patient_id=patient.id,
+        institution_id=None,
+        finding_id=finding.id,
+        source_type="legacy",
+        source_label="Unresolved legacy source",
+        source_reference="legacy:unresolved",
+        question_key="unresolved_legacy_question",
+        label="UNRESOLVED_QUESTION_SENTINEL",
+        status="awaiting_review",
+        requires_clinician_review=True,
+    )
+    db.add(question)
+    db.flush()
+
+    headers = _headers(client, auth_setup)
+    findings = client.get(f"/api/patients/{patient.id}/clinical-findings", headers=headers)
+    questions = client.get(f"/api/patients/{patient.id}/clinical-open-questions", headers=headers)
+    timeline = client.get(f"/api/patients/{patient.id}/clinical-evidence-timeline", headers=headers)
+
+    assert findings.status_code == questions.status_code == timeline.status_code == 200
+    assert findings.json()["findings"] == []
+    assert questions.json()["questions"] == []
+    assert timeline.json()["events"] == []
 
 
 @BLOCKER_XFAIL

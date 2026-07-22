@@ -301,9 +301,13 @@ def patient_clinical_findings(
 ):
     """Read-only source-linked findings; not diagnosis, treatment, task, outcome evidence or patient messaging."""
     get_scoped_patient(db, patient_id, context)
+    institution_id = authorized_institution_id(context)
     findings = db.scalars(
         select(ClinicalFinding)
-        .where(ClinicalFinding.patient_id == patient_id)
+        .where(
+            ClinicalFinding.patient_id == patient_id,
+            ClinicalFinding.institution_id == institution_id,
+        )
         .order_by(ClinicalFinding.created_at.desc(), ClinicalFinding.id.desc())
     ).all()
     items = [finding_read_item(finding) for finding in findings]
@@ -319,10 +323,12 @@ def patient_clinical_finding_detail(
 ):
     """Read-only source-linked finding detail; not diagnosis, treatment, task, outcome evidence or patient messaging."""
     get_scoped_patient(db, patient_id, context)
+    institution_id = authorized_institution_id(context)
     finding = db.scalar(
         select(ClinicalFinding).where(
             ClinicalFinding.id == finding_id,
             ClinicalFinding.patient_id == patient_id,
+            ClinicalFinding.institution_id == institution_id,
         )
     )
     if not finding:
@@ -339,14 +345,24 @@ def patient_clinical_open_questions(
 ):
     """Read-only source-linked open questions; not review, diagnosis, treatment, task, outcome evidence or patient messaging."""
     get_scoped_patient(db, patient_id, context)
+    institution_id = authorized_institution_id(context)
     stmt = (
         select(ClinicalOpenQuestion)
         .options(joinedload(ClinicalOpenQuestion.finding))
-        .where(ClinicalOpenQuestion.patient_id == patient_id)
+        .where(
+            ClinicalOpenQuestion.patient_id == patient_id,
+            ClinicalOpenQuestion.institution_id == institution_id,
+        )
         .order_by(ClinicalOpenQuestion.created_at.desc(), ClinicalOpenQuestion.id.desc())
     )
     if finding_id is not None:
-        if not db.scalar(select(ClinicalFinding.id).where(ClinicalFinding.id == finding_id, ClinicalFinding.patient_id == patient_id)):
+        if not db.scalar(
+            select(ClinicalFinding.id).where(
+                ClinicalFinding.id == finding_id,
+                ClinicalFinding.patient_id == patient_id,
+                ClinicalFinding.institution_id == institution_id,
+            )
+        ):
             raise HTTPException(404, detail="Finding nije pronaden za pacijenta")
         stmt = stmt.where(ClinicalOpenQuestion.finding_id == finding_id)
     questions = db.scalars(stmt).all()
@@ -363,12 +379,14 @@ def patient_clinical_open_question_detail(
 ):
     """Read-only source-linked open question detail; not review, diagnosis, treatment, task, outcome evidence or patient messaging."""
     get_scoped_patient(db, patient_id, context)
+    institution_id = authorized_institution_id(context)
     question = db.scalar(
         select(ClinicalOpenQuestion)
         .options(joinedload(ClinicalOpenQuestion.finding))
         .where(
             ClinicalOpenQuestion.id == question_id,
             ClinicalOpenQuestion.patient_id == patient_id,
+            ClinicalOpenQuestion.institution_id == institution_id,
         )
     )
     if not question:
@@ -389,9 +407,11 @@ def patient_clinical_evidence_timeline(
 ):
     """GET-only source-linked clinical evidence timeline; not workflow, decision, task, outcome evidence or messaging."""
     get_scoped_patient(db, patient_id, context)
+    institution_id = authorized_institution_id(context)
     events = list_patient_clinical_evidence_timeline(
         db,
         patient_id=patient_id,
+        institution_id=institution_id,
         event_type=event_type,
         source_type=source_type,
         requires_review=requires_review,
