@@ -422,6 +422,7 @@ def seed() -> dict:
         signed_document = ClinicalDocument(
             patient_id=shared.id,
             clinic_id=clinic_b.id,
+            institution_id=institution_a.id,
             source_type="generated_signed_report",
             document_type="gastroscopy_report",
             title="E2E potpisani nalaz Clinic B",
@@ -441,6 +442,7 @@ def seed() -> dict:
         own_draft = ClinicalDocument(
             patient_id=shared.id,
             clinic_id=clinic_b.id,
+            institution_id=institution_a.id,
             source_type="internal",
             document_type="consultation",
             title="E2E vlastiti klinički nacrt",
@@ -456,6 +458,7 @@ def seed() -> dict:
         unclassified_source = ClinicalDocument(
             patient_id=shared.id,
             clinic_id=clinic_b.id,
+            institution_id=institution_a.id,
             source_type="uploaded",
             document_type="other",
             title="E2E neklasificirani izvor",
@@ -468,6 +471,7 @@ def seed() -> dict:
         financial_source = ClinicalDocument(
             patient_id=shared.id,
             clinic_id=clinic_b.id,
+            institution_id=institution_a.id,
             source_type="uploaded",
             document_type="other",
             title="E2E financijski izvor",
@@ -480,6 +484,7 @@ def seed() -> dict:
         foreign_document = ClinicalDocument(
             patient_id=foreign_patient.id,
             clinic_id=clinic_c.id,
+            institution_id=institution_other.id,
             source_type="internal",
             document_type="consultation",
             title="E2E dokument druge ustanove",
