@@ -1,4 +1,6 @@
-from app.models.domain import ClinicalFormDefinition, ClinicalFormVersion, PatientJourney, ServiceFormBinding
+from datetime import date, time
+
+from app.models.domain import Appointment, Clinic, ClinicalFormDefinition, ClinicalFormVersion, Institution, PatientJourney, Provider, Room, ServiceFormBinding
 from tests.conftest import login_token
 from tests.factories import appointment
 
@@ -79,3 +81,70 @@ def test_package_preview_booking_and_retry_create_one_coordinated_arrival(client
     assert len(detail["activities"]) == 3
     combined = client.get(f"/api/patient-journeys/{booked.json()['journey_id']}/activity-preparation", headers=headers(client)).json()
     assert {item["requirement_key"] for item in combined["requirements"]} == {"fasting", "bowel_preparation"}
+
+
+def test_package_scheduling_rejects_foreign_clinic_assignments_and_journey(client, db, auth_setup):
+    appt = appointment(db)
+    package = client.post("/api/service-packages", headers=headers(client), json={"package_key": "foreign-scope-test", "name": "Scope test", "specialty_key": "general"}).json()
+    version = client.post(f"/api/service-packages/{package['id']}/versions", headers=headers(client), json={"items": [{
+        "service_id": appt.service_id,
+        "activity_key": "scope-item",
+        "activity_kind": "specialist_consultation",
+        "specialty_key": "general",
+        "sequence": 1,
+        "default_duration_minutes": 30,
+    }]}).json()
+    assert client.post(f"/api/service-package-versions/{version['id']}/publish", headers=headers(client)).status_code == 200
+    item = next(row for row in client.get("/api/service-packages", headers=headers(client)).json() if row["id"] == package["id"])["versions"][0]["items"][0]
+
+    foreign_institution = Institution(name="Foreign package institution")
+    foreign_clinic = Clinic(name="Foreign package clinic", institution=foreign_institution)
+    foreign_provider = Provider(full_name="Foreign package provider", specialty="Test", clinic=foreign_clinic)
+    foreign_room = Room(name="Foreign package room", type="test", clinic=foreign_clinic)
+    db.add_all([foreign_institution, foreign_clinic, foreign_provider, foreign_room])
+    db.flush()
+    foreign_appointment = Appointment(
+        patient_id=appt.patient_id,
+        clinic_id=foreign_clinic.id,
+        provider_id=foreign_provider.id,
+        room_id=foreign_room.id,
+        service_id=appt.service_id,
+        date=date(2026, 7, 8),
+        start_time=time(8, 0),
+        end_time=time(8, 30),
+        duration_minutes=30,
+        status="scheduled",
+    )
+    db.add(foreign_appointment)
+    db.flush()
+    foreign_journey = PatientJourney(
+        patient_id=appt.patient_id,
+        appointment_id=foreign_appointment.id,
+        clinic_id=foreign_clinic.id,
+        current_stage="booked",
+        intake_channel="manual",
+    )
+    db.add(foreign_journey)
+    db.flush()
+
+    assignments = [{
+        "package_item_id": item["id"],
+        "date": "2026-07-08",
+        "start_time": "09:00",
+        "end_time": "09:30",
+        "provider_id": foreign_provider.id,
+        "room_id": foreign_room.id,
+    }]
+    preview = client.post(
+        f"/api/service-package-versions/{version['id']}/schedule-preview",
+        headers=headers(client),
+        json={"patient_id": appt.patient_id, "assignments": assignments},
+    )
+    materialize = client.post(
+        f"/api/patient-journeys/{foreign_journey.id}/packages/{version['id']}/materialize",
+        headers=headers(client),
+        json={"assignments": assignments},
+    )
+
+    assert preview.status_code == 404
+    assert materialize.status_code == 404

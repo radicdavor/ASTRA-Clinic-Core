@@ -3,15 +3,24 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
 from app.audit.service import audit, snapshot
-from app.auth.dependencies import Actor, require_permission
+from app.auth.dependencies import Actor, CurrentUserContext, require_active_clinic, require_permission
 from app.core.database import get_db
-from app.models.domain import ClinicalFormDefinition, ClinicalFormVersion, PatientJourney, ServiceFormBinding, ServicePackage, ServicePackageVersion
+from app.models.domain import ClinicalFormDefinition, ClinicalFormVersion, PatientJourney, Provider, Room, ServiceFormBinding, ServicePackage, ServicePackageVersion
 from app.schemas.catalog_governance import FormBindingCreate, FormDefinitionCreate, FormVersionDraftCreate, PackageBookRequest, PackageCreate, PackageMaterializeRequest, PackageSchedulePreviewRequest, PackageVersionCreate
 from app.schemas.clinical_forms import ClinicalFormDefinitionOut, ClinicalFormVersionOut
 from app.schemas.patient_journeys import JourneyActivityOut
 from app.services.catalog_governance import book_package, clone_form_version, create_binding, create_form_definition, create_package_version, materialize_package, preview_package_schedule, publish_form_version, publish_package_version
+from app.services.clinical_scope import get_institution_episode
 
 router = APIRouter(prefix="/api", tags=["catalog-governance"])
+
+
+def validate_package_assignments_for_active_clinic(db: Session, assignments: list, clinic_id: int) -> None:
+    for assignment in assignments:
+        room = db.scalar(select(Room).where(Room.id == assignment.room_id, Room.clinic_id == clinic_id))
+        provider = db.get(Provider, assignment.provider_id)
+        if room is None or provider is None:
+            raise HTTPException(404, detail="Prostorija ili liječnik nisu pronađeni")
 
 
 @router.get("/service-packages")
@@ -21,7 +30,9 @@ def list_packages(db: Session = Depends(get_db), actor: Actor = Depends(require_
 
 
 @router.post("/service-package-versions/{version_id}/schedule-preview")
-def schedule_preview(version_id: int, payload: PackageSchedulePreviewRequest, request: Request, db: Session = Depends(get_db), actor: Actor = Depends(require_permission("service_packages.schedule"))):
+def schedule_preview(version_id: int, payload: PackageSchedulePreviewRequest, request: Request, db: Session = Depends(get_db), context: CurrentUserContext = Depends(require_active_clinic("service_packages.schedule"))):
+    actor = context.actor
+    validate_package_assignments_for_active_clinic(db, payload.assignments, context.active_clinic_id)
     version = db.scalar(select(ServicePackageVersion).options(selectinload(ServicePackageVersion.items)).where(ServicePackageVersion.id == version_id))
     if not version:
         raise HTTPException(404, detail="Verzija paketa nije pronađena")
@@ -32,11 +43,17 @@ def schedule_preview(version_id: int, payload: PackageSchedulePreviewRequest, re
 
 
 @router.post("/service-package-versions/{version_id}/book", status_code=201)
-def book_published_package(version_id: int, payload: PackageBookRequest, request: Request, db: Session = Depends(get_db), actor: Actor = Depends(require_permission("service_packages.schedule"))):
+def book_published_package(version_id: int, payload: PackageBookRequest, request: Request, db: Session = Depends(get_db), context: CurrentUserContext = Depends(require_active_clinic("service_packages.schedule"))):
+    actor = context.actor
+    validate_package_assignments_for_active_clinic(db, payload.assignments, context.active_clinic_id)
+    if payload.episode_id is not None:
+        episode = get_institution_episode(db, payload.episode_id, context)
+        if episode.patient_id != payload.patient_id:
+            raise HTTPException(422, detail="Klinička epizoda mora pripadati istom pacijentu kao termin")
     version = db.scalar(select(ServicePackageVersion).options(selectinload(ServicePackageVersion.items), selectinload(ServicePackageVersion.package)).where(ServicePackageVersion.id == version_id))
     if not version:
         raise HTTPException(404, detail="Verzija paketa nije pronađena")
-    journey = book_package(db, version, payload.patient_id, payload.episode_id, [item.model_dump() for item in payload.assignments], payload.idempotency_key, actor, request)
+    journey = book_package(db, version, payload.patient_id, payload.episode_id, [item.model_dump() for item in payload.assignments], payload.idempotency_key, context.active_clinic_id, actor, request)
     audit(db, "package_booked", "PatientJourney", journey.id, "Transakcijski je rezerviran koordinirani paket", actor.user_id, actor.actor_type, actor.api_key_id, None, {"package_version_id": version.id, "activity_ids": [item.id for item in journey.activities]}, request)
     db.commit()
     return {"journey_id": journey.id, "appointment_id": journey.appointment_id, "activity_ids": [item.id for item in journey.activities]}
@@ -63,8 +80,10 @@ def publish_package(version_id: int, request: Request, db: Session = Depends(get
 
 
 @router.post("/patient-journeys/{journey_id}/packages/{version_id}/materialize", response_model=list[JourneyActivityOut])
-def materialize(journey_id: int, version_id: int, payload: PackageMaterializeRequest, request: Request, db: Session = Depends(get_db), actor: Actor = Depends(require_permission("service_packages.schedule"))):
-    journey = db.scalar(select(PatientJourney).options(selectinload(PatientJourney.activities)).where(PatientJourney.id == journey_id))
+def materialize(journey_id: int, version_id: int, payload: PackageMaterializeRequest, request: Request, db: Session = Depends(get_db), context: CurrentUserContext = Depends(require_active_clinic("service_packages.schedule"))):
+    actor = context.actor
+    validate_package_assignments_for_active_clinic(db, payload.assignments, context.active_clinic_id)
+    journey = db.scalar(select(PatientJourney).options(selectinload(PatientJourney.activities)).where(PatientJourney.id == journey_id, PatientJourney.clinic_id == context.active_clinic_id))
     version = db.scalar(select(ServicePackageVersion).options(selectinload(ServicePackageVersion.items), selectinload(ServicePackageVersion.package)).where(ServicePackageVersion.id == version_id))
     if not journey or not version: raise HTTPException(404, detail="Dolazak ili paket nije pronađen")
     created = materialize_package(db, journey, version, [item.model_dump() for item in payload.assignments], actor, request); audit(db, "service_package_materialized", "PatientJourney", journey.id, "Paket je stvorio aktivnosti jednog dolaska", actor.user_id, actor.actor_type, actor.api_key_id, None, {"package_version_id": version.id, "activity_ids": [item.id for item in created]}, request); db.commit(); return created
