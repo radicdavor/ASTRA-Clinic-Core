@@ -1,20 +1,34 @@
 import { useEffect, useState } from "react";
 import { api } from "../api/client";
 
-export function useApi<T>(path: string, fallback: T) {
+export function useApi<T>(path: string | null, fallback: T) {
   const [data, setData] = useState<T>(fallback);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    let alive = true;
+    if (!path) {
+      setData(fallback);
+      setLoading(false);
+      setError(null);
+      return;
+    }
+    const controller = new AbortController();
+    setData(fallback);
     setLoading(true);
-    api<T>(path)
-      .then((result) => alive && setData(result))
-      .catch((err) => alive && setError(err.message))
-      .finally(() => alive && setLoading(false));
+    setError(null);
+    api<T>(path, { signal: controller.signal })
+      .then((result) => {
+        if (!controller.signal.aborted) setData(result);
+      })
+      .catch((err) => {
+        if (!controller.signal.aborted) setError(err.message);
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setLoading(false);
+      });
     return () => {
-      alive = false;
+      controller.abort();
     };
   }, [path]);
 

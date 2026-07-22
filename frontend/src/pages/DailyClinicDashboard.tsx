@@ -162,7 +162,7 @@ export function DailyClinicDashboard() {
   if (query.trim()) params.set("q", query.trim());
 
   const board = useApi<DashboardResponse>(`/api/dashboard/day?${params}`, { date: day, refreshed_at: "", visible_sections: [], viewer_role: "", scope: "", scope_label: "", scoped_clinician_id: null, can_filter_clinician: false, available_clinics: [], rows: [] });
-  const providers = useApi<Provider[]>("/api/providers", []);
+  const providers = useApi<Provider[]>(board.data.can_filter_clinician ? "/api/providers" : null, []);
   const rooms = useApi<Room[]>("/api/rooms", []);
   const services = useApi<Service[]>("/api/services", []);
 

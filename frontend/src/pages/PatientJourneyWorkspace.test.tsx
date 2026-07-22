@@ -59,6 +59,22 @@ describe("fokusirani radni prostor tijeka pacijenta", () => {
     expect(screen.getByRole("tab", { name: "Dokumenti" })).toBeTruthy();
   });
 
+  test("izravni ulazak u pregled ne dohvaća podatke skrivenih faza", async () => {
+    render(<MemoryRouter initialEntries={["/journeys/32?focus=encounter"]}><Routes><Route path="/journeys/:id" element={<PatientJourneyWorkspace/>}/></Routes></MemoryRouter>);
+    await screen.findByText("Pregled pacijenta");
+    await waitFor(() => expect(globalThis.fetch).toHaveBeenCalledWith(expect.stringContaining("/encounter"), expect.anything()));
+
+    const urls = vi.mocked(globalThis.fetch).mock.calls.map(([input]) => String(input));
+    expect(urls.some(url => url.endsWith("/check-in"))).toBe(true);
+    expect(urls.some(url => url.endsWith("/public-config"))).toBe(true);
+    expect(urls.some(url => url.endsWith("/activity-preparation"))).toBe(false);
+    expect(urls.some(url => url.endsWith("/preparation"))).toBe(false);
+    expect(urls.some(url => url.endsWith("/closure"))).toBe(false);
+    expect(urls.some(url => url.endsWith("/inventory/items"))).toBe(false);
+    expect(urls.some(url => url.endsWith("/visit-documents"))).toBe(false);
+    expect(urls.some(url => url.endsWith("/pathology-cases"))).toBe(false);
+  });
+
   test("promjena aktivnosti ne odbacuje nespremljeni klinički unos", async () => {
     vi.restoreAllMocks();
     const activities = [
