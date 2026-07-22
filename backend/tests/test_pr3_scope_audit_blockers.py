@@ -4,9 +4,11 @@ from decimal import Decimal
 import pytest
 
 from app.models.domain import (
+    ApiKey,
     Appointment,
     AuditLog,
     Clinic,
+    ClinicMembership,
     ClinicalDocument,
     ClinicalEpisode,
     ClinicalFinding,
@@ -14,6 +16,7 @@ from app.models.domain import (
     ClinicalPlan,
     Institution,
     Invoice,
+    InvoiceLine,
     Patient,
     PatientClinicAssociation,
     PaymentTransaction,
@@ -21,6 +24,7 @@ from app.models.domain import (
     Room,
     Service,
 )
+from app.auth.dependencies import hash_api_key
 from tests.conftest import login_token
 
 
@@ -66,17 +70,23 @@ def _foreign_invoice(db, auth_setup, *, status: str = "issued"):
     )
     db.add(invoice)
     db.flush()
+    line = InvoiceLine(
+        invoice_id=invoice.id,
+        description="Scoped service",
+        quantity=Decimal("1"),
+        unit_price=Decimal("100"),
+        total=Decimal("100"),
+    )
     payment = PaymentTransaction(
         invoice_id=invoice.id,
         amount=Decimal("10"),
         method="cash",
     )
-    db.add(payment)
+    db.add_all([line, payment])
     db.flush()
     return clinic_a, clinic_b, patient, invoice
 
 
-@BLOCKER_XFAIL
 @pytest.mark.parametrize("operation", ["detail", "update", "issue", "payment_create", "payment_list"])
 def test_foreign_clinic_invoice_operations_are_non_enumerating(client, db, auth_setup, operation):
     status = "draft" if operation == "issue" else "issued"
@@ -103,6 +113,67 @@ def test_foreign_clinic_invoice_operations_are_non_enumerating(client, db, auth_
         response = client.get(f"/api/invoices/{invoice.id}/payments", headers=headers)
 
     assert response.status_code == 404
+
+
+@pytest.mark.parametrize("operation", ["line_list", "line_create", "line_update", "line_delete", "mark_paid"])
+def test_foreign_clinic_invoice_child_operations_are_non_enumerating(client, db, auth_setup, operation):
+    _, _, _, invoice = _foreign_invoice(db, auth_setup)
+    line = invoice.lines[0]
+    headers = _headers(client, auth_setup)
+    if operation == "line_list":
+        response = client.get(f"/api/invoices/{invoice.id}/lines", headers=headers)
+    elif operation == "line_create":
+        response = client.post(
+            f"/api/invoices/{invoice.id}/lines",
+            headers=headers,
+            json={"description": "Foreign line", "quantity": "1", "unit_price": "10"},
+        )
+    elif operation == "line_update":
+        response = client.patch(
+            f"/api/invoices/{invoice.id}/lines/{line.id}",
+            headers=headers,
+            json={"description": "Foreign mutation"},
+        )
+    elif operation == "line_delete":
+        response = client.delete(f"/api/invoices/{invoice.id}/lines/{line.id}", headers=headers)
+    else:
+        response = client.post(f"/api/invoices/{invoice.id}/mark-paid", headers=headers)
+    assert response.status_code == 404
+
+
+def test_invoice_list_and_clinic_switch_use_only_active_clinic(client, db, auth_setup):
+    clinic_a, clinic_b, patient = _two_institution_patient(db, auth_setup)
+    db.add(ClinicMembership(user_id=auth_setup["admin"].id, clinic_id=clinic_b.id, active=True))
+    local = Invoice(patient_id=patient.id, clinic_id=clinic_a.id, invoice_number="LOCAL-LIST", status="draft")
+    foreign = Invoice(patient_id=patient.id, clinic_id=clinic_b.id, invoice_number="FOREIGN-LIST", status="draft")
+    db.add_all([local, foreign])
+    db.flush()
+    token = login_token(client, "admin@test.local")
+
+    local_response = client.get(
+        "/api/invoices",
+        headers={"Authorization": f"Bearer {token}", "X-Clinic-Id": str(clinic_a.id)},
+    )
+    foreign_response = client.get(
+        "/api/invoices",
+        headers={"Authorization": f"Bearer {token}", "X-Clinic-Id": str(clinic_b.id)},
+    )
+    assert {item["id"] for item in local_response.json()} == {local.id}
+    assert {item["id"] for item in foreign_response.json()} == {foreign.id}
+
+
+def test_billing_permission_without_clinic_membership_is_denied(client, auth_setup):
+    token = login_token(client, "limited@test.local")
+    response = client.get("/api/invoices", headers={"Authorization": f"Bearer {token}"})
+    assert response.status_code == 403
+
+
+def test_billing_api_key_cannot_select_a_clinic(client, db):
+    raw_key = "scope-billing-api-key"
+    db.add(ApiKey(name="Billing machine", key_hash=hash_api_key(raw_key), scopes=["billing.read"], active=True))
+    db.flush()
+    response = client.get("/api/invoices", headers={"X-ASTRA-API-Key": raw_key, "X-Clinic-Id": "1"})
+    assert response.status_code == 403
 
 
 def _foreign_episode(db, auth_setup):
