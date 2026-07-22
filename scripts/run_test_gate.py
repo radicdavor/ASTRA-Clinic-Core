@@ -24,6 +24,7 @@ FAST_TESTS = (
     "tests/test_gastroenterology_protocol_seeds.py",
     "tests/test_gastroscopy_protocol_migration.py",
     "tests/test_cli.py",
+    "tests/test_recovery_tooling.py",
     "tests/test_test_gate.py",
 )
 

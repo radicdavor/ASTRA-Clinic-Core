@@ -42,3 +42,8 @@ test-backup-restore:
 	@test -n "$(SOURCE_DATABASE_URL)" || (echo "SOURCE_DATABASE_URL is required" && exit 1)
 	@test -n "$(TARGET_DATABASE_URL)" || (echo "TARGET_DATABASE_URL is required" && exit 1)
 	SOURCE_DATABASE_URL="$(SOURCE_DATABASE_URL)" TARGET_DATABASE_URL="$(TARGET_DATABASE_URL)" sh scripts/validate_test_backup_restore.sh
+
+recovery:
+	@test -n "$(RECOVERY_ADMIN_DATABASE_URL)" || (echo "RECOVERY_ADMIN_DATABASE_URL is required" && exit 1)
+	docker build -f backend/Dockerfile.recovery -t astra-recovery-local .
+	docker run --rm --network host -e RECOVERY_ADMIN_DATABASE_URL -e ASTRA_APPLICATION_COMMIT astra-recovery-local scripts/run_recovery_integration.py
