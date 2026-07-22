@@ -14,8 +14,10 @@ export type ApiKeyCreate = {
 
 export type ApiKeyCreated = {
   active: boolean;
+  clinic_id?: number | null;
   expires_at: string | null;
   id: number;
+  institution_id?: number | null;
   key: string;
   name: string;
   scopes: Array<string>;
@@ -23,9 +25,11 @@ export type ApiKeyCreated = {
 
 export type ApiKeyOut = {
   active: boolean;
+  clinic_id?: number | null;
   created_at: string;
   expires_at: string | null;
   id: number;
+  institution_id?: number | null;
   last_used_at?: string | null;
   name: string;
   scopes: Array<string>;
@@ -166,6 +170,23 @@ export type CheckInOut = {
   journey_id: number;
   reception_note?: string | null;
   status: string;
+};
+
+export type ClinicAuditEventOut = {
+  action: string;
+  actor_type: string;
+  actor_user_id: number | null;
+  changed_fields: Array<string>;
+  clinic_id: number;
+  created_at: string;
+  entity_id: number | null;
+  entity_type: string;
+  id: number;
+  institution_id: number | null;
+  reason_code: string | null;
+  request_id: string | null;
+  scope_type: string;
+  status: string | null;
 };
 
 export type ClinicCreate = {
