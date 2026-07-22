@@ -78,8 +78,9 @@ identity/deduplication surface and does not grant access to child records.
 
 Local evidence at the remediation HEAD: 147 fast backend tests, 737 full
 non-integration backend tests, 16 PostgreSQL integration tests, 57 frontend
-tests plus 4 contract tests, 1 route-mocked Playwright scenario, 10 DB-backed
-Playwright scenarios, OpenAPI drift check, and empty/populated migration cycles
+tests plus 4 contract tests, 1 route-mocked Playwright scenario, 11 DB-backed
+Playwright scenarios including explicit foreign clinical-derived-data denial,
+OpenAPI drift check, and empty/populated migration cycles
 passed. See `pr3-scope-and-audit-remediation.md` for the scope matrix and the
 mandatory separate PR #4 recovery update plan.
 

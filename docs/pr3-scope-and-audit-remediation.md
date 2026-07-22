@@ -108,7 +108,8 @@ At the remediation HEAD before GitHub publication:
 - PostgreSQL integration: 16 passed;
 - frontend: 57 Vitest tests and 4 contract tests passed;
 - route-mocked Playwright: 1 passed;
-- isolated DB-backed Playwright: 10 passed;
+- isolated DB-backed Playwright: 11 passed, including foreign invoice,
+  episode, finding, open-question, and evidence-timeline denial;
 - OpenAPI generated-contract check: passed;
 - populated and empty migration regression gates: passed.
 

@@ -6,7 +6,17 @@ type Seed = {
   users: { receptionA: string; physicianA: string; physicianB: string; nurseA: string; foreignPhysician: string };
   clinics: { a: number; b: number; foreign: number };
   patients: { shared: number };
-  clinical: { signedDocument: number; signedReport: number; ownDraft: number; unclassifiedSource: number; financialSource: number; clinicBInvoice: number };
+  clinical: {
+    signedDocument: number;
+    signedReport: number;
+    ownDraft: number;
+    unclassifiedSource: number;
+    financialSource: number;
+    clinicBInvoice: number;
+    foreignEpisode: number;
+    foreignFinding: number;
+    foreignQuestion: number;
+  };
 };
 
 const seedPath = process.env.ASTRA_E2E_SEED_FILE;
@@ -145,4 +155,22 @@ test("DB-backed source classification is one-way and clinical read does not open
     body: JSON.stringify({ record_classification: "financial" }),
   });
   expect(reclassified.status).toBe(409);
+});
+
+test("DB-backed global patient identity does not expose foreign episodes or derived clinical data", async ({ page }) => {
+  await login(page, seed.users.physicianA, seed.clinics.a);
+
+  const episode = await api(page, `/api/episodes/${seed.clinical.foreignEpisode}`);
+  const finding = await api(page, `/api/patients/${seed.patients.shared}/clinical-findings/${seed.clinical.foreignFinding}`);
+  const question = await api(page, `/api/patients/${seed.patients.shared}/clinical-open-questions/${seed.clinical.foreignQuestion}`);
+  const timeline = await api(page, `/api/patients/${seed.patients.shared}/clinical-evidence-timeline`);
+  const serializedTimeline = JSON.stringify(timeline.body);
+
+  expect(episode.status).toBe(404);
+  expect(finding.status).toBe(404);
+  expect(question.status).toBe(404);
+  expect(timeline.status).toBe(200);
+  expect(serializedTimeline).not.toContain("E2E_FOREIGN_FINDING_SENTINEL");
+  expect(serializedTimeline).not.toContain("E2E_FOREIGN_QUESTION_SENTINEL");
+  expect(serializedTimeline).not.toContain("E2E_FOREIGN_DERIVED_SOURCE_SENTINEL");
 });

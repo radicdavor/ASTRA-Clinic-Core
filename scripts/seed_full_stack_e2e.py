@@ -14,9 +14,12 @@ from app.models.domain import (
     Appointment,
     ClinicalDocument,
     ClinicalDocumentAddendum,
+    ClinicalEpisode,
+    ClinicalFinding,
     ClinicalFormDefinition,
     ClinicalFormInstance,
     ClinicalFormVersion,
+    ClinicalOpenQuestion,
     Clinic,
     ClinicMembership,
     Invoice,
@@ -325,6 +328,10 @@ def seed() -> dict:
                 "documents.view_source",
                 "documents.review",
                 "reports.read",
+                "episodes.read",
+                "clinical_findings.read",
+                "clinical_open_questions.read",
+                "clinical_evidence_timeline.read",
             ],
             "medical_staff",
         )
@@ -497,6 +504,62 @@ def seed() -> dict:
         db.add_all([signed_document, own_draft, unclassified_source, financial_source, foreign_document])
         db.flush()
 
+        cross_institution_source = ClinicalDocument(
+            patient_id=shared.id,
+            clinic_id=clinic_c.id,
+            institution_id=institution_other.id,
+            source_type="internal",
+            document_type="consultation",
+            title="E2E foreign institution source for shared identity",
+            raw_text="E2E_FOREIGN_DERIVED_SOURCE_SENTINEL",
+            review_status="reviewed",
+            physician_reviewed=True,
+            is_clinical_record=True,
+            record_classification="clinical",
+        )
+        foreign_episode = ClinicalEpisode(
+            patient_id=shared.id,
+            institution_id=institution_other.id,
+            title="E2E_FOREIGN_EPISODE_SENTINEL",
+            episode_type="gastroenterology",
+            status="active",
+            priority="routine",
+            start_date=day,
+            summary="E2E foreign episode summary",
+        )
+        db.add_all([cross_institution_source, foreign_episode])
+        db.flush()
+        foreign_finding = ClinicalFinding(
+            patient_id=shared.id,
+            institution_id=institution_other.id,
+            source_document_id=cross_institution_source.id,
+            source_type="clinical_document",
+            source_label="E2E foreign finding source",
+            source_reference=f"clinical_document:{cross_institution_source.id}",
+            finding_key="e2e_foreign_finding",
+            label="E2E_FOREIGN_FINDING_SENTINEL",
+            category="test",
+            lifecycle_status="awaiting_review",
+            requires_review=True,
+        )
+        db.add(foreign_finding)
+        db.flush()
+        foreign_question = ClinicalOpenQuestion(
+            patient_id=shared.id,
+            institution_id=institution_other.id,
+            finding_id=foreign_finding.id,
+            source_document_id=cross_institution_source.id,
+            source_type="clinical_document",
+            source_label="E2E foreign question source",
+            source_reference=f"clinical_document:{cross_institution_source.id}",
+            question_key="e2e_foreign_question",
+            label="E2E_FOREIGN_QUESTION_SENTINEL",
+            status="awaiting_review",
+            requires_clinician_review=True,
+        )
+        db.add(foreign_question)
+        db.flush()
+
         definition = ClinicalFormDefinition(
             form_key="e2e-signed-snapshot",
             name="E2E potpisani obrazac",
@@ -617,6 +680,9 @@ def seed() -> dict:
                 "financialSource": financial_source.id,
                 "foreignDocument": foreign_document.id,
                 "clinicBInvoice": clinic_b_invoice.id,
+                "foreignEpisode": foreign_episode.id,
+                "foreignFinding": foreign_finding.id,
+                "foreignQuestion": foreign_question.id,
             },
         }
         output = os.getenv("ASTRA_E2E_SEED_FILE")
