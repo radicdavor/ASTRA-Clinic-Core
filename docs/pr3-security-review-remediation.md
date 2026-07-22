@@ -56,6 +56,14 @@ The sole recommended production browser topology is one HTTPS public origin. The
 
 ## Increment D — session-bound CSRF validation
 
-Login generates an independent random CSRF token and stores only its SHA-256 hash on the new `UserSession`. For every unsafe cookie-authenticated request, the normal authentication dependency resolves the active, non-expired, non-revoked session once and validates both the header token and readable same-origin cookie against that exact session hash. Hash comparison uses `hmac.compare_digest`; middleware retains the Origin/Referer and double-submit precheck, also using constant-time comparison.
+Login generates an independent random CSRF token and stores only its SHA-256 hash on the new `UserSession`. For every unsafe cookie-authenticated request, the normal authentication dependency resolves the active, non-expired, non-revoked session once and validates both the header token and readable same-origin cookie against that exact session hash. Hash comparison uses `hmac.compare_digest`; middleware performs the independent Origin/Referer check, while the session-aware dependency is the single authority for CSRF token validation.
 
 Safe methods do not require CSRF. Browser login is exempt because no session exists yet. Logout validates the header against the resolved session before revocation, while Bearer and API-key requests remain outside the browser-cookie CSRF path. `/auth/session` rejects a readable CSRF cookie that does not belong to its active session instead of reflecting an arbitrary value. Raw session and CSRF material is never placed in audit or application logs.
+
+## Increment E — durable browser-session security audit
+
+Rejected browser-session and CSRF requests now write sanitized security metadata through a short SQLAlchemy transaction created independently of the request session. The writer commits only the audit row, closes its own session, and never receives a raw session token, CSRF token, authorization header, request body, or clinical data. Known sessions contribute only database identifiers and a bounded reason code; unknown and malformed tokens are classified without persistence of their value.
+
+Covered events include revoked, expired, unknown, malformed, and inactive-user sessions; invalid CSRF for an active session; cookie/Bearer or cookie/API-key credential conflicts; successful logout; and revoke-all. Each rejected attempt intentionally produces one event—there is no lossy deduplication—while database-generated audit IDs make concurrent inserts independent.
+
+If the audit transaction fails, the authentication decision remains fail-closed: the request is still rejected. The operational logger records only the correlation ID and action plus the sanitized database exception; it does not recursively audit the audit failure. PostgreSQL regression coverage proves that the audit commit survives the rejected request and does not commit a flushed business mutation in the request transaction.

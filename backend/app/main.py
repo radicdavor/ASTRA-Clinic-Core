@@ -1,5 +1,4 @@
 from uuid import uuid4
-from hmac import compare_digest
 import logging
 from urllib.parse import urlparse
 
@@ -140,10 +139,6 @@ async def protect_browser_session_mutations(request: Request, call_next):
         referer_origin = _same_origin_from_referer(request.headers.get("Referer"))
         if not _origin_allowed(origin) or (referer_origin and not _origin_allowed(referer_origin)):
             return _browser_forbidden(request, "Nedopu?ten origin zahtjeva")
-        raw_csrf = request.headers.get("X-CSRF-Token")
-        cookie_csrf = request.cookies.get(settings.csrf_cookie_name)
-        if not raw_csrf or not cookie_csrf or not compare_digest(raw_csrf, cookie_csrf):
-            return _browser_forbidden(request, "CSRF provjera nije uspjela")
     response = await call_next(request)
     response.headers.setdefault("X-Content-Type-Options", "nosniff")
     response.headers.setdefault("Referrer-Policy", "same-origin")
