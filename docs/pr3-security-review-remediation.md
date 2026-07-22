@@ -101,3 +101,28 @@ exercises the four review findings and the indirect processing-job boundary:
 PR #4 remains outside this remediation branch. It must not be retargeted or
 merged until this stacked draft PR is independently reviewed and PR #3 is
 revalidated.
+
+## Closing validation
+
+Executed locally on 22 July 2026 with synthetic data only:
+
+- backend full gate: 689 passed, 18 skipped (16 PostgreSQL tests and one
+  PostgreSQL-only audit test were then executed separately; the remaining skip
+  is the POSIX entrypoint check on Windows);
+- PostgreSQL integration: 16 passed;
+- independent PostgreSQL audit-transaction regression: 1 passed;
+- Alembic: one `0063` head, empty upgrade, `0063 -> 0062` downgrade, and
+  re-upgrade passed;
+- `alembic check`: still reports only the documented historical metadata drift;
+  no operation targets the new document institution provenance field or index;
+- OpenAPI generated-type drift check passed;
+- frontend: typecheck passed, 57 Vitest tests and 4 contract tests passed,
+  smoke passed, and the production build passed;
+- Playwright: 1 route-mocked and 10 isolated DB-backed scenarios passed;
+- development and production-example Compose configurations parsed;
+- tracked-tree and branch-diff secret-pattern scan found no candidate secret.
+
+The DB-backed E2E seed was updated to populate canonical institution provenance
+for its directly created synthetic documents. This is required because normal
+application write paths already populate the field and unresolved ownership is
+intentionally denied.
