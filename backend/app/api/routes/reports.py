@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -95,6 +95,16 @@ def deliver_reports(journey_id: int, payload: ReportDeliveryRequest, request: Re
 
 
 @router.get("/signed-reports/{report_id}/delivery-history", response_model=list[ReportDeliveryOut])
-def delivery_history(report_id: int, db: Session = Depends(get_db), actor: Actor = Depends(require_permission("reports.delivery_history"))):
+def delivery_history(
+    report_id: int,
+    limit: int = Query(default=100, ge=1, le=100),
+    db: Session = Depends(get_db),
+    actor: Actor = Depends(require_permission("reports.delivery_history")),
+):
     report_or_404(db, report_id)
-    return db.scalars(select(ReportDeliveryEvent).where(ReportDeliveryEvent.report_id == report_id).order_by(ReportDeliveryEvent.id.desc())).all()
+    return db.scalars(
+        select(ReportDeliveryEvent)
+        .where(ReportDeliveryEvent.report_id == report_id)
+        .order_by(ReportDeliveryEvent.id.desc())
+        .limit(limit)
+    ).all()

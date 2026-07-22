@@ -1,6 +1,6 @@
 from datetime import date, datetime, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy import and_, func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, joinedload
@@ -171,8 +171,13 @@ def create_patient(
 
 
 @router.get("/patients", response_model=list[PatientOut])
-def list_patients(q: str | None = None, db: Session = Depends(get_db), context: CurrentUserContext = Depends(require_active_clinic("patients.read"))):
-    stmt = select(Patient).order_by(Patient.last_name, Patient.first_name)
+def list_patients(
+    q: str | None = None,
+    limit: int = Query(default=50, ge=1, le=50),
+    db: Session = Depends(get_db),
+    context: CurrentUserContext = Depends(require_active_clinic("patients.read")),
+):
+    stmt = select(Patient).order_by(Patient.last_name, Patient.first_name, Patient.id).limit(limit)
     if q:
         like = f"%{q}%"
         stmt = stmt.where(or_(Patient.first_name.ilike(like), Patient.last_name.ilike(like), Patient.phone.ilike(like), Patient.email.ilike(like), Patient.oib.ilike(like)))
@@ -396,12 +401,18 @@ def patient_clinical_evidence_timeline(
 
 
 @router.get("/patients/{patient_id}/appointments", response_model=list[PatientAppointmentAvailabilityOut])
-def patient_appointments(patient_id: int, db: Session = Depends(get_db), context: CurrentUserContext = Depends(require_active_clinic("appointments.patient_availability.read"))):
+def patient_appointments(
+    patient_id: int,
+    limit: int = Query(default=200, ge=1, le=200),
+    db: Session = Depends(get_db),
+    context: CurrentUserContext = Depends(require_active_clinic("appointments.patient_availability.read")),
+):
     if not db.get(Patient, patient_id):
         raise HTTPException(404, detail="Pacijent nije pronaden")
     appointments = db.scalars(
         patient_appointment_availability_stmt(patient_id)
         .options(joinedload(Appointment.clinic), joinedload(Appointment.service), joinedload(Appointment.provider))
+        .limit(limit)
     ).all()
     return [minimal_appointment_conflict(appointment) for appointment in appointments]
 
@@ -419,12 +430,18 @@ def patient_episodes(patient_id: int, db: Session = Depends(get_db), context: Cu
 
 
 @router.get("/patients/{patient_id}/invoices", response_model=list[InvoiceOut])
-def patient_invoices(patient_id: int, db: Session = Depends(get_db), context: CurrentUserContext = Depends(require_active_clinic("billing.read"))):
+def patient_invoices(
+    patient_id: int,
+    limit: int = Query(default=100, ge=1, le=100),
+    db: Session = Depends(get_db),
+    context: CurrentUserContext = Depends(require_active_clinic("billing.read")),
+):
     get_scoped_patient(db, patient_id, context)
     return db.scalars(
         select(Invoice)
         .where(Invoice.patient_id == patient_id, Invoice.clinic_id == context.active_clinic_id)
         .order_by(Invoice.invoice_date.desc(), Invoice.id.desc())
+        .limit(limit)
     ).all()
 
 

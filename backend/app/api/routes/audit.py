@@ -43,7 +43,7 @@ def audit_log(
     db: Session = Depends(get_db),
     context: CurrentUserContext = Depends(require_active_clinic("audit.read")),
 ):
-    stmt = select(AuditLog).order_by(AuditLog.created_at.desc()).limit(200)
+    stmt = select(AuditLog).order_by(AuditLog.created_at.desc(), AuditLog.id.desc()).limit(200)
     if entity_type:
         stmt = stmt.where(AuditLog.entity_type == entity_type)
     if entity_id:

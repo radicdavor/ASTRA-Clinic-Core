@@ -306,6 +306,7 @@ def list_appointments(
     provider_id: int | None = None,
     room_id: int | None = None,
     status: str | None = None,
+    limit: int = Query(default=200, ge=1, le=200),
     db: Session = Depends(get_db),
     context: CurrentUserContext = Depends(require_active_clinic("appointments.read")),
 ):
@@ -313,7 +314,7 @@ def list_appointments(
         select(Appointment)
         .options(*appointment_load_options())
         .where(Appointment.clinic_id == context.active_clinic_id)
-        .order_by(Appointment.date, Appointment.start_time)
+        .order_by(Appointment.date, Appointment.start_time, Appointment.id)
     )
     if date_from:
         stmt = stmt.where(Appointment.date >= date_from)
@@ -329,7 +330,7 @@ def list_appointments(
         stmt = stmt.join(Appointment.patient).where(or_(Patient.first_name.ilike(f"%{patient}%"), Patient.last_name.ilike(f"%{patient}%")))
     if service:
         stmt = stmt.join(Appointment.service).where(Service.name.ilike(f"%{service}%"))
-    return db.scalars(stmt).all()
+    return db.scalars(stmt.limit(limit)).all()
 
 
 @router.get("/appointments/{appointment_id}", response_model=AppointmentOut)

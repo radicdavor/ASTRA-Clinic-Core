@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy import or_, select
 from sqlalchemy.orm import Session, joinedload
 
@@ -54,6 +54,7 @@ def list_clinical_documents(
     physician_reviewed: bool | None = None,
     review_status: str | None = None,
     q: str | None = None,
+    limit: int = Query(default=100, ge=1, le=100),
     db: Session = Depends(get_db),
     actor: Actor = Depends(get_current_actor),
 ):
@@ -71,7 +72,7 @@ def list_clinical_documents(
     if q:
         like = f"%{q}%"
         stmt = stmt.where(or_(ClinicalDocument.title.ilike(like), ClinicalDocument.origin.ilike(like), ClinicalDocument.institution.ilike(like), ClinicalDocument.raw_text.ilike(like), ClinicalDocument.ai_summary.ilike(like)))
-    return db.scalars(stmt).all()
+    return db.scalars(stmt.limit(limit)).all()
 
 
 @router.post("/clinical-documents", response_model=ClinicalDocumentOut)
@@ -263,6 +264,7 @@ def add_clinical_document_addendum(
 def list_clinical_document_addenda(
     document_id: int,
     request: Request,
+    limit: int = Query(default=100, ge=1, le=100),
     db: Session = Depends(get_db),
     actor: Actor = Depends(require_permission("clinical.documents.read_institution")),
 ):
@@ -270,10 +272,11 @@ def list_clinical_document_addenda(
     addenda = db.scalars(
         select(ClinicalDocumentAddendum)
         .where(ClinicalDocumentAddendum.original_document_id == document_id)
-        .order_by(ClinicalDocumentAddendum.created_at, ClinicalDocumentAddendum.id)
+        .order_by(ClinicalDocumentAddendum.created_at.desc(), ClinicalDocumentAddendum.id.desc())
+        .limit(limit)
     ).all()
     db.commit()
-    return addenda
+    return list(reversed(addenda))
 
 
 @router.post("/clinical-documents/{document_id}/extract", response_model=ClinicalDocumentOut)
@@ -353,7 +356,17 @@ def reject_clinical_document_summary(
 
 
 @router.get("/patients/{patient_id}/clinical-documents", response_model=list[ClinicalDocumentOut])
-def patient_clinical_documents(patient_id: int, db: Session = Depends(get_db), actor: Actor = Depends(get_current_actor)):
+def patient_clinical_documents(
+    patient_id: int,
+    limit: int = Query(default=100, ge=1, le=100),
+    db: Session = Depends(get_db),
+    actor: Actor = Depends(get_current_actor),
+):
     if not db.get(Patient, patient_id):
         raise HTTPException(404, detail="Pacijent nije pronaden")
-    return db.scalars(institution_scoped_clinical_documents_statement(db, actor).where(ClinicalDocument.patient_id == patient_id).order_by(ClinicalDocument.document_date.desc().nulls_last(), ClinicalDocument.id.desc())).all()
+    return db.scalars(
+        institution_scoped_clinical_documents_statement(db, actor)
+        .where(ClinicalDocument.patient_id == patient_id)
+        .order_by(ClinicalDocument.document_date.desc().nulls_last(), ClinicalDocument.id.desc())
+        .limit(limit)
+    ).all()

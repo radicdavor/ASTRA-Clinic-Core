@@ -67,6 +67,21 @@ def test_patient_search_includes_oib(client, auth_setup, sql_query_counter):
     assert query_count.count <= 8
 
 
+def test_patient_directory_is_bounded_and_stably_ordered(client, db, auth_setup):
+    db.add_all(
+        Patient(first_name=f"Ime {index:03d}", last_name="Ograniceni", phone=str(index))
+        for index in range(75)
+    )
+    db.commit()
+
+    response = client.get("/api/patients?q=Ograniceni", headers=auth_headers(client))
+
+    assert response.status_code == 200
+    assert len(response.json()) == 50
+    assert [item["first_name"] for item in response.json()[:3]] == ["Ime 000", "Ime 001", "Ime 002"]
+    assert client.get("/api/patients?limit=51", headers=auth_headers(client)).status_code == 422
+
+
 def test_possible_duplicates_returns_identity_candidates(client, auth_setup):
     headers = auth_headers(client)
     client.post(
