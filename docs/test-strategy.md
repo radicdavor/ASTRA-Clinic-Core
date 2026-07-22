@@ -22,6 +22,8 @@ not require the PostgreSQL integration directory. Measured locally:
 - process wall time: 19.23 s;
 - result: 145 passed after adding the gate's own regression tests.
 
+A final rerun also passed all 145 tests in 9.50 s of pytest time.
+
 The explicit manifest is intentional: `pytest -m "not integration"` is the full
 backend core, not a fast gate, and took roughly the same order of time as the
 historical 710.93-second full baseline. New tests enter the fast manifest only
@@ -59,6 +61,11 @@ The full layer runs `pytest -ra --durations=50`. The Module 3.5 baseline was 681
 passed in 710.93 s before the optimization commits. It remains the authoritative
 backend regression gate and reports the slowest 50 tests.
 
+The final isolated PostgreSQL run collected 688 tests and produced 687 passed,
+one POSIX-entrypoint skip on Windows and 982 warnings in 762.09 s (789.23 s
+including empty-database migration). The suite grew by seven collected tests;
+no full-suite speed improvement is claimed.
+
 ### Frontend component and contract
 
 ```bash
@@ -83,6 +90,11 @@ The route-mocked Playwright scenario checks the dashboard-native reception and
 canonical clinical workspace quickly. It is a browser/UI smoke layer, not a
 database authorization proof.
 
+Final rerun: one passed in 15.7 s. An earlier successful rerun took 15.4 s
+(19.10 s process wall). The mock explicitly returns
+the real 404 contract for an unopened activity form and an array for the
+intervention collection; a generic successful object is not a valid substitute.
+
 ### DB-backed E2E full
 
 ```bash
@@ -96,6 +108,8 @@ seeds only the required synthetic scenario, starts one backend and one frontend,
 runs the full Playwright suite, terminates both processes and drops the database.
 Its migration, seed and server setup are session-scoped to that run rather than
 repeated per scenario.
+
+Final result: 10 passed in 58.8 s, with 142.37 s total orchestration time.
 
 ### Recovery
 

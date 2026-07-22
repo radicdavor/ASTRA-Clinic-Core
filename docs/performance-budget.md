@@ -175,3 +175,13 @@ that route-level lazy loading is effective.
 
 No cache, worker, queue, search service or infrastructure split is justified by
 the current measurements.
+
+## Module 3.5 final measurement
+
+The final 22 July 2026 synthetic sample is consolidated in
+`lean-core-optimization.md`. `/ready` now passes its p95 budget at 139.89 ms,
+down from 524.98 ms. The late-run dashboard, directory, clinical-record and
+signed-report samples exceeded their p95 budgets even though their guarded SQL
+counts decreased. Those rows remain visible performance risks and no latency
+improvement is claimed for them. Repeat them on a controlled host before using
+this budget for capacity or production acceptance.

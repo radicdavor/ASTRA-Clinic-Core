@@ -40,3 +40,19 @@ The remaining local warning is the existing third-party `python-jose` use of
 increment.
 
 Module 3 is closed for the authorized local/demo scope. Broader production validation remains separate from Module 3 functional closure.
+
+## Module 3.5 Lean Core validation
+
+Lean Core optimization is complete in the local synthetic scope. It retains the
+three-process production model, centralizes clinical/institution authorization,
+reduces guarded SQL counts, returns metadata-only clinical-record lists, cuts
+entry JavaScript from 239,861 B to 63,861 B, and reduces initial journey
+workspace requests from 16 to 9 (documents) or 8 (encounter).
+
+Final gates: 687 backend tests passed with one POSIX-only Windows skip, 16
+PostgreSQL integration tests passed, 57 frontend and 4 contract tests passed,
+route-mocked Playwright passed, all 10 DB-backed Playwright scenarios passed,
+OpenAPI passed, and empty upgrade/downgrade/re-upgrade passed. Production and
+development Compose models parse. The optional Alembic metadata drift check and
+the variable late-run endpoint latency sample are documented limitations, not
+silently treated as successes. See `lean-core-optimization.md`.

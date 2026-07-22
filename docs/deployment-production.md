@@ -117,6 +117,11 @@ The minimal process model is PostgreSQL, one FastAPI process and one Nginx
 process serving the static React build. No Redis, queue broker, scheduler or
 permanent maintenance worker is required.
 
+This process boundary, startup measurements, maintenance ownership and known
+limits are recorded in `lean-core-runtime-and-maintenance.md` and the final
+`lean-core-optimization.md` report. Do not add a resident worker or cache without
+a new measured requirement.
+
 ## 9. Liveness
 
 Check:
@@ -157,6 +162,11 @@ Schedule session cleanup with cron or the host task scheduler at an interval
 appropriate to the installation. It must not become a loop inside the API
 process. Backup and restore remain outside this module and require the separate
 Module 4 workflow.
+
+For pre-deployment performance checks, apply the budgets in
+`performance-budget.md` with authenticated requests on a controlled host. A
+developer-workstation sample is diagnostic evidence, not production capacity
+approval.
 
 ## 11. Initial admin provisioning
 

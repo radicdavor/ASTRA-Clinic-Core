@@ -1,5 +1,16 @@
 # ASTRA Clinic Core
 
+## Module 3.5 Lean Core
+
+Module 3.5 preserves the existing single FastAPI + PostgreSQL architecture while
+centralizing clinical authorization, reducing critical SQL counts, making
+frontend routes genuinely lazy, aborting stale reads, separating production
+migration/maintenance from API startup, and adding explicit fast, integration
+and full test gates. Measured results and limitations are documented in the
+[Lean Core optimization report](docs/lean-core-optimization.md),
+[performance budget](docs/performance-budget.md), and
+[test strategy](docs/test-strategy.md). Module 4 is not part of this work.
+
 ## Multi-service visit
 
 The Program 2 Multi-Service Visit and Specialty Documentation extension preserves one physical arrival as one `PatientJourney` while allowing multiple ordered activities, rooms, clinicians, specialty forms, reports, specimens, consumables and billing lines. The demo seed includes a first gastroenterology consultation followed by gastroscopy in the same arrival. See the [track closure report](docs/programs/PROGRAM_2_MULTI_SERVICE_VISIT_AND_SPECIALTY_DOCUMENTATION_TRACK_CLOSURE_REPORT.md).
