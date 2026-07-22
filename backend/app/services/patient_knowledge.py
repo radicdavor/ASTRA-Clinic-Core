@@ -74,6 +74,18 @@ def is_document_awaiting_physician_review(document: ClinicalDocument) -> bool:
     return document.review_status in DOCUMENT_REVIEW_AWAITING_STATUSES
 
 
+def normalized_summary_source_ids(raw_source_ids: list | None) -> frozenset[int] | None:
+    raw_source_ids = raw_source_ids or []
+    source_ids = frozenset(
+        item
+        for item in raw_source_ids
+        if isinstance(item, int) and not isinstance(item, bool)
+    )
+    if not source_ids or len(source_ids) != len(raw_source_ids):
+        return None
+    return source_ids
+
+
 def latest_patient_summary_record(db: Session, patient_id: int, statuses: list[str] | None = None) -> PatientClinicalSummaryRecord | None:
     stmt = select(PatientClinicalSummaryRecord).where(PatientClinicalSummaryRecord.patient_id == patient_id)
     if statuses:

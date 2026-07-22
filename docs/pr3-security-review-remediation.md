@@ -117,10 +117,14 @@ same-institution clinical-record policy:
 - patient, clinic, and appointment provenance links are immutable after a
   document is created, and the canonical institution invariant is revalidated
   on every permitted draft update;
-- operational readiness considers a reviewed summary current only when the
-  summary explicitly references the exact reviewed source document and is not
-  older than that source. A summary from another institution can no longer mask
-  an uncovered document for the same global patient.
+- summary generation, editing, review, selection, and operational readiness use
+  the exact current set of official reviewed sources for one institution. A
+  subset, an unreviewed source, or a mixed-institution source set cannot become
+  current. Historical subsets remain visible only as stale warnings;
+- users with accessible sources in multiple institutions must select the
+  institution explicitly before generating, editing, or reviewing its summary.
+  A summary from another institution can no longer mask an uncovered document
+  for the same global patient.
 
 Foreign and unresolved identifiers continue to return not-found responses on
 read paths so that institution boundaries do not disclose object existence.
@@ -153,6 +157,11 @@ Executed locally on 22 July 2026 with synthetic data only:
 - Playwright: 1 route-mocked and 10 isolated DB-backed scenarios passed;
 - development and production-example Compose configurations parsed;
 - tracked-tree and branch-diff secret-pattern scan found no candidate secret.
+
+After the independent follow-up, the summary/provenance regression package
+passed 81 tests and the fast backend gate passed 147 tests. The final pushed
+head remains subject to the full GitHub PostgreSQL CI and a fresh independent
+read-only re-review before any merge decision.
 
 The DB-backed E2E seed was updated to populate canonical institution provenance
 for its directly created synthetic documents. This is required because normal

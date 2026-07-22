@@ -939,6 +939,17 @@ def test_readiness_requires_summary_to_cover_each_institution_document_source(cl
     db.add(summary)
     db.flush()
     summary.updated_at = datetime(2026, 7, 3, 9, 0)
+    mixed_summary = PatientClinicalSummaryRecord(
+        patient_id=p.id,
+        summary_text="Mixed institutions must not satisfy either institution group",
+        source_document_ids=[local_document.id, foreign_document.id],
+        status="reviewed",
+        generated_by="physician",
+        reviewed_by=auth_setup["admin"].id,
+    )
+    db.add(mixed_summary)
+    db.flush()
+    mixed_summary.updated_at = datetime(2026, 7, 4, 9, 0)
     db.commit()
 
     response = client.get("/api/readiness", headers=headers)
@@ -947,6 +958,33 @@ def test_readiness_requires_summary_to_cover_each_institution_document_source(cl
     check = next(item for item in response.json()["checks"] if item["key"] == "patient_summary_stale")
     assert check["status"] == "warning"
     assert check["count"] == 1
+
+
+def test_patient_summary_update_requires_exact_official_institution_source_set(client, db, auth_setup):
+    headers = auth_headers(client)
+    p = patient(db)
+    first = clinical_document(db, p, physician_reviewed=True)
+    second = clinical_document(db, p, physician_reviewed=True)
+    unreviewed = clinical_document(db, p, physician_reviewed=False)
+    db.commit()
+    draft = client.post(f"/api/patients/{p.id}/clinical-summary/generate-draft", headers=headers)
+    assert draft.status_code == 200
+    assert set(draft.json()["source_document_ids"]) == {first.id, second.id}
+
+    omitted = client.patch(
+        f"/api/patients/{p.id}/clinical-summary",
+        headers=headers,
+        json={"source_document_ids": [first.id]},
+    )
+    includes_unreviewed = client.patch(
+        f"/api/patients/{p.id}/clinical-summary",
+        headers=headers,
+        json={"source_document_ids": [first.id, second.id, unreviewed.id]},
+    )
+
+    assert omitted.status_code == 422
+    assert includes_unreviewed.status_code == 422
+    assert "točan skup pregledanih dokumenata ustanove" in omitted.json()["detail"]
 
 
 def test_review_stale_draft_is_blocked(client, db, auth_setup):

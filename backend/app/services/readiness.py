@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 from app.core.config import get_settings
 from app.models.domain import ApiKey, Appointment, AuditLog, ClinicalDocument, ClinicalEpisode, Institution, InventoryBatch, InventoryItem, Invoice, Module, Patient, PatientClinicalSummaryRecord, Provider, Room, Service, room_services
 from app.schemas.common import ReadinessCheck
-from app.services.patient_knowledge import DOCUMENT_REVIEW_AWAITING_STATUSES, official_patient_documents_statement
+from app.services.patient_knowledge import DOCUMENT_REVIEW_AWAITING_STATUSES, normalized_summary_source_ids, official_patient_documents_statement
 
 
 def scalar_count(db: Session, stmt) -> int:
@@ -56,19 +56,27 @@ def build_operational_readiness(db: Session) -> dict:
     reviewed_summaries_by_patient: dict[int, list[PatientClinicalSummaryRecord]] = {}
     for summary in reviewed_summaries:
         reviewed_summaries_by_patient.setdefault(summary.patient_id, []).append(summary)
-    stale_summary_patients = {
-        document.patient_id
-        for document in reviewed_documents
-        if not any(
-            document.id in {
-                source_id
-                for source_id in (summary.source_document_ids or [])
-                if isinstance(source_id, int) and not isinstance(source_id, bool)
-            }
-            and (document.updated_at is None or (summary.updated_at is not None and summary.updated_at >= document.updated_at))
-            for summary in reviewed_summaries_by_patient.get(document.patient_id, [])
+    document_groups: dict[tuple[int, int], list[ClinicalDocument]] = {}
+    for document in reviewed_documents:
+        if document.institution_id is not None:
+            document_groups.setdefault((document.patient_id, document.institution_id), []).append(document)
+    stale_summary_patients = set()
+    for (patient_id, _institution_id), documents in document_groups.items():
+        expected_source_ids = frozenset(document.id for document in documents)
+        latest_document_updated_at = max(
+            (document.updated_at for document in documents if document.updated_at is not None),
+            default=None,
         )
-    }
+        has_current_exact_summary = any(
+            normalized_summary_source_ids(summary.source_document_ids) == expected_source_ids
+            and (
+                latest_document_updated_at is None
+                or (summary.updated_at is not None and summary.updated_at >= latest_document_updated_at)
+            )
+            for summary in reviewed_summaries_by_patient.get(patient_id, [])
+        )
+        if not has_current_exact_summary:
+            stale_summary_patients.add(patient_id)
 
     checks = [
         ReadinessCheck(

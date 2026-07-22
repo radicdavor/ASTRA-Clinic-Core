@@ -395,6 +395,38 @@ def test_document_patch_cannot_change_patient_clinic_or_appointment_provenance(c
     assert document.appointment_id == appointment.id
 
 
+def test_patient_summary_requires_explicit_institution_for_multi_institution_sources(client, db):
+    clinic_a, _, clinic_other, patient, _ = setup_scope(db)
+    doctor = user_with_role(
+        db,
+        "multi-institution-summary@test.local",
+        MEDICAL_EDIT + ["clinical_documents.write"],
+        "medical_staff",
+        clinic_a,
+    )
+    db.add(ClinicMembership(user_id=doctor.id, clinic_id=clinic_other.id, active=True, created_by_user_id=doctor.id))
+    local_document = clinical_doc(db, patient, clinic_a, doctor, status="reviewed")
+    other_document = clinical_doc(db, patient, clinic_other, doctor, status="reviewed")
+    db.commit()
+    auth = headers(client, doctor.email)
+
+    ambiguous = client.post(f"/api/patients/{patient.id}/clinical-summary/generate-draft", headers=auth)
+    local = client.post(
+        f"/api/patients/{patient.id}/clinical-summary/generate-draft?institution_id={clinic_a.institution_id}",
+        headers=auth,
+    )
+    other = client.post(
+        f"/api/patients/{patient.id}/clinical-summary/generate-draft?institution_id={clinic_other.institution_id}",
+        headers=auth,
+    )
+
+    assert ambiguous.status_code == 409
+    assert local.status_code == 200
+    assert local.json()["source_document_ids"] == [local_document.id]
+    assert other.status_code == 200
+    assert other.json()["source_document_ids"] == [other_document.id]
+
+
 def test_physician_and_nurse_read_clinical_documents_across_clinics_same_institution(client, db):
     clinic_a, clinic_b, _, patient, _ = setup_scope(db)
     physician = user_with_role(db, "doctor-a@test.local", MEDICAL_READ, "medical_staff", clinic_a)
