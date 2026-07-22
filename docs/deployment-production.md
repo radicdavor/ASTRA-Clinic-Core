@@ -76,6 +76,10 @@ Before every schema migration:
 Migrations are not executed automatically by application startup. They must be a
 controlled deployment step.
 
+The backend entrypoint enforces this boundary when `APP_ENV=production`: it
+starts the requested API command without running Alembic, catalog seed or demo
+seed. Development/test startup retains the local convenience behavior.
+
 ## 6. Check Alembic current/head
 
 From the backend environment:
@@ -109,6 +113,10 @@ docker compose --env-file .env.production -f docker-compose.prod.example.yml up 
 The example is a baseline single-host deployment, not a high-availability
 orchestration design.
 
+The minimal process model is PostgreSQL, one FastAPI process and one Nginx
+process serving the static React build. No Redis, queue broker, scheduler or
+permanent maintenance worker is required.
+
 ## 9. Liveness
 
 Check:
@@ -134,6 +142,21 @@ curl -f http://localhost:8000/ready
 - configuration valid.
 
 It returns no secrets.
+
+### Bounded maintenance
+
+Run schema inspection and expired/revoked-session cleanup as explicit,
+short-lived commands:
+
+```bash
+docker compose --env-file .env.production -f docker-compose.prod.example.yml exec backend python -m app.cli schema-status
+docker compose --env-file .env.production -f docker-compose.prod.example.yml exec backend python -m app.cli session-cleanup
+```
+
+Schedule session cleanup with cron or the host task scheduler at an interval
+appropriate to the installation. It must not become a loop inside the API
+process. Backup and restore remain outside this module and require the separate
+Module 4 workflow.
 
 ## 11. Initial admin provisioning
 

@@ -1196,11 +1196,19 @@ cp .env.example .env
 docker compose up --build
 ```
 
-Backend Docker entrypoint automatski pokreće:
+U lokalnom development/test okruženju backend Docker entrypoint automatski pokreće:
 
 ```bash
 alembic upgrade head
 python -m app.seed
+```
+
+U `APP_ENV=production` entrypoint ne pokreće migracije ni seed. Migracije su
+zaseban kontrolirani deployment korak, a ograničene maintenance naredbe su:
+
+```bash
+python -m app.cli schema-status
+python -m app.cli session-cleanup
 ```
 
 Ako ste ranije pokretali prvu MVP verziju koja je bazu stvarala preko `create_all()`, resetirajte lokalni razvojni volume prije novog starta:

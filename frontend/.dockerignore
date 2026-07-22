@@ -1,0 +1,7 @@
+node_modules
+dist
+.vite
+.e2e-tmp
+test-results
+playwright-report
+npm-debug.log*
