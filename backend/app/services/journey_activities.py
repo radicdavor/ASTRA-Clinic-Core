@@ -66,7 +66,7 @@ def create_activity(
     room = db.get(Room, data["room_id"])
     if provider is None or room is None:
         raise HTTPException(404, detail="Lijecnik ili prostorija nisu pronadeni")
-    if provider.clinic_id != journey.clinic_id or room.clinic_id != journey.clinic_id:
+    if provider.clinic_id not in {None, journey.clinic_id} or room.clinic_id != journey.clinic_id:
         raise HTTPException(403, detail="Aktivnost smije koristiti samo resurse aktivne klinike")
 
     duration = validate_appointment_payload(
