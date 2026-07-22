@@ -1107,6 +1107,8 @@ class ApiKeyCreated(ORMModel):
     id: int
     name: str
     scopes: list[str]
+    clinic_id: int | None = None
+    institution_id: int | None = None
     active: bool
     expires_at: DateTimeType | None
     key: str
@@ -1116,6 +1118,8 @@ class ApiKeyOut(ORMModel):
     id: int
     name: str
     scopes: list[str]
+    clinic_id: int | None = None
+    institution_id: int | None = None
     active: bool
     expires_at: DateTimeType | None
     last_used_at: DateTimeType | None = None
