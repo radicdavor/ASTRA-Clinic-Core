@@ -104,7 +104,6 @@ def test_csrf_allows_cookie_authenticated_mutation_with_matching_token(client, a
     assert response.status_code == 200
 
 
-@pytest.mark.xfail(strict=True, reason="PR #3 P2: CSRF currently validates only matching header and cookie")
 def test_csrf_token_from_another_session_is_rejected(client, auth_setup):
     first = client.post("/auth/browser/login", json={"email": "admin@test.local", "password": "secret"})
     csrf_from_first_session = first.json()["csrf_token"]
@@ -119,6 +118,16 @@ def test_csrf_token_from_another_session_is_rejected(client, auth_setup):
     )
 
     assert response.status_code == 403
+
+
+def test_session_bootstrap_rejects_csrf_cookie_from_another_session(client, auth_setup):
+    first = client.post("/auth/browser/login", json={"email": "admin@test.local", "password": "secret"})
+    csrf_from_first_session = first.json()["csrf_token"]
+    second = client.post("/auth/browser/login", json={"email": "admin@test.local", "password": "secret"})
+    assert second.status_code == 200
+    client.cookies.set("astra_csrf", csrf_from_first_session)
+
+    assert client.get("/auth/session").status_code == 403
 
 
 @pytest.mark.xfail(strict=True, reason="PR #3 P2: invalid-session audit currently rolls back with the request")

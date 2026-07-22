@@ -10,8 +10,8 @@ from sqlalchemy.orm import Session, contains_eager
 
 from app.core.config import get_settings
 from app.core.database import get_db
-from app.models.domain import ApiKey, Clinic, ClinicMembership, Patient, PatientClinicAssociation, PatientJourney, User
-from app.services.sessions import get_valid_session, record_session_audit
+from app.models.domain import ApiKey, Clinic, ClinicMembership, Patient, PatientClinicAssociation, PatientJourney, User, UserSession
+from app.services.sessions import csrf_token_matches, get_valid_session, record_session_audit
 
 bearer = HTTPBearer(auto_error=False)
 
@@ -59,6 +59,15 @@ def hash_api_key(raw_key: str) -> str:
     return sha256(raw_key.encode("utf-8")).hexdigest()
 
 
+def validate_browser_session_csrf(request: Request, session: UserSession) -> None:
+    if request.method.upper() in {"GET", "HEAD", "OPTIONS"}:
+        return
+    raw_csrf = request.headers.get("X-CSRF-Token")
+    cookie_csrf = request.cookies.get(get_settings().csrf_cookie_name)
+    if not raw_csrf or not cookie_csrf or not csrf_token_matches(session, raw_csrf) or not csrf_token_matches(session, cookie_csrf):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="CSRF provjera nije uspjela")
+
+
 def get_current_user(
     request: Request,
     credentials: HTTPAuthorizationCredentials | None = Depends(bearer),
@@ -73,6 +82,7 @@ def get_current_user(
         if not session:
             record_session_audit(db, "auth.browser_session_invalid", summary="Invalid, expired or revoked browser session was used.")
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Prijava je istekla")
+        validate_browser_session_csrf(request, session)
         return session.user
     if credentials is None:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Nedostaje prijava")
@@ -111,6 +121,7 @@ def get_current_actor(
         if not session:
             record_session_audit(db, "auth.browser_session_invalid", summary="Invalid, expired or revoked browser session was used.")
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Prijava je istekla")
+        validate_browser_session_csrf(request, session)
         return Actor(actor_type="user", user=session.user)
     return Actor(actor_type="user", user=get_current_user(request, credentials, db))
 

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
 from hashlib import sha256
+from hmac import compare_digest
 from secrets import token_urlsafe
 
 from sqlalchemy import delete, select
@@ -85,7 +86,7 @@ def cleanup_expired_sessions(db: Session, *, older_than: datetime | None = None)
 
 
 def csrf_token_matches(session: UserSession, raw_csrf_token: str | None) -> bool:
-    return bool(raw_csrf_token) and hash_session_secret(raw_csrf_token) == session.csrf_token_hash
+    return bool(raw_csrf_token) and compare_digest(hash_session_secret(raw_csrf_token), session.csrf_token_hash)
 
 
 def record_session_audit(db: Session, action: str, *, user_id: int | None = None, session_id: int | None = None, summary: str | None = None) -> None:

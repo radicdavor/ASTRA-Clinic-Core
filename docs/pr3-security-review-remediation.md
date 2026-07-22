@@ -53,3 +53,9 @@ The scoped list, search, patient list, patient clinical-record metadata, detail,
 The sole recommended production browser topology is one HTTPS public origin. The gateway serves React at `/` and proxies `/api/*`, `/auth/*`, `/health`, and `/ready` to the private FastAPI service. The frontend defaults to `window.location.origin`; the production example leaves `VITE_API_BASE_URL` empty and does not publicly expose the backend port.
 
 `BROWSER_PUBLIC_ORIGIN` is now an explicit production setting. Production startup rejects missing/non-HTTPS values and rejects a CORS origin list that differs from that canonical origin. Session and readable CSRF cookies remain host-scoped, `Secure`, and `SameSite=Lax`, which is coherent because frontend and API share an origin. The Nginx contract forwards original host/protocol and request ID, prevents auth response caching, and bounds document uploads.
+
+## Increment D — session-bound CSRF validation
+
+Login generates an independent random CSRF token and stores only its SHA-256 hash on the new `UserSession`. For every unsafe cookie-authenticated request, the normal authentication dependency resolves the active, non-expired, non-revoked session once and validates both the header token and readable same-origin cookie against that exact session hash. Hash comparison uses `hmac.compare_digest`; middleware retains the Origin/Referer and double-submit precheck, also using constant-time comparison.
+
+Safe methods do not require CSRF. Browser login is exempt because no session exists yet. Logout validates the header against the resolved session before revocation, while Bearer and API-key requests remain outside the browser-cookie CSRF path. `/auth/session` rejects a readable CSRF cookie that does not belong to its active session instead of reflecting an arbitrary value. Raw session and CSRF material is never placed in audit or application logs.
