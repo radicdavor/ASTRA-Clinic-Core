@@ -113,9 +113,15 @@ Final result: 10 passed in 58.8 s, with 142.37 s total orchestration time.
 
 ### Recovery
 
-Backup/restore and recovery validation remain reserved for Module 4. The current
-CI backup/restore safety script is preserved; this module does not expand that
-scope.
+The dedicated `recovery` CI job builds the version-pinned recovery image and
+runs `scripts/run_recovery_integration.py` against real PostgreSQL 16. It owns
+custom-format dump/restore, canonical file storage, manifest/checksum, empty
+target protection, incomplete-recovery readiness, session revocation,
+application/security smoke and the supported 0061-to-0062 migration scenario.
+
+Recovery helper/failure tests remain in the normal backend suite. The full
+recovery job is separate because it provisions multiple databases and invokes
+official PostgreSQL tools; it is not replaced by SQLite or mocks.
 
 ## CI ordering
 

@@ -39,6 +39,11 @@ The remaining local warning is the existing third-party `python-jose` use of
 `datetime.utcnow()`; it does not fail the suite and is not introduced by this
 increment.
 
+Module 4 is implemented on the stacked `feature/backup-restore-recovery`
+branch. It adds synthetic PostgreSQL 16 and source-storage recovery validation;
+it does not convert this report into production deployment approval. See
+`module-4-recovery-report.md` for the separate evidence and limitations.
+
 Module 3 is closed for the authorized local/demo scope. Broader production validation remains separate from Module 3 functional closure.
 
 ## Module 3.5 Lean Core validation
