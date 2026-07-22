@@ -32,3 +32,18 @@ This document records the remediation of four merge-blocking findings from the i
 | browser/API authentication | `get_current_user` and `get_current_actor` | resolved user or actor |
 
 PR #4 remains stacked and untouched. Its recovery hash projections and migration fixtures will require review after this remediation is integrated into PR #3.
+
+## Increment B — canonical clinical-document institution provenance
+
+`ClinicalDocument.institution_id` is now the sole normal-read tenant boundary. It is an indexed, nullable legacy-resolution foreign key to `Institution`; null means unresolved and is denied by every ordinary institution-scoped loader. Neither global patient identity nor patient-clinic associations participate in document ownership.
+
+Migration `0063_clinical_document_institution_provenance` derives provenance only from immutable document links: the document clinic, originating appointment clinic, or originating journey clinic. It backfills a row only when all available candidates identify exactly one institution. Missing and conflicting candidates remain unresolved. Empty-database upgrade, `0063 -> 0062` downgrade, and re-upgrade pass on PostgreSQL. The repository's already-documented historical Alembic metadata drift remains; the new field itself adds no drift operation.
+
+All application write paths now persist provenance explicitly:
+
+- manual clinical-document creation and placeholder upload derive it from the validated clinic;
+- journey source ingestion derives it from the journey clinic;
+- signed-report generation derives it from the activity/journey clinic;
+- demo records receive the demo gastro clinic provenance.
+
+The scoped list, search, patient list, patient clinical-record metadata, detail, evidence, classification, and source-download paths now converge on the canonical institution value. The former `clinic_id IS NULL` wildcard and patient-association fallback were removed. Addenda inherit the exact original document institution.

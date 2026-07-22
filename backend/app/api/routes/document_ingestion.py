@@ -6,7 +6,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session, joinedload
 
 from app.audit.service import audit, snapshot
-from app.auth.dependencies import Actor, active_clinic_memberships, require_permission
+from app.auth.dependencies import Actor, require_permission
 from app.core.database import get_db
 from app.models.domain import ClinicalDocument, DocumentProcessingJob, DocumentRequest, PatientJourney
 from app.schemas.common import ClinicalDocumentClassificationReview
@@ -19,7 +19,7 @@ from app.services.document_ingestion import (
     queue_ocr,
     source_path,
 )
-from app.services.clinical_document_access import document_institution_ids, document_institution_keys, get_institution_scoped_clinical_document_for_read
+from app.services.clinical_document_access import actor_institution_ids, get_institution_scoped_clinical_document_for_read
 from app.services.patient_journeys import add_event
 
 
@@ -69,10 +69,7 @@ def get_document_for_classification_review(db: Session, document_id: int, actor:
         raise HTTPException(404, detail="Dokument nije pronađen")
     if actor.user_id is None:
         raise HTTPException(403, detail="Pregled dokumenta zahtijeva prijavljenog korisnika")
-    memberships = active_clinic_memberships(db, actor.user_id)
-    actor_ids = {membership.clinic.institution_id for membership in memberships if membership.clinic.institution_id is not None}
-    actor_keys = {membership.clinic.institution_key for membership in memberships}
-    if actor_ids.intersection(document_institution_ids(db, document)) or actor_keys.intersection(document_institution_keys(db, document)):
+    if document.institution_id is not None and document.institution_id in actor_institution_ids(db, actor):
         return document
     raise HTTPException(404, detail="Dokument nije pronađen")
 

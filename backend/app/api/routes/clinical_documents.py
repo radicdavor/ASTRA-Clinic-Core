@@ -9,7 +9,7 @@ from app.auth.dependencies import Actor, active_clinic_memberships, get_current_
 from app.core.database import get_db
 from app.models.domain import AuditLog, ClinicalDocument, ClinicalDocumentAddendum, Patient
 from app.schemas.common import ClinicalDocumentAddendumCreate, ClinicalDocumentAddendumOut, ClinicalDocumentCreate, ClinicalDocumentOut, ClinicalDocumentUpdate, ClinicalDocumentUpload, ClinicalEvidenceTimelineItem, ErrorResponse
-from app.services.clinical_document_access import clinical_document_capabilities, create_document_addendum, ensure_institution_clinical_read, get_authored_draft_for_edit, get_institution_scoped_clinical_document_for_read, institution_scoped_clinical_documents_statement
+from app.services.clinical_document_access import clinical_document_capabilities, create_document_addendum, ensure_institution_clinical_read, get_authored_draft_for_edit, get_institution_scoped_clinical_document_for_read, institution_scoped_clinical_documents_statement, require_document_institution_for_clinic
 from app.services.clinical_documents import extract_document_knowledge, get_document_or_404, has_extracted_content, initial_ai_extraction_status, initial_document_review_status, mark_document_ai_extraction_edited, mark_document_needs_review, validate_document_links
 from app.services.clinical_evidence_timeline import classify_audit_log
 
@@ -85,6 +85,7 @@ def create_clinical_document(
     validate_document_links(db, payload.patient_id, payload.appointment_id)
     values = payload.model_dump()
     values["clinic_id"] = default_document_clinic_id(db, values.get("clinic_id"), values.get("appointment_id"), actor)
+    values["institution_id"] = require_document_institution_for_clinic(db, values["clinic_id"])
     now = datetime.now(timezone.utc)
     initial_ai_status = initial_ai_extraction_status(values)
     document = ClinicalDocument(
@@ -128,9 +129,11 @@ def upload_clinical_document(
 ):
     validate_document_links(db, payload.patient_id, payload.appointment_id)
     attachment_path = f"local-placeholder/{payload.attachment_name}" if payload.attachment_name else None
+    clinic_id = default_document_clinic_id(db, payload.clinic_id, payload.appointment_id, actor)
     document = ClinicalDocument(
         patient_id=payload.patient_id,
-        clinic_id=default_document_clinic_id(db, payload.clinic_id, payload.appointment_id, actor),
+        clinic_id=clinic_id,
+        institution_id=require_document_institution_for_clinic(db, clinic_id),
         title=payload.title,
         source_type=payload.source_type,
         document_type=payload.document_type,

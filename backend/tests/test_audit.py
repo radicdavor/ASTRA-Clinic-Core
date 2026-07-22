@@ -192,6 +192,7 @@ def test_source_document_access_event_requires_scoped_document(client, db, auth_
     document = ClinicalDocument(
         patient_id=patient.id,
         clinic_id=auth_setup["clinic"].id,
+        institution_id=auth_setup["clinic"].institution_id,
         source_type="uploaded",
         document_type="laboratory",
         title="Synthetic source",

@@ -119,8 +119,11 @@ def clinical_plan(db, episode_obj=None, status="draft", physician_confirmed=Fals
 
 def clinical_document(db, patient_obj=None, physician_reviewed=True):
     patient_obj = patient_obj or patient(db)
+    clinic_obj = default_clinic(db)
     obj = ClinicalDocument(
         patient_id=patient_obj.id,
+        clinic_id=clinic_obj.id if clinic_obj else None,
+        institution_id=clinic_obj.institution_id if clinic_obj else None,
         source_type="external",
         document_type="gastroscopy",
         origin="Test institution",

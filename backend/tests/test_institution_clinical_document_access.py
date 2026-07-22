@@ -1,6 +1,5 @@
 from datetime import date, time
 
-import pytest
 from sqlalchemy import select
 
 from app.core.security import hash_password
@@ -106,6 +105,7 @@ def clinical_doc(
     document = ClinicalDocument(
         patient_id=patient.id,
         clinic_id=clinic.id,
+        institution_id=clinic.institution_id,
         source_type="external",
         document_type=document_type,
         title="Klinički nalaz",
@@ -122,7 +122,6 @@ def clinical_doc(
     return document
 
 
-@pytest.mark.xfail(strict=True, reason="PR #3 P1: unresolved documents are currently treated as institution-wide")
 def test_unresolved_document_is_hidden_from_all_standard_clinical_read_paths(client, db):
     clinic_a, _, _, patient, _ = setup_scope(db)
     doctor = user_with_role(db, "unresolved-scope@test.local", MEDICAL_READ + ["documents.view_source"], "medical_staff", clinic_a)
@@ -147,6 +146,32 @@ def test_unresolved_document_is_hidden_from_all_standard_clinical_read_paths(cli
     assert document.id not in {item["id"] for item in client.get(f"/api/patients/{patient.id}/clinical-documents", headers=auth).json()}
     assert client.get(f"/api/clinical-documents/{document.id}", headers=auth).status_code == 404
     assert client.get(f"/api/clinical-documents/{document.id}/source", headers=auth).status_code == 404
+    clinical_record = client.get(f"/api/patients/{patient.id}/clinical-record", headers=auth)
+    assert clinical_record.status_code == 200
+    assert document.id not in {item["document_id"] for item in clinical_record.json()["items"]}
+
+
+def test_new_manual_document_persists_canonical_institution_provenance(client, db):
+    clinic_a, _, _, patient, _ = setup_scope(db)
+    doctor = user_with_role(db, "provenance-write@test.local", MEDICAL_EDIT + ["clinical_documents.write"], "medical_staff", clinic_a)
+    db.commit()
+
+    response = client.post(
+        "/api/clinical-documents",
+        headers=headers(client, doctor.email),
+        json={
+            "patient_id": patient.id,
+            "clinic_id": clinic_a.id,
+            "source_type": "external",
+            "document_type": "laboratory",
+            "title": "Synthetic provenance write",
+        },
+    )
+
+    assert response.status_code == 200
+    document = db.get(ClinicalDocument, response.json()["id"])
+    assert document is not None
+    assert document.institution_id == clinic_a.institution_id
 
 
 def test_physician_and_nurse_read_clinical_documents_across_clinics_same_institution(client, db):
