@@ -1,4 +1,4 @@
-from datetime import date, time
+from datetime import date, datetime, time, timezone
 from decimal import Decimal
 
 import pytest
@@ -25,6 +25,7 @@ from app.models.domain import (
     Service,
 )
 from app.auth.dependencies import hash_api_key
+from app.audit.service import snapshot
 from tests.conftest import login_token
 
 
@@ -459,3 +460,33 @@ def test_audit_log_is_clinic_scoped_and_returns_phi_safe_projection(client, db, 
     assert "AUDIT_PHI_SENTINEL" not in serialized
     assert "SESSION_SECRET_SENTINEL" not in serialized
     assert "REPORT_CONTENT_SENTINEL" not in serialized
+
+
+def test_financial_audit_snapshot_preserves_material_transaction_values_without_free_text():
+    paid_at = datetime(2026, 7, 22, 12, 30, tzinfo=timezone.utc)
+    invoice = Invoice(
+        patient_id=1,
+        clinic_id=1,
+        invoice_number="AUDIT-FINANCIAL",
+        status="issued",
+        payment_status="partially_paid",
+        total_amount=Decimal("125.50"),
+        notes="FINANCIAL_FREE_TEXT_SENTINEL",
+    )
+    payment = PaymentTransaction(
+        invoice_id=1,
+        amount=Decimal("25.50"),
+        method="card",
+        reference="PAYMENT_REFERENCE_SENTINEL",
+        paid_at=paid_at,
+    )
+
+    invoice_projection = snapshot(invoice)
+    payment_projection = snapshot(payment)
+
+    assert invoice_projection["total_amount"] == "125.50"
+    assert payment_projection["amount"] == "25.50"
+    assert payment_projection["method"] == "card"
+    assert payment_projection["paid_at"] == paid_at.isoformat()
+    assert "notes" not in invoice_projection
+    assert "reference" not in payment_projection
