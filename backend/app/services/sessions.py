@@ -78,9 +78,27 @@ def revoke_all_user_sessions(db: Session, user_id: int, *, except_session_id: in
     return len(sessions)
 
 
-def cleanup_expired_sessions(db: Session, *, older_than: datetime | None = None) -> int:
+def cleanup_expired_sessions(
+    db: Session,
+    *,
+    older_than: datetime | None = None,
+    max_rows: int = 1000,
+    dry_run: bool = False,
+) -> int:
+    if max_rows < 1:
+        raise ValueError("max_rows must be positive")
     cutoff = older_than or datetime.now(UTC)
-    result = db.execute(delete(UserSession).where(UserSession.expires_at < cutoff, UserSession.revoked_at.is_not(None)))
+    session_ids = list(
+        db.scalars(
+            select(UserSession.id)
+            .where(UserSession.expires_at < cutoff, UserSession.revoked_at.is_not(None))
+            .order_by(UserSession.id)
+            .limit(max_rows)
+        ).all()
+    )
+    if dry_run or not session_ids:
+        return len(session_ids)
+    result = db.execute(delete(UserSession).where(UserSession.id.in_(session_ids)))
     return int(result.rowcount or 0)
 
 
