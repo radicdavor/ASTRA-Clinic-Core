@@ -271,6 +271,7 @@ class WorkflowTemplate(TimestampMixin, Base):
 class WorkflowTask(TimestampMixin, Base):
     __tablename__ = "workflow_tasks"
     id: Mapped[int] = mapped_column(primary_key=True)
+    institution_id: Mapped[int | None] = mapped_column(ForeignKey("institutions.id", ondelete="RESTRICT"), index=True)
     title: Mapped[str] = mapped_column(String(180), index=True)
     description: Mapped[str | None] = mapped_column(Text)
     status: Mapped[str] = mapped_column(String(40), default="open", index=True)
@@ -1312,6 +1313,7 @@ class LabTemplate(TimestampMixin, Base):
 class LabOrder(TimestampMixin, Base):
     __tablename__ = "lab_orders"
     id: Mapped[int] = mapped_column(primary_key=True)
+    institution_id: Mapped[int | None] = mapped_column(ForeignKey("institutions.id", ondelete="RESTRICT"), index=True)
     patient_id: Mapped[int] = mapped_column(ForeignKey("patients.id"), index=True)
     episode_id: Mapped[int | None] = mapped_column(ForeignKey("clinical_episodes.id"), index=True)
     appointment_id: Mapped[int | None] = mapped_column(ForeignKey("appointments.id"), index=True)
@@ -1358,6 +1360,7 @@ class LabResult(TimestampMixin, Base):
 class Therapy(TimestampMixin, Base):
     __tablename__ = "therapies"
     id: Mapped[int] = mapped_column(primary_key=True)
+    institution_id: Mapped[int | None] = mapped_column(ForeignKey("institutions.id", ondelete="RESTRICT"), index=True)
     patient_id: Mapped[int] = mapped_column(ForeignKey("patients.id"), index=True)
     episode_id: Mapped[int | None] = mapped_column(ForeignKey("clinical_episodes.id"), index=True)
     parent_therapy_id: Mapped[int | None] = mapped_column(ForeignKey("therapies.id"), index=True)
