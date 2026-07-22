@@ -9,7 +9,8 @@ from app.auth.dependencies import Actor, require_permission
 from app.core.database import get_db
 from app.models.domain import ClinicalDocument, Patient, PatientClinicalSummaryRecord
 from app.schemas.common import ErrorResponse, PatientClinicalSummary, PatientClinicalSummaryRecordOut, PatientClinicalSummaryRecordUpdate
-from app.services.patient_knowledge import GENERIC_OPEN_QUESTION_TEXT, add_knowledge_item, contains_unresolved_language, is_document_awaiting_physician_review, is_official_clinical_document, latest_patient_summary_record, latest_reviewed_document_updated_at, official_patient_documents_statement, summary_record_from_documents, summary_record_is_stale
+from app.services.clinical_document_access import institution_scoped_clinical_documents_statement
+from app.services.patient_knowledge import GENERIC_OPEN_QUESTION_TEXT, add_knowledge_item, contains_unresolved_language, is_document_awaiting_physician_review, is_official_clinical_document, latest_reviewed_document_updated_at, summary_record_from_documents, summary_record_is_stale
 
 ERROR_RESPONSES = {400: {"model": ErrorResponse}, 401: {"model": ErrorResponse}, 403: {"model": ErrorResponse}, 404: {"model": ErrorResponse}, 409: {"model": ErrorResponse}, 422: {"model": ErrorResponse}}
 
@@ -21,15 +22,43 @@ def patch_model(obj, data: dict) -> None:
         setattr(obj, key, value)
 
 
+def scoped_patient_documents(db: Session, actor: Actor, patient_id: int) -> list[ClinicalDocument]:
+    statement = institution_scoped_clinical_documents_statement(db, actor).where(ClinicalDocument.patient_id == patient_id)
+    return db.scalars(statement.order_by(ClinicalDocument.document_date.desc().nulls_last(), ClinicalDocument.id.desc())).all()
+
+
+def latest_scoped_summary_record(
+    db: Session,
+    patient_id: int,
+    statuses: list[str],
+    accessible_document_ids: set[int],
+) -> PatientClinicalSummaryRecord | None:
+    candidates = db.scalars(
+        select(PatientClinicalSummaryRecord)
+        .where(
+            PatientClinicalSummaryRecord.patient_id == patient_id,
+            PatientClinicalSummaryRecord.status.in_(statuses),
+        )
+        .order_by(PatientClinicalSummaryRecord.updated_at.desc(), PatientClinicalSummaryRecord.id.desc())
+    ).all()
+    for record in candidates:
+        raw_source_ids = record.source_document_ids or []
+        source_ids = {item for item in raw_source_ids if isinstance(item, int) and not isinstance(item, bool)}
+        if len(source_ids) == len(raw_source_ids) and source_ids and source_ids.issubset(accessible_document_ids):
+            return record
+    return None
+
+
 @router.get("/patients/{patient_id}/clinical-summary", response_model=PatientClinicalSummary)
 def patient_clinical_summary(patient_id: int, db: Session = Depends(get_db), actor: Actor = Depends(require_permission("clinical_documents.read"))):
     if not db.get(Patient, patient_id):
         raise HTTPException(404, detail="Pacijent nije pronaden")
-    documents = db.scalars(select(ClinicalDocument).where(ClinicalDocument.patient_id == patient_id).order_by(ClinicalDocument.document_date.desc().nulls_last(), ClinicalDocument.id.desc())).all()
+    documents = scoped_patient_documents(db, actor, patient_id)
+    accessible_document_ids = {document.id for document in documents}
     reviewed = [document for document in documents if is_official_clinical_document(document)]
     awaiting_review_count = len([document for document in documents if is_document_awaiting_physician_review(document)])
-    reviewed_summary = latest_patient_summary_record(db, patient_id, ["reviewed"])
-    draft_summary = latest_patient_summary_record(db, patient_id, ["draft_ai", "needs_review", "stale"])
+    reviewed_summary = latest_scoped_summary_record(db, patient_id, ["reviewed"], accessible_document_ids)
+    draft_summary = latest_scoped_summary_record(db, patient_id, ["draft_ai", "needs_review", "stale"], accessible_document_ids)
     latest_document_updated_at = latest_reviewed_document_updated_at(reviewed)
     reviewed_summary_is_stale = summary_record_is_stale(reviewed_summary, latest_document_updated_at)
     draft_summary_is_stale = summary_record_is_stale(draft_summary, latest_document_updated_at)
@@ -96,7 +125,7 @@ def generate_patient_clinical_summary_draft(
 ):
     if not db.get(Patient, patient_id):
         raise HTTPException(404, detail="Pacijent nije pronaden")
-    reviewed = db.scalars(official_patient_documents_statement(patient_id).order_by(ClinicalDocument.document_date.desc().nulls_last(), ClinicalDocument.id.desc())).all()
+    reviewed = [document for document in scoped_patient_documents(db, actor, patient_id) if is_official_clinical_document(document)]
     values = summary_record_from_documents(patient_id, reviewed)
     record = PatientClinicalSummaryRecord(**values)
     db.add(record)
@@ -117,13 +146,27 @@ def update_patient_clinical_summary_record(
 ):
     if not db.get(Patient, patient_id):
         raise HTTPException(404, detail="Pacijent nije pronaden")
-    record = latest_patient_summary_record(db, patient_id, ["draft_ai", "needs_review", "stale", "reviewed"])
+    documents = scoped_patient_documents(db, actor, patient_id)
+    accessible_document_ids = {document.id for document in documents}
+    record = latest_scoped_summary_record(db, patient_id, ["draft_ai", "needs_review", "stale", "reviewed"], accessible_document_ids)
     if record is None:
-        record = PatientClinicalSummaryRecord(patient_id=patient_id, status="needs_review", generated_by="physician")
+        reviewed_documents = [document for document in documents if is_official_clinical_document(document)]
+        if not reviewed_documents:
+            raise HTTPException(409, detail="Sazetak mora imati barem jedan dostupni pregledani izvor")
+        record = PatientClinicalSummaryRecord(
+            patient_id=patient_id,
+            source_document_ids=[document.id for document in reviewed_documents],
+            status="needs_review",
+            generated_by="physician",
+        )
         db.add(record)
         db.flush()
     before = snapshot(record)
     update_data = payload.model_dump(exclude_unset=True)
+    if "source_document_ids" in update_data:
+        requested_sources = {int(item) for item in update_data["source_document_ids"] or []}
+        if not requested_sources or not requested_sources.issubset(accessible_document_ids):
+            raise HTTPException(422, detail="Izvori sazetka moraju biti dostupni unutar ustanove")
     if update_data.get("status") == "reviewed":
         update_data["status"] = "needs_review"
     patch_model(record, update_data)
@@ -150,10 +193,12 @@ def review_patient_clinical_summary_record(
 ):
     if not db.get(Patient, patient_id):
         raise HTTPException(404, detail="Pacijent nije pronaden")
-    record = latest_patient_summary_record(db, patient_id, ["draft_ai", "needs_review", "stale"])
+    documents = scoped_patient_documents(db, actor, patient_id)
+    accessible_document_ids = {document.id for document in documents}
+    record = latest_scoped_summary_record(db, patient_id, ["draft_ai", "needs_review", "stale"], accessible_document_ids)
     if record is None:
         raise HTTPException(404, detail="Nema draft sazetka za potvrdu")
-    reviewed_documents = db.scalars(official_patient_documents_statement(patient_id)).all()
+    reviewed_documents = [document for document in documents if is_official_clinical_document(document)]
     latest_document_updated_at = latest_reviewed_document_updated_at(reviewed_documents)
     if summary_record_is_stale(record, latest_document_updated_at):
         raise HTTPException(409, detail="Sazetak je zastario jer postoje noviji pregledani dokumenti. Generirajte novi draft prije potvrde.")

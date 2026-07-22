@@ -67,3 +67,22 @@ Rejected browser-session and CSRF requests now write sanitized security metadata
 Covered events include revoked, expired, unknown, malformed, and inactive-user sessions; invalid CSRF for an active session; cookie/Bearer or cookie/API-key credential conflicts; successful logout; and revoke-all. Each rejected attempt intentionally produces one event—there is no lossy deduplication—while database-generated audit IDs make concurrent inserts independent.
 
 If the audit transaction fails, the authentication decision remains fail-closed: the request is still rejected. The operational logger records only the correlation ID and action plus the sanitized database exception; it does not recursively audit the audit failure. PostgreSQL regression coverage proves that the audit commit survives the rejected request and does not commit a flushed business mutation in the request transaction.
+
+## Increment F — repository-wide document access audit
+
+The follow-up audit found and closed four indirect paths that did not use the canonical provenance boundary: processing-job metadata and execution, patient knowledge summaries, journey timeline/AI summary sources, and pathology result linking. Journey document ingestion is now also bound to the active clinic, and client-emitted sensitive-access audit events resolve documents by institution rather than by a nullable clinic or journey fallback.
+
+| Route or consumer | Loader / policy | Scope and returned content | Access audit |
+| --- | --- | --- | --- |
+| clinical document list/search/patient list | `institution_scoped_clinical_documents_statement` | canonical institution plus confirmed clinical classification; full DTO | detail/source reads audited separately |
+| detail, evidence timeline, addenda | `get_institution_scoped_clinical_document_for_read` or `ensure_institution_clinical_read` | canonical institution; full document or derived audit evidence | deduplicated read action |
+| source download | provenance check before classification branch, then clinical/read-review policy | exact source bytes; foreign and unresolved both return 404 | source view action |
+| OCR/classification queue, processing and job list | `get_document_for_classification_review` before every job lookup | canonical institution; job metadata only | mutation actions |
+| patient clinical summary and draft sources | institution-scoped clinical statement plus source-ID subset validation | derived source-linked knowledge only | existing summary mutation audit |
+| journey timeline and AI summary | active-clinic journey loader plus institution-provenance document statement | visit events and source-linked document projection | existing journey/summary actions |
+| readiness preview | appointment clinic → institution filter | reviewed source-derived warnings only | immutable snapshot audit where requested |
+| pathology result link | actor institution read plus case-journey institution equality | link metadata, never free cross-patient/institution attachment | pathology link action |
+| sensitive-access event API | active clinic → institution equality | event receipt only; no clinical content | the event itself |
+| demo seed | internal idempotent seed lookup | synthetic startup data only; not an API read path | not applicable |
+
+No `ClinicalDocument.clinic_id IS NULL` wildcard remains. Unresolved documents are excluded from standard list, search, summary, timeline, processing-job, source, count, and client audit paths. Unauthorized document IDs use the existing not-found response to avoid cross-institution existence disclosure. Operational readiness may aggregate counts across all *resolved* active institutions for system readiness, but never includes unresolved documents or document content.

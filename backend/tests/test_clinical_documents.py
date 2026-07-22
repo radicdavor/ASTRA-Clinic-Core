@@ -467,7 +467,7 @@ def test_summary_record_alone_does_not_create_official_knowledge(client, db, aut
     summary = client.get(f"/api/patients/{p.id}/clinical-summary", headers=headers)
     assert summary.status_code == 200
     body = summary.json()
-    assert body["reviewed_summary"]["id"] == record.id
+    assert body["reviewed_summary"] is None
     assert_no_official_knowledge(body)
 
 
@@ -831,7 +831,7 @@ def test_reviewed_summary_is_view_not_source_of_truth(client, db, auth_setup):
     summary = client.get(f"/api/patients/{p.id}/clinical-summary", headers=headers)
     assert summary.status_code == 200
     body = summary.json()
-    assert body["reviewed_summary"]["summary_text"] == "Pregledani sazetak bez izvora."
+    assert body["reviewed_summary"] is None
     assert_no_official_knowledge(body)
 
 
@@ -926,8 +926,9 @@ def test_review_stale_draft_is_blocked(client, db, auth_setup):
 def test_latest_reviewed_summary_selection_is_deterministic(client, db, auth_setup):
     headers = auth_headers(client)
     p = patient(db)
-    older = PatientClinicalSummaryRecord(patient_id=p.id, summary_text="Stariji sazetak", status="reviewed", generated_by="physician", reviewed_by=1, reviewed_at=datetime(2026, 7, 1))
-    newer = PatientClinicalSummaryRecord(patient_id=p.id, summary_text="Noviji sazetak", status="reviewed", generated_by="physician", reviewed_by=1, reviewed_at=datetime(2026, 7, 2))
+    source = clinical_document(db, p, physician_reviewed=True)
+    older = PatientClinicalSummaryRecord(patient_id=p.id, summary_text="Stariji sazetak", source_document_ids=[source.id], status="reviewed", generated_by="physician", reviewed_by=1, reviewed_at=datetime(2026, 7, 1))
+    newer = PatientClinicalSummaryRecord(patient_id=p.id, summary_text="Noviji sazetak", source_document_ids=[source.id], status="reviewed", generated_by="physician", reviewed_by=1, reviewed_at=datetime(2026, 7, 2))
     db.add_all([older, newer])
     db.flush()
     older.updated_at = datetime(2026, 7, 1, 9, 0)
@@ -943,8 +944,9 @@ def test_latest_reviewed_summary_selection_is_deterministic(client, db, auth_set
 def test_latest_reviewed_summary_selection_uses_id_when_timestamp_matches(client, db, auth_setup):
     headers = auth_headers(client)
     p = patient(db)
-    first = PatientClinicalSummaryRecord(patient_id=p.id, summary_text="Prvi sazetak", status="reviewed", generated_by="physician", reviewed_by=1, reviewed_at=datetime(2026, 7, 1))
-    second = PatientClinicalSummaryRecord(patient_id=p.id, summary_text="Drugi sazetak", status="reviewed", generated_by="physician", reviewed_by=1, reviewed_at=datetime(2026, 7, 1))
+    source = clinical_document(db, p, physician_reviewed=True)
+    first = PatientClinicalSummaryRecord(patient_id=p.id, summary_text="Prvi sazetak", source_document_ids=[source.id], status="reviewed", generated_by="physician", reviewed_by=1, reviewed_at=datetime(2026, 7, 1))
+    second = PatientClinicalSummaryRecord(patient_id=p.id, summary_text="Drugi sazetak", source_document_ids=[source.id], status="reviewed", generated_by="physician", reviewed_by=1, reviewed_at=datetime(2026, 7, 1))
     db.add_all([first, second])
     db.flush()
     same_time = datetime(2026, 7, 2, 9, 0)

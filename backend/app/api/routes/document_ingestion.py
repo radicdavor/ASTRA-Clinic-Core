@@ -6,7 +6,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session, joinedload
 
 from app.audit.service import audit, snapshot
-from app.auth.dependencies import Actor, require_permission
+from app.auth.dependencies import Actor, CurrentUserContext, require_active_clinic, require_permission
 from app.core.database import get_db
 from app.models.domain import ClinicalDocument, DocumentProcessingJob, DocumentRequest, PatientJourney
 from app.schemas.common import ClinicalDocumentClassificationReview
@@ -38,11 +38,11 @@ def classification_audit_snapshot(document: ClinicalDocument) -> dict:
     }
 
 
-def get_journey(db: Session, journey_id: int) -> PatientJourney:
+def get_journey(db: Session, journey_id: int, clinic_id: int) -> PatientJourney:
     journey = db.scalar(
         select(PatientJourney)
         .options(joinedload(PatientJourney.appointment))
-        .where(PatientJourney.id == journey_id)
+        .where(PatientJourney.id == journey_id, PatientJourney.clinic_id == clinic_id)
     )
     if not journey:
         raise HTTPException(404, detail="Tijek pacijenta nije pronađen")
@@ -84,9 +84,10 @@ async def ingest_document(
     upload_channel: str = Form("staff_upload"),
     document_date: date | None = Form(None),
     db: Session = Depends(get_db),
-    actor: Actor = Depends(require_permission("documents.upload")),
+    context: CurrentUserContext = Depends(require_active_clinic("documents.upload")),
 ):
-    journey = get_journey(db, journey_id)
+    actor = context.actor
+    journey = get_journey(db, journey_id, context.active_clinic_id)
     if upload_channel in {"reception_scan", "direct_scan"} and "documents.scan" not in actor.permissions:
         raise HTTPException(403, detail="Nedostaje dozvola: documents.scan")
     content = await file.read()
@@ -137,13 +138,10 @@ def open_document_source(
     db: Session = Depends(get_db),
     actor: Actor = Depends(require_permission("documents.view_source")),
 ):
-    document = db.get(ClinicalDocument, document_id)
-    if not document:
-        raise HTTPException(404, detail="Dokument nije pronađen")
+    document = get_document_for_classification_review(db, document_id, actor)
     if document.record_classification == "clinical" and document.is_clinical_record:
         document = get_institution_scoped_clinical_document_for_read(db, document_id, actor, request, "source_document_viewed")
     elif "documents.review" in actor.permissions:
-        document = get_document_for_classification_review(db, document_id, actor)
         audit(db, "source_document_viewed_for_classification", "ClinicalDocument", document.id, "Izvorni dokument otvoren radi ljudske klasifikacije", actor.user_id, actor.actor_type, actor.api_key_id, None, classification_audit_snapshot(document), request)
     else:
         raise HTTPException(403, detail="Neklasificirani izvor zahtijeva ovlaštenje za pregled dokumenta")
@@ -175,6 +173,7 @@ def run_ocr_job(
     db: Session = Depends(get_db),
     actor: Actor = Depends(require_permission("documents.review")),
 ):
+    get_document_for_classification_review(db, document_id, actor)
     job = get_job(db, document_id, job_id)
     before = snapshot(job)
     job = process_ocr_job(db, job)
@@ -190,6 +189,7 @@ def list_processing_jobs(
     db: Session = Depends(get_db),
     actor: Actor = Depends(require_permission("documents.view_source")),
 ):
+    get_document_for_classification_review(db, document_id, actor)
     return db.scalars(
         select(DocumentProcessingJob)
         .where(DocumentProcessingJob.clinical_document_id == document_id)
@@ -220,6 +220,7 @@ def run_classification_job(
     db: Session = Depends(get_db),
     actor: Actor = Depends(require_permission("documents.review")),
 ):
+    get_document_for_classification_review(db, document_id, actor)
     job = get_job(db, document_id, job_id)
     before = snapshot(job)
     job = process_classification_job(db, job)

@@ -216,21 +216,25 @@ def get_institution_scoped_clinical_document_for_read(
 
 
 def institution_scoped_clinical_documents_statement(db: Session, actor: Actor):
+    return (
+        institution_provenance_scoped_documents_statement(db, actor)
+        .options(joinedload(ClinicalDocument.patient), joinedload(ClinicalDocument.clinic))
+        .where(
+            ClinicalDocument.is_clinical_record.is_(True),
+            ClinicalDocument.record_classification.in_(INSTITUTION_READABLE_RECORD_CLASSIFICATIONS),
+        )
+    )
+
+
+def institution_provenance_scoped_documents_statement(db: Session, actor: Actor):
+    """Scope every document lifecycle state by canonical institution provenance."""
     if not actor_is_medical_staff(actor):
         raise HTTPException(status.HTTP_403_FORBIDDEN, detail="Kliničke dokumente smije čitati samo ovlašteno medicinsko osoblje")
     scope = actor_institution_scope(db, actor)
     institution_ids = scope.institution_ids
     if not institution_ids:
         raise HTTPException(status.HTTP_403_FORBIDDEN, detail="Korisnik nema aktivno članstvo ni u jednoj ustanovi")
-    return (
-        select(ClinicalDocument)
-        .options(joinedload(ClinicalDocument.patient), joinedload(ClinicalDocument.clinic))
-        .where(
-            ClinicalDocument.is_clinical_record.is_(True),
-            ClinicalDocument.record_classification.in_(INSTITUTION_READABLE_RECORD_CLASSIFICATIONS),
-            ClinicalDocument.institution_id.in_(institution_ids),
-        )
-    )
+    return select(ClinicalDocument).where(ClinicalDocument.institution_id.in_(institution_ids))
 
 
 def institution_scoped_clinical_record_metadata_statement(

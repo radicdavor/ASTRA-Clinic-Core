@@ -14,6 +14,7 @@ from app.models.domain import (
     AuditLog,
     ClinicalDocument,
     ClinicalFormInstance,
+    Clinic,
     Invoice,
     JourneyActivity,
     PatientJourney,
@@ -173,12 +174,10 @@ def _scoped_document(db: Session, document_id: int, clinic_id: int) -> ClinicalD
     document = db.get(ClinicalDocument, document_id)
     if document is None:
         _not_found()
-    if document.clinic_id == clinic_id:
-        return document
-    if document.journey_id is not None:
-        _scoped_journey(db, document.journey_id, clinic_id)
-        return document
-    _not_found()
+    institution_id = db.scalar(select(Clinic.institution_id).where(Clinic.id == clinic_id))
+    if institution_id is None or document.institution_id != institution_id:
+        _not_found()
+    return document
 
 
 def _scoped_invoice(db: Session, invoice_id: int, clinic_id: int) -> Invoice:

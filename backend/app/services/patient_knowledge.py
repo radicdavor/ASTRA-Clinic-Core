@@ -81,8 +81,12 @@ def latest_patient_summary_record(db: Session, patient_id: int, statuses: list[s
     return db.scalar(stmt.order_by(PatientClinicalSummaryRecord.updated_at.desc(), PatientClinicalSummaryRecord.id.desc()))
 
 
-def official_patient_documents_statement(patient_id: int | None = None):
-    stmt = select(ClinicalDocument).where(ClinicalDocument.physician_reviewed.is_(True), ClinicalDocument.review_status == "reviewed")
+def official_patient_documents_statement(institution_ids: set[int], patient_id: int | None = None):
+    stmt = select(ClinicalDocument).where(
+        ClinicalDocument.institution_id.in_(institution_ids),
+        ClinicalDocument.physician_reviewed.is_(True),
+        ClinicalDocument.review_status == "reviewed",
+    )
     if patient_id is not None:
         stmt = stmt.where(ClinicalDocument.patient_id == patient_id)
     return stmt

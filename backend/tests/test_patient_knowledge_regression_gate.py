@@ -87,7 +87,7 @@ def test_gate_summary_is_not_source_of_truth(client, db, auth_setup):
     summary = client.get(f"/api/patients/{p.id}/clinical-summary", headers=headers)
     assert summary.status_code == 200
     body = summary.json()
-    assert body["reviewed_summary"]["id"] == record.id
+    assert body["reviewed_summary"] is None
     assert_no_official_knowledge(body)
 
 

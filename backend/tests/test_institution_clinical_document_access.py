@@ -7,11 +7,14 @@ from app.models.domain import (
     Appointment,
     AuditLog,
     ClinicalDocument,
+    DocumentProcessingJob,
     Clinic,
     ClinicMembership,
     Institution,
     Patient,
     PatientClinicAssociation,
+    PatientClinicalSummaryRecord,
+    PatientJourney,
     Permission,
     Provider,
     Role,
@@ -149,6 +152,133 @@ def test_unresolved_document_is_hidden_from_all_standard_clinical_read_paths(cli
     clinical_record = client.get(f"/api/patients/{patient.id}/clinical-record", headers=auth)
     assert clinical_record.status_code == 200
     assert document.id not in {item["document_id"] for item in clinical_record.json()["items"]}
+
+
+def test_processing_jobs_do_not_disclose_foreign_or_unresolved_documents(client, db):
+    clinic_a, clinic_b, clinic_other, patient, _ = setup_scope(db)
+    same_institution_reviewer = user_with_role(
+        db,
+        "same-processing-reviewer@test.local",
+        MEDICAL_READ + ["documents.view_source", "documents.review"],
+        "medical_staff",
+        clinic_a,
+    )
+    other_reviewer = user_with_role(
+        db,
+        "other-processing-reviewer@test.local",
+        MEDICAL_READ + ["documents.view_source", "documents.review"],
+        "medical_staff",
+        clinic_other,
+    )
+    document = clinical_doc(db, patient, clinic_b, status="reviewed")
+    unresolved = ClinicalDocument(
+        patient_id=patient.id,
+        source_type="legacy_import",
+        document_type="other",
+        title="Unresolved processing source",
+        review_status="draft",
+        is_clinical_record=False,
+        record_classification="unclassified",
+    )
+    db.add(unresolved)
+    db.flush()
+    document_job = DocumentProcessingJob(
+        clinical_document_id=document.id,
+        job_type="ocr",
+        provider="local-demo-text-only",
+        status="pending",
+    )
+    unresolved_job = DocumentProcessingJob(
+        clinical_document_id=unresolved.id,
+        job_type="ocr",
+        provider="local-demo-text-only",
+        status="pending",
+    )
+    db.add_all([document_job, unresolved_job])
+    db.commit()
+
+    same_headers = headers(client, same_institution_reviewer.email)
+    other_headers = headers(client, other_reviewer.email)
+    assert client.get(f"/api/clinical-documents/{document.id}/processing-jobs", headers=same_headers).status_code == 200
+    assert client.get(f"/api/clinical-documents/{document.id}/processing-jobs", headers=other_headers).status_code == 404
+    assert client.get(f"/api/clinical-documents/{document.id}/source", headers=other_headers).status_code == 404
+    assert client.post(f"/api/clinical-documents/{document.id}/ocr/{document_job.id}/process", headers=other_headers).status_code == 404
+    assert client.get(f"/api/clinical-documents/{unresolved.id}/processing-jobs", headers=same_headers).status_code == 404
+    assert client.get(f"/api/clinical-documents/{unresolved.id}/source", headers=same_headers).status_code == 404
+    assert client.post(f"/api/clinical-documents/{unresolved.id}/ocr/{unresolved_job.id}/process", headers=same_headers).status_code == 404
+
+
+def test_patient_summary_uses_only_source_documents_from_actor_institutions(client, db):
+    clinic_a, clinic_b, clinic_other, patient, _ = setup_scope(db)
+    local_doctor = user_with_role(db, "local-summary@test.local", MEDICAL_READ, "medical_staff", clinic_a)
+    other_doctor = user_with_role(db, "other-summary@test.local", MEDICAL_READ, "medical_staff", clinic_other)
+    local_document = clinical_doc(db, patient, clinic_b, status="reviewed")
+    local_document.key_findings = ["Local institution finding"]
+    foreign_document = clinical_doc(db, patient, clinic_other, status="reviewed")
+    foreign_document.key_findings = ["Foreign institution finding"]
+    foreign_summary = PatientClinicalSummaryRecord(
+        patient_id=patient.id,
+        summary_text="Foreign institution summary",
+        source_document_ids=[foreign_document.id],
+        status="reviewed",
+        generated_by="physician",
+        reviewed_by=other_doctor.id,
+    )
+    db.add(foreign_summary)
+    db.commit()
+
+    response = client.get(f"/api/patients/{patient.id}/clinical-summary", headers=headers(client, local_doctor.email))
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["generated_from_reviewed_documents"] == 1
+    assert "Local institution finding" in str(body)
+    assert "Foreign institution finding" not in str(body)
+    assert "Foreign institution summary" not in str(body)
+    assert body["reviewed_summary"] is None
+
+
+def test_journey_timeline_requires_active_clinic_and_hides_unresolved_sources(client, db):
+    clinic_a, clinic_b, clinic_other, patient, appointment = setup_scope(db)
+    local_doctor = user_with_role(db, "local-timeline@test.local", MEDICAL_READ + ["journey.read"], "medical_staff", clinic_a)
+    db.add(ClinicMembership(user_id=local_doctor.id, clinic_id=clinic_b.id, active=True, created_by_user_id=local_doctor.id))
+    other_doctor = user_with_role(db, "other-timeline@test.local", MEDICAL_READ + ["journey.read"], "medical_staff", clinic_other)
+    journey = PatientJourney(
+        patient_id=patient.id,
+        appointment_id=appointment.id,
+        clinic_id=clinic_b.id,
+        intake_channel="manual",
+        current_stage="booked",
+    )
+    db.add(journey)
+    db.flush()
+    visible = clinical_doc(db, patient, clinic_b, status="reviewed")
+    visible.journey_id = journey.id
+    unresolved = ClinicalDocument(
+        patient_id=patient.id,
+        journey_id=journey.id,
+        source_type="legacy_import",
+        document_type="other",
+        title="Unresolved journey source",
+        review_status="reviewed",
+        physician_reviewed=True,
+        is_clinical_record=True,
+        record_classification="clinical",
+    )
+    db.add(unresolved)
+    db.commit()
+
+    local_headers = headers(client, local_doctor.email) | {"X-Clinic-ID": str(clinic_b.id)}
+    timeline = client.get(f"/api/patient-journeys/{journey.id}/timeline", headers=local_headers)
+
+    assert timeline.status_code == 200
+    source_ids = {
+        item["provenance"]["id"]
+        for item in timeline.json()
+        if item["event_type"] == "clinical_document"
+    }
+    assert source_ids == {visible.id}
+    assert client.get(f"/api/patient-journeys/{journey.id}/timeline", headers=headers(client, other_doctor.email)).status_code == 404
 
 
 def test_new_manual_document_persists_canonical_institution_provenance(client, db):

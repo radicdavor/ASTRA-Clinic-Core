@@ -6,7 +6,7 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
-from app.models.domain import ApiKey, Appointment, AuditLog, ClinicalDocument, ClinicalEpisode, InventoryBatch, InventoryItem, Invoice, Module, Patient, PatientClinicalSummaryRecord, Provider, Room, Service, room_services
+from app.models.domain import ApiKey, Appointment, AuditLog, ClinicalDocument, ClinicalEpisode, Institution, InventoryBatch, InventoryItem, Invoice, Module, Patient, PatientClinicalSummaryRecord, Provider, Room, Service, room_services
 from app.schemas.common import ReadinessCheck
 from app.services.patient_knowledge import DOCUMENT_REVIEW_AWAITING_STATUSES, latest_summary_records_by_patient, official_patient_documents_statement
 
@@ -35,12 +35,19 @@ def build_operational_readiness(db: Session) -> dict:
     unpaid_invoice_count = scalar_count(db, select(func.count(Invoice.id)).where(Invoice.status != "draft", Invoice.payment_status != "paid"))
     episode_count = scalar_count(db, select(func.count(ClinicalEpisode.id)))
     appointments_without_episode = scalar_count(db, select(func.count(Appointment.id)).where(Appointment.episode_id.is_(None)))
-    documents_awaiting_review = scalar_count(db, select(func.count(ClinicalDocument.id)).where(ClinicalDocument.review_status.in_(DOCUMENT_REVIEW_AWAITING_STATUSES)))
+    documents_awaiting_review = scalar_count(
+        db,
+        select(func.count(ClinicalDocument.id)).where(
+            ClinicalDocument.institution_id.is_not(None),
+            ClinicalDocument.review_status.in_(DOCUMENT_REVIEW_AWAITING_STATUSES),
+        ),
+    )
     rooms_without_services = scalar_count(db, select(func.count(Room.id)).where(Room.active.is_(True), ~Room.id.in_(select(room_services.c.room_id))))
     services_without_rooms = scalar_count(db, select(func.count(Service.id)).where(Service.active.is_(True), ~Service.id.in_(select(room_services.c.service_id))))
     providers_without_clinic = scalar_count(db, select(func.count(Provider.id)).where(Provider.active.is_(True), Provider.clinic_id.is_(None)))
     today_incomplete_appointments = scalar_count(db, select(func.count(Appointment.id)).where(Appointment.date == today, or_(Appointment.provider_id.is_(None), Appointment.room_id.is_(None), Appointment.service_id.is_(None))))
-    reviewed_documents = db.scalars(official_patient_documents_statement()).all()
+    institution_ids = set(db.scalars(select(Institution.id).where(Institution.active.is_(True))).all())
+    reviewed_documents = db.scalars(official_patient_documents_statement(institution_ids)).all()
     reviewed_summaries = db.scalars(
         select(PatientClinicalSummaryRecord)
         .where(PatientClinicalSummaryRecord.status == "reviewed")

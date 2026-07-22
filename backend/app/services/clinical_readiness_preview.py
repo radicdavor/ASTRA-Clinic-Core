@@ -129,8 +129,9 @@ def build_clinical_readiness_preview(db: Session, appointment: Appointment) -> C
         )
 
     reviewed_documents = []
-    if appointment.patient_id:
-        reviewed_documents = db.scalars(official_patient_documents_statement(appointment.patient_id)).all()
+    institution_id = appointment.clinic.institution_id if appointment.clinic else None
+    if appointment.patient_id and institution_id is not None:
+        reviewed_documents = db.scalars(official_patient_documents_statement({institution_id}, appointment.patient_id)).all()
         if not reviewed_documents:
             limitations.append(NO_REVIEWED_DOCUMENTS_LIMITATION)
             items.append(
