@@ -9,7 +9,7 @@ from app.auth.dependencies import Actor, active_clinic_memberships, get_current_
 from app.core.database import get_db
 from app.models.domain import AuditLog, ClinicalDocument, ClinicalDocumentAddendum, Patient
 from app.schemas.common import ClinicalDocumentAddendumCreate, ClinicalDocumentAddendumOut, ClinicalDocumentCreate, ClinicalDocumentOut, ClinicalDocumentUpdate, ClinicalDocumentUpload, ClinicalEvidenceTimelineItem, ErrorResponse
-from app.services.clinical_document_access import create_document_addendum, ensure_institution_clinical_read, get_authored_draft_for_edit, get_institution_scoped_clinical_document_for_read, institution_scoped_clinical_documents_statement
+from app.services.clinical_document_access import clinical_document_capabilities, create_document_addendum, ensure_institution_clinical_read, get_authored_draft_for_edit, get_institution_scoped_clinical_document_for_read, institution_scoped_clinical_documents_statement
 from app.services.clinical_documents import extract_document_knowledge, get_document_or_404, has_extracted_content, initial_ai_extraction_status, initial_document_review_status, mark_document_ai_extraction_edited, mark_document_needs_review, validate_document_links
 from app.services.clinical_evidence_timeline import classify_audit_log
 
@@ -170,19 +170,12 @@ def search_clinical_documents(q: str, db: Session = Depends(get_db), actor: Acto
 @router.get("/clinical-documents/{document_id}", response_model=ClinicalDocumentOut)
 def get_clinical_document(document_id: int, request: Request, db: Session = Depends(get_db), actor: Actor = Depends(get_current_actor)):
     document = get_institution_scoped_clinical_document_for_read(db, document_id, actor, request)
+    capabilities = clinical_document_capabilities(actor, document)
     response = ClinicalDocumentOut.model_validate(document).model_copy(
         update={
-            "can_edit": bool(
-                actor.user_id
-                and "clinical.documents.edit_own_draft" in actor.permissions
-                and document.author_user_id == actor.user_id
-                and document.review_status in {"draft", "needs_physician_review", "reviewed"}
-            ),
-            "can_review": bool("clinical_documents.review" in actor.permissions and document.review_status != "signed"),
-            "can_add_addendum": bool(
-                "clinical.documents.add_addendum" in actor.permissions
-                and document.review_status in {"signed", "reviewed"}
-            ),
+            "can_edit": capabilities.can_edit,
+            "can_review": capabilities.can_review,
+            "can_add_addendum": capabilities.can_add_addendum,
         }
     )
     db.commit()

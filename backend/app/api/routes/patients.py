@@ -12,7 +12,7 @@ from app.models.domain import Appointment, ClinicalDocument, ClinicalDocumentAdd
 from app.schemas.common import ClinicalEpisodeOut, ClinicalEvidenceTimelineListResponse, ClinicalFindingDetailResponse, ClinicalFindingListResponse, ClinicalFindingReadItem, ClinicalOpenQuestionDetailResponse, ClinicalOpenQuestionListResponse, ClinicalOpenQuestionReadItem, ErrorResponse, InvoiceOut, PatientAppointmentAvailabilityOut, PatientClinicalRecordItem, PatientClinicalRecordResponse, PatientCreate, PatientOut, PatientUpdate
 from app.services.clinical_evidence_timeline import list_patient_clinical_evidence_timeline
 from app.services.appointments import minimal_appointment_conflict, patient_appointment_availability_stmt
-from app.services.clinical_document_access import CLINICAL_ADDENDUM_PERMISSION, CLINICAL_EDIT_PERMISSION, resolve_actor_institution_context, institution_scoped_clinical_documents_statement
+from app.services.clinical_document_access import clinical_document_capabilities, resolve_actor_institution_context, institution_scoped_clinical_documents_statement
 
 ERROR_RESPONSES = {400: {"model": ErrorResponse}, 401: {"model": ErrorResponse}, 403: {"model": ErrorResponse}, 404: {"model": ErrorResponse}, 409: {"model": ErrorResponse}, 422: {"model": ErrorResponse}}
 
@@ -42,6 +42,32 @@ def flush_or_conflict(db: Session) -> None:
 
 def scalar_count(db: Session, stmt) -> int:
     return int(db.scalar(stmt) or 0)
+
+
+def clinical_record_item(
+    document: ClinicalDocument,
+    addendum_count: int,
+    actor: Actor,
+) -> PatientClinicalRecordItem:
+    capabilities = clinical_document_capabilities(actor, document)
+    return PatientClinicalRecordItem(
+        document_id=document.id,
+        patient_id=document.patient_id,
+        date=document.document_date,
+        created_at=document.created_at,
+        clinic_id=document.clinic_id,
+        clinic_name=document.clinic.name if document.clinic else None,
+        specialty=None,
+        document_type=document.document_type,
+        title=document.title,
+        author=document.author,
+        author_professional_role=document.author_professional_role,
+        status=document.review_status,
+        signed_at=document.reviewed_at if document.review_status == "signed" else None,
+        addendum_count=addendum_count,
+        can_edit=capabilities.can_edit,
+        can_add_addendum=capabilities.can_add_addendum,
+    )
 
 
 def normalize_dt(value: datetime | None) -> datetime | None:
@@ -239,27 +265,8 @@ def patient_clinical_record(
             .group_by(ClinicalDocumentAddendum.original_document_id)
         ).all()
     )
-    can_add_addendum = CLINICAL_ADDENDUM_PERMISSION in actor.permissions
-    can_edit = CLINICAL_EDIT_PERMISSION in actor.permissions
     items = [
-        PatientClinicalRecordItem(
-            document_id=document.id,
-            patient_id=document.patient_id,
-            date=document.document_date,
-            created_at=document.created_at,
-            clinic_id=document.clinic_id,
-            clinic_name=document.clinic.name if document.clinic else None,
-            specialty=None,
-            document_type=document.document_type,
-            title=document.title,
-            author=document.author,
-            author_professional_role=document.author_professional_role,
-            status=document.review_status,
-            signed_at=document.reviewed_at if document.review_status == "signed" else None,
-            addendum_count=int(addendum_counts.get(document.id, 0)),
-            can_edit=bool(can_edit and document.review_status != "signed" and document.author_user_id == actor.user_id),
-            can_add_addendum=bool(can_add_addendum and document.review_status in {"signed", "reviewed"}),
-        )
+        clinical_record_item(document, int(addendum_counts.get(document.id, 0)), actor)
         for document in documents
     ]
     audit(

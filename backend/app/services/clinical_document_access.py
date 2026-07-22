@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
 from datetime import datetime, timezone
 
 from fastapi import HTTPException, Request, status
@@ -25,9 +26,41 @@ MEDICAL_STAFF_CATEGORY = "medical_staff"
 CLINICAL_READ_PERMISSION = "clinical.documents.read_institution"
 CLINICAL_EDIT_PERMISSION = "clinical.documents.edit_own_draft"
 CLINICAL_ADDENDUM_PERMISSION = "clinical.documents.add_addendum"
+CLINICAL_REVIEW_PERMISSION = "clinical_documents.review"
 SIGNED_OR_FINAL_DOCUMENT_STATUSES = {"signed", "reviewed"}
 INSTITUTION_READABLE_RECORD_CLASSIFICATIONS = {"clinical"}
 EDITABLE_CLINICAL_DOCUMENT_STATUSES = {"draft", "needs_physician_review", "reviewed"}
+
+
+@dataclass(frozen=True)
+class ClinicalDocumentCapabilities:
+    can_edit: bool
+    can_review: bool
+    can_add_addendum: bool
+
+
+def clinical_document_capabilities(actor: Actor, document: ClinicalDocument) -> ClinicalDocumentCapabilities:
+    """Return UI capabilities from the same author, permission and status rules used by writes.
+
+    The caller must still use a scoped loader before exposing the document. These
+    flags are presentation hints; write endpoints remain authoritative.
+    """
+    return ClinicalDocumentCapabilities(
+        can_edit=bool(
+            actor.user_id
+            and CLINICAL_EDIT_PERMISSION in actor.permissions
+            and document.author_user_id == actor.user_id
+            and document.review_status in EDITABLE_CLINICAL_DOCUMENT_STATUSES
+        ),
+        can_review=bool(
+            CLINICAL_REVIEW_PERMISSION in actor.permissions
+            and document.review_status != "signed"
+        ),
+        can_add_addendum=bool(
+            CLINICAL_ADDENDUM_PERMISSION in actor.permissions
+            and document.review_status in SIGNED_OR_FINAL_DOCUMENT_STATUSES
+        ),
+    )
 
 
 def actor_is_medical_staff(actor: Actor) -> bool:
