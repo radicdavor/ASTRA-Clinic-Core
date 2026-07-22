@@ -46,15 +46,12 @@ jobs:
           alembic upgrade head
           alembic downgrade -1
           alembic upgrade head
-      - name: Run snapshot regression gate
+      - name: Run fast backend feedback gate
         working-directory: backend
-        run: python -m pytest tests/test_clinical_readiness_snapshots.py
-      - name: Run advisory and acknowledgment safety gate
+        run: python ../scripts/run_test_gate.py fast
+      - name: Run backend non-integration tests
         working-directory: backend
-        run: python -m pytest tests/test_clinical_readiness_advisory_signal.py tests/test_clinical_readiness_review_acknowledgment.py tests/test_clinical_readiness_acknowledgments.py
-      - name: Run backend tests
-        working-directory: backend
-        run: python -m pytest
+        run: python -m pytest -m "not integration"
       - name: Run explicit PostgreSQL integration gate
         working-directory: backend
         run: python -m pytest tests/integration -q -rs
