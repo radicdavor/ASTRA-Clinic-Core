@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session, joinedload
 from app.audit.service import audit, snapshot
 from app.auth.dependencies import Actor, CurrentUserContext, get_current_actor, require_active_clinic, require_permission
 from app.core.database import get_db
-from app.models.domain import Appointment, ClinicalEpisode, ClinicalReadinessReviewAcknowledgment, ClinicalReadinessSnapshot, Patient, PatientJourney, Room, Service
+from app.models.domain import Appointment, ClinicalEpisode, ClinicalReadinessReviewAcknowledgment, ClinicalReadinessSnapshot, Patient, Room, Service
 from app.schemas.common import AppointmentCreate, AppointmentOut, AppointmentUpdate, ClinicalReadinessAcknowledgmentDetailResponse, ClinicalReadinessAcknowledgmentListResponse, ClinicalReadinessAcknowledgmentReadItem, ClinicalReadinessPreviewResponse, ClinicalReadinessSnapshotCaptureRequest, ClinicalReadinessSnapshotDetailResponse, ClinicalReadinessSnapshotHistoryItem, ClinicalReadinessSnapshotHistoryResponse, ClinicalReadinessSnapshotResponse, ClinicalReadinessSnapshotSupersedeRequest, ClinicalReadinessSnapshotSupersedeResponse, ErrorResponse
 from app.services.appointments import create_appointment_with_journey, validate_appointment_payload
 from app.services.clinical_readiness_preview import build_clinical_readiness_preview
@@ -587,14 +587,10 @@ def update_appointment(
     update_data["clinic_id"] = context.active_clinic_id
     next_patient_id = update_data.get("patient_id", appointment.patient_id)
     if next_patient_id != appointment.patient_id:
-        linked_journey_id = db.scalar(
-            select(PatientJourney.id).where(PatientJourney.appointment_id == appointment.id).limit(1)
+        raise HTTPException(
+            409,
+            detail="Pacijenta nije moguce promijeniti nakon stvaranja termina; otkazite termin i stvorite novi",
         )
-        if appointment.episode_id is not None or linked_journey_id is not None:
-            raise HTTPException(
-                409,
-                detail="Pacijenta nije moguce promijeniti na terminu povezanom s klinickom epizodom ili tijekom pacijenta",
-            )
     if "episode_id" in update_data:
         validate_episode_for_patient(db, update_data.get("episode_id"), next_patient_id, context)
     old_episode_id = appointment.episode_id

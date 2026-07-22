@@ -52,8 +52,9 @@ clinical document ingestion, summaries, and evidence timelines.
 The first independent review of this remediation found four additional
 same-pattern blockers. They are closed as follows:
 
-- changing a patient on an appointment already linked to an episode or patient
-  journey is rejected, preventing cross-patient clinical provenance;
+- appointment patient identity is immutable after creation; correcting it
+  requires cancellation and a new appointment, preventing every child record
+  from retaining cross-patient clinical or financial provenance;
 - global patient directory, duplicate-search, and identity-detail responses use
   a dedicated identity projection that never includes free-text notes;
 - direct journey-activity creation accepts only the parent journey clinic's
