@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import date as DateType, datetime as DateTimeType, time as TimeType
 from decimal import Decimal
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 
@@ -25,7 +26,7 @@ CLINICAL_PLAN_NEXT_ACTIONS = {
 }
 CLINICAL_DOCUMENT_SOURCE_TYPES = {"internal", "external", "scanned", "uploaded"}
 CLINICAL_DOCUMENT_TYPES = {"consultation", "gastroscopy", "colonoscopy", "pathology", "laboratory", "radiology", "discharge", "referral", "other"}
-CLINICAL_DOCUMENT_REVIEW_STATUSES = {"draft", "extracted", "needs_physician_review", "reviewed", "rejected", "superseded"}
+CLINICAL_DOCUMENT_REVIEW_STATUSES = {"draft", "extracted", "needs_physician_review", "reviewed", "rejected", "superseded", "signed"}
 CLINICAL_DOCUMENT_AI_EXTRACTION_STATUSES = {"not_run", "generated", "edited", "accepted", "rejected", "superseded"}
 PATIENT_CLINICAL_SUMMARY_STATUSES = {"draft_ai", "needs_review", "reviewed", "stale", "rejected", "superseded"}
 CLINICAL_READINESS_STATUSES = {
@@ -1088,6 +1089,12 @@ class TokenResponse(BaseModel):
     user: dict
 
 
+class BrowserSessionResponse(BaseModel):
+    user: dict
+    csrf_token: str
+    expires_at: DateTimeType
+
+
 class ApiKeyCreate(BaseModel):
     name: str
     scopes: list[str]
@@ -1194,9 +1201,21 @@ class ServiceUpdate(BaseModel):
         return value
 
 
+class InstitutionOut(ORMModel):
+    id: int
+    code: str | None = None
+    name: str
+    active: bool
+    created_at: DateTimeType
+    updated_at: DateTimeType
+
+
 class ClinicOut(ORMModel):
     id: int
     name: str
+    institution_key: str = "default"
+    institution_id: int | None = None
+    timezone: str = "Europe/Zagreb"
     active: bool
     visible_in_catalog: bool = True
     created_at: DateTimeType
@@ -1205,6 +1224,16 @@ class ClinicOut(ORMModel):
 
 class ClinicCreate(BaseModel):
     name: str = Field(min_length=2, max_length=120)
+    timezone: str = Field(default="Europe/Zagreb", min_length=1, max_length=80)
+
+    @field_validator("timezone")
+    @classmethod
+    def validate_timezone(cls, value: str) -> str:
+        try:
+            ZoneInfo(value)
+        except ZoneInfoNotFoundError as exc:
+            raise ValueError("Timezone mora biti valjana IANA zona, npr. Europe/Zagreb") from exc
+        return value
 
 
 class ProviderOut(ORMModel):
@@ -1460,6 +1489,7 @@ class ClinicalDecisionTimelineItem(BaseModel):
 
 class ClinicalDocumentBase(BaseModel):
     patient_id: int
+    clinic_id: int | None = None
     source_type: str = "uploaded"
     document_type: str = "other"
     origin: str | None = None
@@ -1477,6 +1507,8 @@ class ClinicalDocumentBase(BaseModel):
     @field_validator("source_type")
     @classmethod
     def validate_source_type(cls, value: str) -> str:
+        if cls.__name__ == "ClinicalDocumentOut":
+            return value
         if value not in CLINICAL_DOCUMENT_SOURCE_TYPES:
             raise ValueError("Nepoznat izvor dokumenta")
         return value
@@ -1484,6 +1516,8 @@ class ClinicalDocumentBase(BaseModel):
     @field_validator("document_type")
     @classmethod
     def validate_document_type(cls, value: str) -> str:
+        if cls.__name__ == "ClinicalDocumentOut":
+            return value
         if value not in CLINICAL_DOCUMENT_TYPES:
             raise ValueError("Nepoznat tip dokumenta")
         return value
@@ -1495,6 +1529,7 @@ class ClinicalDocumentCreate(ClinicalDocumentBase):
 
 class ClinicalDocumentUpload(BaseModel):
     patient_id: int
+    clinic_id: int | None = None
     title: str
     source_type: str = "uploaded"
     document_type: str = "other"
@@ -1517,7 +1552,22 @@ class ClinicalDocumentUpload(BaseModel):
         return ClinicalDocumentBase.validate_document_type(value)
 
 
+class ClinicalDocumentClassificationReview(BaseModel):
+    record_classification: str
+    note: str | None = Field(default=None, max_length=1000)
+
+    @field_validator("record_classification")
+    @classmethod
+    def validate_record_classification(cls, value: str) -> str:
+        allowed = {"clinical", "administrative", "financial"}
+        if value not in allowed:
+            raise ValueError("Nepoznata klasifikacija dokumenta")
+        return value
+
+
 class ClinicalDocumentUpdate(BaseModel):
+    patient_id: int | None = None
+    clinic_id: int | None = None
     source_type: str | None = None
     document_type: str | None = None
     origin: str | None = None
@@ -1549,6 +1599,10 @@ class ClinicalDocumentUpdate(BaseModel):
 
 class ClinicalDocumentOut(ClinicalDocumentBase, ORMModel):
     id: int
+    author_user_id: int | None = None
+    author_professional_role: str | None = None
+    is_clinical_record: bool = True
+    record_classification: str = "clinical"
     review_status: str
     ai_extraction_status: str
     ai_extraction_generated_at: DateTimeType | None = None
@@ -1559,6 +1613,9 @@ class ClinicalDocumentOut(ClinicalDocumentBase, ORMModel):
     patient: PatientOut | None = None
     created_at: DateTimeType
     updated_at: DateTimeType
+    can_edit: bool = False
+    can_review: bool = False
+    can_add_addendum: bool = False
 
     @field_validator("review_status")
     @classmethod
@@ -1573,6 +1630,55 @@ class ClinicalDocumentOut(ClinicalDocumentBase, ORMModel):
         if value not in CLINICAL_DOCUMENT_AI_EXTRACTION_STATUSES:
             raise ValueError("Nepoznat status AI ekstrakcije")
         return value
+
+
+class ClinicalDocumentAddendumCreate(BaseModel):
+    reason: str = Field(min_length=2, max_length=1000)
+    content: str = Field(min_length=2, max_length=10000)
+
+
+class ClinicalDocumentAddendumOut(ORMModel):
+    id: int
+    original_document_id: int
+    signed_report_id: int | None = None
+    original_document_type: str = "clinical_document"
+    patient_id: int | None = None
+    institution_id: int | None = None
+    clinic_id: int | None = None
+    author_user_id: int
+    reason: str
+    content: str
+    status: str
+    signed_at: DateTimeType | None = None
+    signed_by_user_id: int | None = None
+    created_at: DateTimeType
+    updated_at: DateTimeType
+
+
+class PatientClinicalRecordItem(BaseModel):
+    document_id: int
+    patient_id: int
+    date: DateType | None = None
+    created_at: DateTimeType
+    clinic_id: int | None = None
+    clinic_name: str | None = None
+    specialty: str | None = None
+    document_type: str
+    title: str
+    author: str | None = None
+    author_professional_role: str | None = None
+    status: str
+    signed_at: DateTimeType | None = None
+    addendum_count: int = 0
+    can_edit: bool = False
+    can_add_addendum: bool = False
+
+
+class PatientClinicalRecordResponse(BaseModel):
+    patient_id: int
+    institution_id: int | None = None
+    count: int
+    items: list[PatientClinicalRecordItem]
 
 
 class ClinicalEvidenceTimelineItem(BaseModel):
@@ -1716,6 +1822,25 @@ class AppointmentOut(AppointmentCreate, ORMModel):
     provider: ProviderOut | None = None
     room: RoomOut | None = None
     episode: ClinicalEpisodeOut | None = None
+
+
+class AppointmentClinicSummary(BaseModel):
+    id: int | None = None
+    name: str | None = None
+
+
+class PatientAppointmentAvailabilityOut(BaseModel):
+    appointment_id: int
+    patient_id: int
+    date: DateType
+    start_time: TimeType
+    end_time: TimeType
+    status: str
+    clinic: AppointmentClinicSummary
+    service_name: str | None = None
+    provider_name: str | None = None
+
+    model_config = ConfigDict(extra="forbid")
 
 
 class ReceptionPatientUpdate(BaseModel):

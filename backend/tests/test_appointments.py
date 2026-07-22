@@ -2,11 +2,28 @@ from datetime import date, time
 
 import pytest
 from fastapi import HTTPException
+from sqlalchemy import select
 
-from app.models.domain import Appointment
-from app.services.appointments import validate_appointment_payload
+from app.models.domain import Appointment, Clinic, ClinicMembership, Permission, Role, User
+from app.core.security import hash_password
+from app.services.appointments import APPOINTMENT_STATUSES_BLOCKING_PATIENT_TIME, calculate_duration_minutes, validate_appointment_payload
 from tests.conftest import login_token
 from tests.factories import appointment, patient, provider, room, service
+
+
+def appointment_payload(patient_obj, provider_obj, room_obj, service_obj, start="09:15", end="09:45", status="scheduled"):
+    return {
+        "patient_id": patient_obj.id,
+        "provider_id": provider_obj.id,
+        "room_id": room_obj.id,
+        "service_id": service_obj.id,
+        "date": "2026-07-06",
+        "start_time": start,
+        "end_time": end,
+        "duration_minutes": 30,
+        "status": status,
+        "source": "manual",
+    }
 
 
 def test_reject_end_time_before_start_time(db):
@@ -17,6 +34,22 @@ def test_reject_end_time_before_start_time(db):
         validate_appointment_payload(db, date(2026, 7, 6), time(10, 0), time(9, 0), p.id, r.id, "scheduled", "manual")
 
     assert exc.value.status_code == 422
+
+
+def test_appointment_duration_rejects_ambiguous_clinic_local_time():
+    with pytest.raises(HTTPException) as exc:
+        calculate_duration_minutes(date(2026, 10, 25), time(2, 30), time(3, 30), "Europe/Zagreb")
+
+    assert exc.value.status_code == 422
+    assert "dvosmisleno" in exc.value.detail
+
+
+def test_appointment_duration_rejects_nonexistent_clinic_local_time():
+    with pytest.raises(HTTPException) as exc:
+        calculate_duration_minutes(date(2026, 3, 29), time(2, 30), time(3, 30), "Europe/Zagreb")
+
+    assert exc.value.status_code == 422
+    assert "ne postoji" in exc.value.detail
 
 
 def test_reject_provider_overlap(db):
@@ -44,6 +77,127 @@ def test_cancelled_appointment_does_not_block_time(db):
     duration = validate_appointment_payload(db, existing.date, time(9, 15), time(9, 45), existing.provider_id, existing.room_id, "scheduled", "manual")
 
     assert duration == 30
+
+
+@pytest.mark.parametrize(
+    ("start", "end"),
+    [
+        (time(9, 0), time(9, 30)),
+        (time(8, 45), time(9, 15)),
+        (time(9, 15), time(9, 45)),
+        (time(9, 5), time(9, 25)),
+        (time(8, 45), time(9, 45)),
+    ],
+)
+def test_same_patient_overlapping_intervals_block_even_across_resources(db, start, end):
+    existing = appointment(db)
+    other_provider = provider(db, "dr. Other resource")
+    other_room = room(db, "Other resource room")
+
+    with pytest.raises(HTTPException) as exc:
+        validate_appointment_payload(
+            db,
+            existing.date,
+            start,
+            end,
+            other_provider.id,
+            other_room.id,
+            "scheduled",
+            "manual",
+            patient_id=existing.patient_id,
+        )
+
+    assert exc.value.status_code == 409
+    assert exc.value.detail["code"] == "patient_appointment_overlap"
+    assert "conflicts" in exc.value.detail
+
+
+def test_touching_patient_appointments_do_not_conflict(db):
+    existing = appointment(db)
+    other_provider = provider(db, "dr. Touching")
+    other_room = room(db, "Touching room")
+
+    duration = validate_appointment_payload(
+        db,
+        existing.date,
+        time(9, 30),
+        time(10, 0),
+        other_provider.id,
+        other_room.id,
+        "scheduled",
+        "manual",
+        patient_id=existing.patient_id,
+    )
+
+    assert duration == 30
+
+
+def test_patient_appointment_on_different_day_does_not_conflict(db):
+    existing = appointment(db)
+    other_provider = provider(db, "dr. Different day")
+    other_room = room(db, "Different day room")
+
+    duration = validate_appointment_payload(
+        db,
+        date(2026, 7, 7),
+        time(9, 0),
+        time(9, 30),
+        other_provider.id,
+        other_room.id,
+        "scheduled",
+        "manual",
+        patient_id=existing.patient_id,
+    )
+
+    assert duration == 30
+
+
+def test_other_patient_same_time_does_not_trigger_patient_overlap(db):
+    existing = appointment(db)
+    other_patient = patient(db, first_name="Other")
+    other_provider = provider(db, "dr. Other patient")
+    other_room = room(db, "Other patient room")
+
+    duration = validate_appointment_payload(
+        db,
+        existing.date,
+        existing.start_time,
+        existing.end_time,
+        other_provider.id,
+        other_room.id,
+        "scheduled",
+        "manual",
+        patient_id=other_patient.id,
+    )
+
+    assert duration == 30
+
+
+def test_nonblocking_status_does_not_block_patient_time(db):
+    existing = appointment(db, status="cancelled")
+    other_provider = provider(db, "dr. Cancelled patient")
+    other_room = room(db, "Cancelled patient room")
+
+    duration = validate_appointment_payload(
+        db,
+        existing.date,
+        existing.start_time,
+        existing.end_time,
+        other_provider.id,
+        other_room.id,
+        "scheduled",
+        "manual",
+        patient_id=existing.patient_id,
+    )
+
+    assert duration == 30
+
+
+def test_formal_patient_time_blocking_statuses_are_known():
+    assert "confirmed" in APPOINTMENT_STATUSES_BLOCKING_PATIENT_TIME
+    assert "rescheduled" in APPOINTMENT_STATUSES_BLOCKING_PATIENT_TIME
+    assert "cancelled" not in APPOINTMENT_STATUSES_BLOCKING_PATIENT_TIME
+    assert "no_show" not in APPOINTMENT_STATUSES_BLOCKING_PATIENT_TIME
 
 
 def test_create_appointment_succeeds(db):
@@ -102,6 +256,53 @@ def test_update_appointment_revalidates_conflicts(db):
     assert exc.value.status_code == 409
 
 
+def test_update_appointment_excludes_itself_from_patient_overlap(db):
+    existing = appointment(db)
+
+    duration = validate_appointment_payload(
+        db,
+        existing.date,
+        existing.start_time,
+        existing.end_time,
+        existing.provider_id,
+        existing.room_id,
+        existing.status,
+        existing.source,
+        patient_id=existing.patient_id,
+        appointment_id=existing.id,
+    )
+
+    assert duration == 30
+
+
+def test_update_appointment_to_patient_conflict_blocks(db):
+    existing = appointment(db)
+    candidate = appointment(
+        db,
+        patient_obj=patient(db, first_name="Candidate"),
+        provider_obj=provider(db, "dr. Candidate patient conflict"),
+        room_obj=room(db, "Candidate patient conflict room"),
+        service_obj=service(db, name="Candidate service"),
+    )
+
+    with pytest.raises(HTTPException) as exc:
+        validate_appointment_payload(
+            db,
+            existing.date,
+            existing.start_time,
+            existing.end_time,
+            candidate.provider_id,
+            candidate.room_id,
+            candidate.status,
+            candidate.source,
+            patient_id=existing.patient_id,
+            appointment_id=candidate.id,
+        )
+
+    assert exc.value.status_code == 409
+    assert exc.value.detail["code"] == "patient_appointment_overlap"
+
+
 def test_reject_service_in_incompatible_room(db):
     pr = provider(db)
     rm = room(db)
@@ -125,6 +326,145 @@ def test_reject_appointment_on_sunday(db):
 
     assert exc.value.status_code == 422
     assert "Nedjelja je neradni dan" in exc.value.detail
+
+
+def test_create_appointment_api_blocks_cross_clinic_same_patient_overlap(client, db, auth_setup):
+    clinic_b = Clinic(name="Other scheduling clinic")
+    p = patient(db)
+    service_obj = service(db, name="Cross clinic service")
+    existing = appointment(db, patient_obj=p, service_obj=service_obj)
+    provider_b = provider(db, "dr. Cross clinic")
+    room_b = room(db, "Cross clinic room")
+    db.add(clinic_b)
+    db.flush()
+    room_b.clinic_id = clinic_b.id
+    db.add(ClinicMembership(user_id=auth_setup["admin"].id, clinic_id=clinic_b.id, created_by_user_id=auth_setup["admin"].id))
+    db.commit()
+    token = login_token(client, "admin@test.local")
+
+    response = client.post(
+        "/api/appointments",
+        headers={"Authorization": f"Bearer {token}", "X-Clinic-Id": str(clinic_b.id)},
+        json=appointment_payload(p, provider_b, room_b, service_obj, start="09:15", end="09:45"),
+    )
+
+    assert existing.id
+    assert response.status_code == 409
+    detail = response.json()["detail"]
+    assert detail["code"] == "patient_appointment_overlap"
+    assert detail["conflicts"][0]["patient_id"] == p.id
+    forbidden_keys = {"notes", "price", "total_amount", "diagnosis", "anamnesis", "reception_note"}
+    assert forbidden_keys.isdisjoint(detail["conflicts"][0].keys())
+
+
+def test_create_appointment_api_allows_touching_patient_appointment(client, db, auth_setup):
+    p = patient(db)
+    existing = appointment(db, patient_obj=p)
+    provider_obj = provider(db, "dr. Touch api")
+    room_obj = room(db, "Touch api room")
+    room_obj.clinic_id = auth_setup["clinic"].id
+    service_obj = service(db, name="Touch api service")
+    db.commit()
+    token = login_token(client, "admin@test.local")
+
+    response = client.post(
+        "/api/appointments",
+        headers={"Authorization": f"Bearer {token}"},
+        json=appointment_payload(p, provider_obj, room_obj, service_obj, start="09:30", end="10:00"),
+    )
+
+    assert existing.id
+    assert response.status_code == 200
+
+
+def test_update_appointment_api_blocks_patient_overlap(client, db, auth_setup):
+    existing = appointment(db)
+    candidate = appointment(
+        db,
+        patient_obj=patient(db, first_name="Patch"),
+        provider_obj=provider(db, "dr. Patch conflict"),
+        room_obj=room(db, "Patch conflict room"),
+        service_obj=service(db, name="Patch service"),
+    )
+    token = login_token(client, "admin@test.local")
+
+    response = client.patch(
+        f"/api/appointments/{candidate.id}",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"patient_id": existing.patient_id},
+    )
+
+    assert response.status_code == 409
+    assert response.json()["detail"]["code"] == "patient_appointment_overlap"
+
+
+def test_appointments_list_is_scoped_to_active_clinic(client, db, auth_setup):
+    clinic_b = Clinic(name="Hidden schedule clinic")
+    service_obj = service(db, name="Scoped list service")
+    provider_b = provider(db, "dr. Hidden")
+    room_b = room(db, "Hidden room")
+    db.add(clinic_b)
+    db.flush()
+    room_b.clinic_id = clinic_b.id
+    visible = appointment(db, service_obj=service_obj)
+    hidden = appointment(db, provider_obj=provider_b, room_obj=room_b, service_obj=service_obj)
+    db.commit()
+    token = login_token(client, "admin@test.local")
+
+    response = client.get("/api/appointments", headers={"Authorization": f"Bearer {token}"})
+
+    assert response.status_code == 200
+    ids = {item["id"] for item in response.json()}
+    assert visible.id in ids
+    assert hidden.id not in ids
+
+
+def test_patient_availability_requires_specific_permission(client, db, auth_setup):
+    p = patient(db)
+    permission = db.scalar(select(Permission).where(Permission.name == "patients.read"))
+    role = Role(name="patient-reader-only", description="Patient Reader", permissions=[permission])
+    user = User(email="patient-reader@test.local", full_name="Patient Reader", password_hash=hash_password("secret"), role=role)
+    db.add_all([permission, role, user])
+    db.flush()
+    db.add(ClinicMembership(user_id=user.id, clinic_id=auth_setup["clinic"].id, created_by_user_id=auth_setup["admin"].id))
+    db.commit()
+    token = login_token(client, "patient-reader@test.local")
+
+    response = client.get(f"/api/patients/{p.id}/appointments", headers={"Authorization": f"Bearer {token}"})
+
+    assert response.status_code == 403
+
+
+def test_patient_availability_returns_minimal_cross_clinic_dto(client, db, auth_setup):
+    clinic_b = Clinic(name="Visible conflict clinic")
+    service_obj = service(db, name="Minimal DTO service")
+    provider_b = provider(db, "dr. Minimal DTO")
+    room_b = room(db, "Minimal DTO room")
+    db.add(clinic_b)
+    db.flush()
+    room_b.clinic_id = clinic_b.id
+    p = patient(db)
+    obj = appointment(db, patient_obj=p, provider_obj=provider_b, room_obj=room_b, service_obj=service_obj)
+    db.commit()
+    token = login_token(client, "admin@test.local")
+
+    response = client.get(f"/api/patients/{p.id}/appointments", headers={"Authorization": f"Bearer {token}"})
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload == [
+        {
+            "appointment_id": obj.id,
+            "patient_id": p.id,
+            "date": "2026-07-06",
+            "start_time": "09:00:00",
+            "end_time": "09:30:00",
+            "status": "scheduled",
+            "clinic": {"id": clinic_b.id, "name": clinic_b.name},
+            "service_name": service_obj.name,
+            "provider_name": provider_b.full_name,
+        }
+    ]
 
 
 def test_reception_list_and_arrival_action(client, db, auth_setup):

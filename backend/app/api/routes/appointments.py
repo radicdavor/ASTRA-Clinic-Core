@@ -5,9 +5,9 @@ from sqlalchemy import or_, select
 from sqlalchemy.orm import Session, joinedload
 
 from app.audit.service import audit, snapshot
-from app.auth.dependencies import Actor, get_current_actor, require_permission
+from app.auth.dependencies import Actor, CurrentUserContext, get_current_actor, require_active_clinic, require_permission
 from app.core.database import get_db
-from app.models.domain import Appointment, ClinicalEpisode, ClinicalReadinessReviewAcknowledgment, ClinicalReadinessSnapshot, Patient, Service
+from app.models.domain import Appointment, ClinicalEpisode, ClinicalReadinessReviewAcknowledgment, ClinicalReadinessSnapshot, Patient, Room, Service
 from app.schemas.common import AppointmentCreate, AppointmentOut, AppointmentUpdate, ClinicalReadinessAcknowledgmentDetailResponse, ClinicalReadinessAcknowledgmentListResponse, ClinicalReadinessAcknowledgmentReadItem, ClinicalReadinessPreviewResponse, ClinicalReadinessSnapshotCaptureRequest, ClinicalReadinessSnapshotDetailResponse, ClinicalReadinessSnapshotHistoryItem, ClinicalReadinessSnapshotHistoryResponse, ClinicalReadinessSnapshotResponse, ClinicalReadinessSnapshotSupersedeRequest, ClinicalReadinessSnapshotSupersedeResponse, ErrorResponse
 from app.services.appointments import create_appointment_with_journey, validate_appointment_payload
 from app.services.clinical_readiness_preview import build_clinical_readiness_preview
@@ -283,9 +283,16 @@ def create_appointment(
     payload: AppointmentCreate,
     request: Request,
     db: Session = Depends(get_db),
-    actor: Actor = Depends(require_permission("appointments.write")),
+    context: CurrentUserContext = Depends(require_active_clinic("appointments.write")),
 ):
-    appointment = create_appointment_with_journey(db, payload.model_dump(), actor, request)
+    data = payload.model_dump()
+    room = db.get(Room, data["room_id"])
+    if room is None:
+        raise HTTPException(404, detail="Soba nije pronadena")
+    if room.clinic_id is not None and room.clinic_id != context.active_clinic_id:
+        raise HTTPException(403, detail="Termin se moze kreirati samo u aktivnoj klinici")
+    data["clinic_id"] = context.active_clinic_id
+    appointment = create_appointment_with_journey(db, data, context.actor, request)
     db.commit()
     return get_appointment_or_404(db, appointment.id)
 
@@ -299,10 +306,16 @@ def list_appointments(
     provider_id: int | None = None,
     room_id: int | None = None,
     status: str | None = None,
+    limit: int = Query(default=200, ge=1, le=200),
     db: Session = Depends(get_db),
-    actor: Actor = Depends(require_permission("appointments.read")),
+    context: CurrentUserContext = Depends(require_active_clinic("appointments.read")),
 ):
-    stmt = select(Appointment).options(*appointment_load_options()).order_by(Appointment.date, Appointment.start_time)
+    stmt = (
+        select(Appointment)
+        .options(*appointment_load_options())
+        .where(Appointment.clinic_id == context.active_clinic_id)
+        .order_by(Appointment.date, Appointment.start_time, Appointment.id)
+    )
     if date_from:
         stmt = stmt.where(Appointment.date >= date_from)
     if date_to:
@@ -317,16 +330,19 @@ def list_appointments(
         stmt = stmt.join(Appointment.patient).where(or_(Patient.first_name.ilike(f"%{patient}%"), Patient.last_name.ilike(f"%{patient}%")))
     if service:
         stmt = stmt.join(Appointment.service).where(Service.name.ilike(f"%{service}%"))
-    return db.scalars(stmt).all()
+    return db.scalars(stmt.limit(limit)).all()
 
 
 @router.get("/appointments/{appointment_id}", response_model=AppointmentOut)
 def get_appointment(
     appointment_id: int,
     db: Session = Depends(get_db),
-    actor: Actor = Depends(require_permission("appointments.read")),
+    context: CurrentUserContext = Depends(require_active_clinic("appointments.read")),
 ):
-    return get_appointment_or_404(db, appointment_id)
+    appointment = get_appointment_or_404(db, appointment_id)
+    if appointment.clinic_id != context.active_clinic_id:
+        raise HTTPException(404, detail="Termin nije pronaden")
+    return appointment
 
 
 @router.get("/appointments/{appointment_id}/clinical-readiness-preview", response_model=ClinicalReadinessPreviewResponse)
@@ -543,13 +559,20 @@ def update_appointment(
     payload: AppointmentUpdate,
     request: Request,
     db: Session = Depends(get_db),
-    actor: Actor = Depends(require_permission("appointments.write")),
+    context: CurrentUserContext = Depends(require_active_clinic("appointments.write")),
 ):
     appointment = db.get(Appointment, appointment_id)
-    if not appointment:
+    if not appointment or appointment.clinic_id != context.active_clinic_id:
         raise HTTPException(404, detail="Termin nije pronaden")
     before = snapshot(appointment)
     update_data = payload.model_dump(exclude_unset=True)
+    next_room_id = update_data.get("room_id", appointment.room_id)
+    next_room = db.get(Room, next_room_id)
+    if next_room is None:
+        raise HTTPException(404, detail="Soba nije pronadena")
+    if next_room.clinic_id is not None and next_room.clinic_id != context.active_clinic_id:
+        raise HTTPException(403, detail="Termin se moze premjestiti samo unutar aktivne klinike")
+    update_data["clinic_id"] = context.active_clinic_id
     next_patient_id = update_data.get("patient_id", appointment.patient_id)
     if "episode_id" in update_data:
         validate_episode_for_patient(db, update_data.get("episode_id"), next_patient_id)
@@ -569,6 +592,7 @@ def update_appointment(
         appointment_id=appointment.id,
     )
     db.flush()
+    actor = context.actor
     audit(db, "update", "Appointment", appointment.id, "Azuriran termin", actor.user_id, actor.actor_type, actor.api_key_id, before, snapshot(appointment), request)
     if "episode_id" in update_data and old_episode_id != appointment.episode_id:
         action = "link_episode" if appointment.episode_id else "unlink_episode"
@@ -584,13 +608,14 @@ def delete_appointment(
     appointment_id: int,
     request: Request,
     db: Session = Depends(get_db),
-    actor: Actor = Depends(require_permission("appointments.write")),
+    context: CurrentUserContext = Depends(require_active_clinic("appointments.write")),
 ):
     appointment = db.get(Appointment, appointment_id)
-    if not appointment:
+    if not appointment or appointment.clinic_id != context.active_clinic_id:
         raise HTTPException(404, detail="Termin nije pronaden")
     before = snapshot(appointment)
     db.delete(appointment)
+    actor = context.actor
     audit(db, "delete", "Appointment", appointment_id, "Obrisan termin", actor.user_id, actor.actor_type, actor.api_key_id, before, None, request)
     db.commit()
     return {"ok": True}
@@ -600,11 +625,11 @@ def delete_appointment(
 def day_schedule(
     date: date = Query(...),
     db: Session = Depends(get_db),
-    actor: Actor = Depends(require_permission("appointments.read")),
+    context: CurrentUserContext = Depends(require_active_clinic("appointments.read")),
 ):
     return db.scalars(
         select(Appointment)
         .options(*appointment_load_options())
-        .where(Appointment.date == date)
+        .where(Appointment.date == date, Appointment.clinic_id == context.active_clinic_id)
         .order_by(Appointment.start_time)
     ).all()

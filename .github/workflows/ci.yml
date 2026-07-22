@@ -37,22 +37,33 @@ jobs:
       - name: Install backend dependencies
         working-directory: backend
         run: pip install -r requirements.txt
+      - name: Check generated OpenAPI frontend types
+        run: python scripts/generate_openapi_types.py --check
       - name: Run database migrations
         working-directory: backend
         run: |
           test "$(alembic heads | wc -l)" -eq 1
           alembic upgrade head
           alembic downgrade -1
+          python ../scripts/validate_0063_document_provenance.py seed
           alembic upgrade head
-      - name: Run snapshot regression gate
+          python ../scripts/validate_0063_document_provenance.py check
+      - name: Run PR3 security regression gate
         working-directory: backend
-        run: python -m pytest tests/test_clinical_readiness_snapshots.py
-      - name: Run advisory and acknowledgment safety gate
+        run: |
+          python -m pytest -q \
+            tests/test_contract_hardening.py::test_production_example_uses_one_same_origin_browser_auth_contract \
+            tests/test_browser_sessions.py::test_csrf_token_from_another_session_is_rejected \
+            tests/test_browser_sessions.py::test_invalid_browser_session_audit_survives_unauthorized_response \
+            tests/test_browser_sessions.py::test_security_audit_commit_does_not_commit_business_transaction \
+            tests/test_institution_clinical_document_access.py::test_unresolved_document_is_hidden_from_all_standard_clinical_read_paths \
+            tests/test_institution_clinical_document_access.py::test_processing_jobs_do_not_disclose_foreign_or_unresolved_documents
+      - name: Run fast backend feedback gate
         working-directory: backend
-        run: python -m pytest tests/test_clinical_readiness_advisory_signal.py tests/test_clinical_readiness_review_acknowledgment.py tests/test_clinical_readiness_acknowledgments.py
-      - name: Run backend tests
+        run: python ../scripts/run_test_gate.py fast
+      - name: Run backend non-integration tests
         working-directory: backend
-        run: python -m pytest
+        run: python -m pytest -m "not integration"
       - name: Run explicit PostgreSQL integration gate
         working-directory: backend
         run: python -m pytest tests/integration -q -rs
@@ -80,9 +91,58 @@ jobs:
       - name: Test frontend interactions
         working-directory: frontend
         run: npm test -- --run
+      - name: Install Playwright browsers
+        working-directory: frontend
+        run: npx playwright install --with-deps chromium
+      - name: Run browser E2E smoke
+        working-directory: frontend
+        run: npm run e2e
       - name: Frontend pilot smoke
         working-directory: frontend
         run: npm run smoke
       - name: Build frontend
         working-directory: frontend
         run: npm run build
+
+  e2e-db:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: astra_ci_e2e
+          POSTGRES_USER: astra
+          POSTGRES_PASSWORD: astra
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U astra -d astra_ci_e2e"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      ASTRA_E2E_DATABASE_URL: postgresql+psycopg://astra:astra@127.0.0.1:5432/astra_ci_e2e_run
+      JWT_SECRET: ci-e2e-jwt-secret-with-no-production-value
+      PYTHONPATH: ${{ github.workspace }}/backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install backend dependencies
+        working-directory: backend
+        run: pip install -r requirements.txt
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci
+      - name: Install Playwright browser
+        working-directory: frontend
+        run: npx playwright install --with-deps chromium
+      - name: Run DB-backed full-stack E2E smoke
+        working-directory: frontend
+        run: npm run e2e:db

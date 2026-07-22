@@ -1,16 +1,18 @@
 from datetime import date, datetime, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy import and_, func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, joinedload
 
 from app.audit.service import audit, snapshot
-from app.auth.dependencies import Actor, get_current_actor, require_permission
+from app.auth.dependencies import Actor, CurrentUserContext, get_current_actor, get_scoped_patient, require_active_clinic
 from app.core.database import get_db
-from app.models.domain import Appointment, ClinicalEpisode, ClinicalFinding, ClinicalOpenQuestion, Invoice, Patient
-from app.schemas.common import AppointmentOut, ClinicalEpisodeOut, ClinicalEvidenceTimelineListResponse, ClinicalFindingDetailResponse, ClinicalFindingListResponse, ClinicalFindingReadItem, ClinicalOpenQuestionDetailResponse, ClinicalOpenQuestionListResponse, ClinicalOpenQuestionReadItem, ErrorResponse, InvoiceOut, PatientCreate, PatientOut, PatientUpdate
+from app.models.domain import Appointment, ClinicalDocument, ClinicalDocumentAddendum, ClinicalEpisode, ClinicalFinding, ClinicalOpenQuestion, Invoice, Patient, PatientClinicAssociation
+from app.schemas.common import ClinicalEpisodeOut, ClinicalEvidenceTimelineListResponse, ClinicalFindingDetailResponse, ClinicalFindingListResponse, ClinicalFindingReadItem, ClinicalOpenQuestionDetailResponse, ClinicalOpenQuestionListResponse, ClinicalOpenQuestionReadItem, ErrorResponse, InvoiceOut, PatientAppointmentAvailabilityOut, PatientClinicalRecordItem, PatientClinicalRecordResponse, PatientCreate, PatientOut, PatientUpdate
 from app.services.clinical_evidence_timeline import list_patient_clinical_evidence_timeline
+from app.services.appointments import minimal_appointment_conflict, patient_appointment_availability_stmt
+from app.services.clinical_document_access import clinical_document_capabilities, institution_scoped_clinical_record_metadata_statement, resolve_actor_institution_context
 
 ERROR_RESPONSES = {400: {"model": ErrorResponse}, 401: {"model": ErrorResponse}, 403: {"model": ErrorResponse}, 404: {"model": ErrorResponse}, 409: {"model": ErrorResponse}, 422: {"model": ErrorResponse}}
 
@@ -40,6 +42,32 @@ def flush_or_conflict(db: Session) -> None:
 
 def scalar_count(db: Session, stmt) -> int:
     return int(db.scalar(stmt) or 0)
+
+
+def clinical_record_item(
+    document: ClinicalDocument,
+    addendum_count: int,
+    actor: Actor,
+) -> PatientClinicalRecordItem:
+    capabilities = clinical_document_capabilities(actor, document)
+    return PatientClinicalRecordItem(
+        document_id=document.id,
+        patient_id=document.patient_id,
+        date=document.document_date,
+        created_at=document.created_at,
+        clinic_id=document.clinic_id,
+        clinic_name=document.clinic.name if document.clinic else None,
+        specialty=None,
+        document_type=document.document_type,
+        title=document.title,
+        author=document.author,
+        author_professional_role=document.author_professional_role,
+        status=document.review_status,
+        signed_at=document.reviewed_at if document.review_status == "signed" else None,
+        addendum_count=addendum_count,
+        can_edit=capabilities.can_edit,
+        can_add_addendum=capabilities.can_add_addendum,
+    )
 
 
 def normalize_dt(value: datetime | None) -> datetime | None:
@@ -95,14 +123,6 @@ def finding_read_item(finding: ClinicalFinding) -> ClinicalFindingReadItem:
     )
 
 
-def require_findings_read_user(actor: Actor) -> Actor:
-    if actor.actor_type != "user" or actor.user_id is None:
-        raise HTTPException(403, detail="Findings read zahtijeva prijavljenog korisnika")
-    if "clinical_findings.read" not in actor.permissions:
-        raise HTTPException(403, detail="Nedostaje dozvola: clinical_findings.read")
-    return actor
-
-
 def open_question_read_item(question: ClinicalOpenQuestion) -> ClinicalOpenQuestionReadItem:
     return ClinicalOpenQuestionReadItem(
         id=question.id,
@@ -132,41 +152,32 @@ def open_question_detail_response(question: ClinicalOpenQuestion) -> ClinicalOpe
     )
 
 
-def require_open_questions_read_user(actor: Actor) -> Actor:
-    if actor.actor_type != "user" or actor.user_id is None:
-        raise HTTPException(403, detail="Open questions read zahtijeva prijavljenog korisnika")
-    if "clinical_open_questions.read" not in actor.permissions:
-        raise HTTPException(403, detail="Nedostaje dozvola: clinical_open_questions.read")
-    return actor
-
-
-def require_timeline_read_user(actor: Actor) -> Actor:
-    if actor.actor_type != "user" or actor.user_id is None:
-        raise HTTPException(403, detail="Clinical evidence timeline read zahtijeva prijavljenog korisnika")
-    if "clinical_evidence_timeline.read" not in actor.permissions:
-        raise HTTPException(403, detail="Nedostaje dozvola: clinical_evidence_timeline.read")
-    return actor
-
-
 @router.post("/patients", response_model=PatientOut)
 def create_patient(
     payload: PatientCreate,
     request: Request,
     db: Session = Depends(get_db),
-    actor: Actor = Depends(require_permission("patients.write")),
+    context: CurrentUserContext = Depends(require_active_clinic("patients.write")),
 ):
     patient = Patient(**payload.model_dump())
     db.add(patient)
     flush_or_conflict(db)
-    audit(db, "create", "Patient", patient.id, f"{patient.first_name} {patient.last_name}", actor.user_id, actor.actor_type, actor.api_key_id, None, snapshot(patient), request)
+    db.add(PatientClinicAssociation(patient_id=patient.id, clinic_id=context.active_clinic_id, active=True, created_by_user_id=context.user.id))
+    audit(db, "create", "Patient", patient.id, f"{patient.first_name} {patient.last_name}", context.actor.user_id, context.actor.actor_type, context.actor.api_key_id, None, snapshot(patient), request)
+    audit(db, "patient_clinic_association_create", "PatientClinicAssociation", None, "Pacijent povezan s aktivnom klinikom", context.actor.user_id, context.actor.actor_type, context.actor.api_key_id, None, {"patient_id": patient.id, "clinic_id": context.active_clinic_id}, request)
     commit_or_conflict(db)
     db.refresh(patient)
     return patient
 
 
 @router.get("/patients", response_model=list[PatientOut])
-def list_patients(q: str | None = None, db: Session = Depends(get_db), actor: Actor = Depends(require_permission("patients.read"))):
-    stmt = select(Patient).order_by(Patient.last_name, Patient.first_name)
+def list_patients(
+    q: str | None = None,
+    limit: int = Query(default=50, ge=1, le=50),
+    db: Session = Depends(get_db),
+    context: CurrentUserContext = Depends(require_active_clinic("patients.read")),
+):
+    stmt = select(Patient).order_by(Patient.last_name, Patient.first_name, Patient.id).limit(limit)
     if q:
         like = f"%{q}%"
         stmt = stmt.where(or_(Patient.first_name.ilike(like), Patient.last_name.ilike(like), Patient.phone.ilike(like), Patient.email.ilike(like), Patient.oib.ilike(like)))
@@ -182,7 +193,7 @@ def possible_patient_duplicates(
     email: str | None = None,
     oib: str | None = None,
     db: Session = Depends(get_db),
-    actor: Actor = Depends(require_permission("patients.read")),
+    context: CurrentUserContext = Depends(require_active_clinic("patients.read")),
 ):
     conditions = []
     if oib:
@@ -204,23 +215,91 @@ def possible_patient_duplicates(
 
 
 @router.get("/patients/{patient_id}", response_model=PatientOut)
-def get_patient(patient_id: int, db: Session = Depends(get_db), actor: Actor = Depends(require_permission("patients.read"))):
+def get_patient(patient_id: int, db: Session = Depends(get_db), context: CurrentUserContext = Depends(require_active_clinic("patients.read"))):
     patient = db.get(Patient, patient_id)
     if not patient:
-        raise HTTPException(404, detail="Pacijent nije pronaÄ‘en")
+        raise HTTPException(404, detail="Pacijent nije pronađen")
     return patient
+
+
+@router.get("/patients/{patient_id}/clinical-record", response_model=PatientClinicalRecordResponse)
+def patient_clinical_record(
+    patient_id: int,
+    request: Request,
+    institution_id: int | None = None,
+    document_type: str | None = None,
+    clinic_id: int | None = None,
+    date_from: date | None = None,
+    date_to: date | None = None,
+    limit: int = 50,
+    offset: int = 0,
+    db: Session = Depends(get_db),
+    actor: Actor = Depends(get_current_actor),
+):
+    patient = db.get(Patient, patient_id)
+    if not patient:
+        raise HTTPException(404, detail="Pacijent nije pronađen")
+    resolved_institution_id = resolve_actor_institution_context(db, actor, institution_id)
+    limit = max(1, min(limit, 100))
+    offset = max(0, offset)
+    stmt = institution_scoped_clinical_record_metadata_statement(db, actor, resolved_institution_id).where(ClinicalDocument.patient_id == patient_id)
+    if document_type:
+        stmt = stmt.where(ClinicalDocument.document_type == document_type)
+    if clinic_id:
+        stmt = stmt.where(ClinicalDocument.clinic_id == clinic_id)
+    if date_from:
+        stmt = stmt.where(or_(ClinicalDocument.document_date >= date_from, ClinicalDocument.document_date.is_(None)))
+    if date_to:
+        stmt = stmt.where(or_(ClinicalDocument.document_date <= date_to, ClinicalDocument.document_date.is_(None)))
+    total = scalar_count(
+        db,
+        stmt.with_only_columns(func.count(ClinicalDocument.id), maintain_column_froms=True).order_by(None),
+    )
+    documents = db.scalars(
+        stmt.order_by(
+            ClinicalDocument.document_date.desc().nulls_last(),
+            ClinicalDocument.created_at.desc(),
+            ClinicalDocument.id.desc(),
+        )
+        .offset(offset)
+        .limit(limit)
+    ).all()
+    addendum_counts = dict(
+        db.execute(
+            select(ClinicalDocumentAddendum.original_document_id, func.count(ClinicalDocumentAddendum.id))
+            .where(ClinicalDocumentAddendum.original_document_id.in_([item.id for item in documents] or [-1]))
+            .group_by(ClinicalDocumentAddendum.original_document_id)
+        ).all()
+    )
+    items = [
+        clinical_record_item(document, int(addendum_counts.get(document.id, 0)), actor)
+        for document in documents
+    ]
+    audit(
+        db,
+        "clinical_history.opened",
+        "Patient",
+        patient.id,
+        "Otvoren je klinički karton ustanove",
+        actor.user_id,
+        actor.actor_type,
+        actor.api_key_id,
+        None,
+        {"patient_id": patient.id, "institution_id": resolved_institution_id, "count": len(items), "limit": limit, "offset": offset},
+        request,
+    )
+    db.commit()
+    return PatientClinicalRecordResponse(patient_id=patient.id, institution_id=resolved_institution_id, count=total, items=items)
 
 
 @router.get("/patients/{patient_id}/clinical-findings", response_model=ClinicalFindingListResponse)
 def patient_clinical_findings(
     patient_id: int,
     db: Session = Depends(get_db),
-    actor: Actor = Depends(get_current_actor),
+    context: CurrentUserContext = Depends(require_active_clinic("clinical_findings.read")),
 ):
     """Read-only source-linked findings; not diagnosis, treatment, task, outcome evidence or patient messaging."""
-    require_findings_read_user(actor)
-    if not db.get(Patient, patient_id):
-        raise HTTPException(404, detail="Pacijent nije pronaden")
+    get_scoped_patient(db, patient_id, context)
     findings = db.scalars(
         select(ClinicalFinding)
         .where(ClinicalFinding.patient_id == patient_id)
@@ -235,12 +314,10 @@ def patient_clinical_finding_detail(
     patient_id: int,
     finding_id: int,
     db: Session = Depends(get_db),
-    actor: Actor = Depends(get_current_actor),
+    context: CurrentUserContext = Depends(require_active_clinic("clinical_findings.read")),
 ):
     """Read-only source-linked finding detail; not diagnosis, treatment, task, outcome evidence or patient messaging."""
-    require_findings_read_user(actor)
-    if not db.get(Patient, patient_id):
-        raise HTTPException(404, detail="Pacijent nije pronaden")
+    get_scoped_patient(db, patient_id, context)
     finding = db.scalar(
         select(ClinicalFinding).where(
             ClinicalFinding.id == finding_id,
@@ -257,12 +334,10 @@ def patient_clinical_open_questions(
     patient_id: int,
     finding_id: int | None = None,
     db: Session = Depends(get_db),
-    actor: Actor = Depends(get_current_actor),
+    context: CurrentUserContext = Depends(require_active_clinic("clinical_open_questions.read")),
 ):
     """Read-only source-linked open questions; not review, diagnosis, treatment, task, outcome evidence or patient messaging."""
-    require_open_questions_read_user(actor)
-    if not db.get(Patient, patient_id):
-        raise HTTPException(404, detail="Pacijent nije pronaden")
+    get_scoped_patient(db, patient_id, context)
     stmt = (
         select(ClinicalOpenQuestion)
         .options(joinedload(ClinicalOpenQuestion.finding))
@@ -283,12 +358,10 @@ def patient_clinical_open_question_detail(
     patient_id: int,
     question_id: int,
     db: Session = Depends(get_db),
-    actor: Actor = Depends(get_current_actor),
+    context: CurrentUserContext = Depends(require_active_clinic("clinical_open_questions.read")),
 ):
     """Read-only source-linked open question detail; not review, diagnosis, treatment, task, outcome evidence or patient messaging."""
-    require_open_questions_read_user(actor)
-    if not db.get(Patient, patient_id):
-        raise HTTPException(404, detail="Pacijent nije pronaden")
+    get_scoped_patient(db, patient_id, context)
     question = db.scalar(
         select(ClinicalOpenQuestion)
         .options(joinedload(ClinicalOpenQuestion.finding))
@@ -311,12 +384,10 @@ def patient_clinical_evidence_timeline(
     date_from: datetime | None = None,
     date_to: datetime | None = None,
     db: Session = Depends(get_db),
-    actor: Actor = Depends(get_current_actor),
+    context: CurrentUserContext = Depends(require_active_clinic("clinical_evidence_timeline.read")),
 ):
     """GET-only source-linked clinical evidence timeline; not workflow, decision, task, outcome evidence or messaging."""
-    require_timeline_read_user(actor)
-    if not db.get(Patient, patient_id):
-        raise HTTPException(404, detail="Pacijent nije pronaden")
+    get_scoped_patient(db, patient_id, context)
     events = list_patient_clinical_evidence_timeline(
         db,
         patient_id=patient_id,
@@ -329,22 +400,26 @@ def patient_clinical_evidence_timeline(
     return ClinicalEvidenceTimelineListResponse(patient_id=patient_id, events=events, count=len(events))
 
 
-@router.get("/patients/{patient_id}/appointments", response_model=list[AppointmentOut])
-def patient_appointments(patient_id: int, db: Session = Depends(get_db), actor: Actor = Depends(require_permission("appointments.read"))):
+@router.get("/patients/{patient_id}/appointments", response_model=list[PatientAppointmentAvailabilityOut])
+def patient_appointments(
+    patient_id: int,
+    limit: int = Query(default=200, ge=1, le=200),
+    db: Session = Depends(get_db),
+    context: CurrentUserContext = Depends(require_active_clinic("appointments.patient_availability.read")),
+):
     if not db.get(Patient, patient_id):
         raise HTTPException(404, detail="Pacijent nije pronaden")
-    return db.scalars(
-        select(Appointment)
-        .options(joinedload(Appointment.patient), joinedload(Appointment.service), joinedload(Appointment.provider), joinedload(Appointment.room))
-        .where(Appointment.patient_id == patient_id)
-        .order_by(Appointment.date.desc(), Appointment.start_time.desc())
+    appointments = db.scalars(
+        patient_appointment_availability_stmt(patient_id)
+        .options(joinedload(Appointment.clinic), joinedload(Appointment.service), joinedload(Appointment.provider))
+        .limit(limit)
     ).all()
+    return [minimal_appointment_conflict(appointment) for appointment in appointments]
 
 
 @router.get("/patients/{patient_id}/episodes", response_model=list[ClinicalEpisodeOut])
-def patient_episodes(patient_id: int, db: Session = Depends(get_db), actor: Actor = Depends(require_permission("episodes.read"))):
-    if not db.get(Patient, patient_id):
-        raise HTTPException(404, detail="Pacijent nije pronaden")
+def patient_episodes(patient_id: int, db: Session = Depends(get_db), context: CurrentUserContext = Depends(require_active_clinic("episodes.read"))):
+    get_scoped_patient(db, patient_id, context)
     stmt = (
         select(ClinicalEpisode)
         .options(joinedload(ClinicalEpisode.patient), joinedload(ClinicalEpisode.owner_provider))
@@ -355,10 +430,19 @@ def patient_episodes(patient_id: int, db: Session = Depends(get_db), actor: Acto
 
 
 @router.get("/patients/{patient_id}/invoices", response_model=list[InvoiceOut])
-def patient_invoices(patient_id: int, db: Session = Depends(get_db), actor: Actor = Depends(require_permission("billing.read"))):
-    if not db.get(Patient, patient_id):
-        raise HTTPException(404, detail="Pacijent nije pronaden")
-    return db.scalars(select(Invoice).where(Invoice.patient_id == patient_id).order_by(Invoice.invoice_date.desc(), Invoice.id.desc())).all()
+def patient_invoices(
+    patient_id: int,
+    limit: int = Query(default=100, ge=1, le=100),
+    db: Session = Depends(get_db),
+    context: CurrentUserContext = Depends(require_active_clinic("billing.read")),
+):
+    get_scoped_patient(db, patient_id, context)
+    return db.scalars(
+        select(Invoice)
+        .where(Invoice.patient_id == patient_id, Invoice.clinic_id == context.active_clinic_id)
+        .order_by(Invoice.invoice_date.desc(), Invoice.id.desc())
+        .limit(limit)
+    ).all()
 
 
 @router.patch("/patients/{patient_id}", response_model=PatientOut)
@@ -367,11 +451,10 @@ def update_patient(
     payload: PatientUpdate,
     request: Request,
     db: Session = Depends(get_db),
-    actor: Actor = Depends(require_permission("patients.write")),
+    context: CurrentUserContext = Depends(require_active_clinic("patients.write")),
 ):
-    patient = db.get(Patient, patient_id)
-    if not patient:
-        raise HTTPException(404, detail="Pacijent nije pronaÄ‘en")
+    patient = get_scoped_patient(db, patient_id, context)
+    actor = context.actor
     before = snapshot(patient)
     updates = payload.model_dump(exclude_unset=True)
     expected_updated_at = updates.pop("expected_updated_at", None)
@@ -381,7 +464,7 @@ def update_patient(
         patient.email_verified_at = None
     patch_model(patient, updates)
     flush_or_conflict(db)
-    audit(db, "update", "Patient", patient.id, "AĹľuriran pacijent", actor.user_id, actor.actor_type, actor.api_key_id, before, snapshot(patient), request)
+    audit(db, "update", "Patient", patient.id, "Ažuriran pacijent", actor.user_id, actor.actor_type, actor.api_key_id, before, snapshot(patient), request)
     commit_or_conflict(db)
     db.refresh(patient)
     return patient

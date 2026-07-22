@@ -25,19 +25,88 @@ def test_production_rejects_default_jwt_secret():
         settings.validate_production_safety()
 
 
+def production_settings(**overrides):
+    values = {
+        "app_env": "production",
+        "jwt_secret": "s" * 48,
+        "database_url": "postgresql+psycopg://astra:strong-production-password@example-db:5432/astra_clinic",
+        "browser_public_origin": "https://clinic.example.com",
+        "cors_origins": "https://clinic.example.com",
+        "cors_origin_regex": None,
+        "demo_mode": False,
+        "demo_seed_enabled": False,
+        "auto_create_default_admin": False,
+        "fiscalization_mode": "production",
+        "ocr_provider_mode": "production",
+        "reminder_provider_mode": "production",
+        "ai_summary_provider_mode": "production",
+    }
+    values.update(overrides)
+    return Settings(**values)
+
+
+def test_valid_production_configuration_passes():
+    production_settings().validate_production_safety()
+
+
+def test_production_requires_secure_browser_session_cookies():
+    settings = production_settings(session_cookie_secure=False)
+
+    with pytest.raises(RuntimeError, match="Secure"):
+        settings.validate_production_safety()
+
+
+def test_samesite_none_requires_secure_cookies():
+    settings = production_settings(session_cookie_samesite="none", csrf_cookie_secure=False)
+
+    with pytest.raises(RuntimeError, match="SameSite=None"):
+        settings.validate_production_safety()
+
+
 def test_production_rejects_local_cors():
-    settings = Settings(app_env="production", jwt_secret="x" * 40, cors_origins="http://localhost:5173")
+    settings = production_settings(cors_origins="http://localhost:5173")
+
+    with pytest.raises(RuntimeError, match="localhost"):
+        settings.validate_production_safety()
+
+
+@pytest.mark.parametrize("secret", ["", "secret", "change-this-local-secret", "x" * 12])
+def test_production_rejects_missing_default_or_short_jwt_secret(secret):
+    settings = production_settings(jwt_secret=secret)
+
+    with pytest.raises(RuntimeError, match="JWT secret"):
+        settings.validate_production_safety()
+
+
+@pytest.mark.parametrize("database_url", [
+    "postgresql+psycopg://astra@db:5432/astra_clinic",
+    "postgresql+psycopg://astra:astra@db:5432/astra_clinic",
+    "postgresql+psycopg://astra:short@db:5432/astra_clinic",
+])
+def test_production_rejects_missing_default_or_short_database_password(database_url):
+    settings = production_settings(database_url=database_url)
+
+    with pytest.raises(RuntimeError, match="Database password"):
+        settings.validate_production_safety()
+
+
+def test_production_rejects_wildcard_cors_with_credentials():
+    settings = production_settings(cors_origins="*")
+
+    with pytest.raises(RuntimeError, match="Wildcard CORS"):
+        settings.validate_production_safety()
+
+
+@pytest.mark.parametrize("field", ["debug", "reload", "demo_mode", "demo_seed_enabled", "auto_create_default_admin"])
+def test_production_rejects_unsafe_runtime_switches(field):
+    settings = production_settings(**{field: True})
 
     with pytest.raises(RuntimeError):
         settings.validate_production_safety()
 
 
 def test_production_rejects_demo_and_stub_providers():
-    settings = Settings(
-        app_env="production",
-        jwt_secret="x" * 40,
-        cors_origins="https://clinic.example.com",
-        cors_origin_regex=None,
+    settings = production_settings(
         fiscalization_mode="noop",
         ocr_provider_mode="local_demo",
         reminder_provider_mode="local_demo",
@@ -45,6 +114,53 @@ def test_production_rejects_demo_and_stub_providers():
     )
 
     with pytest.raises(RuntimeError, match="demo/stub providers"):
+        settings.validate_production_safety()
+
+
+def test_development_and_test_environments_accept_explicit_development_defaults():
+    Settings(app_env="development", jwt_secret="change-this-local-secret").validate_production_safety()
+    Settings(app_env="test", jwt_secret="change-this-local-secret").validate_production_safety()
+
+
+def test_production_error_messages_do_not_leak_secret_values():
+    secret = "super-secret-but-still-short"
+    database_password = "also-secret"
+    settings = production_settings(
+        jwt_secret=secret,
+        database_url=f"postgresql+psycopg://astra:{database_password}@db:5432/astra_clinic",
+    )
+
+    with pytest.raises(RuntimeError) as exc:
+        settings.validate_production_safety()
+
+    message = str(exc.value)
+    assert secret not in message
+    assert database_password not in message
+
+
+def test_production_compose_example_uses_placeholders_not_demo_secrets():
+    compose = (Path(__file__).resolve().parents[2] / "docker-compose.prod.example.yml").read_text(encoding="utf-8")
+
+    assert "APP_ENV=production" in compose
+    assert "change-this-local-secret" not in compose
+    assert "change-me-in-production" not in compose
+    assert "astra:astra" not in compose
+    assert "DEMO_MODE=false" in compose
+
+
+def test_production_example_uses_one_same_origin_browser_auth_contract():
+    env_text = (Path(__file__).resolve().parents[2] / ".env.production.example").read_text(encoding="utf-8")
+
+    assert "BROWSER_PUBLIC_ORIGIN=https://conceptnura.com" in env_text
+    assert "CORS_ORIGINS=https://conceptnura.com" in env_text
+    assert "VITE_API_BASE_URL=\n" in env_text
+    assert "VITE_API_BASE_URL=https://poliklinikanura.eu" not in env_text
+
+
+def test_production_rejects_cross_site_browser_origin_contract():
+    settings = production_settings(cors_origins="https://api.example.com")
+
+    with pytest.raises(RuntimeError, match="canonical BROWSER_PUBLIC_ORIGIN"):
         settings.validate_production_safety()
 
 

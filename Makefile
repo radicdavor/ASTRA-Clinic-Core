@@ -7,9 +7,33 @@ migrate:
 seed:
 	docker compose run --rm backend python -m app.seed
 
+schema-status:
+	docker compose run --rm backend python -m app.cli schema-status
+
+session-cleanup:
+	docker compose run --rm backend python -m app.cli session-cleanup
+
 test:
 	cd backend && pytest
 	cd frontend && npm run build
+
+backend-fast:
+	python scripts/run_test_gate.py fast
+
+backend-integration:
+	python scripts/run_test_gate.py integration
+
+backend-full:
+	python scripts/run_test_gate.py full
+
+frontend-test:
+	cd frontend && npm run typecheck && npm test -- --run
+
+e2e-smoke:
+	cd frontend && npm run e2e
+
+e2e-full:
+	cd frontend && npm run e2e:db
 
 lint:
 	cd backend && python -m compileall app

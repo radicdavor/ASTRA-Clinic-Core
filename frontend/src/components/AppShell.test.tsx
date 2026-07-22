@@ -1,18 +1,27 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { cleanup, render, screen } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
-import { setSessionUser, setToken } from "../api/client";
+import { setSessionUser } from "../api/client";
 import { AppShell } from "./AppShell";
 
+function mockShellFetch(clinics = [{ id: 1, name: "Demo klinika" }]) {
+  vi.spyOn(globalThis, "fetch").mockImplementation((input) => {
+    const url = String(input);
+    const payload = url.includes("/auth/me/clinics")
+      ? { clinics, default_clinic_id: clinics.length === 1 ? clinics[0].id : null, requires_selection: clinics.length > 1 }
+      : { demo_mode: true, real_data_allowed: false };
+    return Promise.resolve(new Response(JSON.stringify(payload), { status: 200, headers: { "Content-Type": "application/json" } }));
+  });
+}
+
 function renderShell(role: string) {
-  setToken("test-token");
   setSessionUser({ id: 1, name: "Test", email: "test@example.invalid", role });
-  vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify({ demo_mode: true, real_data_allowed: false }), { status: 200, headers: { "Content-Type": "application/json" } }));
+  mockShellFetch();
   return render(<MemoryRouter initialEntries={["/"]}><Routes><Route element={<AppShell/>}><Route index element={<p>Početna</p>}/></Route></Routes></MemoryRouter>);
 }
 
-beforeEach(() => localStorage.clear());
-afterEach(() => { cleanup(); vi.restoreAllMocks(); localStorage.clear(); });
+beforeEach(() => { localStorage.clear(); sessionStorage.clear(); });
+afterEach(() => { cleanup(); vi.restoreAllMocks(); localStorage.clear(); sessionStorage.clear(); });
 
 describe("navigacija prema zadatku i ulozi", () => {
   test("recepcija ima tri primarna zadatka i nema administraciju", () => {
@@ -36,11 +45,18 @@ describe("navigacija prema zadatku i ulozi", () => {
   });
 
   test("postojeća prijava čita ulogu iz tokena kada zapis korisnika još ne postoji", () => {
-    const payload = btoa(JSON.stringify({ sub: "1", role: "demo_admin" })).replace(/=/g, "").replace(/\+/g, "-").replace(/\//g, "_");
-    setToken(`header.${payload}.signature`);
-    vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify({ demo_mode: true, real_data_allowed: false }), { status: 200, headers: { "Content-Type": "application/json" } }));
+    setSessionUser({ id: 1, name: "Admin", email: "admin@example.invalid", role: "demo_admin" });
+    mockShellFetch();
     render(<MemoryRouter initialEntries={["/"]}><Routes><Route element={<AppShell/>}><Route index element={<p>Početna</p>}/></Route></Routes></MemoryRouter>);
     expect(screen.getByText("Administracija")).toBeTruthy();
+  });
+
+  test("korisnik s vise klinika bira aktivnu kliniku u topbaru", async () => {
+    setSessionUser({ id: 1, name: "Admin", email: "admin@example.invalid", role: "demo_admin" });
+    mockShellFetch([{ id: 1, name: "Gastroenterologija" }, { id: 2, name: "Estetika" }]);
+    render(<MemoryRouter initialEntries={["/"]}><Routes><Route element={<AppShell/>}><Route index element={<p>Početna</p>}/></Route></Routes></MemoryRouter>);
+    expect(await screen.findByText("Odaberite kliniku za prikaz podataka.")).toBeTruthy();
+    expect(screen.getByLabelText("Aktivna klinika")).toBeTruthy();
   });
 
   test("ne prikazuje nefunkcionalnu globalnu pretragu", () => {

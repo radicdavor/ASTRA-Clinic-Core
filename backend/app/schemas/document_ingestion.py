@@ -24,6 +24,8 @@ class DocumentIngestionOut(BaseModel):
     classification_confidence: Decimal | None
     received_at: datetime | None
     review_status: str
+    is_clinical_record: bool
+    record_classification: str
 
 
 class DocumentJobOut(BaseModel):

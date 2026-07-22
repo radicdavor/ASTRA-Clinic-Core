@@ -32,7 +32,7 @@ def _as_datetime(value: datetime | None) -> datetime:
     return value.replace(tzinfo=timezone.utc) if value.tzinfo is None else value
 
 
-def build_timeline(db: Session, journey: PatientJourney) -> list[dict]:
+def build_timeline(db: Session, journey: PatientJourney, documents: list[ClinicalDocument]) -> list[dict]:
     appointment = journey.appointment
     appointment_time = datetime.combine(
         appointment.date,
@@ -57,7 +57,6 @@ def build_timeline(db: Session, journey: PatientJourney) -> list[dict]:
             "provenance": {"entity": "JourneyEvent", "id": event.id, "source_channel": event.source_channel},
             "review_state": None, "journey_id": journey.id,
         })
-    documents = db.scalars(select(ClinicalDocument).where(ClinicalDocument.journey_id == journey.id)).all()
     for document in documents:
         items.append({
             "date": _as_datetime(document.received_at or document.created_at),
@@ -97,10 +96,9 @@ def build_timeline(db: Session, journey: PatientJourney) -> list[dict]:
     return sorted(items, key=lambda item: item["date"], reverse=True)
 
 
-def generate_local_summary(db: Session, journey: PatientJourney) -> JourneyAISummary:
+def generate_local_summary(db: Session, journey: PatientJourney, documents: list[ClinicalDocument]) -> JourneyAISummary:
     if get_settings().ai_summary_provider_mode != "local_deterministic":
         raise HTTPException(503, detail="Lokalni AI sažetak je isključen u ovom okruženju")
-    documents = db.scalars(select(ClinicalDocument).where(ClinicalDocument.journey_id == journey.id).order_by(ClinicalDocument.id)).all()
     missing_requests = db.scalars(
         select(DocumentRequest).where(
             DocumentRequest.journey_id == journey.id,

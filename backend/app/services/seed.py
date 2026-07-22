@@ -10,10 +10,12 @@ from app.models.domain import (
     ClinicalFormDefinition,
     ClinicalFormVersion,
     Clinic,
+    ClinicMembership,
     InventoryBatch,
     InventoryItem,
     Module,
     Patient,
+    PatientClinicAssociation,
     Permission,
     Provider,
     Role,
@@ -36,6 +38,7 @@ PERMISSIONS = [
     "appointments.read",
     "appointments.write",
     "appointments.cancel",
+    "appointments.patient_availability.read",
     "episodes.read",
     "episodes.write",
     "clinical_plans.read",
@@ -43,6 +46,12 @@ PERMISSIONS = [
     "clinical_documents.read",
     "clinical_documents.write",
     "clinical_documents.review",
+    "clinical.documents.read_institution",
+    "clinical.documents.edit_own_draft",
+    "clinical.documents.add_addendum",
+    "clinical.documents.sign_own",
+    "clinical.documents.print",
+    "clinical.documents.download",
     "services.read",
     "services.write",
     "modules.read",
@@ -57,7 +66,9 @@ PERMISSIONS = [
     "billing.write",
     "billing.mark_paid",
     "audit.read",
+    "audit.access_events.write",
     "admin.manage_users",
+    "system.admin",
     "clinical_readiness.snapshots.read",
     "clinical_readiness.snapshots.write",
     "clinical_readiness.snapshots.supersede",
@@ -119,14 +130,34 @@ PERMISSIONS = [
 
 ROLE_PERMISSIONS = {
     "admin": PERMISSIONS,
-    "physician": ["patients.read", "patients.write", "appointments.read", "appointments.write", "episodes.read", "episodes.write", "clinical_plans.read", "clinical_plans.write", "clinical_documents.read", "clinical_documents.write", "clinical_documents.review", "services.read", "inventory.read", "billing.read", "clinical_readiness.snapshots.read", "clinical_readiness.snapshots.write", "clinical_readiness.snapshots.supersede", "clinical_readiness.acknowledgments.read", "clinical_findings.read", "clinical_open_questions.read", "clinical_evidence_timeline.read", "workflow_tasks.read", "workflow_tasks.write", "knowledge_protocols.read", "knowledge_protocols.write", "knowledge_protocols.review", "journey.read", "journey.transition", "preparation.assign", "preparation.review", "documents.request", "documents.upload", "documents.view_source", "documents.review", "checkin.clinical_review", "encounter.read", "encounter.write", "encounter.complete", "summary.generate", "summary.review", "clinical_forms.read", "clinical_forms.sign", "activity_preparation.read", "activity_preparation.update", "activity_preparation.clinical_review", "procedure_interventions.read", "procedure_interventions.write", "pathology_cases.read", "pathology_cases.update", "pathology_results.receive", "pathology_results.review", "pathology_communication.decide", "reports.read", "reports.print", "reports.send", "reports.delivery_history"],
-    "nurse": ["patients.read", "appointments.read", "appointments.write", "episodes.read", "clinical_plans.read", "clinical_documents.read", "clinical_documents.write", "clinical_documents.review", "inventory.read", "inventory.write", "clinical_readiness.snapshots.read", "workflow_tasks.read", "workflow_tasks.write", "journey.read", "journey.transition", "preparation.assign", "documents.request", "documents.upload", "documents.scan", "documents.view_source", "documents.review", "checkin.update", "encounter.read", "consumables.record", "activity_preparation.read", "activity_preparation.update", "procedure_interventions.read", "pathology_cases.read", "reports.read"],
-    "receptionist": ["patients.read", "patients.write", "appointments.read", "appointments.write", "episodes.read", "clinical_plans.read", "clinical_documents.read", "services.read", "billing.read", "workflow_tasks.read", "workflow_tasks.write", "journey.read", "journey.create", "journey.transition", "preparation.assign", "documents.request", "documents.upload", "documents.scan", "documents.view_source", "checkin.update", "service_packages.read", "service_packages.schedule", "activity_preparation.read", "activity_preparation.update"],
+    "physician": ["patients.read", "patients.write", "appointments.read", "appointments.write", "appointments.patient_availability.read", "episodes.read", "episodes.write", "clinical_plans.read", "clinical_plans.write", "clinical_documents.read", "clinical_documents.write", "clinical_documents.review", "services.read", "inventory.read", "billing.read", "clinical_readiness.snapshots.read", "clinical_readiness.snapshots.write", "clinical_readiness.snapshots.supersede", "clinical_readiness.acknowledgments.read", "clinical_findings.read", "clinical_open_questions.read", "clinical_evidence_timeline.read", "workflow_tasks.read", "workflow_tasks.write", "knowledge_protocols.read", "knowledge_protocols.write", "knowledge_protocols.review", "journey.read", "journey.transition", "preparation.assign", "preparation.review", "documents.request", "documents.upload", "documents.view_source", "documents.review", "checkin.clinical_review", "encounter.read", "encounter.write", "encounter.complete", "summary.generate", "summary.review", "clinical_forms.read", "clinical_forms.sign", "activity_preparation.read", "activity_preparation.update", "activity_preparation.clinical_review", "procedure_interventions.read", "procedure_interventions.write", "pathology_cases.read", "pathology_cases.update", "pathology_results.receive", "pathology_results.review", "pathology_communication.decide", "reports.read", "reports.print", "reports.send", "reports.delivery_history", "audit.access_events.write"],
+    "nurse": ["patients.read", "appointments.read", "appointments.write", "appointments.patient_availability.read", "episodes.read", "clinical_plans.read", "clinical_documents.read", "clinical_documents.write", "clinical_documents.review", "inventory.read", "inventory.write", "clinical_readiness.snapshots.read", "workflow_tasks.read", "workflow_tasks.write", "journey.read", "journey.transition", "preparation.assign", "documents.request", "documents.upload", "documents.scan", "documents.view_source", "documents.review", "checkin.update", "encounter.read", "consumables.record", "activity_preparation.read", "activity_preparation.update", "procedure_interventions.read", "pathology_cases.read", "reports.read", "audit.access_events.write"],
+    "receptionist": ["patients.read", "patients.write", "appointments.read", "appointments.write", "appointments.patient_availability.read", "episodes.read", "clinical_plans.read", "clinical_documents.read", "services.read", "billing.read", "workflow_tasks.read", "workflow_tasks.write", "journey.read", "journey.create", "journey.transition", "preparation.assign", "documents.request", "documents.upload", "documents.scan", "documents.view_source", "checkin.update", "service_packages.read", "service_packages.schedule", "activity_preparation.read", "activity_preparation.update", "audit.access_events.write"],
     "inventory_manager": ["inventory.read", "inventory.write", "inventory.adjust", "inventory.write_off", "inventory.transfer", "procurement.read", "procurement.write"],
-    "billing": ["billing.read", "billing.write", "billing.mark_paid", "patients.read", "appointments.read", "journey.read", "journey.transition", "payment.record"],
+    "billing": ["billing.read", "billing.write", "billing.mark_paid", "patients.read", "appointments.read", "journey.read", "journey.transition", "payment.record", "audit.access_events.write"],
     "ai_agent": ["ai.appointments.create", "ai.patients.create", "ai.free_slots.read", "journey.read", "journey.create"],
-    "document_reviewer": ["patients.read", "clinical_documents.read", "clinical_documents.review", "journey.read", "documents.view_source", "documents.review", "pathology_cases.read", "pathology_results.receive", "reports.read"],
+    "document_reviewer": ["patients.read", "clinical_documents.read", "clinical_documents.review", "journey.read", "documents.view_source", "documents.review", "pathology_cases.read", "pathology_results.receive", "reports.read", "audit.access_events.write"],
 }
+
+ROLE_PROFESSIONAL_CATEGORIES = {
+    "physician": "medical_staff",
+    "nurse": "medical_staff",
+    "document_reviewer": "medical_staff",
+}
+
+MEDICAL_CLINICAL_DOCUMENT_PERMISSIONS = [
+    "clinical.documents.read_institution",
+    "clinical.documents.edit_own_draft",
+    "clinical.documents.add_addendum",
+    "clinical.documents.sign_own",
+    "clinical.documents.print",
+    "clinical.documents.download",
+]
+
+for _role_name in ROLE_PROFESSIONAL_CATEGORIES:
+    for _permission_name in MEDICAL_CLINICAL_DOCUMENT_PERMISSIONS:
+        if _permission_name not in ROLE_PERMISSIONS[_role_name]:
+            ROLE_PERMISSIONS[_role_name].append(_permission_name)
 
 MODULE_SEEDS = [
     {"key": "scheduling", "name": "Narucivanje", "description": "Pacijenti, termini i dnevni raspored"},
@@ -335,7 +366,32 @@ def seed_security(db: Session) -> None:
             role = Role(name=role_name, description=role_name.replace("_", " ").title())
             db.add(role)
             roles[role_name] = role
+        role.professional_category = ROLE_PROFESSIONAL_CATEGORIES.get(role_name, "administrative")
         role.permissions = [permissions[name] for name in permission_names]
+    db.flush()
+
+
+def seed_demo_memberships(db: Session) -> None:
+    clinics = db.scalars(select(Clinic)).all()
+    if not clinics:
+        return
+    admins = db.scalars(
+        select(User)
+        .join(Role, User.role_id == Role.id)
+        .where((Role.name == "admin") | (Role.name.like("demo_%")))
+    ).all()
+    for admin in admins:
+        for clinic in clinics:
+            membership = db.scalar(
+                select(ClinicMembership).where(
+                    ClinicMembership.user_id == admin.id,
+                    ClinicMembership.clinic_id == clinic.id,
+                )
+            )
+            if membership is None:
+                db.add(ClinicMembership(user_id=admin.id, clinic_id=clinic.id, active=True, created_by_user_id=admin.id))
+            else:
+                membership.active = True
     db.flush()
 
 
@@ -343,6 +399,7 @@ def seed(db: Session) -> None:
     if db.scalar(select(User).limit(1)):
         seed_security(db)
         seed_catalog(db)
+        seed_demo_memberships(db)
         seed_clinical_forms(db)
         seed_gastro_package(db)
         db.commit()
@@ -353,7 +410,7 @@ def seed(db: Session) -> None:
     db.flush()
 
     roles = {
-        name: Role(name=name, description=name.replace("_", " ").title())
+        name: Role(name=name, description=name.replace("_", " ").title(), professional_category=ROLE_PROFESSIONAL_CATEGORIES.get(name, "administrative"))
         for name in ROLE_PERMISSIONS
     }
     for role_name, permission_names in ROLE_PERMISSIONS.items():
@@ -388,6 +445,13 @@ def seed(db: Session) -> None:
     provider = Provider(full_name="dr. Ana Kovač", specialty="Gastroenterologija", clinic_id=gastro_clinic.id)
     room = Room(name="Endoskopska sala 1", type="endoscopy_room", clinic_id=gastro_clinic.id)
     db.add_all([admin, provider, room])
+    db.flush()
+    db.add_all(
+        [
+            ClinicMembership(user_id=admin.id, clinic_id=gastro_clinic.id, active=True, created_by_user_id=admin.id),
+            ClinicMembership(user_id=admin.id, clinic_id=aesthetic_clinic.id, active=True, created_by_user_id=admin.id),
+        ]
+    )
 
     modules = [
         Module(key="scheduling", name="Naručivanje", description="Pacijenti, termini i dnevni raspored"),
@@ -416,6 +480,7 @@ def seed(db: Session) -> None:
     patient = Patient(first_name="Ivana", last_name="Horvat", date_of_birth=date(1984, 5, 12), phone="+385 91 234 5678", email="ivana.horvat@example.com")
     db.add(patient)
     db.flush()
+    db.add(PatientClinicAssociation(patient_id=patient.id, clinic_id=gastro_clinic.id, active=True, created_by_user_id=admin.id))
 
     db.add(
         Appointment(
@@ -423,6 +488,7 @@ def seed(db: Session) -> None:
             service_id=services[0].id,
             provider_id=provider.id,
             room_id=room.id,
+            clinic_id=gastro_clinic.id,
             date=date.today(),
             start_time=time(9, 0),
             end_time=time(9, 45),

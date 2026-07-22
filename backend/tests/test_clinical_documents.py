@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from app.models.domain import AuditLog, PatientClinicalSummaryRecord
+from app.models.domain import AuditLog, Clinic, ClinicalDocument, Institution, PatientClinicalSummaryRecord
 from tests.conftest import login_token
 from tests.factories import appointment, clinical_document, patient
 
@@ -467,7 +467,7 @@ def test_summary_record_alone_does_not_create_official_knowledge(client, db, aut
     summary = client.get(f"/api/patients/{p.id}/clinical-summary", headers=headers)
     assert summary.status_code == 200
     body = summary.json()
-    assert body["reviewed_summary"]["id"] == record.id
+    assert body["reviewed_summary"] is None
     assert_no_official_knowledge(body)
 
 
@@ -831,7 +831,7 @@ def test_reviewed_summary_is_view_not_source_of_truth(client, db, auth_setup):
     summary = client.get(f"/api/patients/{p.id}/clinical-summary", headers=headers)
     assert summary.status_code == 200
     body = summary.json()
-    assert body["reviewed_summary"]["summary_text"] == "Pregledani sazetak bez izvora."
+    assert body["reviewed_summary"] is None
     assert_no_official_knowledge(body)
 
 
@@ -904,6 +904,89 @@ def test_readiness_does_not_warn_when_reviewed_summary_current(client, db, auth_
     assert check["count"] == 0
 
 
+def test_readiness_requires_summary_to_cover_each_institution_document_source(client, db, auth_setup):
+    headers = auth_headers(client)
+    p = patient(db)
+    local_document = clinical_document(db, p, physician_reviewed=True)
+    local_document.updated_at = datetime(2026, 7, 1, 9, 0)
+    foreign_institution = Institution(code="summary-foreign", name="Summary Foreign", active=True)
+    foreign_clinic = Clinic(name="Summary Foreign Clinic", institution_key="summary-foreign", institution=foreign_institution)
+    db.add(foreign_clinic)
+    db.flush()
+    foreign_document = ClinicalDocument(
+        patient_id=p.id,
+        clinic_id=foreign_clinic.id,
+        institution_id=foreign_institution.id,
+        source_type="external",
+        document_type="laboratory",
+        title="Foreign institution source",
+        review_status="reviewed",
+        physician_reviewed=True,
+        is_clinical_record=True,
+        record_classification="clinical",
+    )
+    db.add(foreign_document)
+    db.flush()
+    foreign_document.updated_at = datetime(2026, 7, 2, 9, 0)
+    summary = PatientClinicalSummaryRecord(
+        patient_id=p.id,
+        summary_text="Covers only the local institution source",
+        source_document_ids=[local_document.id],
+        status="reviewed",
+        generated_by="physician",
+        reviewed_by=auth_setup["admin"].id,
+    )
+    db.add(summary)
+    db.flush()
+    summary.updated_at = datetime(2026, 7, 3, 9, 0)
+    mixed_summary = PatientClinicalSummaryRecord(
+        patient_id=p.id,
+        summary_text="Mixed institutions must not satisfy either institution group",
+        source_document_ids=[local_document.id, foreign_document.id],
+        status="reviewed",
+        generated_by="physician",
+        reviewed_by=auth_setup["admin"].id,
+    )
+    db.add(mixed_summary)
+    db.flush()
+    mixed_summary.updated_at = datetime(2026, 7, 4, 9, 0)
+    db.commit()
+
+    response = client.get("/api/readiness", headers=headers)
+
+    assert response.status_code == 200
+    check = next(item for item in response.json()["checks"] if item["key"] == "patient_summary_stale")
+    assert check["status"] == "warning"
+    assert check["count"] == 1
+
+
+def test_patient_summary_update_requires_exact_official_institution_source_set(client, db, auth_setup):
+    headers = auth_headers(client)
+    p = patient(db)
+    first = clinical_document(db, p, physician_reviewed=True)
+    second = clinical_document(db, p, physician_reviewed=True)
+    unreviewed = clinical_document(db, p, physician_reviewed=False)
+    db.commit()
+    draft = client.post(f"/api/patients/{p.id}/clinical-summary/generate-draft", headers=headers)
+    assert draft.status_code == 200
+    assert set(draft.json()["source_document_ids"]) == {first.id, second.id}
+
+    omitted = client.patch(
+        f"/api/patients/{p.id}/clinical-summary",
+        headers=headers,
+        json={"source_document_ids": [first.id]},
+    )
+    includes_unreviewed = client.patch(
+        f"/api/patients/{p.id}/clinical-summary",
+        headers=headers,
+        json={"source_document_ids": [first.id, second.id, unreviewed.id]},
+    )
+
+    assert omitted.status_code == 422
+    assert includes_unreviewed.status_code == 422
+    assert "točan skup pregledanih dokumenata ustanove" in omitted.json()["detail"]
+
+
 def test_review_stale_draft_is_blocked(client, db, auth_setup):
     headers = auth_headers(client)
     p = patient(db)
@@ -926,8 +1009,9 @@ def test_review_stale_draft_is_blocked(client, db, auth_setup):
 def test_latest_reviewed_summary_selection_is_deterministic(client, db, auth_setup):
     headers = auth_headers(client)
     p = patient(db)
-    older = PatientClinicalSummaryRecord(patient_id=p.id, summary_text="Stariji sazetak", status="reviewed", generated_by="physician", reviewed_by=1, reviewed_at=datetime(2026, 7, 1))
-    newer = PatientClinicalSummaryRecord(patient_id=p.id, summary_text="Noviji sazetak", status="reviewed", generated_by="physician", reviewed_by=1, reviewed_at=datetime(2026, 7, 2))
+    source = clinical_document(db, p, physician_reviewed=True)
+    older = PatientClinicalSummaryRecord(patient_id=p.id, summary_text="Stariji sazetak", source_document_ids=[source.id], status="reviewed", generated_by="physician", reviewed_by=1, reviewed_at=datetime(2026, 7, 1))
+    newer = PatientClinicalSummaryRecord(patient_id=p.id, summary_text="Noviji sazetak", source_document_ids=[source.id], status="reviewed", generated_by="physician", reviewed_by=1, reviewed_at=datetime(2026, 7, 2))
     db.add_all([older, newer])
     db.flush()
     older.updated_at = datetime(2026, 7, 1, 9, 0)
@@ -943,8 +1027,9 @@ def test_latest_reviewed_summary_selection_is_deterministic(client, db, auth_set
 def test_latest_reviewed_summary_selection_uses_id_when_timestamp_matches(client, db, auth_setup):
     headers = auth_headers(client)
     p = patient(db)
-    first = PatientClinicalSummaryRecord(patient_id=p.id, summary_text="Prvi sazetak", status="reviewed", generated_by="physician", reviewed_by=1, reviewed_at=datetime(2026, 7, 1))
-    second = PatientClinicalSummaryRecord(patient_id=p.id, summary_text="Drugi sazetak", status="reviewed", generated_by="physician", reviewed_by=1, reviewed_at=datetime(2026, 7, 1))
+    source = clinical_document(db, p, physician_reviewed=True)
+    first = PatientClinicalSummaryRecord(patient_id=p.id, summary_text="Prvi sazetak", source_document_ids=[source.id], status="reviewed", generated_by="physician", reviewed_by=1, reviewed_at=datetime(2026, 7, 1))
+    second = PatientClinicalSummaryRecord(patient_id=p.id, summary_text="Drugi sazetak", source_document_ids=[source.id], status="reviewed", generated_by="physician", reviewed_by=1, reviewed_at=datetime(2026, 7, 1))
     db.add_all([first, second])
     db.flush()
     same_time = datetime(2026, 7, 2, 9, 0)

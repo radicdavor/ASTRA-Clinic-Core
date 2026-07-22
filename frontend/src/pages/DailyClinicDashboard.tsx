@@ -3,115 +3,35 @@ import { useNavigate } from "react-router-dom";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { DateInput } from "../components/DateInput";
 import { ReceptionFloatingModal } from "../components/program2/ReceptionFloatingModal";
+import {
+  activityDurationLabel,
+  buildTimelineBlocks,
+  fallbackActivities,
+  focusFor,
+  formatMinutes,
+  groupRowsByRoom,
+  operationalState,
+  slotMinutes,
+  timelineSlots,
+  visibleRange,
+  type DashboardResponse,
+  type DashboardRow,
+  type OperationalState,
+  type StatusTone,
+  type TimelineBlock,
+} from "../features/daily-dashboard/model";
 import { useApi } from "../hooks/useApi";
 import type { Provider, Room, Service } from "../types";
+import { formatUtcTimestampInClinic, getClinicToday } from "../utils/clinicTime";
 
-type DashboardBlocker = { id: number; title: string; details: string | null; is_clinical: boolean };
-type DashboardActivity = {
-  id: number; sequence: number; time: string; end_time?: string;
-  service_name: string; clinician_name: string | null; room_name: string | null; status: string;
-};
-type DashboardRow = {
-  journey_id: number; appointment_id: number; time: string; patient_name: string;
-  service_id: number; service_name: string; clinician_id: number; clinician_name: string;
-  room_id: number; room_name: string; clinic_id: number | null; clinic_name: string | null;
-  intake_channel: string; workflow_stage: string;
-  document_status: string; preparation_status: string; arrival_status: string;
-  check_in_status: string; encounter_status: string; consumables_status: string;
-  billing_status: string; payment_status: string; blocker_status: string;
-  blocker_labels: string[]; blockers: DashboardBlocker[]; allowed_actions: string[];
-  reception_warning: boolean; reception_warning_details: string[];
-  activity_count: number; current_activity_id: number | null; next_activity_id: number | null; activities: DashboardActivity[];
-};
-type DashboardClinic = { id: number; name: string };
-type DashboardResponse = {
-  date: string; refreshed_at: string; visible_sections: string[]; viewer_role: string;
-  scope: string; scope_label: string; scoped_clinician_id: number | null;
-  can_filter_clinician: boolean; available_clinics: DashboardClinic[]; rows: DashboardRow[];
-};
-type StatusTone = "gray" | "blue" | "red" | "orange" | "green";
-type OperationalState = {
-  tone: StatusTone; label: string; detail: string;
-  action?: "reception" | "encounter" | "consumables" | "billing" | "open";
-  actionLabel?: string; icon?: ReactNode;
-};
-type TimelineBlock = {
-  row: DashboardRow; state: OperationalState; startMinutes: number; endMinutes: number;
-  lane: number; laneCount: number; roomName: string;
-};
+const today = getClinicToday();
 
-const today = new Date().toISOString().slice(0, 10);
-const dayStart = 7 * 60;
-const dayEnd = 20 * 60;
-const slotMinutes = 30;
-const minimumBlockMinutes = 30;
-
-const documentContext: Record<string, string> = {
-  requested: "Ranije nalaze pacijent može donijeti na pregled; to ne blokira početak pregleda.",
-  partial: "Dio nalaza je zaprimljen; ostalo se može pregledati tijekom pregleda.",
-  review_required: "Nalazi čekaju liječnički pregled, ali nisu administrativni uvjet za dolazak.",
-};
-
-function minutesFromTime(value?: string | null) {
-  if (!value) return Number.NaN;
-  const [hours, minutes] = value.split(":").map(Number);
-  if (!Number.isFinite(hours) || !Number.isFinite(minutes)) return Number.NaN;
-  return hours * 60 + minutes;
-}
-
-function formatMinutes(minutes: number) {
-  const bounded = Math.max(0, minutes);
-  const hours = Math.floor(bounded / 60);
-  const mins = bounded % 60;
-  return `${String(hours).padStart(2, "0")}:${String(mins).padStart(2, "0")}`;
-}
-
-function rowActivityWindow(row: DashboardRow) {
-  const starts = (row.activities ?? []).map(activity => minutesFromTime(activity.time)).filter(Number.isFinite);
-  const ends = (row.activities ?? []).map(activity => minutesFromTime(activity.end_time)).filter(Number.isFinite);
-  const fallbackStart = minutesFromTime(row.time);
-  const start = Math.min(...(starts.length ? starts : [fallbackStart]));
-  const explicitEnd = ends.length ? Math.max(...ends) : Number.NaN;
-  const end = Number.isFinite(explicitEnd) && explicitEnd > start ? explicitEnd : start + minimumBlockMinutes;
-  return { start, end: Math.max(end, start + minimumBlockMinutes) };
-}
-
-function activityDurationLabel(activity: DashboardActivity) {
-  const start = minutesFromTime(activity.time);
-  const end = minutesFromTime(activity.end_time);
-  if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) return activity.time.slice(0, 5);
-  return `${formatMinutes(start)}–${formatMinutes(end)}`;
-}
-
-function operationalState(row: DashboardRow): OperationalState {
-  const blocker = row.blockers[0];
-  const redFlagCount = row.blockers.length + row.reception_warning_details.length;
-  if (redFlagCount > 0) {
-    const detail = [
-      ...row.blockers.map(item => item.details || item.title),
-      ...row.reception_warning_details,
-    ].filter(Boolean).join("; ");
-    const canOpenEncounter = row.allowed_actions.includes("open_encounter") && ["ready_for_clinician", "in_encounter"].includes(row.workflow_stage);
-    return {
-      tone: "red",
-      label: row.workflow_stage === "ready_for_clinician" || row.workflow_stage === "in_encounter" ? "Čeka pregled/pretragu" : blocker?.title || "Crvena napomena",
-      detail: detail || "Postoji odstupanje koje treba ljudsku provjeru.",
-      action: canOpenEncounter ? "encounter" : row.allowed_actions.includes("open_check_in") ? "reception" : "open",
-      actionLabel: canOpenEncounter ? "Otvori pregled" : row.allowed_actions.includes("open_check_in") ? "Otvori prijem" : "Otvori",
-      icon: canOpenEncounter ? <Stethoscope size={15}/> : <ClipboardCheck size={15}/>,
-    };
-  }
-  if (row.workflow_stage === "completed" && ["paid", "not_due", "cancelled"].includes(row.payment_status)) {
-    return { tone: "green", label: "Završeno", detail: "Sve aktivnosti su završene i plaćanje je riješeno." };
-  }
-  if (row.workflow_stage === "completed") return { tone: "orange", label: "Čeka plaćanje", detail: "Klinički dio je završen; plaćanje još nije potpuno riješeno.", action: "billing", actionLabel: "Naplati", icon: <CreditCard size={15}/> };
-  if (row.workflow_stage === "no_show") return { tone: "red", label: "Nije došao/la", detail: "Pacijent nije došao na termin." };
-  if (row.workflow_stage === "procedure_completed") return { tone: "orange", label: "Čeka materijal", detail: "Treba potvrditi korišteni materijal.", action: row.allowed_actions.includes("record_consumables") ? "consumables" : "open", actionLabel: row.allowed_actions.includes("record_consumables") ? "Evidentiraj materijal" : "Otvori", icon: <PackageCheck size={15}/> };
-  if (["awaiting_billing", "awaiting_payment"].includes(row.workflow_stage)) return { tone: "orange", label: row.workflow_stage === "awaiting_billing" ? "Čeka račun" : "Čeka plaćanje", detail: row.workflow_stage === "awaiting_billing" ? "Račun treba izraditi." : "Račun je izrađen i čeka plaćanje.", action: "billing", actionLabel: "Naplati", icon: <CreditCard size={15}/> };
-  if (["ready_for_clinician", "in_encounter"].includes(row.workflow_stage)) return { tone: "blue", label: row.workflow_stage === "in_encounter" ? "Pregled u tijeku" : "Čeka pregled/pretragu", detail: row.workflow_stage === "in_encounter" ? "Klinički susret je otvoren." : "Prijem je završen; pacijent čeka liječnika ili pretragu.", action: row.allowed_actions.includes("open_encounter") ? "encounter" : "open", actionLabel: row.workflow_stage === "in_encounter" ? "Nastavi pregled" : "Otvori pregled", icon: <Stethoscope size={15}/> };
-  if (["arrived", "check_in_review"].includes(row.workflow_stage)) return { tone: "blue", label: "Stigao", detail: "Otvorite prijem: opći podaci, potpis i kratka pitanja prije pregleda.", action: row.allowed_actions.includes("open_check_in") ? "reception" : "open", actionLabel: row.allowed_actions.includes("open_check_in") ? "Otvori prijem" : "Otvori", icon: <ClipboardCheck size={15}/> };
-  if (["requested", "booked", "awaiting_forms", "awaiting_documents", "preparation_in_progress", "ready_for_arrival"].includes(row.workflow_stage)) return { tone: "gray", label: "Čeka dolazak", detail: documentContext[row.document_status] || "Pacijent je naručen; prijem počinje kad se javi tajnici ili sestri.", action: row.allowed_actions.includes("open_check_in") ? "reception" : "open", actionLabel: row.allowed_actions.includes("open_check_in") ? "Otvori prijem" : "Otvori", icon: <ClipboardCheck size={15}/> };
-  return { tone: "gray", label: "Nije započeto", detail: "Nema trenutne operativne radnje.", action: "open", actionLabel: "Otvori" };
+function iconForAction(action: OperationalState["action"]): ReactNode {
+  if (action === "reception") return <ClipboardCheck size={15}/>;
+  if (action === "encounter") return <Stethoscope size={15}/>;
+  if (action === "consumables") return <PackageCheck size={15}/>;
+  if (action === "billing") return <CreditCard size={15}/>;
+  return null;
 }
 
 function StatusDot({ tone, label, detail }: { tone: StatusTone; label: string; detail: string }) {
@@ -123,57 +43,6 @@ function StatusDot({ tone, label, detail }: { tone: StatusTone; label: string; d
       </span>
     </span>
   );
-}
-
-function buildTimelineBlocks(rows: DashboardRow[]) {
-  const prepared = rows.map(row => {
-    const state = operationalState(row);
-    const window = rowActivityWindow(row);
-    return { row, state, startMinutes: window.start, endMinutes: window.end, lane: 0, laneCount: 1, roomName: row.room_name || "Bez prostorije" };
-  }).sort((a, b) => a.startMinutes - b.startMinutes || a.endMinutes - b.endMinutes);
-  const lanes: number[] = [];
-  for (const block of prepared) {
-    let lane = lanes.findIndex(end => end <= block.startMinutes);
-    if (lane === -1) {
-      lane = lanes.length;
-      lanes.push(block.endMinutes);
-    } else {
-      lanes[lane] = block.endMinutes;
-    }
-    block.lane = lane;
-  }
-  const laneCount = Math.max(1, lanes.length);
-  return prepared.map(block => ({ ...block, laneCount }));
-}
-
-function visibleRange(blocks: TimelineBlock[]) {
-  if (!blocks.length) return { start: dayStart, end: dayEnd };
-  const earliest = Math.min(...blocks.map(block => block.startMinutes));
-  const latest = Math.max(...blocks.map(block => block.endMinutes));
-  return {
-    start: Math.max(0, Math.min(dayStart, Math.floor(earliest / slotMinutes) * slotMinutes)),
-    end: Math.min(24 * 60, Math.max(dayEnd, Math.ceil(latest / slotMinutes) * slotMinutes)),
-  };
-}
-
-function timelineSlots(start: number, end: number) {
-  const slots = [];
-  for (let value = start; value <= end; value += slotMinutes) slots.push(value);
-  return slots;
-}
-
-function primaryRoomName(row: DashboardRow, preferredRoomName?: string) {
-  const activities = [...(row.activities ?? [])].sort((a, b) => minutesFromTime(a.time) - minutesFromTime(b.time));
-  if (preferredRoomName && activities.some(activity => activity.room_name === preferredRoomName)) return preferredRoomName;
-  return activities.find(activity => activity.room_name)?.room_name || row.room_name || "Bez prostorije";
-}
-
-function focusFor(state: OperationalState) {
-  if (state.action === "reception") return "arrival";
-  if (state.action === "encounter") return "encounter";
-  if (state.action === "consumables") return "consumables";
-  if (state.action === "billing") return "billing";
-  return "attention";
 }
 
 function RedFlagButton({ row }: { row: DashboardRow }) {
@@ -241,7 +110,7 @@ function PatientBlock({
         <time>{formatMinutes(block.startMinutes)}</time>
       </header>
       <div className="timeline-activity-list" aria-label={`Današnje aktivnosti za ${row.patient_name}`}>
-        {(row.activities?.length ? row.activities : [{ id: row.appointment_id, sequence: 1, time: row.time, end_time: formatMinutes(block.endMinutes), service_name: row.service_name, clinician_name: row.clinician_name, room_name: row.room_name, status: row.workflow_stage }]).map(activity => (
+        {fallbackActivities(row, block.endMinutes).map(activity => (
           <div className="timeline-activity-row" key={activity.id}>
             <time>{activityDurationLabel(activity)}</time>
             <span>{activity.service_name}</span>
@@ -253,7 +122,7 @@ function PatientBlock({
         <span className="timeline-state-label">{state.label}</span>
         <RedFlagButton row={row}/>
         <div className="timeline-actions">
-          {state.action && <button type="button" ref={actionRef} className="primary" onClick={() => onPrimaryAction(row, state)}>{state.icon}{state.actionLabel}</button>}
+          {state.action && <button type="button" ref={actionRef} className="primary" onClick={() => onPrimaryAction(row, state)}>{iconForAction(state.action)}{state.actionLabel}</button>}
           <details className="timeline-more-menu">
             <summary aria-label={`Dodatne radnje za ${row.patient_name}`}><MoreVertical size={16}/></summary>
             <div>
@@ -272,40 +141,54 @@ function PatientBlock({
 export function DailyClinicDashboard() {
   const navigate = useNavigate();
   const [day, setDay] = useState(today);
-  const [clinician, setClinician] = useState(""); const [clinic, setClinic] = useState(""); const [room, setRoom] = useState(""); const [service, setService] = useState("");
-  const [stage, setStage] = useState(""); const [blocker, setBlocker] = useState(""); const [query, setQuery] = useState("");
+  const [clinician, setClinician] = useState("");
+  const [clinic, setClinic] = useState("");
+  const [room, setRoom] = useState("");
+  const [service, setService] = useState("");
+  const [stage, setStage] = useState("");
+  const [blocker, setBlocker] = useState("");
+  const [query, setQuery] = useState("");
   const [view, setView] = useState<"patients" | "rooms">("patients");
   const [refresh, setRefresh] = useState(0);
   const [receptionJourneyId, setReceptionJourneyId] = useState<number | null>(null);
   const receptionActionRefs = useRef<Record<number, HTMLButtonElement | null>>({});
   const params = new URLSearchParams({ selected_date: day, refresh: String(refresh) });
-  if (clinician) params.set("clinician_id", clinician); if (clinic) params.set("clinic_id", clinic); if (room) params.set("room_id", room); if (service) params.set("service_id", service);
-  if (stage) params.set("status", stage); if (blocker) params.set("blocker", blocker); if (query.trim()) params.set("q", query.trim());
+  if (clinician) params.set("clinician_id", clinician);
+  if (clinic) params.set("clinic_id", clinic);
+  if (room) params.set("room_id", room);
+  if (service) params.set("service_id", service);
+  if (stage) params.set("status", stage);
+  if (blocker) params.set("blocker", blocker);
+  if (query.trim()) params.set("q", query.trim());
+
   const board = useApi<DashboardResponse>(`/api/dashboard/day?${params}`, { date: day, refreshed_at: "", visible_sections: [], viewer_role: "", scope: "", scope_label: "", scoped_clinician_id: null, can_filter_clinician: false, available_clinics: [], rows: [] });
-  const providers = useApi<Provider[]>("/api/providers", []); const rooms = useApi<Room[]>("/api/rooms", []); const services = useApi<Service[]>("/api/services", []);
+  const providers = useApi<Provider[]>(board.data.can_filter_clinician ? "/api/providers" : null, []);
+  const rooms = useApi<Room[]>("/api/rooms", []);
+  const services = useApi<Service[]>("/api/services", []);
+
   useEffect(() => {
     if (clinic && !board.data.available_clinics.some(item => String(item.id) === clinic)) setClinic("");
   }, [board.data.available_clinics, clinic]);
 
-  const blocks = useMemo(() => buildTimelineBlocks(board.data.rows), [board.data.rows]);
+  useEffect(() => {
+    if (board.loading) return;
+    const availableJourneyIds = new Set(board.data.rows.map(row => row.journey_id));
+    if (receptionJourneyId != null && !availableJourneyIds.has(receptionJourneyId)) setReceptionJourneyId(null);
+  }, [board.data.rows, board.loading, receptionJourneyId]);
+
+  const visibleRows = board.loading ? [] : board.data.rows;
+  const blocks = useMemo(() => buildTimelineBlocks(visibleRows), [visibleRows]);
   const range = useMemo(() => visibleRange(blocks), [blocks]);
   const slots = useMemo(() => timelineSlots(range.start, range.end), [range]);
   const timelineHeight = ((range.end - range.start) / slotMinutes) * 52 + 24;
   const counts = useMemo(() => ({
-    total: board.data.rows.length,
-    active: board.data.rows.filter(row => ["blue", "orange"].includes(operationalState(row).tone)).length,
-    problems: board.data.rows.filter(row => operationalState(row).tone === "red").length,
-  }), [board.data.rows]);
+    total: visibleRows.length,
+    active: visibleRows.filter(row => ["blue", "orange"].includes(operationalState(row).tone)).length,
+    problems: visibleRows.filter(row => operationalState(row).tone === "red").length,
+  }), [visibleRows]);
   const advancedFilterCount = [clinic, room, service, stage].filter(Boolean).length;
   const selectedRoomName = useMemo(() => rooms.data.find(item => String(item.id) === room)?.name, [room, rooms.data]);
-  const roomGroups = useMemo(() => {
-    const grouped = new Map<string, DashboardRow[]>();
-    for (const row of board.data.rows) {
-      const name = primaryRoomName(row, selectedRoomName);
-      grouped.set(name, [...(grouped.get(name) ?? []), row]);
-    }
-    return [...grouped.entries()].map(([roomName, rows]) => ({ roomName, blocks: buildTimelineBlocks(rows) })).sort((a, b) => a.roomName.localeCompare(b.roomName));
-  }, [board.data.rows, selectedRoomName]);
+  const roomGroups = useMemo(() => groupRowsByRoom(visibleRows, selectedRoomName), [visibleRows, selectedRoomName]);
 
   function journeyHref(row: DashboardRow, state: OperationalState) {
     const focus = focusFor(state);
@@ -327,7 +210,13 @@ export function DailyClinicDashboard() {
     }, 0);
   }
   function clearFilters() {
-    setClinician(""); setClinic(""); setRoom(""); setService(""); setStage(""); setBlocker(""); setQuery("");
+    setClinician("");
+    setClinic("");
+    setRoom("");
+    setService("");
+    setStage("");
+    setBlocker("");
+    setQuery("");
   }
 
   return <section className="page clinic-day-page">
@@ -335,7 +224,7 @@ export function DailyClinicDashboard() {
       <div><span className="eyebrow">Dnevni operativni pregled</span><h1>Danas u poliklinici</h1><p>Tko je sljedeći, postoji li problem i što sada treba napraviti.</p><span className="clinic-day-scope">Prikaz: {board.data.scope_label || "učitavanje…"}</span></div>
       <div className="clinic-day-date"><DateInput value={day} onChange={setDay} required/><button type="button" onClick={() => setRefresh(value => value + 1)}><RefreshCw size={16}/>Osvježi</button></div>
     </header>
-    <div className="clinic-day-summary"><span><b>{counts.total}</b> dolazaka</span><span><b>{counts.active}</b> u tijeku</span><span className={counts.problems ? "attention" : ""}><b>{counts.problems}</b> s problemom</span><small>Zadnje osvježenje: {board.data.refreshed_at ? new Date(board.data.refreshed_at).toLocaleTimeString("hr-HR", { hour: "2-digit", minute: "2-digit" }) : "—"}</small></div>
+    <div className="clinic-day-summary"><span><b>{counts.total}</b> dolazaka</span><span><b>{counts.active}</b> u tijeku</span><span className={counts.problems ? "attention" : ""}><b>{counts.problems}</b> s problemom</span><small>Zadnje osvježenje: {formatUtcTimestampInClinic(board.data.refreshed_at)}</small></div>
     <div className="clinic-day-view-toggle" role="group" aria-label="Način prikaza"><button type="button" className={view === "patients" ? "active" : ""} onClick={() => setView("patients")}>Po pacijentima</button><button type="button" className={view === "rooms" ? "active" : ""} onClick={() => setView("rooms")}>Po prostorijama</button></div>
     <div className="clinic-day-filter-bar"><label className="clinic-day-search"><Search size={16}/><input aria-label="Pretraži pacijenta" placeholder="Pretraži pacijenta" value={query} onChange={event => setQuery(event.target.value)}/></label>{board.data.can_filter_clinician && <select aria-label="Liječnik" value={clinician} onChange={event => { setClinician(event.target.value); setClinic(""); setRoom(""); }}><option value="">Svi liječnici</option>{providers.data.filter(item => item.staff_role === "physician").map(item => <option key={item.id} value={item.id}>{item.full_name}</option>)}</select>}<select aria-label="Problem" value={blocker} onChange={event => setBlocker(event.target.value)}><option value="">Sva stanja</option><option value="true">S problemom</option><option value="false">Bez problema</option></select><details className="clinic-day-advanced"><summary><Filter size={15}/>Dodatni filtri{advancedFilterCount > 0 && <b aria-label={`${advancedFilterCount} aktivna dodatna filtra`}>{advancedFilterCount}</b>}</summary><div className="clinic-day-filters">{board.data.available_clinics.length > 1 && <select aria-label="Klinika" value={clinic} onChange={event => { setClinic(event.target.value); setRoom(""); }}><option value="">Sve klinike</option>{board.data.available_clinics.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select>}<select aria-label="Prostorija" value={room} onChange={event => setRoom(event.target.value)}><option value="">Sve prostorije</option>{rooms.data.filter(item => !clinic || String(item.clinic_id ?? "") === clinic).map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select><select aria-label="Usluga" value={service} onChange={event => setService(event.target.value)}><option value="">Sve usluge</option>{services.data.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select><select aria-label="Faza" value={stage} onChange={event => setStage(event.target.value)}><option value="">Sve faze</option><option value="ready_for_arrival">Čeka dolazak</option><option value="check_in_review">Stigao</option><option value="ready_for_clinician">Čeka pregled/pretragu</option><option value="in_encounter">Pregled u tijeku</option><option value="awaiting_payment">Čeka naplatu</option></select></div></details>{[clinician, clinic, room, service, stage, blocker, query].some(Boolean) && <button type="button" className="clear-filters" onClick={clearFilters}><X size={15}/>Očisti filtre</button>}</div>
     {board.error && <p className="form-error">Dnevni pregled nije učitan: {board.error}</p>}

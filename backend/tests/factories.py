@@ -1,13 +1,28 @@
 from datetime import date, time
 from decimal import Decimal
 
-from app.models.domain import Appointment, Clinic, ClinicalDocument, ClinicalEpisode, ClinicalPlan, InventoryBatch, InventoryItem, Patient, Provider, Room, Service, StockLocation
+from app.models.domain import Appointment, Clinic, ClinicalDocument, ClinicalEpisode, ClinicalPlan, InventoryBatch, InventoryItem, Patient, PatientClinicAssociation, Provider, Room, Service, StockLocation
+
+
+def default_clinic(db):
+    return db.query(Clinic).order_by(Clinic.id).first()
+
+
+def associate_patient_with_default_clinic(db, patient_obj):
+    clinic_obj = default_clinic(db)
+    if clinic_obj is None:
+        return
+    exists = db.query(PatientClinicAssociation).filter_by(patient_id=patient_obj.id, clinic_id=clinic_obj.id).first()
+    if exists is None:
+        db.add(PatientClinicAssociation(patient_id=patient_obj.id, clinic_id=clinic_obj.id))
+        db.flush()
 
 
 def patient(db, first_name="Test", last_name="Patient"):
     obj = Patient(first_name=first_name, last_name=last_name)
     db.add(obj)
     db.flush()
+    associate_patient_with_default_clinic(db, obj)
     return obj
 
 
@@ -44,10 +59,14 @@ def appointment(db, patient_obj=None, provider_obj=None, room_obj=None, service_
     provider_obj = provider_obj or provider(db)
     room_obj = room_obj or room(db)
     service_obj = service_obj or service(db)
+    clinic_obj = room_obj.clinic or default_clinic(db)
+    if clinic_obj and room_obj.clinic_id is None:
+        room_obj.clinic_id = clinic_obj.id
     obj = Appointment(
         patient_id=patient_obj.id,
         provider_id=provider_obj.id,
         room_id=room_obj.id,
+        clinic_id=clinic_obj.id if clinic_obj else None,
         service_id=service_obj.id,
         date=date(2026, 7, 6),
         start_time=time(9, 0),
@@ -100,8 +119,11 @@ def clinical_plan(db, episode_obj=None, status="draft", physician_confirmed=Fals
 
 def clinical_document(db, patient_obj=None, physician_reviewed=True):
     patient_obj = patient_obj or patient(db)
+    clinic_obj = default_clinic(db)
     obj = ClinicalDocument(
         patient_id=patient_obj.id,
+        clinic_id=clinic_obj.id if clinic_obj else None,
+        institution_id=clinic_obj.institution_id if clinic_obj else None,
         source_type="external",
         document_type="gastroscopy",
         origin="Test institution",

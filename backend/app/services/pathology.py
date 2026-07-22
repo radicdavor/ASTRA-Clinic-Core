@@ -6,7 +6,8 @@ from sqlalchemy.orm import Session
 
 from app.audit.service import audit, snapshot
 from app.auth.dependencies import Actor
-from app.models.domain import ClinicalDocument, JourneyActivity, PathologyCase, PathologyReportLink, PathologySpecimen, ProcedureIntervention, ReportDeliveryEvent, SignedClinicalReport
+from app.models.domain import ClinicalDocument, Clinic, JourneyActivity, PathologyCase, PathologyReportLink, PathologySpecimen, PatientJourney, ProcedureIntervention, ReportDeliveryEvent, SignedClinicalReport
+from app.services.clinical_document_access import ensure_institution_clinical_read
 from app.services.patient_journeys import add_event
 
 
@@ -53,6 +54,14 @@ def link_result(db: Session, case: PathologyCase, document_id: int, actor: Actor
     document = db.get(ClinicalDocument, document_id)
     if not document or document.patient_id != case.patient_id:
         raise HTTPException(422, detail="Patološki nalaz mora pripadati istom pacijentu")
+    ensure_institution_clinical_read(db, document, actor)
+    case_institution_id = db.scalar(
+        select(Clinic.institution_id)
+        .join(PatientJourney, PatientJourney.clinic_id == Clinic.id)
+        .where(PatientJourney.id == case.journey_id)
+    )
+    if case_institution_id is None or document.institution_id != case_institution_id:
+        raise HTTPException(422, detail="Patoloski nalaz mora pripadati ustanovi klinickog slucaja")
     existing = db.scalar(select(PathologyReportLink).where(PathologyReportLink.case_id == case.id, PathologyReportLink.clinical_document_id == document.id))
     if not existing:
         db.add(PathologyReportLink(case_id=case.id, clinical_document_id=document.id, linked_by=actor.user_id))

@@ -147,7 +147,8 @@ assertIncludes("src/utils/date.ts", "`${match[3]}. ${match[2]}. ${match[1]}.`");
   "src/pages/PurchaseOrders.tsx",
 ].forEach((file) => assertNotIncludes(file, "type=\"date\""));
 assertIncludes("src/api/client.ts", "Pacijent je spremljen.");
-assertIncludes("src/api/client.ts", "import.meta.env.DEV");
+assertIncludes("src/api/client.ts", "return window.location.origin");
+assertNotIncludes("src/api/client.ts", "window.location.hostname}:8000");
 assertIncludes("vite.config.ts", '"/api": "http://127.0.0.1:8000"');
 assertIncludes("vite.config.ts", '"/auth": "http://127.0.0.1:8000"');
 assertIncludes("src/pages/Clinics.tsx", "Organizacija klinika, prostorija i osoblja");

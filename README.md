@@ -1,5 +1,16 @@
 # ASTRA Clinic Core
 
+## Module 3.5 Lean Core
+
+Module 3.5 preserves the existing single FastAPI + PostgreSQL architecture while
+centralizing clinical authorization, reducing critical SQL counts, making
+frontend routes genuinely lazy, aborting stale reads, separating production
+migration/maintenance from API startup, and adding explicit fast, integration
+and full test gates. Measured results and limitations are documented in the
+[Lean Core optimization report](docs/lean-core-optimization.md),
+[performance budget](docs/performance-budget.md), and
+[test strategy](docs/test-strategy.md). Module 4 is not part of this work.
+
 ## Multi-service visit
 
 The Program 2 Multi-Service Visit and Specialty Documentation extension preserves one physical arrival as one `PatientJourney` while allowing multiple ordered activities, rooms, clinicians, specialty forms, reports, specimens, consumables and billing lines. The demo seed includes a first gastroenterology consultation followed by gastroscopy in the same arrival. See the [track closure report](docs/programs/PROGRAM_2_MULTI_SERVICE_VISIT_AND_SPECIALTY_DOCUMENTATION_TRACK_CLOSURE_REPORT.md).
@@ -15,6 +26,17 @@ Canonical current-state sources:
 Glavna navigacija organizirana je oko zadataka **Danas**, **Pacijenti**, **Naručivanje** i **Znanje**, dok su ostali postojeći moduli grupirani pod **Više** prema ulozi. Dnevna ploča zadržava četiri operativna stupca i vodi u jednu fokusiranu fazu tijeka pacijenta. Vremenska crta, dokumenti i AI sažetak dostupni su kroz sekundarni Klinički kontekst. Sve postojeće rute i backend workflow ostaju očuvani; nije uvedena nova autonomna klinička odluka.
 
 UX simplification track vizualno je provjeren sa sintetičkim administratorskim i liječničkim scenarijima na standardnom i 1024 px prikazu te je formalno zatvoren. Daljnji razvoj ostaje u stanju `STOP AND HOLD` bez nove izričite autorizacije.
+
+## Module 3 institution-aware clinical access
+
+Module 3 introduces `Institution -> Clinic` authorization for clinical record continuity. Patient identity remains global, authorized medical staff may read clinical documents across clinics of the same institution, and operations/billing remain clinic-scoped. Draft editing is author-controlled, signed clinical documents are immutable, source uploads require human classification, and corrections use separate addenda. See [Institution clinical access ADR](docs/ADR/institution-clinical-access.md), [access matrix](docs/security/institution-clinical-access-matrix.md), and [Module 3 closure report](docs/programs/MODULE_3_INSTITUTION_CLINICAL_ACCESS_CLOSURE_REPORT.md).
+
+PR #3 security hardening adds canonical `ClinicalDocument.institution_id`
+provenance, denies unresolved document ownership, binds CSRF tokens to the
+active browser session, and persists rejected-session security audit events in
+an independent short transaction. The supported production browser topology is
+one HTTPS origin with `/api` and `/auth` reverse-proxied to FastAPI. See the
+[security review remediation record](docs/pr3-security-review-remediation.md).
 
 Workflow Engine MVP is documented in [`docs/WORKFLOW_ENGINE_MVP.md`](docs/WORKFLOW_ENGINE_MVP.md). It adds audited patient/episode tasks, responsibility, due dates, templates, and completion checklists without automated clinical decision-making.
 
@@ -1175,7 +1197,7 @@ Final posture: `STOP AND HOLD`.
 - ORM: SQLAlchemy 2.x
 - Migracije: Alembic
 - Frontend: React, TypeScript, Vite
-- Auth: JWT prijava
+- Auth: browser httpOnly cookie sesija; Bearer JWT za Swagger, CLI i integracije
 - Deployment: Docker Compose
 
 ## Lokalno pokretanje
@@ -1192,11 +1214,19 @@ cp .env.example .env
 docker compose up --build
 ```
 
-Backend Docker entrypoint automatski pokreće:
+U lokalnom development/test okruženju backend Docker entrypoint automatski pokreće:
 
 ```bash
 alembic upgrade head
 python -m app.seed
+```
+
+U `APP_ENV=production` entrypoint ne pokreće migracije ni seed. Migracije su
+zaseban kontrolirani deployment korak, a ograničene maintenance naredbe su:
+
+```bash
+python -m app.cli schema-status
+python -m app.cli session-cleanup
 ```
 
 Ako ste ranije pokretali prvu MVP verziju koja je bazu stvarala preko `create_all()`, resetirajte lokalni razvojni volume prije novog starta:
@@ -1211,6 +1241,17 @@ docker compose up --build
 - Aplikacija: http://localhost:5173
 - API dokumentacija: http://localhost:8000/docs
 - Health check: http://localhost:8000/health
+- Readiness check: http://localhost:8000/ready
+
+`/health` potvrđuje da je proces živ. `/ready` dodatno provjerava može li
+servis sigurno primati promet i vraća `503` ako baza nije na očekivanom
+Alembic head revisionu. U production deploymentu migracije se pokreću
+kontrolirano, prije preusmjeravanja prometa:
+
+```bash
+cd backend
+alembic upgrade head
+```
 
 Za pristup s drugog uredaja u istoj mrezi otvorite:
 
@@ -1237,7 +1278,7 @@ Backend testovi koriste izoliranu testnu bazu i ne ovise o ručnom seedanju razv
 
 PostgreSQL integration testovi koriste `TEST_DATABASE_URL`. Lokalno se preskaču ako ta varijabla nije postavljena; u CI-ju je postavljena na testni PostgreSQL servis.
 
-Za produkciju postavite `APP_ENV=production`, jak `JWT_SECRET`, kraći `ACCESS_TOKEN_MINUTES` i eksplicitni `CORS_ORIGINS`. Aplikacija namjerno odbija startup u produkciji ako su JWT ili CORS postavke nesigurne.
+Za produkciju postavite `APP_ENV=production`, jak `JWT_SECRET`, eksplicitni `CORS_ORIGINS` i sigurne browser cookie postavke (`SESSION_COOKIE_SECURE=true`, `CSRF_COOKIE_SECURE=true`). Aplikacija namjerno odbija startup u produkciji ako su JWT, CORS ili cookie postavke nesigurne.
 
 ## Što je uključeno
 
@@ -1252,7 +1293,7 @@ Za produkciju postavite `APP_ENV=production`, jak `JWT_SECRET`, kraći `ACCESS_T
 - Katalog usluga i modularni registar
 - Klinička knjižnica s draft protokolom "Priprema za gastroskopiju" za obvezni liječnički pregled
 - Sedam dodatnih gastroenteroloških operativnih draft protokola za pripremu, uzorke, oporavak, dekontaminaciju i sigurnost terapije
-- JWT prijava i osnovna kontrola uloga
+- Browser prijava preko opozive httpOnly cookie sesije s CSRF zaštitom; Bearer token ostaje odvojen za Swagger, CLI i integracije
 
 ## Gastroenterološki koordinirani dolazak
 

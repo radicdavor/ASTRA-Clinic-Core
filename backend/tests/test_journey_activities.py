@@ -90,7 +90,7 @@ def test_rejects_second_date_duplicate_key_and_patient_overlap(client, db, auth_
         json=activity_payload(db, activity_key="overlap", start=time(9, 45), end=time(10, 15)),
     )
     assert overlap.status_code == 409
-    assert "pacijent" in overlap.json()["detail"]
+    assert overlap.json()["detail"]["code"] == "patient_appointment_overlap"
 
 
 def test_activity_transition_is_explicit_and_audited(client, db, auth_setup):

@@ -16,6 +16,8 @@ const rows = [
     document_status: "complete", preparation_status: "complete", arrival_status: "not_arrived",
     check_in_status: "not_arrived", encounter_status: "not_started", consumables_status: "not_ready",
     billing_status: "not_ready", payment_status: "not_due", blocker_status: "clear",
+    operational_status: "waiting_arrival", operational_status_label: "Čeka dolazak", operational_status_severity: "neutral",
+    operational_status_reasons: [{ code: "patient_not_arrived", label: "Backend kanonski status: pacijent još nije stigao" }],
     blocker_labels: [], blockers: [], reception_warning: false, reception_warning_details: [], allowed_actions: ["open_check_in"],
     activity_count: 1, current_activity_id: 1011, next_activity_id: null, activities: [activity(1011, "08:00:00", "08:30:00", "Prvi pregled")],
   },
@@ -177,6 +179,7 @@ describe("vremenska dnevna ploča", () => {
     const block = await findPatientBlock(/Kratki Pregled/);
     expect(within(block).getByText("Prvi pregled")).toBeTruthy();
     expect(within(block).getByText("Ordinacija 1")).toBeTruthy();
+    expect(within(block).getByLabelText(/Backend kanonski status/)).toBeTruthy();
   });
 
   test("multi-activity visit stays one connected block spanning multiple timeline rows", async () => {
