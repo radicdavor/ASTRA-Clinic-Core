@@ -14,6 +14,7 @@ from app.services.clinical_readiness_preview import build_clinical_readiness_pre
 from app.services.clinical_readiness_acknowledgments import get_clinical_readiness_review_acknowledgment, list_clinical_readiness_review_acknowledgments, record_acknowledgment_read_denied_audit
 from app.services.clinical_readiness_snapshots import SnapshotIdempotencyConflict, capture_clinical_readiness_snapshot, supersede_clinical_readiness_snapshot
 from app.services.clinical_scope import get_institution_episode
+from app.services.clinical_document_access import actor_institution_scope, institution_id_for_clinic
 
 ERROR_RESPONSES = {
     400: {"model": ErrorResponse},
@@ -253,12 +254,14 @@ def _get_acknowledgment_read_appointment_or_404(
     request: Request | None = None,
 ) -> Appointment:
     appointment = db.get(Appointment, appointment_id)
-    if not appointment:
+    institution_ids = actor_institution_scope(db, actor).institution_ids
+    appointment_institution_id = institution_id_for_clinic(db, appointment.clinic_id) if appointment else None
+    if not appointment or appointment_institution_id not in institution_ids:
         _record_acknowledgment_denied_read(
             db,
             actor=actor,
             access_type=access_type,
-            denial_category="appointment_not_found",
+            denial_category="appointment_not_found_or_out_of_scope",
             route=route,
             appointment_id=appointment_id,
             acknowledgment_id=acknowledgment_id,
