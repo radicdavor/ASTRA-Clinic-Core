@@ -128,8 +128,8 @@ excluded from the generic audit projection.
 At the remediation HEAD before GitHub publication:
 
 - backend fast gate: 147 passed;
-- full non-integration backend: 741 passed, 2 skipped, 16 deselected;
-- focused appointment, activity, patient-identity, and audit regressions: 86
+- full non-integration backend: 742 passed, 2 skipped, 16 deselected;
+- focused appointment, activity, patient-identity, and audit regressions: 87
   passed;
 - PostgreSQL integration: 16 passed;
 - frontend: 57 Vitest tests and 4 contract tests passed;
