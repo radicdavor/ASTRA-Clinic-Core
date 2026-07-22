@@ -175,3 +175,15 @@ def test_future_revision_is_rejected():
     manifest["alembic_revision"] = "9999_future"
     with pytest.raises(RecoveryError, match="unknown_backup_revision"):
         require_known_revision(manifest, {"0062_signed_report_addendum_integrity"})
+
+
+def test_recovery_ci_is_bounded_and_local_artifacts_are_ignored():
+    root = SCRIPTS.parent
+    workflow = (root / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
+    recovery_job = workflow.split("\n  recovery:\n", maxsplit=1)[1]
+    gitignore = (root / ".gitignore").read_text(encoding="utf-8").splitlines()
+
+    assert "timeout-minutes: 30" in recovery_job
+    assert "/backups/" in gitignore
+    assert "*.dump" in gitignore
+    assert "*.backup" in gitignore
