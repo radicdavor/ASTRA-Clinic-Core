@@ -45,7 +45,9 @@ jobs:
           test "$(alembic heads | wc -l)" -eq 1
           alembic upgrade head
           alembic downgrade -1
+          python ../scripts/validate_0063_document_provenance.py seed
           alembic upgrade head
+          python ../scripts/validate_0063_document_provenance.py check
       - name: Run PR3 security regression gate
         working-directory: backend
         run: |

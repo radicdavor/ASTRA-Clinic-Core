@@ -102,17 +102,49 @@ PR #4 remains outside this remediation branch. It must not be retargeted or
 merged until this stacked draft PR is independently reviewed and PR #3 is
 revalidated.
 
+## Increment G — independent provenance follow-up
+
+The independent review of the first remediation identified four additional
+provenance boundaries. They are now closed without changing the cross-clinic,
+same-institution clinical-record policy:
+
+- visit-document listing, signed-report preview, delivery, and delivery history
+  resolve the report's canonical clinical document and require medical staff
+  membership in that document's institution before returning content or
+  recipient metadata;
+- manual create and upload reject API-key callers and reject clinics or
+  appointments outside the authenticated user's institution memberships;
+- patient, clinic, and appointment provenance links are immutable after a
+  document is created, and the canonical institution invariant is revalidated
+  on every permitted draft update;
+- operational readiness considers a reviewed summary current only when the
+  summary explicitly references the exact reviewed source document and is not
+  older than that source. A summary from another institution can no longer mask
+  an uncovered document for the same global patient.
+
+Foreign and unresolved identifiers continue to return not-found responses on
+read paths so that institution boundaries do not disclose object existence.
+Manual clinical-document ingestion remains a human-user workflow; scoped
+machine ingestion must use its dedicated integration boundary rather than the
+manual write endpoint.
+
+CI now validates migration `0063` with populated PostgreSQL data. The fixture
+starts at `0062` and covers an agreed clinic source, an appointment-only source,
+an unresolved source, and conflicting clinic/appointment sources. Upgrade must
+assign the two unambiguous institutions and leave both unresolved cases null.
+The same fixture passed a `0063 -> 0062 -> 0063` downgrade/re-upgrade cycle.
+
 ## Closing validation
 
 Executed locally on 22 July 2026 with synthetic data only:
 
-- backend full gate: 689 passed, 18 skipped (16 PostgreSQL tests and one
-  PostgreSQL-only audit test were then executed separately; the remaining skip
-  is the POSIX entrypoint check on Windows);
+- backend non-integration gate after the independent follow-up: 693 passed,
+  2 skipped and 16 integration tests deselected on Windows;
 - PostgreSQL integration: 16 passed;
 - independent PostgreSQL audit-transaction regression: 1 passed;
 - Alembic: one `0063` head, empty upgrade, `0063 -> 0062` downgrade, and
-  re-upgrade passed;
+  re-upgrade passed; a populated four-case provenance backfill plus its
+  downgrade/re-upgrade cycle also passed;
 - `alembic check`: still reports only the documented historical metadata drift;
   no operation targets the new document institution provenance field or index;
 - OpenAPI generated-type drift check passed;
