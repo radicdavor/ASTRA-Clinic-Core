@@ -46,6 +46,16 @@ jobs:
           alembic upgrade head
           alembic downgrade -1
           alembic upgrade head
+      - name: Run PR3 security regression gate
+        working-directory: backend
+        run: |
+          python -m pytest -q \
+            tests/test_contract_hardening.py::test_production_example_uses_one_same_origin_browser_auth_contract \
+            tests/test_browser_sessions.py::test_csrf_token_from_another_session_is_rejected \
+            tests/test_browser_sessions.py::test_invalid_browser_session_audit_survives_unauthorized_response \
+            tests/test_browser_sessions.py::test_security_audit_commit_does_not_commit_business_transaction \
+            tests/test_institution_clinical_document_access.py::test_unresolved_document_is_hidden_from_all_standard_clinical_read_paths \
+            tests/test_institution_clinical_document_access.py::test_processing_jobs_do_not_disclose_foreign_or_unresolved_documents
       - name: Run fast backend feedback gate
         working-directory: backend
         run: python ../scripts/run_test_gate.py fast

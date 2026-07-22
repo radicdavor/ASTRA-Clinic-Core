@@ -12,7 +12,7 @@ The implemented path is:
 
 ```text
 User -> active ClinicMembership -> Clinic -> Institution
-ClinicalDocument -> Clinic -> Institution
+ClinicalDocument -> immutable institution provenance
 ```
 
 Institution-wide clinical read requires all of:
@@ -20,9 +20,18 @@ Institution-wide clinical read requires all of:
 1. authenticated active user;
 2. role `professional_category = medical_staff`;
 3. permission `clinical.documents.read_institution`;
-4. active clinic membership in the same institution as the document;
+4. active clinic membership in the same institution as
+   `ClinicalDocument.institution_id`;
 5. document marked `is_clinical_record = true`;
 6. document `record_classification = clinical`.
+
+`ClinicalDocument.institution_id` is the canonical normal-read tenant
+boundary. Migration `0063_clinical_document_institution_provenance` derives it
+only from immutable document links (document clinic, originating appointment,
+or originating journey) when those sources agree. Missing or conflicting
+legacy provenance remains null and is denied. Global patient identity,
+patient-clinic association, and `clinic_id IS NULL` are never ownership
+fallbacks.
 
 Administrative staff, billing staff and system administrators do not receive PHI access merely because they are privileged users. System administration is not a break-glass clinical access path.
 
@@ -77,6 +86,7 @@ Allowed:
 Denied:
 
 - cross-institution read;
+- unresolved or conflicting document provenance;
 - administrative clinical read;
 - billing access by clinical read permission;
 - operations/dashboard access by clinical read permission;

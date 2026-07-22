@@ -86,3 +86,18 @@ The follow-up audit found and closed four indirect paths that did not use the ca
 | demo seed | internal idempotent seed lookup | synthetic startup data only; not an API read path | not applicable |
 
 No `ClinicalDocument.clinic_id IS NULL` wildcard remains. Unresolved documents are excluded from standard list, search, summary, timeline, processing-job, source, count, and client audit paths. Unauthorized document IDs use the existing not-found response to avoid cross-institution existence disclosure. Operational readiness may aggregate counts across all *resolved* active institutions for system readiness, but never includes unresolved documents or document content.
+
+## Required CI regression gate
+
+The backend CI job runs a named security gate immediately after the PostgreSQL
+empty-upgrade, one-step downgrade, and re-upgrade check. The gate directly
+exercises the four review findings and the indirect processing-job boundary:
+
+- same-origin production browser configuration;
+- CSRF rejection when a token is swapped between active sessions;
+- durable rejected-session audit and isolation from the request transaction;
+- denial of unresolved clinical documents through normal and processing paths.
+
+PR #4 remains outside this remediation branch. It must not be retargeted or
+merged until this stacked draft PR is independently reviewed and PR #3 is
+revalidated.

@@ -35,6 +35,25 @@ Validated in this increment:
 - isolated DB-backed Playwright: 10 passed;
 - development and production-example Docker Compose configuration validation.
 
+## PR #3 security-review remediation
+
+The follow-up hardening branch adds migration
+`0063_clinical_document_institution_provenance` and closes four independent
+review findings: unresolved clinical-document ownership, a split-origin browser
+deployment contract, CSRF tokens reusable across sessions, and rejected-session
+audit rows lost with the request transaction. A repository-wide document read
+audit also brings processing jobs, patient summaries, journey timelines,
+readiness projections, pathology linking, ingestion, source download, and
+client-emitted sensitive-access events under the same provenance boundary.
+
+The CI backend job now executes a named PR #3 security regression gate after an
+empty PostgreSQL upgrade/downgrade/re-upgrade. It covers same-origin production
+configuration, cross-session CSRF rejection, durable invalid-session audit,
+transaction isolation of the audit writer, and denial of unresolved document
+and processing-job paths. Full validation results are recorded in
+`pr3-security-review-remediation.md`; counts in earlier module sections remain
+historical results rather than being rewritten.
+
 The remaining local warning is the existing third-party `python-jose` use of
 `datetime.utcnow()`; it does not fail the suite and is not introduced by this
 increment.
