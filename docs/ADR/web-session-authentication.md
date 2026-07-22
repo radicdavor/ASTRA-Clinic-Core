@@ -32,6 +32,10 @@ Development and DB-backed E2E may use non-secure cookies because local tests run
 
 No cookie `Domain` is set by the application; deployment should keep cookies host-scoped unless a reviewed reverse-proxy design requires otherwise.
 
+## Canonical public topology
+
+Production browser authentication uses one public HTTPS origin. Nginx or the managed gateway serves React at `/` and proxies `/api/*` and `/auth/*` to FastAPI. The frontend uses relative same-origin requests; FastAPI may run on a private service address but that address is not a second browser origin. This is the only recommended browser deployment model. A cross-site frontend/API topology requires a separate reviewed contract and is not represented by the production example.
+
 ## CSRF and CORS
 
 State-changing browser-session requests (`POST`, `PUT`, `PATCH`, `DELETE`) require a matching `X-CSRF-Token` header and `astra_csrf` cookie. The CSRF token is separate from the session token and does not authenticate the user.

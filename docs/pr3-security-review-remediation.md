@@ -47,3 +47,9 @@ All application write paths now persist provenance explicitly:
 - demo records receive the demo gastro clinic provenance.
 
 The scoped list, search, patient list, patient clinical-record metadata, detail, evidence, classification, and source-download paths now converge on the canonical institution value. The former `clinic_id IS NULL` wildcard and patient-association fallback were removed. Addenda inherit the exact original document institution.
+
+## Increment C — same-origin production browser authentication
+
+The sole recommended production browser topology is one HTTPS public origin. The gateway serves React at `/` and proxies `/api/*`, `/auth/*`, `/health`, and `/ready` to the private FastAPI service. The frontend defaults to `window.location.origin`; the production example leaves `VITE_API_BASE_URL` empty and does not publicly expose the backend port.
+
+`BROWSER_PUBLIC_ORIGIN` is now an explicit production setting. Production startup rejects missing/non-HTTPS values and rejects a CORS origin list that differs from that canonical origin. Session and readable CSRF cookies remain host-scoped, `Secure`, and `SameSite=Lax`, which is coherent because frontend and API share an origin. The Nginx contract forwards original host/protocol and request ID, prevents auth response caching, and bounds document uploads.

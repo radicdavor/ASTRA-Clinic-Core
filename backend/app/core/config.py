@@ -32,6 +32,7 @@ class Settings(BaseSettings):
     session_cookie_samesite: Literal["lax", "strict", "none"] = "lax"
     session_cookie_secure: bool | None = None
     csrf_cookie_secure: bool | None = None
+    browser_public_origin: str = ""
     cors_origins: str = "http://localhost:5173,http://127.0.0.1:5173"
     cors_origin_regex: str | None = r"^https?://(localhost|127\.0\.0\.1|10\.\d{1,3}\.\d{1,3}\.\d{1,3}|192\.168\.\d{1,3}\.\d{1,3}|172\.(1[6-9]|2\d|3[0-1])\.\d{1,3}\.\d{1,3})(:\d+)?$"
     debug: bool = False
@@ -77,6 +78,11 @@ class Settings(BaseSettings):
         if database_password in FORBIDDEN_DEVELOPMENT_SECRET_VALUES or len(database_password) < 12:
             errors.append("Database password is missing or uses a forbidden development value.")
         origins = self.cors_origin_list
+        public_origin = self.browser_public_origin.rstrip("/")
+        if not public_origin or not public_origin.startswith("https://"):
+            errors.append("Production BROWSER_PUBLIC_ORIGIN must be one explicit HTTPS origin.")
+        elif origins != [public_origin]:
+            errors.append("Production CORS_ORIGINS must equal the canonical BROWSER_PUBLIC_ORIGIN.")
         if not origins:
             errors.append("Production CORS_ORIGINS must list explicit origins.")
         if "*" in origins:

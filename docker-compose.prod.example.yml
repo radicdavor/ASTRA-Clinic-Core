@@ -31,6 +31,7 @@ services:
       - SESSION_COOKIE_SAMESITE=${SESSION_COOKIE_SAMESITE:-lax}
       - SESSION_COOKIE_SECURE=${SESSION_COOKIE_SECURE:-true}
       - CSRF_COOKIE_SECURE=${CSRF_COOKIE_SECURE:-true}
+      - BROWSER_PUBLIC_ORIGIN=${BROWSER_PUBLIC_ORIGIN:?Set canonical HTTPS browser origin}
       - CORS_ORIGINS=${CORS_ORIGINS:?Set explicit production CORS_ORIGINS}
       - CORS_ORIGIN_REGEX=
       - DEBUG=false
@@ -47,8 +48,8 @@ services:
       - OPENAI_MODEL=${OPENAI_MODEL:-gpt-4.1-mini}
       - AI_DIAGNOSIS_SUGGESTIONS_ENABLED=false
       - AI_DIAGNOSIS_SUGGESTIONS_PRODUCTION_AUTHORIZED=false
-    ports:
-      - "8000:8000"
+    expose:
+      - "8000"
     depends_on:
       db:
         condition: service_healthy
@@ -64,7 +65,7 @@ services:
     build:
       context: ./frontend
       args:
-        VITE_API_BASE_URL: ${VITE_API_BASE_URL:?Set production API base URL}
+        VITE_API_BASE_URL: ${VITE_API_BASE_URL:-}
     ports:
       - "80:80"
     depends_on:

@@ -26,6 +26,7 @@ Use `.env.production.example` as the template. Required values include:
 - `SESSION_COOKIE_SECURE=true`
 - `CSRF_COOKIE_SECURE=true`
 - `SESSION_COOKIE_SAMESITE=lax` unless a reviewed cross-site deployment requires `none`
+- `BROWSER_PUBLIC_ORIGIN=https://conceptnura.com` (replace with the one approved public origin)
 - `CORS_ORIGINS`
 - `CORS_ORIGIN_REGEX=` empty
 - `DEBUG=false`
@@ -45,6 +46,8 @@ for Swagger, CLI and integrations. HttpOnly cookies reduce token theft through
 JavaScript, but they do not eliminate XSS; injected JavaScript could still
 attempt actions in the active browser session, so CSP, escaping, CSRF and
 Origin checks remain part of the production boundary.
+
+The canonical topology is same-origin: the public gateway serves React at `/`, proxies `/api/*` and `/auth/*` to the private FastAPI service, preserves `Host`, `X-Forwarded-Host`, `X-Forwarded-Proto` and `X-Request-ID`, terminates HTTPS, disables caching for authentication responses, and permits document uploads up to the configured limit. `VITE_API_BASE_URL` remains empty so the browser uses relative paths. The production example does not expose FastAPI as a second public browser origin.
 
 ## 3. Generate strong secrets
 
