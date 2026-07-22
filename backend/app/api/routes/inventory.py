@@ -613,10 +613,8 @@ def delete_service_material(service_id: int, template_id: int, request: Request,
 
 
 @router.get("/appointments/{appointment_id}/suggest-material-consumption")
-def suggest_material_consumption(appointment_id: int, db: Session = Depends(get_db), actor: Actor = Depends(require_permission("appointments.read"))):
-    appointment = db.get(Appointment, appointment_id)
-    if not appointment:
-        raise HTTPException(404, detail="Termin nije pronaden")
+def suggest_material_consumption(appointment_id: int, db: Session = Depends(get_db), context: CurrentUserContext = Depends(require_active_clinic("appointments.read"))):
+    appointment = get_active_clinic_appointment(db, appointment_id, context)
     templates = db.scalars(select(ServiceMaterialTemplate).options(joinedload(ServiceMaterialTemplate.item)).where(ServiceMaterialTemplate.service_id == appointment.service_id)).all()
     result = []
     for template in templates:
@@ -638,22 +636,20 @@ def suggest_material_consumption(appointment_id: int, db: Session = Depends(get_
 
 
 @router.post("/appointments/{appointment_id}/consume-materials")
-def consume_materials(appointment_id: int, request: Request, payload: AppointmentMaterialConsumptionRequest | None = None, db: Session = Depends(get_db), actor: Actor = Depends(require_permission("inventory.write"))):
-    appointment = db.get(Appointment, appointment_id)
-    if not appointment:
-        raise HTTPException(404, detail="Termin nije pronaden")
+def consume_materials(appointment_id: int, request: Request, payload: AppointmentMaterialConsumptionRequest | None = None, db: Session = Depends(get_db), context: CurrentUserContext = Depends(require_active_clinic("inventory.write"))):
+    actor = context.actor
+    appointment = get_active_clinic_appointment(db, appointment_id, context)
     movements = consume_appointment_materials(db, appointment, payload, actor, request)
     db.commit()
     return {"movements": movements}
 
 
 @router.post("/appointments/{appointment_id}/complete-with-consumption")
-def complete_with_consumption(appointment_id: int, request: Request, payload: AppointmentMaterialConsumptionRequest | None = None, db: Session = Depends(get_db), actor: Actor = Depends(require_permission("appointments.write"))):
+def complete_with_consumption(appointment_id: int, request: Request, payload: AppointmentMaterialConsumptionRequest | None = None, db: Session = Depends(get_db), context: CurrentUserContext = Depends(require_active_clinic("appointments.write"))):
+    actor = context.actor
     if "inventory.write" not in actor.permissions:
         raise HTTPException(403, detail="Nedostaje dozvola: inventory.write")
-    appointment = db.get(Appointment, appointment_id)
-    if not appointment:
-        raise HTTPException(404, detail="Termin nije pronaden")
+    appointment = get_active_clinic_appointment(db, appointment_id, context)
     before = snapshot(appointment)
     consume_appointment_materials(db, appointment, payload, actor, request)
     appointment.status = "completed"

@@ -157,6 +157,18 @@ def test_journey_child_surfaces_require_active_clinic_scope(client, db, auth_set
         f"/api/patient-journeys/{journey.id}/pathology-cases",
         f"/api/patient-journeys/{journey.id}/activities/{activity.id}/form",
         f"/api/appointments/{appointment.id}/clinical-readiness-preview",
+        f"/api/appointments/{appointment.id}/suggest-material-consumption",
     ]
     for url in urls:
         assert client.get(url, headers=auth).status_code == 404
+
+    assert client.post(
+        f"/api/appointments/{appointment.id}/consume-materials",
+        headers=auth,
+        json={},
+    ).status_code == 404
+    assert client.post(
+        f"/api/appointments/{appointment.id}/complete-with-consumption",
+        headers=auth,
+        json={},
+    ).status_code == 404
