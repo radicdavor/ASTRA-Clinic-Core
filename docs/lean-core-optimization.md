@@ -150,3 +150,27 @@ gate provides the short local feedback loop without removing full coverage.
 `MODULE 3.5 COMPLETE — READY FOR MODULE 4`
 
 Module 4 is not started by this work.
+
+## Continued efficiency pass — 22 July 2026
+
+The controlled continuation in `docs/continued-efficiency-pass.md` reproduced
+the four critical read paths on an isolated PostgreSQL database with 20,004
+synthetic patients. All four were within their latency budgets; the earlier
+late-host p95 failures were not reproducible.
+
+The one measurable remaining defect was the unbounded patient directory. Its
+20,004-row response had a 2,032.89 ms p95 and 5.33 MB payload. A stable maximum
+of 50 reduced p95 to 45.83 ms and the payload to 12.9 KB. Other large list
+surfaces received explicit conservative caps without changing response shapes.
+
+A 628.2-second idle run found no backend RSS growth, connection growth or
+background request traffic. A two-worker comparison more than doubled RSS and
+connections and worsened p95 on the local host, so one Uvicorn worker and the
+default bounded SQLAlchemy pool remain the evidence-backed small deployment
+configuration.
+
+Final continuation decision:
+
+`LEAN CORE OPTIMIZATION SATURATED — READY FOR MODULE 4`
+
+This decision does not start Module 4.

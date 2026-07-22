@@ -93,3 +93,21 @@ framework was added.
 - full frontend contract and Vitest suite
 - Vite production build and emitted preload inspection
 - frontend smoke test
+
+## Cache and invalidation policy
+
+The frontend intentionally has no general data cache framework. Small session
+metadata (current user, active clinic ID and clinic timezone) may remain in
+browser storage for navigation continuity. The server remains authoritative.
+
+All request state is replaced or invalidated on clinic switch, logout, session
+failure, patient change and route/detail change. Document and addendum
+mutations explicitly refresh their affected projection. Full signed-report
+content, source-file content, billing details and audit details are not kept in
+a long-lived global cache. `useApi` aborts superseded work and prevents a late
+response from overwriting the current clinic, date, patient or document.
+
+There is no interval polling. Existing timers are one-shot UI behavior, and
+registered event listeners are paired with cleanup handlers. The current
+source viewer does not create Blob URLs; if a future viewer does, it must revoke
+them when the preview closes or changes.
