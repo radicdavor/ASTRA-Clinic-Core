@@ -58,6 +58,14 @@ The remaining local warning is the existing third-party `python-jose` use of
 `datetime.utcnow()`; it does not fail the suite and is not introduced by this
 increment.
 
+PR #5 has been integrated into PR #3's feature branch with its reviewed commit
+history preserved. The integrated contract has one Alembic head, 0063, and
+enforces same-origin browser authentication, session-bound CSRF, durable
+invalid-session auditing, explicit clinical-document institution provenance,
+and deny-by-default handling of unresolved legacy documents. PR #4 is not part
+of this integration and requires a separate 0063 recovery update only after
+PR #3 is merged into `main`.
+
 Module 3 is closed for the authorized local/demo scope. Broader production validation remains separate from Module 3 functional closure.
 
 ## Module 3.5 Lean Core validation

@@ -159,9 +159,30 @@ Executed locally on 22 July 2026 with synthetic data only:
 - tracked-tree and branch-diff secret-pattern scan found no candidate secret.
 
 After the independent follow-up, the summary/provenance regression package
-passed 81 tests and the fast backend gate passed 147 tests. The final pushed
-head remains subject to the full GitHub PostgreSQL CI and a fresh independent
-read-only re-review before any merge decision.
+passed 81 tests and the fast backend gate passed 147 tests. PR #5 was merged,
+without squashing its reviewed history, into
+`feature/full-stack-production-validation` as merge commit `bdbf485`. The
+integrated branch has the single Alembic head 0063.
+
+The integrated local gate on that merge result passed compileall, 695 backend
+tests with 2 skipped and 16 integration tests deselected, 16 isolated
+PostgreSQL integration tests, 81 provenance/security tests, and an additional
+120 auth, authorization, report, appointment, contract, and readiness tests
+with 1 skipped. Frontend validation passed 57 Vitest tests and 4 contract
+tests, typecheck, smoke, and build. Route-mocked Playwright passed 1 scenario
+and the isolated DB-backed suite passed 10 scenarios. OpenAPI drift and the
+development, production-example, and E2E Compose contracts passed. Both the
+push and pull-request GitHub workflows passed on the integrated merge SHA.
+
+`alembic check` reports 130 classified historical comparison operations at
+0063. None refers to the new document institution provenance column, foreign
+key, or index. This remains a documented non-zero historical drift rather than
+a zero-drift release criterion.
+
+PR #4 remains stacked, untouched, and based on the pre-0063 recovery contract.
+Only after PR #3 is merged into `main` may a separate recovery change add
+0063 manifests, provenance hash projections, restore matrices, and negative
+cross-institution recovery tests.
 
 The DB-backed E2E seed was updated to populate canonical institution provenance
 for its directly created synthetic documents. This is required because normal
