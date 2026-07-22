@@ -2,13 +2,20 @@ from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
 from hashlib import sha256
+from hmac import compare_digest
 from secrets import token_urlsafe
+import logging
+import re
 
 from sqlalchemy import delete, select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, sessionmaker
 
 from app.core.config import get_settings
 from app.models.domain import AuditLog, User, UserSession
+
+
+logger = logging.getLogger(__name__)
+SESSION_TOKEN_PATTERN = re.compile(r"^[A-Za-z0-9_-]{64}$")
 
 
 def hash_session_secret(raw: str) -> str:
@@ -85,7 +92,7 @@ def cleanup_expired_sessions(db: Session, *, older_than: datetime | None = None)
 
 
 def csrf_token_matches(session: UserSession, raw_csrf_token: str | None) -> bool:
-    return bool(raw_csrf_token) and hash_session_secret(raw_csrf_token) == session.csrf_token_hash
+    return bool(raw_csrf_token) and compare_digest(hash_session_secret(raw_csrf_token), session.csrf_token_hash)
 
 
 def record_session_audit(db: Session, action: str, *, user_id: int | None = None, session_id: int | None = None, summary: str | None = None) -> None:
@@ -98,4 +105,109 @@ def record_session_audit(db: Session, action: str, *, user_id: int | None = None
             entity_id=session_id,
             summary=summary,
         )
+    )
+
+
+def write_security_audit_event(
+    bind,
+    action: str,
+    *,
+    user_id: int | None = None,
+    session_id: int | None = None,
+    reason_code: str,
+    request_id: str | None = None,
+    method: str | None = None,
+    route: str | None = None,
+) -> bool:
+    """Persist sanitized authentication metadata outside the request transaction."""
+    AuditSession = sessionmaker(bind=bind, expire_on_commit=False)
+    try:
+        with AuditSession.begin() as audit_db:
+            audit_db.add(
+                AuditLog(
+                    actor_type="user" if user_id else "system",
+                    actor_user_id=user_id,
+                    action=action,
+                    entity_type="user_session",
+                    entity_id=session_id,
+                    summary="Browser session security event.",
+                    request_id=request_id,
+                    after_json={"reason_code": reason_code, "method": method, "route": route},
+                )
+            )
+        return True
+    except Exception as exc:
+        logger.error(
+            "Security audit persistence failed; request_id=%s action=%s error_type=%s",
+            request_id,
+            action,
+            type(exc).__name__,
+        )
+        return False
+
+
+def invalid_session_context(db: Session, raw_session_token: str | None) -> tuple[int | None, int | None, str]:
+    if not raw_session_token:
+        return None, None, "missing"
+    if not SESSION_TOKEN_PATTERN.fullmatch(raw_session_token):
+        return None, None, "malformed"
+    session = db.scalar(select(UserSession).where(UserSession.token_hash == hash_session_secret(raw_session_token)))
+    if session is None:
+        return None, None, "unknown"
+    now = datetime.now(UTC)
+    revoked_at = session.revoked_at.replace(tzinfo=UTC) if session.revoked_at and session.revoked_at.tzinfo is None else session.revoked_at
+    expires_at = session.expires_at.replace(tzinfo=UTC) if session.expires_at.tzinfo is None else session.expires_at
+    if revoked_at is not None:
+        reason = "revoked"
+    elif expires_at <= now:
+        reason = "expired"
+    elif not session.user or not session.user.active:
+        reason = "inactive_user"
+    else:
+        reason = "active"
+    return session.user_id, session.id, reason
+
+
+def write_invalid_session_audit(db: Session, raw_session_token: str | None, request) -> None:
+    user_id, session_id, reason = invalid_session_context(db, raw_session_token)
+    route_object = request.scope.get("route")
+    route = getattr(route_object, "path", None)
+    write_security_audit_event(
+        db.get_bind(),
+        "auth.browser_session_invalid",
+        user_id=user_id,
+        session_id=session_id,
+        reason_code=reason,
+        request_id=getattr(request.state, "request_id", None),
+        method=request.method,
+        route=route,
+    )
+
+
+def write_invalid_csrf_audit(db: Session, session: UserSession, request) -> None:
+    route_object = request.scope.get("route")
+    write_security_audit_event(
+        db.get_bind(),
+        "auth.browser_csrf_invalid",
+        user_id=session.user_id,
+        session_id=session.id,
+        reason_code="session_hash_mismatch",
+        request_id=getattr(request.state, "request_id", None),
+        method=request.method,
+        route=getattr(route_object, "path", None),
+    )
+
+
+def write_credential_conflict_audit(db: Session, raw_session_token: str | None, request) -> None:
+    user_id, session_id, session_state = invalid_session_context(db, raw_session_token)
+    route_object = request.scope.get("route")
+    write_security_audit_event(
+        db.get_bind(),
+        "auth.browser_credential_conflict",
+        user_id=user_id,
+        session_id=session_id,
+        reason_code=session_state,
+        request_id=getattr(request.state, "request_id", None),
+        method=request.method,
+        route=getattr(route_object, "path", None),
     )

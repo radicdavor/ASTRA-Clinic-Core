@@ -1,7 +1,9 @@
 from datetime import UTC, datetime, timedelta
 
-from app.models.domain import UserSession
-from app.services.sessions import cleanup_expired_sessions, create_user_session
+import pytest
+
+from app.models.domain import AuditLog, Patient, UserSession
+from app.services.sessions import cleanup_expired_sessions, create_user_session, write_security_audit_event
 from tests.conftest import login_token
 
 
@@ -78,6 +80,28 @@ def test_csrf_rejects_wrong_token_and_keeps_cors_visible(client, auth_setup):
     assert response.headers["access-control-allow-credentials"] == "true"
 
 
+def test_invalid_csrf_audit_is_sanitized(client, db, auth_setup):
+    login = client.post("/auth/browser/login", json={"email": "admin@test.local", "password": "secret"})
+    assert login.status_code == 200
+    wrong_token = "raw-secret-that-must-not-be-audited"
+
+    response = client.post(
+        "/api/patients",
+        headers={"X-CSRF-Token": wrong_token},
+        json={"first_name": "Csrf", "last_name": "Blocked"},
+    )
+
+    assert response.status_code == 403
+    db.expire_all()
+    event = db.query(AuditLog).filter(AuditLog.action == "auth.browser_csrf_invalid").one()
+    assert event.after_json == {
+        "reason_code": "session_hash_mismatch",
+        "method": "POST",
+        "route": "/api/patients",
+    }
+    assert wrong_token not in str(event.after_json)
+
+
 def test_csrf_rejects_disallowed_browser_origin(client, auth_setup):
     login = client.post("/auth/browser/login", json={"email": "admin@test.local", "password": "secret"})
     csrf = login.json()["csrf_token"]
@@ -99,6 +123,128 @@ def test_csrf_allows_cookie_authenticated_mutation_with_matching_token(client, a
     response = client.post("/api/patients", headers={"X-CSRF-Token": csrf}, json={"first_name": "Csrf", "last_name": "Allowed"})
 
     assert response.status_code == 200
+
+
+def test_csrf_token_from_another_session_is_rejected(client, auth_setup):
+    first = client.post("/auth/browser/login", json={"email": "admin@test.local", "password": "secret"})
+    csrf_from_first_session = first.json()["csrf_token"]
+    second = client.post("/auth/browser/login", json={"email": "admin@test.local", "password": "secret"})
+    assert second.status_code == 200
+    client.cookies.set("astra_csrf", csrf_from_first_session)
+
+    response = client.post(
+        "/api/patients",
+        headers={"X-CSRF-Token": csrf_from_first_session},
+        json={"first_name": "Cross", "last_name": "Session"},
+    )
+
+    assert response.status_code == 403
+
+
+def test_session_bootstrap_rejects_csrf_cookie_from_another_session(client, auth_setup):
+    first = client.post("/auth/browser/login", json={"email": "admin@test.local", "password": "secret"})
+    csrf_from_first_session = first.json()["csrf_token"]
+    second = client.post("/auth/browser/login", json={"email": "admin@test.local", "password": "secret"})
+    assert second.status_code == 200
+    client.cookies.set("astra_csrf", csrf_from_first_session)
+
+    assert client.get("/auth/session").status_code == 403
+
+
+def test_invalid_browser_session_audit_survives_unauthorized_response(client, db, auth_setup):
+    login = client.post("/auth/browser/login", json={"email": "admin@test.local", "password": "secret"})
+    assert login.status_code == 200
+    session = db.query(UserSession).one()
+    session.revoked_at = datetime.now(UTC)
+    db.commit()
+
+    assert client.get("/auth/session").status_code == 401
+    db.expire_all()
+    event = db.query(AuditLog).filter(AuditLog.action == "auth.browser_session_invalid").one()
+    assert event.after_json["reason_code"] == "revoked"
+    assert event.after_json["route"] == "/auth/session"
+
+
+def test_unknown_browser_session_audit_does_not_store_raw_token(client, db, auth_setup):
+    raw_token = "u" * 64
+    client.cookies.set("astra_session", raw_token)
+
+    assert client.get("/auth/session").status_code == 401
+
+    db.expire_all()
+    event = db.query(AuditLog).filter(AuditLog.action == "auth.browser_session_invalid").one()
+    assert event.after_json["reason_code"] == "unknown"
+    assert event.actor_user_id is None
+    assert raw_token not in str(event.after_json)
+    assert raw_token not in (event.summary or "")
+
+
+def test_malformed_browser_session_audit_is_classified(client, db, auth_setup):
+    raw_token = "malformed raw session token"
+    client.cookies.set("astra_session", raw_token)
+
+    assert client.get("/auth/session").status_code == 401
+
+    db.expire_all()
+    event = db.query(AuditLog).filter(AuditLog.action == "auth.browser_session_invalid").one()
+    assert event.after_json["reason_code"] == "malformed"
+    assert raw_token not in str(event.after_json)
+
+
+def test_expired_browser_session_audit_is_classified(client, db, auth_setup):
+    login = client.post("/auth/browser/login", json={"email": "admin@test.local", "password": "secret"})
+    assert login.status_code == 200
+    session = db.query(UserSession).one()
+    session.expires_at = datetime.now(UTC) - timedelta(minutes=1)
+    db.commit()
+
+    assert client.get("/auth/session").status_code == 401
+
+    db.expire_all()
+    event = db.query(AuditLog).filter(AuditLog.action == "auth.browser_session_invalid").one()
+    assert event.after_json["reason_code"] == "expired"
+
+
+def test_security_audit_commit_does_not_commit_business_transaction(pg_db):
+    patient = Patient(first_name="Uncommitted", last_name="Business")
+    pg_db.add(patient)
+    pg_db.flush()
+
+    assert write_security_audit_event(pg_db.get_bind(), "auth.browser_session_invalid", reason_code="unknown") is True
+    pg_db.rollback()
+
+    assert pg_db.query(Patient).filter(Patient.first_name == "Uncommitted").count() == 0
+    assert pg_db.query(AuditLog).filter(AuditLog.action == "auth.browser_session_invalid").count() == 1
+
+
+def test_security_audit_failure_is_non_throwing(monkeypatch):
+    class BrokenAuditSession:
+        def begin(self):
+            raise RuntimeError("audit storage unavailable")
+
+    monkeypatch.setattr("app.services.sessions.sessionmaker", lambda **_kwargs: BrokenAuditSession())
+
+    assert write_security_audit_event(object(), "auth.browser_session_invalid", reason_code="unknown") is False
+
+
+def test_security_audit_failure_still_rejects_request_without_leaking_token(client, auth_setup, monkeypatch, caplog):
+    class BrokenAuditSession:
+        def begin(self):
+            raise RuntimeError("audit storage unavailable")
+
+    monkeypatch.setattr("app.services.sessions.sessionmaker", lambda **_kwargs: BrokenAuditSession())
+    raw_token = "z" * 64
+    client.cookies.set("astra_session", raw_token)
+
+    with caplog.at_level("ERROR", logger="app.services.sessions"):
+        response = client.get("/auth/session")
+
+    assert response.status_code == 401
+    assert "audit storage unavailable" not in response.text
+    assert "Security audit persistence failed" in caplog.text
+    assert "request_id=" in caplog.text
+    assert "audit storage unavailable" not in caplog.text
+    assert raw_token not in caplog.text
 
 
 def test_cors_preflight_allows_csrf_and_clinic_headers(client):
@@ -140,6 +286,19 @@ def test_conflicting_cookie_and_bearer_credentials_are_rejected(client, auth_set
     response = client.get("/api/inventory/items", headers={"Authorization": f"Bearer {token}", "X-CSRF-Token": cookie_login.json()["csrf_token"]})
 
     assert response.status_code == 401
+
+
+def test_conflicting_credentials_are_audited_without_authorization_value(client, db, auth_setup):
+    cookie_login = client.post("/auth/browser/login", json={"email": "admin@test.local", "password": "secret"})
+    token = login_token(client, "admin@test.local")
+
+    response = client.get("/api/inventory/items", headers={"Authorization": f"Bearer {token}"})
+
+    assert response.status_code == 401
+    db.expire_all()
+    event = db.query(AuditLog).filter(AuditLog.action == "auth.browser_credential_conflict").one()
+    assert event.after_json["reason_code"] == "active"
+    assert token not in str(event.after_json)
 
 
 def test_expired_or_disabled_user_session_is_rejected(client, db, auth_setup):

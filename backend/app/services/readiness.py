@@ -6,9 +6,9 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
-from app.models.domain import ApiKey, Appointment, AuditLog, ClinicalDocument, ClinicalEpisode, InventoryBatch, InventoryItem, Invoice, Module, Patient, PatientClinicalSummaryRecord, Provider, Room, Service, room_services
+from app.models.domain import ApiKey, Appointment, AuditLog, ClinicalDocument, ClinicalEpisode, Institution, InventoryBatch, InventoryItem, Invoice, Module, Patient, PatientClinicalSummaryRecord, Provider, Room, Service, room_services
 from app.schemas.common import ReadinessCheck
-from app.services.patient_knowledge import DOCUMENT_REVIEW_AWAITING_STATUSES, latest_summary_records_by_patient, official_patient_documents_statement
+from app.services.patient_knowledge import DOCUMENT_REVIEW_AWAITING_STATUSES, normalized_summary_source_ids, official_patient_documents_statement
 
 
 def scalar_count(db: Session, stmt) -> int:
@@ -35,24 +35,48 @@ def build_operational_readiness(db: Session) -> dict:
     unpaid_invoice_count = scalar_count(db, select(func.count(Invoice.id)).where(Invoice.status != "draft", Invoice.payment_status != "paid"))
     episode_count = scalar_count(db, select(func.count(ClinicalEpisode.id)))
     appointments_without_episode = scalar_count(db, select(func.count(Appointment.id)).where(Appointment.episode_id.is_(None)))
-    documents_awaiting_review = scalar_count(db, select(func.count(ClinicalDocument.id)).where(ClinicalDocument.review_status.in_(DOCUMENT_REVIEW_AWAITING_STATUSES)))
+    documents_awaiting_review = scalar_count(
+        db,
+        select(func.count(ClinicalDocument.id)).where(
+            ClinicalDocument.institution_id.is_not(None),
+            ClinicalDocument.review_status.in_(DOCUMENT_REVIEW_AWAITING_STATUSES),
+        ),
+    )
     rooms_without_services = scalar_count(db, select(func.count(Room.id)).where(Room.active.is_(True), ~Room.id.in_(select(room_services.c.room_id))))
     services_without_rooms = scalar_count(db, select(func.count(Service.id)).where(Service.active.is_(True), ~Service.id.in_(select(room_services.c.service_id))))
     providers_without_clinic = scalar_count(db, select(func.count(Provider.id)).where(Provider.active.is_(True), Provider.clinic_id.is_(None)))
     today_incomplete_appointments = scalar_count(db, select(func.count(Appointment.id)).where(Appointment.date == today, or_(Appointment.provider_id.is_(None), Appointment.room_id.is_(None), Appointment.service_id.is_(None))))
-    reviewed_documents = db.scalars(official_patient_documents_statement()).all()
+    institution_ids = set(db.scalars(select(Institution.id).where(Institution.active.is_(True))).all())
+    reviewed_documents = db.scalars(official_patient_documents_statement(institution_ids)).all()
     reviewed_summaries = db.scalars(
         select(PatientClinicalSummaryRecord)
         .where(PatientClinicalSummaryRecord.status == "reviewed")
         .order_by(PatientClinicalSummaryRecord.patient_id, PatientClinicalSummaryRecord.updated_at.desc(), PatientClinicalSummaryRecord.id.desc())
     ).all()
-    reviewed_summary_by_patient = latest_summary_records_by_patient(reviewed_summaries)
-    stale_summary_patients = {
-        document.patient_id
-        for document in reviewed_documents
-        if document.patient_id not in reviewed_summary_by_patient
-        or document.updated_at > reviewed_summary_by_patient[document.patient_id].updated_at
-    }
+    reviewed_summaries_by_patient: dict[int, list[PatientClinicalSummaryRecord]] = {}
+    for summary in reviewed_summaries:
+        reviewed_summaries_by_patient.setdefault(summary.patient_id, []).append(summary)
+    document_groups: dict[tuple[int, int], list[ClinicalDocument]] = {}
+    for document in reviewed_documents:
+        if document.institution_id is not None:
+            document_groups.setdefault((document.patient_id, document.institution_id), []).append(document)
+    stale_summary_patients = set()
+    for (patient_id, _institution_id), documents in document_groups.items():
+        expected_source_ids = frozenset(document.id for document in documents)
+        latest_document_updated_at = max(
+            (document.updated_at for document in documents if document.updated_at is not None),
+            default=None,
+        )
+        has_current_exact_summary = any(
+            normalized_summary_source_ids(summary.source_document_ids) == expected_source_ids
+            and (
+                latest_document_updated_at is None
+                or (summary.updated_at is not None and summary.updated_at >= latest_document_updated_at)
+            )
+            for summary in reviewed_summaries_by_patient.get(patient_id, [])
+        )
+        if not has_current_exact_summary:
+            stale_summary_patients.add(patient_id)
 
     checks = [
         ReadinessCheck(

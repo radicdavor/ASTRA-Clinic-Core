@@ -1,6 +1,7 @@
 from datetime import datetime, timezone
 
-from app.models.domain import ClinicalFormDefinition, ClinicalFormInstance, ClinicalFormVersion, Patient, ServiceFormBinding, SignedClinicalReport
+from app.core.security import hash_password
+from app.models.domain import Clinic, ClinicMembership, ClinicalFormDefinition, ClinicalFormInstance, ClinicalFormVersion, Institution, Patient, Role, ServiceFormBinding, SignedClinicalReport, User
 from tests.conftest import login_token
 from tests.factories import appointment
 
@@ -61,6 +62,49 @@ def test_signing_creates_immutable_clinical_document_and_print_history(client, d
     assert printed.json()["report_id"] == report.id
     refreshed = client.get(f"/api/patient-journeys/{visit['id']}/visit-documents", headers=headers(client)).json()
     assert refreshed[0]["print_count"] == 1
+
+
+def test_foreign_institution_cannot_list_deliver_or_read_report_history(client, db, auth_setup):
+    visit, _, _, report = setup_signed_report(client, db)
+    foreign_institution = Institution(code="foreign-report", name="Foreign report institution", active=True)
+    foreign_clinic = Clinic(name="Foreign report clinic", institution_key="foreign-report", institution=foreign_institution)
+    foreign_role = Role(
+        name="foreign-report-doctor",
+        description="Foreign report doctor",
+        professional_category="medical_staff",
+        permissions=[
+            permission
+            for permission in auth_setup["admin"].role.permissions
+            if permission.name in {
+                "clinical.documents.read_institution",
+                "documents.view_source",
+                "reports.read",
+                "reports.send",
+                "reports.delivery_history",
+            }
+        ],
+    )
+    foreign_user = User(
+        email="foreign-report@test.local",
+        full_name="Foreign Report Doctor",
+        password_hash=hash_password("secret"),
+        role=foreign_role,
+    )
+    db.add_all([foreign_clinic, foreign_role, foreign_user])
+    db.flush()
+    db.add(ClinicMembership(user_id=foreign_user.id, clinic_id=foreign_clinic.id, active=True, created_by_user_id=foreign_user.id))
+    db.commit()
+    foreign_headers = {"Authorization": f"Bearer {login_token(client, foreign_user.email)}"}
+
+    assert client.get(f"/api/patient-journeys/{visit['id']}/visit-documents", headers=foreign_headers).status_code == 404
+    assert client.get(f"/api/signed-reports/{report.id}", headers=foreign_headers).status_code == 404
+    assert client.get(f"/api/signed-reports/{report.id}/delivery-history", headers=foreign_headers).status_code == 404
+    delivered = client.post(
+        f"/api/patient-journeys/{visit['id']}/visit-documents/deliver",
+        headers=foreign_headers,
+        json={"report_ids": [report.id], "recipient": "synthetic.patient@example.test"},
+    )
+    assert delivered.status_code == 404
 
 
 def test_signed_report_has_no_mutation_api_and_generated_source_document_is_locked(client, db, auth_setup):

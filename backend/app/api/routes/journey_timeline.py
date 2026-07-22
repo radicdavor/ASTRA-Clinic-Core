@@ -5,10 +5,11 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session, joinedload, selectinload
 
 from app.audit.service import audit, snapshot
-from app.auth.dependencies import Actor, require_permission
+from app.auth.dependencies import CurrentUserContext, require_active_clinic
 from app.core.database import get_db
-from app.models.domain import JourneyAISummary, JourneyAISummaryFact, PatientJourney
+from app.models.domain import ClinicalDocument, JourneyAISummary, JourneyAISummaryFact, PatientJourney
 from app.schemas.journey_timeline import JourneySummaryOut, SummaryFactReview, TimelineItem
+from app.services.clinical_document_access import actor_is_medical_staff, institution_provenance_scoped_documents_statement
 from app.services.journey_timeline import build_timeline, generate_local_summary, summary_query
 from app.services.patient_journeys import add_event
 
@@ -16,11 +17,11 @@ from app.services.patient_journeys import add_event
 router = APIRouter(prefix="/api/patient-journeys", tags=["journey-timeline"])
 
 
-def get_journey(db: Session, journey_id: int) -> PatientJourney:
+def get_journey(db: Session, journey_id: int, clinic_id: int) -> PatientJourney:
     journey = db.scalar(
         select(PatientJourney)
         .options(joinedload(PatientJourney.appointment), selectinload(PatientJourney.events))
-        .where(PatientJourney.id == journey_id)
+        .where(PatientJourney.id == journey_id, PatientJourney.clinic_id == clinic_id)
     )
     if not journey:
         raise HTTPException(404, detail="Tijek pacijenta nije pronađen")
@@ -31,9 +32,17 @@ def get_journey(db: Session, journey_id: int) -> PatientJourney:
 def journey_timeline(
     journey_id: int,
     db: Session = Depends(get_db),
-    actor: Actor = Depends(require_permission("journey.read")),
+    context: CurrentUserContext = Depends(require_active_clinic("journey.read")),
 ):
-    return build_timeline(db, get_journey(db, journey_id))
+    journey = get_journey(db, journey_id, context.active_clinic_id)
+    documents = []
+    if actor_is_medical_staff(context.actor):
+        documents = db.scalars(
+            institution_provenance_scoped_documents_statement(db, context.actor)
+            .where(ClinicalDocument.journey_id == journey.id)
+            .order_by(ClinicalDocument.id)
+        ).all()
+    return build_timeline(db, journey, documents)
 
 
 @router.post("/{journey_id}/summary", response_model=JourneySummaryOut)
@@ -41,10 +50,16 @@ def generate_summary(
     journey_id: int,
     request: Request,
     db: Session = Depends(get_db),
-    actor: Actor = Depends(require_permission("summary.generate")),
+    context: CurrentUserContext = Depends(require_active_clinic("summary.generate")),
 ):
-    journey = get_journey(db, journey_id)
-    summary = generate_local_summary(db, journey)
+    actor = context.actor
+    journey = get_journey(db, journey_id, context.active_clinic_id)
+    documents = db.scalars(
+        institution_provenance_scoped_documents_statement(db, actor)
+        .where(ClinicalDocument.journey_id == journey.id)
+        .order_by(ClinicalDocument.id)
+    ).all()
+    summary = generate_local_summary(db, journey, documents)
     add_event(db, journey, "ai_summary_generated", "Stvoren izvorno povezani AI sažetak; čeka pregled", actor, request, journey.current_stage, journey.current_stage, {"summary_id": summary.id})
     audit(db, "summary_generated", "JourneyAISummary", summary.id, "Stvoren lokalni izvorno povezani sažetak", actor.user_id, actor.actor_type, actor.api_key_id, None, snapshot(summary), request)
     db.commit()
@@ -55,9 +70,9 @@ def generate_summary(
 def get_latest_summary(
     journey_id: int,
     db: Session = Depends(get_db),
-    actor: Actor = Depends(require_permission("journey.read")),
+    context: CurrentUserContext = Depends(require_active_clinic("journey.read")),
 ):
-    get_journey(db, journey_id)
+    get_journey(db, journey_id, context.active_clinic_id)
     summary = db.scalar(summary_query().where(JourneyAISummary.journey_id == journey_id).order_by(JourneyAISummary.generated_at.desc(), JourneyAISummary.id.desc()))
     if not summary:
         raise HTTPException(404, detail="Sažetak nije generiran")
@@ -72,8 +87,10 @@ def review_summary_fact(
     payload: SummaryFactReview,
     request: Request,
     db: Session = Depends(get_db),
-    actor: Actor = Depends(require_permission("summary.review")),
+    context: CurrentUserContext = Depends(require_active_clinic("summary.review")),
 ):
+    actor = context.actor
+    get_journey(db, journey_id, context.active_clinic_id)
     summary = db.scalar(summary_query().where(JourneyAISummary.id == summary_id, JourneyAISummary.journey_id == journey_id))
     fact = db.get(JourneyAISummaryFact, fact_id)
     if not summary or not fact or fact.summary_id != summary.id:

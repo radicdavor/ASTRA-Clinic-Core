@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 
 from fastapi import HTTPException, Request, status
-from sqlalchemy import or_, select
+from sqlalchemy import select
 from sqlalchemy.orm import Session, joinedload, load_only
 
 from app.audit.service import audit, snapshot
@@ -15,7 +15,6 @@ from app.models.domain import (
     ClinicalDocumentAddendum,
     Clinic,
     Institution,
-    PatientClinicAssociation,
     SignedClinicalReport,
 )
 from app.services.clinical_documents import get_document_or_404
@@ -114,42 +113,24 @@ def clinic_institution_id(db: Session, clinic_id: int | None) -> int | None:
     return clinic.institution_id if clinic else None
 
 
-def document_institution_keys(db: Session, document: ClinicalDocument) -> set[str]:
-    if document.clinic:
-        return {document.clinic.institution_key}
-    if document.clinic_id:
-        clinic = db.get(Clinic, document.clinic_id)
-        return {clinic.institution_key} if clinic else set()
-    rows = db.scalars(
-        select(Clinic.institution_key)
-        .join(PatientClinicAssociation, PatientClinicAssociation.clinic_id == Clinic.id)
-        .where(
-            PatientClinicAssociation.patient_id == document.patient_id,
-            PatientClinicAssociation.active.is_(True),
-            Clinic.active.is_(True),
-        )
-    ).all()
-    return set(rows) or {"default"}
+def institution_id_for_clinic(db: Session, clinic_id: int | None) -> int | None:
+    clinic = db.get(Clinic, clinic_id) if clinic_id is not None else None
+    return clinic.institution_id if clinic else None
 
 
-def document_institution_ids(db: Session, document: ClinicalDocument) -> set[int]:
-    if document.clinic and document.clinic.institution_id is not None:
-        return {document.clinic.institution_id}
-    if document.clinic_id:
-        clinic = db.get(Clinic, document.clinic_id)
-        if clinic and clinic.institution_id is not None:
-            return {clinic.institution_id}
-    rows = db.scalars(
-        select(Clinic.institution_id)
-        .join(PatientClinicAssociation, PatientClinicAssociation.clinic_id == Clinic.id)
-        .where(
-            PatientClinicAssociation.patient_id == document.patient_id,
-            PatientClinicAssociation.active.is_(True),
-            Clinic.active.is_(True),
-            Clinic.institution_id.is_not(None),
-        )
-    ).all()
-    return {item for item in rows if item is not None}
+def require_document_institution_for_clinic(db: Session, clinic_id: int | None) -> int:
+    institution_id = institution_id_for_clinic(db, clinic_id)
+    if institution_id is None:
+        raise HTTPException(status.HTTP_409_CONFLICT, detail="Nije moguće dokazati ustanovu kliničkog dokumenta")
+    return institution_id
+
+
+def validate_document_provenance(db: Session, document: ClinicalDocument) -> None:
+    if document.institution_id is None:
+        raise HTTPException(status.HTTP_409_CONFLICT, detail="Klinički dokument nema razriješeno podrijetlo ustanove")
+    clinic_institution_id = institution_id_for_clinic(db, document.clinic_id)
+    if clinic_institution_id is not None and clinic_institution_id != document.institution_id:
+        raise HTTPException(status.HTTP_409_CONFLICT, detail="Klinika i ustanova kliničkog dokumenta nisu usklađene")
 
 
 def ensure_institution_clinical_read(
@@ -165,14 +146,8 @@ def ensure_institution_clinical_read(
     if not actor_is_medical_staff(actor):
         raise HTTPException(status.HTTP_403_FORBIDDEN, detail="Klinički dokument smije čitati samo ovlašteno medicinsko osoblje")
     scope = actor_scope or actor_institution_scope(db, actor)
-    document_ids = document_institution_ids(db, document)
-    id_overlap = scope.institution_ids.intersection(document_ids)
-    if id_overlap:
-        return sorted(id_overlap)[0]
-    document_keys = document_institution_keys(db, document)
-    key_overlap = scope.institution_keys.intersection(document_keys)
-    if key_overlap:
-        return sorted(key_overlap)[0]
+    if document.institution_id is not None and document.institution_id in scope.institution_ids:
+        return document.institution_id
     raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Klinicki dokument nije pronaden")
 
 
@@ -241,28 +216,25 @@ def get_institution_scoped_clinical_document_for_read(
 
 
 def institution_scoped_clinical_documents_statement(db: Session, actor: Actor):
+    return (
+        institution_provenance_scoped_documents_statement(db, actor)
+        .options(joinedload(ClinicalDocument.patient), joinedload(ClinicalDocument.clinic))
+        .where(
+            ClinicalDocument.is_clinical_record.is_(True),
+            ClinicalDocument.record_classification.in_(INSTITUTION_READABLE_RECORD_CLASSIFICATIONS),
+        )
+    )
+
+
+def institution_provenance_scoped_documents_statement(db: Session, actor: Actor):
+    """Scope every document lifecycle state by canonical institution provenance."""
     if not actor_is_medical_staff(actor):
         raise HTTPException(status.HTTP_403_FORBIDDEN, detail="Kliničke dokumente smije čitati samo ovlašteno medicinsko osoblje")
     scope = actor_institution_scope(db, actor)
     institution_ids = scope.institution_ids
-    institution_keys = scope.institution_keys
-    if not institution_ids and not institution_keys:
+    if not institution_ids:
         raise HTTPException(status.HTTP_403_FORBIDDEN, detail="Korisnik nema aktivno članstvo ni u jednoj ustanovi")
-    institution_filter = []
-    if institution_ids:
-        institution_filter.append(Clinic.institution_id.in_(institution_ids))
-    if institution_keys:
-        institution_filter.append(Clinic.institution_key.in_(institution_keys))
-    return (
-        select(ClinicalDocument)
-        .options(joinedload(ClinicalDocument.patient), joinedload(ClinicalDocument.clinic))
-        .outerjoin(Clinic, ClinicalDocument.clinic_id == Clinic.id)
-        .where(
-            ClinicalDocument.is_clinical_record.is_(True),
-            ClinicalDocument.record_classification.in_(INSTITUTION_READABLE_RECORD_CLASSIFICATIONS),
-            or_(*institution_filter, ClinicalDocument.clinic_id.is_(None)),
-        )
-    )
+    return select(ClinicalDocument).where(ClinicalDocument.institution_id.in_(institution_ids))
 
 
 def institution_scoped_clinical_record_metadata_statement(
@@ -274,15 +246,12 @@ def institution_scoped_clinical_record_metadata_statement(
     if not actor_is_medical_staff(actor):
         raise HTTPException(status.HTTP_403_FORBIDDEN, detail="Klinicke dokumente smije citati samo ovlasteno medicinsko osoblje")
     if resolved_institution_id is not None:
-        scope_filter = Clinic.institution_id == resolved_institution_id
+        scope_filter = ClinicalDocument.institution_id == resolved_institution_id
     else:
         scope = actor_institution_scope(db, actor)
-        if not scope.institution_keys:
+        if not scope.institution_ids:
             raise HTTPException(status.HTTP_403_FORBIDDEN, detail="Korisnik nema aktivno clanstvo ni u jednoj ustanovi")
-        scope_filter = or_(
-            Clinic.institution_key.in_(scope.institution_keys),
-            ClinicalDocument.clinic_id.is_(None),
-        )
+        scope_filter = ClinicalDocument.institution_id.in_(scope.institution_ids)
     return (
         select(ClinicalDocument)
         .options(
@@ -292,6 +261,7 @@ def institution_scoped_clinical_record_metadata_statement(
                 ClinicalDocument.document_date,
                 ClinicalDocument.created_at,
                 ClinicalDocument.clinic_id,
+                ClinicalDocument.institution_id,
                 ClinicalDocument.document_type,
                 ClinicalDocument.title,
                 ClinicalDocument.author,
@@ -302,7 +272,6 @@ def institution_scoped_clinical_record_metadata_statement(
             ),
             joinedload(ClinicalDocument.clinic).load_only(Clinic.id, Clinic.name),
         )
-        .outerjoin(Clinic, ClinicalDocument.clinic_id == Clinic.id)
         .where(
             ClinicalDocument.is_clinical_record.is_(True),
             ClinicalDocument.record_classification.in_(INSTITUTION_READABLE_RECORD_CLASSIFICATIONS),
@@ -365,7 +334,7 @@ def create_document_addendum(
         signed_report_id=signed_report_id,
         original_document_type="signed_clinical_report" if signed_report_id is not None else "clinical_document",
         patient_id=document.patient_id,
-        institution_id=institution if isinstance(institution, int) else clinic_institution_id(db, document.clinic_id),
+        institution_id=institution,
         clinic_id=document.clinic_id,
         author_user_id=actor.user_id,
         reason=reason,

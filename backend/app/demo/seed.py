@@ -390,6 +390,8 @@ def main() -> None:
             if document is None:
                 document = ClinicalDocument(
                     patient_id=patient.id,
+                    clinic_id=gastro_clinic.id,
+                    institution_id=gastro_clinic.institution_id,
                     review_status=review_status,
                     ai_extraction_status=extraction_status,
                     ai_extraction_generated_at=extraction_timestamp,

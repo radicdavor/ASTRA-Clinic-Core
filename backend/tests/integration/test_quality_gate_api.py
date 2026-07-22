@@ -110,7 +110,7 @@ def test_postgresql_rejects_signed_report_content_update_and_delete_and_preserve
     version = ClinicalFormVersion(definition_id=definition.id, version=1, status="published", sections_json=[{"section_key": "main", "fields": [{"field_key": "finding", "label": "Nalaz", "type": "long_text"}]}], validation_schema_json={}, print_layout_json={}, output_document_type="gastroscopy_report")
     pg_db.add(version); pg_db.flush()
     instance = ClinicalFormInstance(activity_id=activity.id, form_version_id=version.id, purpose="clinical_report", status="signed", data_json={"finding": "Sintetički nalaz"}, rendered_summary="Nalaz: Sintetički nalaz", created_by=signer.id, last_edited_by=signer.id, completed_by=signer.id, signed_by=signer.id, completed_at=now, signed_at=now, binding_source="test", resolved_at=now)
-    document = ClinicalDocument(patient_id=patient.id, clinic_id=room.clinic_id, source_type="generated_signed_report", document_type="gastroscopy_report", title="PG nalaz", raw_text="Nalaz: Sintetički nalaz", review_status="signed", physician_reviewed=True, reviewed_by=signer.id, reviewed_at=now, appointment_id=appointment.id, journey_id=journey.id, upload_channel="generated", lifecycle_status="reviewed", received_at=now)
+    document = ClinicalDocument(patient_id=patient.id, clinic_id=room.clinic_id, institution_id=room.clinic.institution_id, source_type="generated_signed_report", document_type="gastroscopy_report", title="PG nalaz", raw_text="Nalaz: Sintetički nalaz", review_status="signed", physician_reviewed=True, reviewed_by=signer.id, reviewed_at=now, appointment_id=appointment.id, journey_id=journey.id, upload_channel="generated", lifecycle_status="reviewed", received_at=now)
     pg_db.add_all([instance, document]); pg_db.flush()
     report = SignedClinicalReport(form_instance_id=instance.id, form_version_id=version.id, clinical_document_id=document.id, activity_id=activity.id, journey_id=journey.id, patient_id=patient.id, document_type="gastroscopy_report", title="PG nalaz", structured_data_json=instance.data_json, rendered_content=instance.rendered_summary, version_number=1, signer_user_id=signer.id, signer_name=signer.full_name, signed_at=now, content_hash=report_digest(instance.rendered_summary, instance.data_json), hash_algorithm="sha256")
     pg_db.add(report); pg_db.flush()
@@ -181,6 +181,7 @@ def test_postgresql_institution_clinical_record_role_boundaries(pg_client, pg_db
     clinical = ClinicalDocument(
         patient_id=patient.id,
         clinic_id=clinic_b.id,
+        institution_id=clinic_b.institution_id,
         source_type="external",
         document_type="gastroscopy",
         title="PG klinički nalaz",
@@ -193,6 +194,7 @@ def test_postgresql_institution_clinical_record_role_boundaries(pg_client, pg_db
     financial = ClinicalDocument(
         patient_id=patient.id,
         clinic_id=clinic_b.id,
+        institution_id=clinic_b.institution_id,
         source_type="uploaded",
         document_type="other",
         title="PG financijski prilog",
@@ -204,6 +206,7 @@ def test_postgresql_institution_clinical_record_role_boundaries(pg_client, pg_db
     own_draft = ClinicalDocument(
         patient_id=patient.id,
         clinic_id=clinic_b.id,
+        institution_id=clinic_b.institution_id,
         source_type="internal",
         document_type="consultation",
         title="PG vlastiti nacrt",
@@ -216,6 +219,7 @@ def test_postgresql_institution_clinical_record_role_boundaries(pg_client, pg_db
     legacy_draft = ClinicalDocument(
         patient_id=patient.id,
         clinic_id=clinic_b.id,
+        institution_id=clinic_b.institution_id,
         source_type="internal",
         document_type="consultation",
         title="PG legacy nacrt",
@@ -228,6 +232,7 @@ def test_postgresql_institution_clinical_record_role_boundaries(pg_client, pg_db
     unclassified = ClinicalDocument(
         patient_id=patient.id,
         clinic_id=clinic_b.id,
+        institution_id=clinic_b.institution_id,
         source_type="uploaded",
         document_type="other",
         title="PG izvor za klasifikaciju",
@@ -239,6 +244,7 @@ def test_postgresql_institution_clinical_record_role_boundaries(pg_client, pg_db
     denied_unclassified = ClinicalDocument(
         patient_id=patient.id,
         clinic_id=clinic_b.id,
+        institution_id=clinic_b.institution_id,
         source_type="uploaded",
         document_type="other",
         title="PG izvor bez reviewer dozvole",

@@ -10,7 +10,15 @@ from app.core.security import create_access_token, verify_password
 from app.auth.dependencies import Actor, active_clinic_memberships, get_current_actor, hash_api_key, require_permission
 from app.models.domain import ApiKey, User
 from app.schemas.common import ApiKeyCreate, ApiKeyCreated, ApiKeyOut, BrowserSessionResponse, ErrorResponse, LoginRequest, TokenResponse
-from app.services.sessions import create_user_session, get_valid_session, revoke_all_user_sessions, revoke_session
+from app.services.sessions import (
+    create_user_session,
+    csrf_token_matches,
+    get_valid_session,
+    revoke_all_user_sessions,
+    revoke_session,
+    write_invalid_csrf_audit,
+    write_invalid_session_audit,
+)
 
 ERROR_RESPONSES = {400: {"model": ErrorResponse}, 401: {"model": ErrorResponse}, 403: {"model": ErrorResponse}, 404: {"model": ErrorResponse}, 409: {"model": ErrorResponse}, 422: {"model": ErrorResponse}}
 
@@ -103,7 +111,11 @@ def current_browser_session(
     astra_csrf = request.cookies.get(settings.csrf_cookie_name)
     session = get_valid_session(db, astra_session)
     if not session:
+        write_invalid_session_audit(db, astra_session, request)
         raise HTTPException(status_code=401, detail="Prijava je istekla")
+    if not csrf_token_matches(session, astra_csrf):
+        write_invalid_csrf_audit(db, session, request)
+        raise HTTPException(status_code=403, detail="CSRF provjera nije uspjela")
     csrf_token = astra_csrf or ""
     return BrowserSessionResponse(
         user={"id": session.user.id, "name": session.user.full_name, "email": session.user.email, "role": session.user.role.name},
@@ -121,6 +133,9 @@ def browser_logout(
     settings = get_settings()
     astra_session = request.cookies.get(settings.session_cookie_name)
     session = get_valid_session(db, astra_session, touch=False)
+    if session and not csrf_token_matches(session, request.headers.get("X-CSRF-Token")):
+        write_invalid_csrf_audit(db, session, request)
+        raise HTTPException(status_code=403, detail="CSRF provjera nije uspjela")
     revoked = revoke_session(db, session)
     response.delete_cookie(settings.session_cookie_name, **_delete_cookie_options(httponly=True))
     response.delete_cookie(settings.csrf_cookie_name, **_delete_cookie_options(httponly=False))

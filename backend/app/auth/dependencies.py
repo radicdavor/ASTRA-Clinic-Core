@@ -10,8 +10,14 @@ from sqlalchemy.orm import Session, contains_eager
 
 from app.core.config import get_settings
 from app.core.database import get_db
-from app.models.domain import ApiKey, Clinic, ClinicMembership, Patient, PatientClinicAssociation, PatientJourney, User
-from app.services.sessions import get_valid_session, record_session_audit
+from app.models.domain import ApiKey, Clinic, ClinicMembership, Patient, PatientClinicAssociation, PatientJourney, User, UserSession
+from app.services.sessions import (
+    csrf_token_matches,
+    get_valid_session,
+    write_credential_conflict_audit,
+    write_invalid_csrf_audit,
+    write_invalid_session_audit,
+)
 
 bearer = HTTPBearer(auto_error=False)
 
@@ -59,6 +65,16 @@ def hash_api_key(raw_key: str) -> str:
     return sha256(raw_key.encode("utf-8")).hexdigest()
 
 
+def validate_browser_session_csrf(request: Request, db: Session, session: UserSession) -> None:
+    if request.method.upper() in {"GET", "HEAD", "OPTIONS"}:
+        return
+    raw_csrf = request.headers.get("X-CSRF-Token")
+    cookie_csrf = request.cookies.get(get_settings().csrf_cookie_name)
+    if not raw_csrf or not cookie_csrf or not csrf_token_matches(session, raw_csrf) or not csrf_token_matches(session, cookie_csrf):
+        write_invalid_csrf_audit(db, session, request)
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="CSRF provjera nije uspjela")
+
+
 def get_current_user(
     request: Request,
     credentials: HTTPAuthorizationCredentials | None = Depends(bearer),
@@ -68,11 +84,13 @@ def get_current_user(
     astra_session = request.cookies.get(settings.session_cookie_name)
     if astra_session:
         if credentials is not None:
+            write_credential_conflict_audit(db, astra_session, request)
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Konfliktni podaci prijave")
         session = get_valid_session(db, astra_session)
         if not session:
-            record_session_audit(db, "auth.browser_session_invalid", summary="Invalid, expired or revoked browser session was used.")
+            write_invalid_session_audit(db, astra_session, request)
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Prijava je istekla")
+        validate_browser_session_csrf(request, db, session)
         return session.user
     if credentials is None:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Nedostaje prijava")
@@ -97,6 +115,8 @@ def get_current_actor(
     astra_session = request.cookies.get(settings.session_cookie_name)
     if x_astra_api_key:
         if astra_session or credentials is not None:
+            if astra_session:
+                write_credential_conflict_audit(db, astra_session, request)
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Konfliktni podaci prijave")
         api_key = db.scalar(select(ApiKey).where(ApiKey.key_hash == hash_api_key(x_astra_api_key), ApiKey.active.is_(True)))
         if not api_key or (api_key.expires_at and api_key.expires_at <= datetime.now(UTC)):
@@ -106,11 +126,13 @@ def get_current_actor(
         return Actor(actor_type="api_key", api_key=api_key)
     if astra_session:
         if credentials is not None:
+            write_credential_conflict_audit(db, astra_session, request)
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Konfliktni podaci prijave")
         session = get_valid_session(db, astra_session)
         if not session:
-            record_session_audit(db, "auth.browser_session_invalid", summary="Invalid, expired or revoked browser session was used.")
+            write_invalid_session_audit(db, astra_session, request)
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Prijava je istekla")
+        validate_browser_session_csrf(request, db, session)
         return Actor(actor_type="user", user=session.user)
     return Actor(actor_type="user", user=get_current_user(request, credentials, db))
 

@@ -3,15 +3,20 @@ from datetime import date, time
 from sqlalchemy import select
 
 from app.core.security import hash_password
+from app.auth.dependencies import hash_api_key
 from app.models.domain import (
+    ApiKey,
     Appointment,
     AuditLog,
     ClinicalDocument,
+    DocumentProcessingJob,
     Clinic,
     ClinicMembership,
     Institution,
     Patient,
     PatientClinicAssociation,
+    PatientClinicalSummaryRecord,
+    PatientJourney,
     Permission,
     Provider,
     Role,
@@ -105,6 +110,7 @@ def clinical_doc(
     document = ClinicalDocument(
         patient_id=patient.id,
         clinic_id=clinic.id,
+        institution_id=clinic.institution_id,
         source_type="external",
         document_type=document_type,
         title="Klinički nalaz",
@@ -119,6 +125,306 @@ def clinical_doc(
     db.add(document)
     db.flush()
     return document
+
+
+def test_unresolved_document_is_hidden_from_all_standard_clinical_read_paths(client, db):
+    clinic_a, _, _, patient, _ = setup_scope(db)
+    doctor = user_with_role(db, "unresolved-scope@test.local", MEDICAL_READ + ["documents.view_source"], "medical_staff", clinic_a)
+    document = ClinicalDocument(
+        patient_id=patient.id,
+        clinic_id=None,
+        source_type="legacy_import",
+        document_type="gastroscopy",
+        title="Unresolved synthetic document",
+        raw_text="Restricted synthetic content",
+        review_status="reviewed",
+        physician_reviewed=True,
+        is_clinical_record=True,
+        record_classification="clinical",
+    )
+    db.add(document)
+    db.commit()
+    auth = headers(client, doctor.email)
+
+    assert document.id not in {item["id"] for item in client.get("/api/clinical-documents", headers=auth).json()}
+    assert document.id not in {item["id"] for item in client.get("/api/clinical-documents/search?q=Unresolved", headers=auth).json()}
+    assert document.id not in {item["id"] for item in client.get(f"/api/patients/{patient.id}/clinical-documents", headers=auth).json()}
+    assert client.get(f"/api/clinical-documents/{document.id}", headers=auth).status_code == 404
+    assert client.get(f"/api/clinical-documents/{document.id}/source", headers=auth).status_code == 404
+    clinical_record = client.get(f"/api/patients/{patient.id}/clinical-record", headers=auth)
+    assert clinical_record.status_code == 200
+    assert document.id not in {item["document_id"] for item in clinical_record.json()["items"]}
+
+
+def test_processing_jobs_do_not_disclose_foreign_or_unresolved_documents(client, db):
+    clinic_a, clinic_b, clinic_other, patient, _ = setup_scope(db)
+    same_institution_reviewer = user_with_role(
+        db,
+        "same-processing-reviewer@test.local",
+        MEDICAL_READ + ["documents.view_source", "documents.review"],
+        "medical_staff",
+        clinic_a,
+    )
+    other_reviewer = user_with_role(
+        db,
+        "other-processing-reviewer@test.local",
+        MEDICAL_READ + ["documents.view_source", "documents.review"],
+        "medical_staff",
+        clinic_other,
+    )
+    document = clinical_doc(db, patient, clinic_b, status="reviewed")
+    unresolved = ClinicalDocument(
+        patient_id=patient.id,
+        source_type="legacy_import",
+        document_type="other",
+        title="Unresolved processing source",
+        review_status="draft",
+        is_clinical_record=False,
+        record_classification="unclassified",
+    )
+    db.add(unresolved)
+    db.flush()
+    document_job = DocumentProcessingJob(
+        clinical_document_id=document.id,
+        job_type="ocr",
+        provider="local-demo-text-only",
+        status="pending",
+    )
+    unresolved_job = DocumentProcessingJob(
+        clinical_document_id=unresolved.id,
+        job_type="ocr",
+        provider="local-demo-text-only",
+        status="pending",
+    )
+    db.add_all([document_job, unresolved_job])
+    db.commit()
+
+    same_headers = headers(client, same_institution_reviewer.email)
+    other_headers = headers(client, other_reviewer.email)
+    assert client.get(f"/api/clinical-documents/{document.id}/processing-jobs", headers=same_headers).status_code == 200
+    assert client.get(f"/api/clinical-documents/{document.id}/processing-jobs", headers=other_headers).status_code == 404
+    assert client.get(f"/api/clinical-documents/{document.id}/source", headers=other_headers).status_code == 404
+    assert client.post(f"/api/clinical-documents/{document.id}/ocr/{document_job.id}/process", headers=other_headers).status_code == 404
+    assert client.get(f"/api/clinical-documents/{unresolved.id}/processing-jobs", headers=same_headers).status_code == 404
+    assert client.get(f"/api/clinical-documents/{unresolved.id}/source", headers=same_headers).status_code == 404
+    assert client.post(f"/api/clinical-documents/{unresolved.id}/ocr/{unresolved_job.id}/process", headers=same_headers).status_code == 404
+
+
+def test_patient_summary_uses_only_source_documents_from_actor_institutions(client, db):
+    clinic_a, clinic_b, clinic_other, patient, _ = setup_scope(db)
+    local_doctor = user_with_role(db, "local-summary@test.local", MEDICAL_READ, "medical_staff", clinic_a)
+    other_doctor = user_with_role(db, "other-summary@test.local", MEDICAL_READ, "medical_staff", clinic_other)
+    local_document = clinical_doc(db, patient, clinic_b, status="reviewed")
+    local_document.key_findings = ["Local institution finding"]
+    foreign_document = clinical_doc(db, patient, clinic_other, status="reviewed")
+    foreign_document.key_findings = ["Foreign institution finding"]
+    foreign_summary = PatientClinicalSummaryRecord(
+        patient_id=patient.id,
+        summary_text="Foreign institution summary",
+        source_document_ids=[foreign_document.id],
+        status="reviewed",
+        generated_by="physician",
+        reviewed_by=other_doctor.id,
+    )
+    db.add(foreign_summary)
+    db.commit()
+
+    response = client.get(f"/api/patients/{patient.id}/clinical-summary", headers=headers(client, local_doctor.email))
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["generated_from_reviewed_documents"] == 1
+    assert "Local institution finding" in str(body)
+    assert "Foreign institution finding" not in str(body)
+    assert "Foreign institution summary" not in str(body)
+    assert body["reviewed_summary"] is None
+
+
+def test_journey_timeline_requires_active_clinic_and_hides_unresolved_sources(client, db):
+    clinic_a, clinic_b, clinic_other, patient, appointment = setup_scope(db)
+    local_doctor = user_with_role(db, "local-timeline@test.local", MEDICAL_READ + ["journey.read"], "medical_staff", clinic_a)
+    db.add(ClinicMembership(user_id=local_doctor.id, clinic_id=clinic_b.id, active=True, created_by_user_id=local_doctor.id))
+    other_doctor = user_with_role(db, "other-timeline@test.local", MEDICAL_READ + ["journey.read"], "medical_staff", clinic_other)
+    journey = PatientJourney(
+        patient_id=patient.id,
+        appointment_id=appointment.id,
+        clinic_id=clinic_b.id,
+        intake_channel="manual",
+        current_stage="booked",
+    )
+    db.add(journey)
+    db.flush()
+    visible = clinical_doc(db, patient, clinic_b, status="reviewed")
+    visible.journey_id = journey.id
+    unresolved = ClinicalDocument(
+        patient_id=patient.id,
+        journey_id=journey.id,
+        source_type="legacy_import",
+        document_type="other",
+        title="Unresolved journey source",
+        review_status="reviewed",
+        physician_reviewed=True,
+        is_clinical_record=True,
+        record_classification="clinical",
+    )
+    db.add(unresolved)
+    db.commit()
+
+    local_headers = headers(client, local_doctor.email) | {"X-Clinic-ID": str(clinic_b.id)}
+    timeline = client.get(f"/api/patient-journeys/{journey.id}/timeline", headers=local_headers)
+
+    assert timeline.status_code == 200
+    source_ids = {
+        item["provenance"]["id"]
+        for item in timeline.json()
+        if item["event_type"] == "clinical_document"
+    }
+    assert source_ids == {visible.id}
+    assert client.get(f"/api/patient-journeys/{journey.id}/timeline", headers=headers(client, other_doctor.email)).status_code == 404
+
+
+def test_new_manual_document_persists_canonical_institution_provenance(client, db):
+    clinic_a, _, _, patient, _ = setup_scope(db)
+    doctor = user_with_role(db, "provenance-write@test.local", MEDICAL_EDIT + ["clinical_documents.write"], "medical_staff", clinic_a)
+    db.commit()
+
+    response = client.post(
+        "/api/clinical-documents",
+        headers=headers(client, doctor.email),
+        json={
+            "patient_id": patient.id,
+            "clinic_id": clinic_a.id,
+            "source_type": "external",
+            "document_type": "laboratory",
+            "title": "Synthetic provenance write",
+        },
+    )
+
+    assert response.status_code == 200
+    document = db.get(ClinicalDocument, response.json()["id"])
+    assert document is not None
+    assert document.institution_id == clinic_a.institution_id
+
+
+def test_document_write_rejects_foreign_clinic_appointment_and_api_key_provenance(client, db):
+    clinic_a, _, clinic_other, patient, _ = setup_scope(db)
+    doctor = user_with_role(db, "bounded-write@test.local", MEDICAL_EDIT + ["clinical_documents.write"], "medical_staff", clinic_a)
+    foreign_provider = Provider(full_name="Foreign provider", specialty="Other", clinic=clinic_other)
+    foreign_room = Room(name="Foreign room", type="ordination", clinic=clinic_other)
+    service = Service(name="Foreign service", duration_minutes=30, price=100)
+    db.add_all([foreign_provider, foreign_room, service])
+    db.flush()
+    foreign_appointment = Appointment(
+        patient_id=patient.id,
+        provider_id=foreign_provider.id,
+        room_id=foreign_room.id,
+        service_id=service.id,
+        clinic_id=clinic_other.id,
+        date=date(2026, 7, 22),
+        start_time=time(10, 0),
+        end_time=time(10, 30),
+        duration_minutes=30,
+        status="scheduled",
+        source="manual",
+    )
+    raw_key = "foreign-write-key"
+    db.add(foreign_appointment)
+    db.add(ApiKey(name="Document writer", key_hash=hash_api_key(raw_key), scopes=["clinical_documents.write"], active=True))
+    db.commit()
+    base_payload = {
+        "patient_id": patient.id,
+        "source_type": "external",
+        "document_type": "laboratory",
+        "title": "Rejected foreign provenance",
+    }
+    doctor_headers = headers(client, doctor.email)
+
+    direct = client.post("/api/clinical-documents", headers=doctor_headers, json={**base_payload, "clinic_id": clinic_other.id})
+    via_appointment = client.post(
+        "/api/clinical-documents",
+        headers=doctor_headers,
+        json={**base_payload, "appointment_id": foreign_appointment.id},
+    )
+    via_api_key = client.post(
+        "/api/clinical-documents",
+        headers={"X-ASTRA-API-Key": raw_key},
+        json={**base_payload, "clinic_id": clinic_other.id},
+    )
+    upload_direct = client.post(
+        "/api/clinical-documents/upload",
+        headers=doctor_headers,
+        json={**base_payload, "clinic_id": clinic_other.id, "attachment_name": "foreign.pdf"},
+    )
+    upload_via_appointment = client.post(
+        "/api/clinical-documents/upload",
+        headers=doctor_headers,
+        json={**base_payload, "appointment_id": foreign_appointment.id, "attachment_name": "foreign.pdf"},
+    )
+    upload_via_api_key = client.post(
+        "/api/clinical-documents/upload",
+        headers={"X-ASTRA-API-Key": raw_key},
+        json={**base_payload, "clinic_id": clinic_other.id, "attachment_name": "foreign.pdf"},
+    )
+
+    assert direct.status_code == 404
+    assert via_appointment.status_code == 404
+    assert via_api_key.status_code == 403
+    assert upload_direct.status_code == 404
+    assert upload_via_appointment.status_code == 404
+    assert upload_via_api_key.status_code == 403
+    assert db.scalar(select(ClinicalDocument).where(ClinicalDocument.title == "Rejected foreign provenance")) is None
+
+
+def test_document_patch_cannot_change_patient_clinic_or_appointment_provenance(client, db):
+    clinic_a, clinic_b, _, patient, appointment = setup_scope(db)
+    author = user_with_role(db, "immutable-provenance@test.local", MEDICAL_EDIT, "medical_staff", clinic_a)
+    document = clinical_doc(db, patient, clinic_b, author, status="draft")
+    document.appointment_id = appointment.id
+    other_patient = Patient(first_name="Other", last_name="Patient")
+    db.add(other_patient)
+    db.commit()
+    auth = headers(client, author.email)
+
+    assert client.patch(f"/api/clinical-documents/{document.id}", headers=auth, json={"patient_id": other_patient.id}).status_code == 409
+    assert client.patch(f"/api/clinical-documents/{document.id}", headers=auth, json={"clinic_id": clinic_a.id}).status_code == 409
+    assert client.patch(f"/api/clinical-documents/{document.id}", headers=auth, json={"appointment_id": None}).status_code == 409
+
+    db.refresh(document)
+    assert document.patient_id == patient.id
+    assert document.clinic_id == clinic_b.id
+    assert document.appointment_id == appointment.id
+
+
+def test_patient_summary_requires_explicit_institution_for_multi_institution_sources(client, db):
+    clinic_a, _, clinic_other, patient, _ = setup_scope(db)
+    doctor = user_with_role(
+        db,
+        "multi-institution-summary@test.local",
+        MEDICAL_EDIT + ["clinical_documents.write"],
+        "medical_staff",
+        clinic_a,
+    )
+    db.add(ClinicMembership(user_id=doctor.id, clinic_id=clinic_other.id, active=True, created_by_user_id=doctor.id))
+    local_document = clinical_doc(db, patient, clinic_a, doctor, status="reviewed")
+    other_document = clinical_doc(db, patient, clinic_other, doctor, status="reviewed")
+    db.commit()
+    auth = headers(client, doctor.email)
+
+    ambiguous = client.post(f"/api/patients/{patient.id}/clinical-summary/generate-draft", headers=auth)
+    local = client.post(
+        f"/api/patients/{patient.id}/clinical-summary/generate-draft?institution_id={clinic_a.institution_id}",
+        headers=auth,
+    )
+    other = client.post(
+        f"/api/patients/{patient.id}/clinical-summary/generate-draft?institution_id={clinic_other.institution_id}",
+        headers=auth,
+    )
+
+    assert ambiguous.status_code == 409
+    assert local.status_code == 200
+    assert local.json()["source_document_ids"] == [local_document.id]
+    assert other.status_code == 200
+    assert other.json()["source_document_ids"] == [other_document.id]
 
 
 def test_physician_and_nurse_read_clinical_documents_across_clinics_same_institution(client, db):

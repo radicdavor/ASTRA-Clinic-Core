@@ -31,6 +31,13 @@ UX simplification track vizualno je provjeren sa sintetičkim administratorskim 
 
 Module 3 introduces `Institution -> Clinic` authorization for clinical record continuity. Patient identity remains global, authorized medical staff may read clinical documents across clinics of the same institution, and operations/billing remain clinic-scoped. Draft editing is author-controlled, signed clinical documents are immutable, source uploads require human classification, and corrections use separate addenda. See [Institution clinical access ADR](docs/ADR/institution-clinical-access.md), [access matrix](docs/security/institution-clinical-access-matrix.md), and [Module 3 closure report](docs/programs/MODULE_3_INSTITUTION_CLINICAL_ACCESS_CLOSURE_REPORT.md).
 
+PR #3 security hardening adds canonical `ClinicalDocument.institution_id`
+provenance, denies unresolved document ownership, binds CSRF tokens to the
+active browser session, and persists rejected-session security audit events in
+an independent short transaction. The supported production browser topology is
+one HTTPS origin with `/api` and `/auth` reverse-proxied to FastAPI. See the
+[security review remediation record](docs/pr3-security-review-remediation.md).
+
 Workflow Engine MVP is documented in [`docs/WORKFLOW_ENGINE_MVP.md`](docs/WORKFLOW_ENGINE_MVP.md). It adds audited patient/episode tasks, responsibility, due dates, templates, and completion checklists without automated clinical decision-making.
 
 > Sigurnosna napomena: zadani korisnik, lozinka i lokalne Docker postavke su samo za razvoj. Prije stvarne uporabe promijenite admin lozinku, postavite jak `JWT_SECRET`, ogranicite CORS, koristite HTTPS, podesite backup PostgreSQL baze i napravite GDPR/access-control provjeru. ASTRA Clinic Core nije certificirani EMR i nije certificirani medicinski uredaj.

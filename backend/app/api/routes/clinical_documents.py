@@ -9,7 +9,7 @@ from app.auth.dependencies import Actor, active_clinic_memberships, get_current_
 from app.core.database import get_db
 from app.models.domain import AuditLog, ClinicalDocument, ClinicalDocumentAddendum, Patient
 from app.schemas.common import ClinicalDocumentAddendumCreate, ClinicalDocumentAddendumOut, ClinicalDocumentCreate, ClinicalDocumentOut, ClinicalDocumentUpdate, ClinicalDocumentUpload, ClinicalEvidenceTimelineItem, ErrorResponse
-from app.services.clinical_document_access import clinical_document_capabilities, create_document_addendum, ensure_institution_clinical_read, get_authored_draft_for_edit, get_institution_scoped_clinical_document_for_read, institution_scoped_clinical_documents_statement
+from app.services.clinical_document_access import actor_institution_scope, clinical_document_capabilities, create_document_addendum, ensure_institution_clinical_read, get_authored_draft_for_edit, get_institution_scoped_clinical_document_for_read, institution_scoped_clinical_documents_statement, require_document_institution_for_clinic, validate_document_provenance
 from app.services.clinical_documents import extract_document_knowledge, get_document_or_404, has_extracted_content, initial_ai_extraction_status, initial_document_review_status, mark_document_ai_extraction_edited, mark_document_needs_review, validate_document_links
 from app.services.clinical_evidence_timeline import classify_audit_log
 
@@ -24,24 +24,23 @@ def patch_model(obj, data: dict) -> None:
 
 
 def default_document_clinic_id(db: Session, payload_clinic_id: int | None, appointment_id: int | None, actor: Actor) -> int | None:
-    if payload_clinic_id is not None:
-        from app.models.domain import Clinic
+    from app.models.domain import Appointment, Clinic
 
-        clinic = db.get(Clinic, payload_clinic_id)
+    if actor.user is None:
+        raise HTTPException(403, detail="Upis kliničkog dokumenta zahtijeva prijavljenog korisnika")
+    appointment = db.get(Appointment, appointment_id) if appointment_id is not None else None
+    if appointment_id is not None and appointment is None:
+        raise HTTPException(404, detail="Termin nije pronađen")
+    if payload_clinic_id is not None and appointment and appointment.clinic_id != payload_clinic_id:
+        raise HTTPException(422, detail="Dokument i termin moraju pripadati istoj klinici")
+    resolved_clinic_id = payload_clinic_id if payload_clinic_id is not None else (appointment.clinic_id if appointment else None)
+    if resolved_clinic_id is not None:
+        clinic = db.get(Clinic, resolved_clinic_id)
         if not clinic or not clinic.active:
             raise HTTPException(404, detail="Klinika nije pronađena")
-        if actor.user_id is not None:
-            institution_keys = {membership.clinic.institution_key for membership in active_clinic_memberships(db, actor.user_id)}
-            if clinic.institution_key not in institution_keys:
-                raise HTTPException(403, detail="Korisnik nema pristup ustanovi odabrane klinike")
-        return payload_clinic_id
-    if appointment_id is not None:
-        from app.models.domain import Appointment
-
-        appointment = db.get(Appointment, appointment_id)
-        return appointment.clinic_id if appointment else None
-    if actor.user_id is None:
-        return None
+        if clinic.institution_id is None or clinic.institution_id not in actor_institution_scope(db, actor).institution_ids:
+            raise HTTPException(404, detail="Klinika nije pronađena")
+        return resolved_clinic_id
     memberships = active_clinic_memberships(db, actor.user_id)
     return memberships[0].clinic_id if memberships else None
 
@@ -82,9 +81,10 @@ def create_clinical_document(
     db: Session = Depends(get_db),
     actor: Actor = Depends(require_permission("clinical_documents.write")),
 ):
-    validate_document_links(db, payload.patient_id, payload.appointment_id)
     values = payload.model_dump()
     values["clinic_id"] = default_document_clinic_id(db, values.get("clinic_id"), values.get("appointment_id"), actor)
+    validate_document_links(db, payload.patient_id, payload.appointment_id)
+    values["institution_id"] = require_document_institution_for_clinic(db, values["clinic_id"])
     now = datetime.now(timezone.utc)
     initial_ai_status = initial_ai_extraction_status(values)
     document = ClinicalDocument(
@@ -126,11 +126,13 @@ def upload_clinical_document(
     db: Session = Depends(get_db),
     actor: Actor = Depends(require_permission("clinical_documents.write")),
 ):
-    validate_document_links(db, payload.patient_id, payload.appointment_id)
     attachment_path = f"local-placeholder/{payload.attachment_name}" if payload.attachment_name else None
+    clinic_id = default_document_clinic_id(db, payload.clinic_id, payload.appointment_id, actor)
+    validate_document_links(db, payload.patient_id, payload.appointment_id)
     document = ClinicalDocument(
         patient_id=payload.patient_id,
-        clinic_id=default_document_clinic_id(db, payload.clinic_id, payload.appointment_id, actor),
+        clinic_id=clinic_id,
+        institution_id=require_document_institution_for_clinic(db, clinic_id),
         title=payload.title,
         source_type=payload.source_type,
         document_type=payload.document_type,
@@ -224,11 +226,15 @@ def update_clinical_document(
 ):
     document = get_authored_draft_for_edit(db, document_id, actor)
     update_data = payload.model_dump(exclude_unset=True)
+    for field in ("patient_id", "clinic_id", "appointment_id"):
+        if field in update_data and update_data[field] != getattr(document, field):
+            raise HTTPException(409, detail="Podrijetlo kliničkog dokumenta je nepromjenjivo")
     if document.checksum_sha256 and "attachment_path" in update_data and update_data["attachment_path"] != document.attachment_path:
         raise HTTPException(409, detail="Putanja pohranjenog izvornog dokumenta je nepromjenjiva")
     validate_document_links(db, update_data.get("patient_id", document.patient_id), update_data.get("appointment_id", document.appointment_id))
     before = snapshot(document)
     patch_model(document, update_data)
+    validate_document_provenance(db, document)
     review_reset_fields = {"raw_text", "ai_summary", "key_findings", "recommendations"}
     if review_reset_fields.intersection(update_data):
         now = datetime.now(timezone.utc)

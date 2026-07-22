@@ -31,7 +31,9 @@ describe("browser session client", () => {
     await api("/api/example", { method: "POST", body: JSON.stringify({ ok: true }) });
 
     const [, init] = vi.mocked(fetch).mock.calls[0];
+    const [url] = vi.mocked(fetch).mock.calls[0];
     const headers = init?.headers as Headers;
+    expect(url).toBe(`${window.location.origin}/api/example`);
     expect(init).toEqual(expect.objectContaining({ credentials: "include" }));
     expect(headers.get("X-Clinic-Id")).toBe("7");
     expect(headers.get("X-CSRF-Token")).toBe("test-csrf");
