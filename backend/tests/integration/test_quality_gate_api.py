@@ -312,6 +312,7 @@ def test_postgresql_institution_clinical_record_role_boundaries(pg_client, pg_db
 def test_api_permission_boundaries_and_api_key_actor(pg_client, pg_db):
     admin = create_user_with_permissions(pg_db, "admin-pg@test.local", ["admin.manage_users", "patients.write", "audit.read"])
     limited = create_user_with_permissions(pg_db, "limited-pg@test.local", ["patients.read"])
+    seed_clinic_objects(pg_db, admin)
     pg_db.flush()
     admin_token = login(pg_client, admin.email)
     limited_token = login(pg_client, limited.email)
@@ -405,8 +406,15 @@ def test_appointment_api_conflict_schedule_order_and_audit(pg_client, pg_db):
 
 def test_invoice_issue_uses_noop_fiscalization_and_audits(pg_client, pg_db):
     user = create_user_with_permissions(pg_db, "billing-pg@test.local", ["billing.read", "billing.write"])
-    patient = Patient(first_name="Billing", last_name="Patient")
-    invoice = Invoice(patient=patient, invoice_number="DRAFT-PG", status="draft", payment_status="unpaid", total_amount=Decimal("100"))
+    patient, _, room, _ = seed_clinic_objects(pg_db, user)
+    invoice = Invoice(
+        patient=patient,
+        clinic_id=room.clinic_id,
+        invoice_number="DRAFT-PG",
+        status="draft",
+        payment_status="unpaid",
+        total_amount=Decimal("100"),
+    )
     line = InvoiceLine(invoice=invoice, description="Line", quantity=Decimal("1"), unit_price=Decimal("100"), total=Decimal("100"))
     pg_db.add_all([patient, invoice, line])
     pg_db.flush()
