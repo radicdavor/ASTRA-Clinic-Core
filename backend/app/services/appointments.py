@@ -10,6 +10,7 @@ from app.models.domain import (
     Appointment,
     AppointmentSource,
     AppointmentStatus,
+    Clinic,
     ClinicalEpisode,
     Patient,
     Provider,
@@ -118,10 +119,19 @@ def create_appointment_with_journey(db: Session, data: dict, actor: Actor, reque
     patient_id = data["patient_id"]
     if not db.get(Patient, patient_id):
         raise HTTPException(404, detail="Pacijent nije pronaden")
+    room = db.get(Room, data["room_id"])
+    if room is None:
+        raise HTTPException(404, detail="Soba nije pronadena")
+    requested_clinic_id = data.get("clinic_id")
+    if requested_clinic_id is not None and room.clinic_id != requested_clinic_id:
+        raise HTTPException(404, detail="Soba nije pronadena")
+    if requested_clinic_id is None:
+        data["clinic_id"] = room.clinic_id
+    clinic = db.get(Clinic, data.get("clinic_id")) if data.get("clinic_id") is not None else None
     episode_id = data.get("episode_id")
     if episode_id:
         episode = db.get(ClinicalEpisode, episode_id)
-        if not episode:
+        if not episode or clinic is None or episode.institution_id != clinic.institution_id:
             raise HTTPException(404, detail="Klinicka epizoda nije pronadena")
         if episode.patient_id != patient_id:
             raise HTTPException(422, detail="Klinicka epizoda mora pripadati istom pacijentu kao termin")
@@ -137,9 +147,6 @@ def create_appointment_with_journey(db: Session, data: dict, actor: Actor, reque
         service_id=data["service_id"],
         patient_id=patient_id,
     )
-    if data.get("clinic_id") is None:
-        room = db.get(Room, data["room_id"])
-        data["clinic_id"] = room.clinic_id if room else None
     if data.get("clinic_id") is None and actor.user_id is not None:
         memberships = active_clinic_memberships(db, actor.user_id)
         if len(memberships) == 1:

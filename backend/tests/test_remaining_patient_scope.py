@@ -2,6 +2,7 @@ from datetime import date, datetime, time
 
 from app.models.domain import Appointment, ClinicalEpisode, Clinic, Institution, JourneyActivity, LabOrder, Patient, PatientClinicAssociation, PatientJourney, Provider, Room, Service, Therapy, WorkflowTask
 from tests.conftest import login_token
+from tests.factories import appointment as make_appointment
 
 
 def headers(client, auth_setup):
@@ -173,3 +174,37 @@ def test_journey_child_surfaces_require_active_clinic_scope(client, db, auth_set
         headers=auth,
         json={},
     ).status_code == 404
+
+
+def test_appointment_creation_rejects_foreign_institution_episode(client, db, auth_setup):
+    anchor = make_appointment(db)
+    foreign_institution = Institution(name="Foreign episode institution")
+    db.add(foreign_institution)
+    db.flush()
+    foreign_episode = ClinicalEpisode(
+        patient_id=anchor.patient_id,
+        institution_id=foreign_institution.id,
+        title="Foreign clinical context",
+        episode_type="general",
+        status="active",
+        start_date=date(2026, 7, 22),
+    )
+    db.add(foreign_episode)
+    db.flush()
+    payload = {
+        "patient_id": anchor.patient_id,
+        "episode_id": foreign_episode.id,
+        "service_id": anchor.service_id,
+        "provider_id": anchor.provider_id,
+        "room_id": anchor.room_id,
+        "date": "2026-07-22",
+        "start_time": "10:00",
+        "end_time": "10:30",
+        "duration_minutes": 30,
+        "status": "scheduled",
+        "source": "manual",
+    }
+
+    auth = headers(client, auth_setup)
+    assert client.post("/api/appointments", headers=auth, json=payload).status_code == 404
+    assert client.post("/api/intake/web/appointments", headers=auth, json=payload).status_code == 404
