@@ -42,6 +42,11 @@ def known_revisions() -> set[str]:
     return {str(item.revision) for item in ScriptDirectory.from_config(config).walk_revisions()}
 
 
+def require_known_revision(manifest: dict[str, object], revisions: set[str] | None = None) -> None:
+    if manifest["alembic_revision"] not in (revisions if revisions is not None else known_revisions()):
+        raise RecoveryError("unknown_backup_revision")
+
+
 def validate_file_manifest(value: object) -> list[dict[str, object]]:
     if not isinstance(value, dict) or set(value) != {"version", "objects"} or value.get("version") != 1 or not isinstance(value.get("objects"), list):
         raise RecoveryError("invalid_file_manifest")
@@ -142,8 +147,7 @@ def restore(args: argparse.Namespace) -> None:
     operation_log(operation_id, "restore_started")
     try:
         manifest, entries = validate_artifact(artifact)
-        if manifest["alembic_revision"] not in known_revisions():
-            raise RecoveryError("unknown_backup_revision")
+        require_known_revision(manifest)
         if target_storage.exists() and any(target_storage.iterdir()) and not args.allow_non_empty_storage:
             raise RecoveryError("target_storage_not_empty")
         normalized_url = target_url.replace("postgresql+psycopg://", "postgresql://", 1)

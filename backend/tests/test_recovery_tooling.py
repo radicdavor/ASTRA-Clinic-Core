@@ -16,8 +16,10 @@ from recovery_common import (  # noqa: E402
     postgres_environment,
     safe_relative_path,
     validate_main_manifest,
+    write_json,
+    sha256_file,
 )
-from restore_postgres import validate_file_manifest  # noqa: E402
+from restore_postgres import require_known_revision, validate_artifact, validate_file_manifest  # noqa: E402
 from backup_postgres import git_commit  # noqa: E402
 
 
@@ -103,3 +105,73 @@ def test_application_commit_rejects_non_hash_value(monkeypatch):
     monkeypatch.setenv("ASTRA_APPLICATION_COMMIT", "not-a-commit")
     with pytest.raises(RecoveryError, match="application_commit_invalid"):
         git_commit()
+
+
+def artifact(tmp_path: Path) -> Path:
+    root = tmp_path / "backup"
+    storage = root / "storage"
+    storage.mkdir(parents=True)
+    dump = root / "database.dump"
+    dump.write_bytes(b"synthetic-dump")
+    source = storage / "1" / "opaque.bin"
+    source.parent.mkdir()
+    source.write_bytes(b"synthetic-object")
+    file_manifest = {
+        "version": 1,
+        "objects": [
+            {
+                "document_id": 1,
+                "relative_path": "1/opaque.bin",
+                "size": source.stat().st_size,
+                "sha256": sha256_file(source),
+                "classification": "clinical",
+                "content_type": "application/octet-stream",
+            }
+        ],
+    }
+    write_json(root / "files.manifest.json", file_manifest)
+    manifest = valid_manifest()
+    manifest.update(
+        {
+            "dump_sha256": sha256_file(dump),
+            "file_manifest_sha256": sha256_file(root / "files.manifest.json"),
+            "storage_object_count": 1,
+        }
+    )
+    write_json(root / "manifest.json", manifest)
+    return root
+
+
+def test_artifact_rejects_corrupt_dump(tmp_path):
+    root = artifact(tmp_path)
+    (root / "database.dump").write_bytes(b"corrupt")
+    with pytest.raises(RecoveryError, match="backup_checksum_mismatch"):
+        validate_artifact(root)
+
+
+@pytest.mark.parametrize("mode", ["missing", "extra", "corrupt"])
+def test_artifact_rejects_storage_mismatch(tmp_path, mode: str):
+    root = artifact(tmp_path)
+    source = root / "storage" / "1" / "opaque.bin"
+    if mode == "missing":
+        source.unlink()
+    elif mode == "extra":
+        (root / "storage" / "extra.bin").write_bytes(b"extra")
+    else:
+        source.write_bytes(b"corrupt")
+    with pytest.raises(RecoveryError, match="backup_storage_set_mismatch|backup_storage_integrity_failed"):
+        validate_artifact(root)
+
+
+def test_artifact_requires_manifest(tmp_path):
+    root = artifact(tmp_path)
+    (root / "manifest.json").unlink()
+    with pytest.raises(RecoveryError, match="invalid_json_manifest"):
+        validate_artifact(root)
+
+
+def test_future_revision_is_rejected():
+    manifest = valid_manifest()
+    manifest["alembic_revision"] = "9999_future"
+    with pytest.raises(RecoveryError, match="unknown_backup_revision"):
+        require_known_revision(manifest, {"0062_signed_report_addendum_integrity"})

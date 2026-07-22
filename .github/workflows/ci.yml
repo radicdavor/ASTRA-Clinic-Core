@@ -134,3 +134,33 @@ jobs:
       - name: Run DB-backed full-stack E2E smoke
         working-directory: frontend
         run: npm run e2e:db
+
+  recovery:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-bookworm
+        env:
+          POSTGRES_DB: postgres
+          POSTGRES_USER: astra
+          POSTGRES_PASSWORD: astra
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U astra -d postgres"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build pinned PostgreSQL recovery image
+        run: docker build -f backend/Dockerfile.recovery -t astra-recovery-ci .
+      - name: Run complete synthetic recovery gate
+        env:
+          RECOVERY_ADMIN_DATABASE_URL: postgresql://astra:astra@127.0.0.1:5432/postgres
+          ASTRA_APPLICATION_COMMIT: ${{ github.sha }}
+        run: >-
+          docker run --rm --network host
+          -e RECOVERY_ADMIN_DATABASE_URL
+          -e ASTRA_APPLICATION_COMMIT
+          astra-recovery-ci scripts/run_recovery_integration.py
