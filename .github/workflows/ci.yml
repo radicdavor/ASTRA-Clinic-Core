@@ -44,10 +44,15 @@ jobs:
         run: |
           test "$(alembic heads | wc -l)" -eq 1
           alembic upgrade head
-          alembic downgrade -1
+          alembic downgrade 0062_signed_report_addendum_integrity
           python ../scripts/validate_0063_document_provenance.py seed
+          alembic upgrade 0063_clinical_document_institution_provenance
+          python ../scripts/validate_0064_0066_scope_provenance.py seed
           alembic upgrade head
           python ../scripts/validate_0063_document_provenance.py check
+          python ../scripts/validate_0064_0066_scope_provenance.py check
+          alembic downgrade 0062_signed_report_addendum_integrity
+          alembic upgrade head
       - name: Run PR3 security regression gate
         working-directory: backend
         run: |
@@ -57,7 +62,9 @@ jobs:
             tests/test_browser_sessions.py::test_invalid_browser_session_audit_survives_unauthorized_response \
             tests/test_browser_sessions.py::test_security_audit_commit_does_not_commit_business_transaction \
             tests/test_institution_clinical_document_access.py::test_unresolved_document_is_hidden_from_all_standard_clinical_read_paths \
-            tests/test_institution_clinical_document_access.py::test_processing_jobs_do_not_disclose_foreign_or_unresolved_documents
+            tests/test_institution_clinical_document_access.py::test_processing_jobs_do_not_disclose_foreign_or_unresolved_documents \
+            tests/test_pr3_scope_audit_blockers.py \
+            tests/test_remaining_patient_scope.py
       - name: Run fast backend feedback gate
         working-directory: backend
         run: python ../scripts/run_test_gate.py fast
