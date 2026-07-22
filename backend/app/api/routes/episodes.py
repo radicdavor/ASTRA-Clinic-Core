@@ -7,10 +7,11 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, joinedload
 
 from app.audit.service import audit, snapshot
-from app.auth.dependencies import Actor, require_permission
+from app.auth.dependencies import CurrentUserContext, get_scoped_patient, require_active_clinic
 from app.core.database import get_db
-from app.models.domain import Appointment, AuditLog, ClinicalEpisode, ClinicalPlan, Patient, Provider
+from app.models.domain import Appointment, AuditLog, Clinic, ClinicalEpisode, ClinicalPlan, Provider
 from app.schemas.common import AppointmentOut, ClinicalDecisionTimelineItem, ClinicalEpisodeCreate, ClinicalEpisodeOut, ClinicalEpisodeUpdate, ClinicalPlanGenerate, ClinicalPlanOut, ClinicalPlanUpdate, ErrorResponse
+from app.services.clinical_scope import authorized_institution_id, get_institution_clinical_plan, get_institution_episode, institution_episode_statement, provider_belongs_to_institution
 
 ERROR_RESPONSES = {400: {"model": ErrorResponse}, 401: {"model": ErrorResponse}, 403: {"model": ErrorResponse}, 404: {"model": ErrorResponse}, 409: {"model": ErrorResponse}, 422: {"model": ErrorResponse}}
 
@@ -34,22 +35,12 @@ def scalar_count(db: Session, stmt) -> int:
     return int(db.scalar(stmt) or 0)
 
 
-def get_episode_or_404(db: Session, episode_id: int) -> ClinicalEpisode:
-    episode = db.scalar(
-        select(ClinicalEpisode)
-        .options(joinedload(ClinicalEpisode.patient), joinedload(ClinicalEpisode.owner_provider))
-        .where(ClinicalEpisode.id == episode_id)
-    )
-    if not episode:
-        raise HTTPException(404, detail="Klinička epizoda nije pronađena")
-    return episode
+def get_episode_or_404(db: Session, episode_id: int, context: CurrentUserContext) -> ClinicalEpisode:
+    return get_institution_episode(db, episode_id, context)
 
 
-def get_plan_or_404(db: Session, plan_id: int) -> ClinicalPlan:
-    plan = db.get(ClinicalPlan, plan_id)
-    if not plan:
-        raise HTTPException(404, detail="Klinicki plan nije pronaden")
-    return plan
+def get_plan_or_404(db: Session, plan_id: int, context: CurrentUserContext) -> ClinicalPlan:
+    return get_institution_clinical_plan(db, plan_id, context)
 
 
 def active_plan_for_episode(db: Session, episode_id: int) -> ClinicalPlan | None:
@@ -119,7 +110,12 @@ def propose_plan(payload: ClinicalPlanGenerate, episode: ClinicalEpisode) -> dic
 
 def episode_with_count(db: Session, episode: ClinicalEpisode) -> ClinicalEpisodeOut:
     data = ClinicalEpisodeOut.model_validate(episode)
-    data.appointment_count = scalar_count(db, select(func.count(Appointment.id)).where(Appointment.episode_id == episode.id))
+    data.appointment_count = scalar_count(
+        db,
+        select(func.count(Appointment.id))
+        .join(Clinic, Clinic.id == Appointment.clinic_id)
+        .where(Appointment.episode_id == episode.id, Clinic.institution_id == episode.institution_id),
+    )
     return data
 
 
@@ -128,9 +124,9 @@ def list_episodes(
     patient_id: int | None = None,
     status: str | None = None,
     db: Session = Depends(get_db),
-    actor: Actor = Depends(require_permission("episodes.read")),
+    context: CurrentUserContext = Depends(require_active_clinic("episodes.read")),
 ):
-    stmt = select(ClinicalEpisode).options(joinedload(ClinicalEpisode.patient), joinedload(ClinicalEpisode.owner_provider)).order_by(ClinicalEpisode.start_date.desc(), ClinicalEpisode.id.desc())
+    stmt = institution_episode_statement(context).order_by(ClinicalEpisode.start_date.desc(), ClinicalEpisode.id.desc())
     if patient_id:
         stmt = stmt.where(ClinicalEpisode.patient_id == patient_id)
     if status:
@@ -143,24 +139,29 @@ def create_episode(
     payload: ClinicalEpisodeCreate,
     request: Request,
     db: Session = Depends(get_db),
-    actor: Actor = Depends(require_permission("episodes.write")),
+    context: CurrentUserContext = Depends(require_active_clinic("episodes.write")),
 ):
-    if not db.get(Patient, payload.patient_id):
-        raise HTTPException(404, detail="Pacijent nije pronađen")
-    if payload.owner_provider_id and not db.get(Provider, payload.owner_provider_id):
+    get_scoped_patient(db, payload.patient_id, context)
+    actor = context.actor
+    provider = db.get(Provider, payload.owner_provider_id) if payload.owner_provider_id else None
+    if payload.owner_provider_id and (provider is None or not provider_belongs_to_institution(db, provider.clinic_id, context)):
         raise HTTPException(404, detail="Liječnik nije pronađen")
-    episode = ClinicalEpisode(**payload.model_dump(), created_by=actor.user_id)
+    episode = ClinicalEpisode(
+        **payload.model_dump(),
+        institution_id=authorized_institution_id(context),
+        created_by=actor.user_id,
+    )
     db.add(episode)
     db.flush()
     audit(db, "create", "ClinicalEpisode", episode.id, f"Kreirana epizoda: {episode.title}", actor.user_id, actor.actor_type, actor.api_key_id, None, snapshot(episode), request)
     db.commit()
     db.refresh(episode)
-    return episode_with_count(db, get_episode_or_404(db, episode.id))
+    return episode_with_count(db, get_episode_or_404(db, episode.id, context))
 
 
 @router.get("/episodes/{episode_id}", response_model=ClinicalEpisodeOut)
-def get_episode(episode_id: int, db: Session = Depends(get_db), actor: Actor = Depends(require_permission("episodes.read"))):
-    return episode_with_count(db, get_episode_or_404(db, episode_id))
+def get_episode(episode_id: int, db: Session = Depends(get_db), context: CurrentUserContext = Depends(require_active_clinic("episodes.read"))):
+    return episode_with_count(db, get_episode_or_404(db, episode_id, context))
 
 
 @router.patch("/episodes/{episode_id}", response_model=ClinicalEpisodeOut)
@@ -169,19 +170,22 @@ def update_episode(
     payload: ClinicalEpisodeUpdate,
     request: Request,
     db: Session = Depends(get_db),
-    actor: Actor = Depends(require_permission("episodes.write")),
+    context: CurrentUserContext = Depends(require_active_clinic("episodes.write")),
 ):
-    episode = get_episode_or_404(db, episode_id)
+    actor = context.actor
+    episode = get_episode_or_404(db, episode_id, context)
     update_data = payload.model_dump(exclude_unset=True)
-    if update_data.get("owner_provider_id") and not db.get(Provider, update_data["owner_provider_id"]):
-        raise HTTPException(404, detail="Liječnik nije pronađen")
+    if update_data.get("owner_provider_id"):
+        provider = db.get(Provider, update_data["owner_provider_id"])
+        if provider is None or not provider_belongs_to_institution(db, provider.clinic_id, context):
+            raise HTTPException(404, detail="Liječnik nije pronađen")
     before = snapshot(episode)
     patch_model(episode, update_data)
     db.flush()
     audit(db, "update", "ClinicalEpisode", episode.id, f"Ažurirana epizoda: {episode.title}", actor.user_id, actor.actor_type, actor.api_key_id, before, snapshot(episode), request)
     db.commit()
     db.refresh(episode)
-    return episode_with_count(db, get_episode_or_404(db, episode.id))
+    return episode_with_count(db, get_episode_or_404(db, episode.id, context))
 
 
 @router.post("/episodes/{episode_id}/close", response_model=ClinicalEpisodeOut)
@@ -189,9 +193,10 @@ def close_episode(
     episode_id: int,
     request: Request,
     db: Session = Depends(get_db),
-    actor: Actor = Depends(require_permission("episodes.write")),
+    context: CurrentUserContext = Depends(require_active_clinic("episodes.write")),
 ):
-    episode = get_episode_or_404(db, episode_id)
+    actor = context.actor
+    episode = get_episode_or_404(db, episode_id, context)
     before = snapshot(episode)
     episode.status = "completed"
     if episode.end_date is None:
@@ -200,29 +205,30 @@ def close_episode(
     audit(db, "close", "ClinicalEpisode", episode.id, f"Zatvorena epizoda: {episode.title}", actor.user_id, actor.actor_type, actor.api_key_id, before, snapshot(episode), request)
     db.commit()
     db.refresh(episode)
-    return episode_with_count(db, get_episode_or_404(db, episode.id))
+    return episode_with_count(db, get_episode_or_404(db, episode.id, context))
 
 
 @router.get("/episodes/{episode_id}/appointments", response_model=list[AppointmentOut])
-def episode_appointments(episode_id: int, db: Session = Depends(get_db), actor: Actor = Depends(require_permission("appointments.read"))):
-    get_episode_or_404(db, episode_id)
+def episode_appointments(episode_id: int, db: Session = Depends(get_db), context: CurrentUserContext = Depends(require_active_clinic("appointments.read"))):
+    episode = get_episode_or_404(db, episode_id, context)
     return db.scalars(
         select(Appointment)
         .options(joinedload(Appointment.patient), joinedload(Appointment.service), joinedload(Appointment.provider), joinedload(Appointment.room), joinedload(Appointment.episode).joinedload(ClinicalEpisode.patient), joinedload(Appointment.episode).joinedload(ClinicalEpisode.owner_provider))
-        .where(Appointment.episode_id == episode_id)
+        .join(Clinic, Clinic.id == Appointment.clinic_id)
+        .where(Appointment.episode_id == episode_id, Clinic.institution_id == episode.institution_id)
         .order_by(Appointment.date.desc(), Appointment.start_time.desc())
     ).all()
 
 
 @router.get("/episodes/{episode_id}/clinical-plans", response_model=list[ClinicalPlanOut])
-def episode_clinical_plans(episode_id: int, db: Session = Depends(get_db), actor: Actor = Depends(require_permission("clinical_plans.read"))):
-    get_episode_or_404(db, episode_id)
+def episode_clinical_plans(episode_id: int, db: Session = Depends(get_db), context: CurrentUserContext = Depends(require_active_clinic("clinical_plans.read"))):
+    get_episode_or_404(db, episode_id, context)
     return db.scalars(select(ClinicalPlan).where(ClinicalPlan.episode_id == episode_id).order_by(ClinicalPlan.created_at.desc(), ClinicalPlan.id.desc())).all()
 
 
 @router.get("/episodes/{episode_id}/clinical-plans/active", response_model=ClinicalPlanOut | None)
-def episode_active_clinical_plan(episode_id: int, db: Session = Depends(get_db), actor: Actor = Depends(require_permission("clinical_plans.read"))):
-    get_episode_or_404(db, episode_id)
+def episode_active_clinical_plan(episode_id: int, db: Session = Depends(get_db), context: CurrentUserContext = Depends(require_active_clinic("clinical_plans.read"))):
+    get_episode_or_404(db, episode_id, context)
     return active_plan_for_episode(db, episode_id)
 
 
@@ -232,12 +238,21 @@ def generate_clinical_plan(
     payload: ClinicalPlanGenerate,
     request: Request,
     db: Session = Depends(get_db),
-    actor: Actor = Depends(require_permission("clinical_plans.write")),
+    context: CurrentUserContext = Depends(require_active_clinic("clinical_plans.write")),
 ):
-    episode = get_episode_or_404(db, episode_id)
+    actor = context.actor
+    episode = get_episode_or_404(db, episode_id, context)
     if payload.appointment_id:
-        appointment = db.get(Appointment, payload.appointment_id)
-        if not appointment or appointment.episode_id != episode.id:
+        appointment = db.scalar(
+            select(Appointment)
+            .join(Clinic, Clinic.id == Appointment.clinic_id)
+            .where(
+                Appointment.id == payload.appointment_id,
+                Appointment.episode_id == episode.id,
+                Clinic.institution_id == episode.institution_id,
+            )
+        )
+        if not appointment:
             raise HTTPException(422, detail="Termin mora pripadati istoj epizodi")
     pending_plans = db.scalars(
         select(ClinicalPlan).where(
@@ -266,9 +281,10 @@ def edit_clinical_plan(
     payload: ClinicalPlanUpdate,
     request: Request,
     db: Session = Depends(get_db),
-    actor: Actor = Depends(require_permission("clinical_plans.write")),
+    context: CurrentUserContext = Depends(require_active_clinic("clinical_plans.write")),
 ):
-    plan = get_plan_or_404(db, plan_id)
+    actor = context.actor
+    plan = get_plan_or_404(db, plan_id, context)
     if plan.physician_confirmed:
         raise HTTPException(422, detail="Potvrdeni plan se ne ureduje. Kreirajte novi prijedlog plana.")
     before = snapshot(plan)
@@ -286,9 +302,10 @@ def reject_clinical_plan(
     plan_id: int,
     request: Request,
     db: Session = Depends(get_db),
-    actor: Actor = Depends(require_permission("clinical_plans.write")),
+    context: CurrentUserContext = Depends(require_active_clinic("clinical_plans.write")),
 ):
-    plan = get_plan_or_404(db, plan_id)
+    actor = context.actor
+    plan = get_plan_or_404(db, plan_id, context)
     if plan.physician_confirmed:
         raise HTTPException(422, detail="Potvrdeni plan se ne moze odbiti")
     if plan.status not in {"draft", "waiting"}:
@@ -307,9 +324,10 @@ def confirm_clinical_plan(
     plan_id: int,
     request: Request,
     db: Session = Depends(get_db),
-    actor: Actor = Depends(require_permission("clinical_plans.write")),
+    context: CurrentUserContext = Depends(require_active_clinic("clinical_plans.write")),
 ):
-    plan = get_plan_or_404(db, plan_id)
+    actor = context.actor
+    plan = get_plan_or_404(db, plan_id, context)
     if plan.physician_confirmed and plan.status == "active":
         return plan
     if plan.physician_confirmed:
@@ -318,7 +336,7 @@ def confirm_clinical_plan(
         raise HTTPException(422, detail="Odbijeni plan se ne moze potvrditi")
     if plan.status not in {"draft", "waiting"}:
         raise HTTPException(422, detail="Samo prijedlog plana koji ceka odluku moze biti potvrden")
-    episode = get_episode_or_404(db, plan.episode_id)
+    episode = get_episode_or_404(db, plan.episode_id, context)
     plan_before = snapshot(plan)
     episode_before = snapshot(episode)
     previous_active = active_plan_for_episode(db, episode.id)
@@ -345,8 +363,8 @@ def confirm_clinical_plan(
 
 
 @router.get("/episodes/{episode_id}/clinical-timeline", response_model=list[ClinicalDecisionTimelineItem])
-def episode_clinical_timeline(episode_id: int, db: Session = Depends(get_db), actor: Actor = Depends(require_permission("clinical_plans.read"))):
-    get_episode_or_404(db, episode_id)
+def episode_clinical_timeline(episode_id: int, db: Session = Depends(get_db), context: CurrentUserContext = Depends(require_active_clinic("clinical_plans.read"))):
+    get_episode_or_404(db, episode_id, context)
     plan_ids = db.scalars(select(ClinicalPlan.id).where(ClinicalPlan.episode_id == episode_id)).all()
     conditions = [and_(AuditLog.entity_type == "ClinicalEpisode", AuditLog.entity_id == episode_id)]
     if plan_ids:

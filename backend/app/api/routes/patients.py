@@ -13,6 +13,7 @@ from app.schemas.common import ClinicalEpisodeOut, ClinicalEvidenceTimelineListR
 from app.services.clinical_evidence_timeline import list_patient_clinical_evidence_timeline
 from app.services.appointments import minimal_appointment_conflict, patient_appointment_availability_stmt
 from app.services.clinical_document_access import clinical_document_capabilities, institution_scoped_clinical_record_metadata_statement, resolve_actor_institution_context
+from app.services.clinical_scope import authorized_institution_id
 
 ERROR_RESPONSES = {400: {"model": ErrorResponse}, 401: {"model": ErrorResponse}, 403: {"model": ErrorResponse}, 404: {"model": ErrorResponse}, 409: {"model": ErrorResponse}, 422: {"model": ErrorResponse}}
 
@@ -423,7 +424,10 @@ def patient_episodes(patient_id: int, db: Session = Depends(get_db), context: Cu
     stmt = (
         select(ClinicalEpisode)
         .options(joinedload(ClinicalEpisode.patient), joinedload(ClinicalEpisode.owner_provider))
-        .where(ClinicalEpisode.patient_id == patient_id)
+        .where(
+            ClinicalEpisode.patient_id == patient_id,
+            ClinicalEpisode.institution_id == authorized_institution_id(context),
+        )
         .order_by(ClinicalEpisode.status, ClinicalEpisode.start_date.desc())
     )
     return [episode_with_count(db, episode) for episode in db.scalars(stmt).all()]

@@ -223,10 +223,24 @@ def _foreign_episode(db, auth_setup):
     return patient, episode, plan
 
 
-@BLOCKER_XFAIL
-@pytest.mark.parametrize("operation", ["list", "patient_list", "detail", "update", "close", "plans"])
+@pytest.mark.parametrize(
+    "operation",
+    [
+        "list",
+        "patient_list",
+        "detail",
+        "update",
+        "close",
+        "appointments",
+        "plans",
+        "plan_update",
+        "plan_reject",
+        "plan_confirm",
+        "timeline",
+    ],
+)
 def test_foreign_institution_episode_and_plan_operations_are_denied(client, db, auth_setup, operation):
-    patient, episode, _ = _foreign_episode(db, auth_setup)
+    patient, episode, plan = _foreign_episode(db, auth_setup)
     headers = _headers(client, auth_setup)
 
     if operation == "list":
@@ -247,9 +261,50 @@ def test_foreign_institution_episode_and_plan_operations_are_denied(client, db, 
         )
     elif operation == "close":
         response = client.post(f"/api/episodes/{episode.id}/close", headers=headers)
-    else:
+    elif operation == "appointments":
+        response = client.get(f"/api/episodes/{episode.id}/appointments", headers=headers)
+    elif operation == "plans":
         response = client.get(f"/api/episodes/{episode.id}/clinical-plans", headers=headers)
+    elif operation == "plan_update":
+        response = client.patch(
+            f"/api/clinical-plans/{plan.id}",
+            headers=headers,
+            json={"rationale": "FOREIGN_PLAN_MUTATION"},
+        )
+    elif operation == "plan_reject":
+        response = client.post(f"/api/clinical-plans/{plan.id}/reject", headers=headers)
+    elif operation == "plan_confirm":
+        response = client.post(f"/api/clinical-plans/{plan.id}/confirm", headers=headers)
+    else:
+        response = client.get(f"/api/episodes/{episode.id}/clinical-timeline", headers=headers)
     assert response.status_code == 404
+
+
+def test_unresolved_legacy_episode_is_hidden(client, db, auth_setup):
+    patient = Patient(first_name="Legacy", last_name="Unresolved")
+    db.add(patient)
+    db.flush()
+    db.add(PatientClinicAssociation(patient_id=patient.id, clinic_id=auth_setup["clinic"].id, active=True))
+    episode = ClinicalEpisode(
+        patient_id=patient.id,
+        institution_id=None,
+        title="UNRESOLVED_EPISODE_SENTINEL",
+        status="active",
+        priority="routine",
+        start_date=date(2026, 7, 22),
+    )
+    db.add(episode)
+    db.flush()
+    response = client.get(f"/api/episodes/{episode.id}", headers=_headers(client, auth_setup))
+    assert response.status_code == 404
+
+
+def test_episode_api_key_permission_has_no_implicit_institution_scope(client, db):
+    raw_key = "scope-episode-api-key"
+    db.add(ApiKey(name="Episode machine", key_hash=hash_api_key(raw_key), scopes=["episodes.read"], active=True))
+    db.flush()
+    response = client.get("/api/episodes", headers={"X-ASTRA-API-Key": raw_key, "X-Clinic-Id": "1"})
+    assert response.status_code == 403
 
 
 def _foreign_derived_data(db, auth_setup):
