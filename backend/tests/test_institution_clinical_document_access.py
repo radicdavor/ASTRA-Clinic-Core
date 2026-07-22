@@ -1,5 +1,6 @@
 from datetime import date, time
 
+import pytest
 from sqlalchemy import select
 
 from app.core.security import hash_password
@@ -119,6 +120,33 @@ def clinical_doc(
     db.add(document)
     db.flush()
     return document
+
+
+@pytest.mark.xfail(strict=True, reason="PR #3 P1: unresolved documents are currently treated as institution-wide")
+def test_unresolved_document_is_hidden_from_all_standard_clinical_read_paths(client, db):
+    clinic_a, _, _, patient, _ = setup_scope(db)
+    doctor = user_with_role(db, "unresolved-scope@test.local", MEDICAL_READ + ["documents.view_source"], "medical_staff", clinic_a)
+    document = ClinicalDocument(
+        patient_id=patient.id,
+        clinic_id=None,
+        source_type="legacy_import",
+        document_type="gastroscopy",
+        title="Unresolved synthetic document",
+        raw_text="Restricted synthetic content",
+        review_status="reviewed",
+        physician_reviewed=True,
+        is_clinical_record=True,
+        record_classification="clinical",
+    )
+    db.add(document)
+    db.commit()
+    auth = headers(client, doctor.email)
+
+    assert document.id not in {item["id"] for item in client.get("/api/clinical-documents", headers=auth).json()}
+    assert document.id not in {item["id"] for item in client.get("/api/clinical-documents/search?q=Unresolved", headers=auth).json()}
+    assert document.id not in {item["id"] for item in client.get(f"/api/patients/{patient.id}/clinical-documents", headers=auth).json()}
+    assert client.get(f"/api/clinical-documents/{document.id}", headers=auth).status_code == 404
+    assert client.get(f"/api/clinical-documents/{document.id}/source", headers=auth).status_code == 404
 
 
 def test_physician_and_nurse_read_clinical_documents_across_clinics_same_institution(client, db):

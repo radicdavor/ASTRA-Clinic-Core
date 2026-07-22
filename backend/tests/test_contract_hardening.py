@@ -147,6 +147,15 @@ def test_production_compose_example_uses_placeholders_not_demo_secrets():
     assert "DEMO_MODE=false" in compose
 
 
+@pytest.mark.xfail(strict=True, reason="PR #3 P1: documented production frontend and API origins are cross-site")
+def test_production_example_uses_one_same_origin_browser_auth_contract():
+    env_text = (Path(__file__).resolve().parents[2] / ".env.production.example").read_text(encoding="utf-8")
+
+    assert "VITE_API_BASE_URL=/api" in env_text
+    assert "CORS_ORIGINS=https://conceptnura.com" in env_text
+    assert "VITE_API_BASE_URL=https://poliklinikanura.eu" not in env_text
+
+
 def test_openapi_does_not_publish_sensitive_hash_fields(client):
     schema = client.get("/openapi.json").json()
     serialized = str(schema)

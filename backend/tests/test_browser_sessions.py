@@ -1,5 +1,8 @@
 from datetime import UTC, datetime, timedelta
 
+import pytest
+
+from app.models.domain import AuditLog
 from app.models.domain import UserSession
 from app.services.sessions import cleanup_expired_sessions, create_user_session
 from tests.conftest import login_token
@@ -99,6 +102,36 @@ def test_csrf_allows_cookie_authenticated_mutation_with_matching_token(client, a
     response = client.post("/api/patients", headers={"X-CSRF-Token": csrf}, json={"first_name": "Csrf", "last_name": "Allowed"})
 
     assert response.status_code == 200
+
+
+@pytest.mark.xfail(strict=True, reason="PR #3 P2: CSRF currently validates only matching header and cookie")
+def test_csrf_token_from_another_session_is_rejected(client, auth_setup):
+    first = client.post("/auth/browser/login", json={"email": "admin@test.local", "password": "secret"})
+    csrf_from_first_session = first.json()["csrf_token"]
+    second = client.post("/auth/browser/login", json={"email": "admin@test.local", "password": "secret"})
+    assert second.status_code == 200
+    client.cookies.set("astra_csrf", csrf_from_first_session)
+
+    response = client.post(
+        "/api/patients",
+        headers={"X-CSRF-Token": csrf_from_first_session},
+        json={"first_name": "Cross", "last_name": "Session"},
+    )
+
+    assert response.status_code == 403
+
+
+@pytest.mark.xfail(strict=True, reason="PR #3 P2: invalid-session audit currently rolls back with the request")
+def test_invalid_browser_session_audit_survives_unauthorized_response(client, db, auth_setup):
+    login = client.post("/auth/browser/login", json={"email": "admin@test.local", "password": "secret"})
+    assert login.status_code == 200
+    session = db.query(UserSession).one()
+    session.revoked_at = datetime.now(UTC)
+    db.commit()
+
+    assert client.get("/auth/session").status_code == 401
+    db.expire_all()
+    assert db.query(AuditLog).filter(AuditLog.action == "auth.browser_session_invalid").count() == 1
 
 
 def test_cors_preflight_allows_csrf_and_clinic_headers(client):
