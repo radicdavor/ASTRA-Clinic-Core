@@ -24,8 +24,6 @@ import { useApi } from "../hooks/useApi";
 import type { Provider, Room, Service } from "../types";
 import { formatUtcTimestampInClinic, getClinicToday } from "../utils/clinicTime";
 
-const today = getClinicToday();
-
 function iconForAction(action: OperationalState["action"]): ReactNode {
   if (action === "reception") return <ClipboardCheck size={15}/>;
   if (action === "encounter") return <Stethoscope size={15}/>;
@@ -148,7 +146,7 @@ function PatientBlock({
 
 export function DailyClinicDashboard() {
   const navigate = useNavigate();
-  const [day, setDay] = useState(today);
+  const [day, setDay] = useState(() => getClinicToday());
   const [clinician, setClinician] = useState("");
   const [clinic, setClinic] = useState("");
   const [room, setRoom] = useState("");

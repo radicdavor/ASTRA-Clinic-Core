@@ -165,10 +165,16 @@ async function findPatientBlock(label: RegExp) {
 }
 
 beforeEach(() => {
+  localStorage.setItem("astra_active_clinic_timezone", "Europe/Zagreb");
   dashboardAccess = { viewer_role: "admin", scope: "all", scope_label: "Svi liječnici", scoped_clinician_id: null, can_filter_clinician: true, available_clinics: [{ id: 1, name: "Klinika Sjever" }, { id: 2, name: "Klinika Jug" }] };
   installFetchMock();
 });
-afterEach(() => { cleanup(); vi.restoreAllMocks(); });
+afterEach(() => {
+  cleanup();
+  vi.useRealTimers();
+  vi.restoreAllMocks();
+  localStorage.clear();
+});
 
 describe("vremenska dnevna ploča", () => {
   test("single short appointment renders as one patient block on a visible time axis", async () => {
@@ -291,5 +297,27 @@ describe("vremenska dnevna ploča", () => {
     await user.click(advanced.querySelector("summary") as HTMLElement);
     await user.selectOptions(screen.getByRole("combobox", { name: "Klinika" }), "2");
     await waitFor(() => expect(fetch).toHaveBeenCalledWith(expect.stringMatching(/dashboard\/day\?.*clinic_id=2/), expect.anything()));
+  });
+
+  test("default day is recalculated from the active clinic timezone on mount", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    vi.setSystemTime(new Date("2026-07-20T22:30:00Z"));
+
+    localStorage.setItem("astra_active_clinic_timezone", "Europe/Zagreb");
+    const first = renderDashboard();
+    await waitFor(() => expect(fetch).toHaveBeenCalledWith(
+      expect.stringMatching(/dashboard\/day\?.*selected_date=2026-07-21/),
+      expect.anything(),
+    ));
+    first.unmount();
+    vi.restoreAllMocks();
+    installFetchMock();
+
+    localStorage.setItem("astra_active_clinic_timezone", "America/New_York");
+    renderDashboard();
+    await waitFor(() => expect(fetch).toHaveBeenCalledWith(
+      expect.stringMatching(/dashboard\/day\?.*selected_date=2026-07-20/),
+      expect.anything(),
+    ));
   });
 });
