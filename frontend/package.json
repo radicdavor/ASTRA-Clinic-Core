@@ -9,7 +9,7 @@
     "test": "node --test scripts/program2-contract.test.mjs && vitest run",
     "e2e": "playwright test",
     "e2e:db": "node scripts/run-db-backed-e2e.mjs",
-    "smoke": "node scripts/pilot-smoke.mjs",
+    "smoke": "playwright test -c playwright.config.ts e2e/semantic-smoke.spec.ts",
     "program1:evaluation-readiness": "node scripts/program1-evaluation-readiness.mjs",
     "build": "tsc && vite build",
     "preview": "vite preview --host 0.0.0.0"
