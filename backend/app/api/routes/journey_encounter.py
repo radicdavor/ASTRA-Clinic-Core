@@ -3,14 +3,14 @@ from fastapi import APIRouter,Depends,HTTPException,Request
 from sqlalchemy import select
 from sqlalchemy.orm import Session,joinedload,selectinload
 from app.audit.service import audit,snapshot
-from app.auth.dependencies import CurrentUserContext,require_active_clinic
+from app.auth.dependencies import CurrentUserContext,require_active_clinic,require_medical_staff
 from app.core.database import get_db
 from app.models.domain import JourneyEncounter,PatientJourney
 from app.schemas.journey_encounter import DiagnosisSuggestionDecision,DiagnosisSuggestionRequest,DiagnosisSuggestionsOut,EncounterOut,EncounterUpdate
 from app.services.encounter_diagnosis import DiagnosisSuggestionUnavailable,ensure_diagnosis_suggestions_enabled,normalize_icd_code,suggest_icd10_diagnoses
 from app.services.patient_journeys import transition
 from app.core.config import get_settings
-router=APIRouter(prefix="/api/patient-journeys",tags=["journey-encounter"])
+router=APIRouter(prefix="/api/patient-journeys",tags=["journey-encounter"],dependencies=[Depends(require_medical_staff)])
 def get_journey(db,id,clinic_id):
  item=db.scalar(select(PatientJourney).options(joinedload(PatientJourney.appointment),selectinload(PatientJourney.blockers),selectinload(PatientJourney.activities)).where(PatientJourney.id==id,PatientJourney.clinic_id==clinic_id))
  if not item: raise HTTPException(404,detail="Tijek pacijenta nije pronađen")

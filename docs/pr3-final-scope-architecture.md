@@ -36,6 +36,12 @@ Five explicit contexts cover the application:
 5. `SystemSecurityAuditContext` requires explicit audit/security authority and
    never implies unrestricted PHI access.
 
+Every wholly clinical route module also declares the shared
+`require_medical_staff` router dependency, so an administrative role with
+broad permissions—and any future route added to that module—fails closed
+before object loading. Mixed route modules apply the same category rule in
+their canonical institution-scoped loaders.
+
 The implementation uses small SQLAlchemy loaders and existing dependencies,
 not a policy DSL or a new authorization framework.
 

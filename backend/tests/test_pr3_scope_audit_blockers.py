@@ -42,11 +42,30 @@ def _headers(client, auth_setup) -> dict[str, str]:
     }
 
 
-def test_administrative_role_cannot_use_institution_clinical_scope(client, db, auth_setup):
+@pytest.mark.parametrize(
+    "path",
+    [
+        "/api/episodes",
+        "/api/laboratory/orders",
+        "/api/therapies",
+        "/api/workflow-tasks",
+        "/api/clinical-forms/definitions",
+        "/api/patient-journeys/999/activities/999/form",
+        "/api/pathology-cases/999",
+        "/api/patient-journeys/999/encounter",
+        "/api/patient-journeys/999/timeline",
+        "/api/patient-journeys/999/summary",
+        "/api/patients/999/clinical-summary",
+        "/api/signed-reports/999",
+        "/api/clinical-documents",
+        "/api/clinical-documents/999/source",
+    ],
+)
+def test_administrative_role_cannot_use_institution_clinical_scope(client, db, auth_setup, path):
     auth_setup["admin"].role.professional_category = "administrative"
     db.flush()
 
-    response = client.get("/api/episodes", headers=_headers(client, auth_setup))
+    response = client.get(path, headers=_headers(client, auth_setup))
 
     assert response.status_code == 403
 

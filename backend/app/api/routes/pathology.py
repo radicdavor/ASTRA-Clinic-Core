@@ -3,7 +3,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
 from app.audit.service import audit, snapshot
-from app.auth.dependencies import CurrentUserContext, require_active_clinic
+from app.auth.dependencies import CurrentUserContext, require_active_clinic, require_medical_staff
 from app.core.database import get_db
 from app.models.domain import PathologyCase, PatientJourney, ProcedureIntervention
 from app.schemas.pathology import InterventionCreate, InterventionOut, PathologyCaseCreate, PathologyCaseOut, PathologyCommunicationDecision, PathologyStatusUpdate, ReportLinkCreate
@@ -12,7 +12,7 @@ from app.services.pathology import create_case, decide_communication, link_resul
 from app.services.patient_journeys import add_event
 
 
-router = APIRouter(prefix="/api", tags=["pathology"])
+router = APIRouter(prefix="/api", tags=["pathology"], dependencies=[Depends(require_medical_staff)])
 
 
 def visit(db: Session, journey_id: int, clinic_id: int) -> PatientJourney:

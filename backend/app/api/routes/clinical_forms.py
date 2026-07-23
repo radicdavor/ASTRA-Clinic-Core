@@ -3,7 +3,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session, joinedload
 
 from app.audit.service import audit, snapshot
-from app.auth.dependencies import Actor, CurrentUserContext, require_active_clinic, require_permission
+from app.auth.dependencies import Actor, CurrentUserContext, require_active_clinic, require_medical_staff, require_permission
 from app.core.database import get_db
 from app.models.domain import ClinicalFormDefinition, ClinicalFormInstance, JourneyActivity, PatientJourney
 from app.schemas.clinical_forms import ClinicalFormCompleteRequest, ClinicalFormDataUpdate, ClinicalFormDefinitionOut, ClinicalFormInstanceOut
@@ -13,7 +13,7 @@ from app.services.patient_journeys import add_event
 from app.services.reports import create_signed_report
 
 
-router = APIRouter(prefix="/api", tags=["clinical-forms"])
+router = APIRouter(prefix="/api", tags=["clinical-forms"], dependencies=[Depends(require_medical_staff)])
 
 
 def journey(db: Session, journey_id: int, clinic_id: int) -> PatientJourney:

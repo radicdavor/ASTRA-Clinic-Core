@@ -5,13 +5,13 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session, joinedload
 
 from app.audit.service import audit, snapshot
-from app.auth.dependencies import Actor, CurrentUserContext, get_scoped_patient, require_active_clinic, require_permission
+from app.auth.dependencies import Actor, CurrentUserContext, get_scoped_patient, require_active_clinic, require_medical_staff, require_permission
 from app.core.database import get_db
 from app.models.domain import Appointment, Clinic, LabOrder, LabResult, LabTemplate
 from app.schemas.laboratory import LabCancel, LabCollection, LabHistoryItem, LabOrderCreate, LabOrderOut, LabResultsUpdate, LabReview, LabTemplateOut
 from app.services.clinical_scope import authorized_institution_id, get_institution_episode
 
-router = APIRouter(prefix="/api/laboratory", tags=["laboratory"])
+router = APIRouter(prefix="/api/laboratory", tags=["laboratory"], dependencies=[Depends(require_medical_staff)])
 
 
 def order_query(institution_id: int):

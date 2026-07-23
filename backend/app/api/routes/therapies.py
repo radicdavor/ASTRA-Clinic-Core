@@ -5,13 +5,13 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session, joinedload
 
 from app.audit.service import audit, snapshot
-from app.auth.dependencies import CurrentUserContext, get_scoped_patient, require_active_clinic
+from app.auth.dependencies import CurrentUserContext, get_scoped_patient, require_active_clinic, require_medical_staff
 from app.core.database import get_db
 from app.models.domain import Therapy
 from app.schemas.therapies import TherapyComplete, TherapyCreate, TherapyOut, TherapyRenew, TherapyStop, TherapyUpdate
 from app.services.clinical_scope import authorized_institution_id, get_institution_episode
 
-router = APIRouter(prefix="/api/therapies", tags=["therapies"])
+router = APIRouter(prefix="/api/therapies", tags=["therapies"], dependencies=[Depends(require_medical_staff)])
 
 
 def therapy_query(institution_id: int):

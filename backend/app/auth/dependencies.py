@@ -160,6 +160,19 @@ def require_permission(permission_name: str):
     return dependency
 
 
+def require_medical_staff(actor: Actor = Depends(get_current_actor)) -> Actor:
+    if (
+        actor.user is None
+        or actor.user.role is None
+        or actor.user.role.professional_category != "medical_staff"
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Kliničke podatke ustanove smije koristiti samo ovlašteno medicinsko osoblje",
+        )
+    return actor
+
+
 def active_clinic_memberships(db: Session, user_id: int) -> list[ClinicMembership]:
     return db.scalars(
         select(ClinicMembership)

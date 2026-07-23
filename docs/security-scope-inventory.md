@@ -111,3 +111,9 @@ pairs and fingerprints the sorted path, method and context projection. Any
 addition, removal, move or reclassification changes the fingerprint and fails
 CI until the route inventory is explicitly reviewed. This includes financial
 mutations located outside `inventory.py`.
+
+Modules classified wholly as `InstitutionClinicalContext` additionally declare
+the shared `require_medical_staff` router dependency. Mixed modules enforce
+the same medical-category rule in their canonical scoped loaders. Therefore,
+an administrative role cannot convert broad permissions into clinical PHI
+access, and new endpoints in wholly clinical modules fail closed.

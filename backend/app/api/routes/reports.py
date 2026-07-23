@@ -3,7 +3,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.audit.service import audit, snapshot
-from app.auth.dependencies import Actor, require_permission
+from app.auth.dependencies import Actor, require_medical_staff, require_permission
 from app.core.database import get_db
 from app.models.domain import Patient, PatientJourney, ReportDeliveryEvent, SignedClinicalReport
 from app.schemas.common import ClinicalDocumentAddendumCreate, ClinicalDocumentAddendumOut
@@ -17,7 +17,7 @@ from app.services.clinical_document_access import (
 )
 from app.services.reports import queue_stub_deliveries, record_print, verify_report_integrity, visit_documents
 
-router = APIRouter(prefix="/api", tags=["signed-reports"])
+router = APIRouter(prefix="/api", tags=["signed-reports"], dependencies=[Depends(require_medical_staff)])
 
 
 def report_or_404(db: Session, report_id: int) -> SignedClinicalReport:

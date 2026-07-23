@@ -6,13 +6,18 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, joinedload
 
 from app.audit.service import audit, snapshot
-from app.auth.dependencies import Actor, CurrentUserContext, get_scoped_patient, require_active_clinic, require_permission
+from app.auth.dependencies import Actor, CurrentUserContext, get_scoped_patient, require_active_clinic, require_medical_staff, require_permission
 from app.core.database import get_db
 from app.models.domain import Appointment, Clinic, Provider, WorkflowChecklistItem, WorkflowTask, WorkflowTemplate
 from app.schemas.common import ErrorResponse, WorkflowTaskCreate, WorkflowTaskOut, WorkflowTaskUpdate, WorkflowTemplateCreate, WorkflowTemplateOut
 from app.services.clinical_scope import authorized_institution_id, get_institution_episode, provider_belongs_to_institution
 
-router = APIRouter(prefix="/api", tags=["workflow"], responses={400: {"model": ErrorResponse}, 401: {"model": ErrorResponse}, 403: {"model": ErrorResponse}, 404: {"model": ErrorResponse}, 409: {"model": ErrorResponse}, 422: {"model": ErrorResponse}})
+router = APIRouter(
+    prefix="/api",
+    tags=["workflow"],
+    responses={400: {"model": ErrorResponse}, 401: {"model": ErrorResponse}, 403: {"model": ErrorResponse}, 404: {"model": ErrorResponse}, 409: {"model": ErrorResponse}, 422: {"model": ErrorResponse}},
+    dependencies=[Depends(require_medical_staff)],
+)
 
 
 def task_query(institution_id: int):

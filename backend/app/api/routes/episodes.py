@@ -7,7 +7,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, joinedload
 
 from app.audit.service import audit, snapshot
-from app.auth.dependencies import CurrentUserContext, get_scoped_patient, require_active_clinic
+from app.auth.dependencies import CurrentUserContext, get_scoped_patient, require_active_clinic, require_medical_staff
 from app.core.database import get_db
 from app.models.domain import Appointment, AuditLog, Clinic, ClinicalEpisode, ClinicalPlan, Provider
 from app.schemas.common import AppointmentOut, ClinicalDecisionTimelineItem, ClinicalEpisodeCreate, ClinicalEpisodeOut, ClinicalEpisodeUpdate, ClinicalPlanGenerate, ClinicalPlanOut, ClinicalPlanUpdate, ErrorResponse
@@ -15,7 +15,12 @@ from app.services.clinical_scope import authorized_institution_id, get_instituti
 
 ERROR_RESPONSES = {400: {"model": ErrorResponse}, 401: {"model": ErrorResponse}, 403: {"model": ErrorResponse}, 404: {"model": ErrorResponse}, 409: {"model": ErrorResponse}, 422: {"model": ErrorResponse}}
 
-router = APIRouter(prefix="/api", tags=["episodes"], responses=ERROR_RESPONSES)
+router = APIRouter(
+    prefix="/api",
+    tags=["episodes"],
+    responses=ERROR_RESPONSES,
+    dependencies=[Depends(require_medical_staff)],
+)
 
 
 def patch_model(obj, data: dict) -> None:
