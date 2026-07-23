@@ -23,7 +23,7 @@ import {
   Users,
   WalletCards,
 } from "lucide-react";
-import { getActiveClinicId, getSessionUser, logout, setActiveClinicId, setActiveClinicTimezone, type UserClinicsResponse } from "../api/client";
+import { getActiveClinicId, getDemoPersonaKey, getSessionUser, logout, setActiveClinicId, setActiveClinicTimezone, switchDemoPersona, type DemoPersonaKey, type UserClinicsResponse } from "../api/client";
 import { useApi } from "../hooks/useApi";
 import { ToastHost } from "./ToastHost";
 
@@ -65,6 +65,14 @@ const roleLabels: Record<string, string> = {
   document_reviewer: "Pregledavatelj dokumenata",
   ai_agent: "AI servisni račun",
 };
+
+const demoPersonas: Array<{ key: DemoPersonaKey; label: string }> = [
+  { key: "admin", label: "Administrator" },
+  { key: "receptionist", label: "Tajnica" },
+  { key: "nurse", label: "Medicinska sestra" },
+  { key: "physician_1", label: "Liječnik 1" },
+  { key: "physician_2", label: "Liječnik 2" },
+];
 
 function group(label: string, icon: typeof LayoutDashboard, groupedItems: NavItem[]): NavEntry {
   return { label, icon, items: groupedItems };
@@ -119,15 +127,21 @@ function NavigationItem({ item }: { item: NavItem }) {
 
 export function AppShell() {
   const navigate = useNavigate();
-  const publicConfig = useApi<{ demo_mode: boolean; real_data_allowed: boolean; warnings?: string[] } | null>("/api/public-config", null);
+  const publicConfig = useApi<{ demo_mode: boolean; real_data_allowed: boolean; demo_persona_switcher_enabled?: boolean; warnings?: string[] } | null>("/api/public-config", null);
   const clinicAccess = useApi<UserClinicsResponse | null>("/auth/me/clinics", null);
   const [activeClinic, setActiveClinic] = useState(getActiveClinicId() ?? "");
   const [pendingClinic, setPendingClinic] = useState<string | null>(null);
+  const [persona, setPersona] = useState<DemoPersonaKey | null>(getDemoPersonaKey());
+  const [pendingPersona, setPendingPersona] = useState<DemoPersonaKey | null>(null);
+  const [switchingPersona, setSwitchingPersona] = useState(false);
   const fallbackDemoMode = import.meta.env.VITE_APP_ENV !== "production";
   const showDemoBanner = publicConfig.data ? publicConfig.data.demo_mode || !publicConfig.data.real_data_allowed : fallbackDemoMode;
   const warningText = publicConfig.data?.warnings?.join(" ") || "Demo/development okruženje – ne unositi stvarne podatke pacijenata.";
   const role = (getSessionUser()?.role ?? "").replace(/^demo_/, "") || "receptionist";
   const navigation = useMemo(() => navigationForRole(role, showDemoBanner), [role, showDemoBanner]);
+  const selectedClinic = clinicAccess.data?.clinics.find((clinic) => String(clinic.id) === activeClinic);
+  const inferredPersona = persona
+    ?? (role === "physician" ? "physician_1" : demoPersonas.some((item) => item.key === role) ? role as DemoPersonaKey : null);
 
   useEffect(() => {
     if (!clinicAccess.data) return;
@@ -160,6 +174,19 @@ export function AppShell() {
     setActiveClinic(pendingClinic);
     setPendingClinic(null);
     window.location.reload();
+  }
+
+  async function applyPersonaChange() {
+    if (!pendingPersona || switchingPersona) return;
+    setSwitchingPersona(true);
+    try {
+      const session = await switchDemoPersona(pendingPersona);
+      setPersona(session.persona_key);
+      setPendingPersona(null);
+      window.location.assign("/");
+    } finally {
+      setSwitchingPersona(false);
+    }
   }
 
   return (
@@ -195,7 +222,31 @@ export function AppShell() {
         {showDemoBanner && <div className="demo-banner">{warningText}</div>}
         <header className="topbar">
           <div className="topbar-context-group">
-            <span className="topbar-role">Uloga: <strong>{roleLabels[role] ?? "Korisnik"}</strong></span>
+            {publicConfig.data?.demo_persona_switcher_enabled ? (
+              <label className="demo-persona-picker">
+                <span>DEMO PRIKAZ ULOGE</span>
+                <select
+                  aria-label="Demo prikaz uloge"
+                  value={inferredPersona ?? ""}
+                  disabled={switchingPersona}
+                  onChange={(event) => {
+                    const next = event.target.value as DemoPersonaKey;
+                    if (next && next !== inferredPersona) setPendingPersona(next);
+                  }}
+                >
+                  {!inferredPersona && <option value="">Odaberite personu</option>}
+                  {demoPersonas.map((item) => <option key={item.key} value={item.key}>{item.label}</option>)}
+                </select>
+              </label>
+            ) : (
+              <span className="topbar-role">Uloga: <strong>{roleLabels[role] ?? "Korisnik"}</strong></span>
+            )}
+            {publicConfig.data?.demo_persona_switcher_enabled && (
+              <span className="demo-persona-context">
+                DEMO · {demoPersonas.find((item) => item.key === inferredPersona)?.label ?? roleLabels[role] ?? "Korisnik"}
+                {selectedClinic ? ` · ${selectedClinic.name}` : ""}
+              </span>
+            )}
             {clinicAccess.data && clinicAccess.data.clinics.length > 0 && (
               <label className="clinic-context-picker">
                 Aktivna klinika
@@ -248,6 +299,28 @@ export function AppShell() {
             <footer>
               <button type="button" onClick={() => setPendingClinic(null)}>Odustani</button>
               <button type="button" className="primary" autoFocus onClick={applyClinicChange}>Promijeni kliniku</button>
+            </footer>
+          </section>
+        </div>
+      )}
+      {pendingPersona && (
+        <div className="modal-backdrop" onMouseDown={(event) => event.target === event.currentTarget && !switchingPersona && setPendingPersona(null)}>
+          <section className="modal-panel clinic-change-dialog" role="dialog" aria-modal="true" aria-labelledby="persona-change-title">
+            <header>
+              <div>
+                <span className="eyebrow">Sintetički sigurnosni kontekst</span>
+                <h2 id="persona-change-title">Promijeniti demo ulogu?</h2>
+              </div>
+            </header>
+            <p>
+              Nastavit ćete kao <strong>{demoPersonas.find((item) => item.key === pendingPersona)?.label}</strong>.
+              Otvoreni prikazi će se zatvoriti, a klinika i podaci ponovno učitati s ovlastima te osobe.
+            </p>
+            <footer>
+              <button type="button" disabled={switchingPersona} onClick={() => setPendingPersona(null)}>Odustani</button>
+              <button type="button" className="primary" disabled={switchingPersona} autoFocus onClick={applyPersonaChange}>
+                {switchingPersona ? "Promjena uloge…" : "Promijeni demo ulogu"}
+              </button>
             </footer>
           </section>
         </div>
