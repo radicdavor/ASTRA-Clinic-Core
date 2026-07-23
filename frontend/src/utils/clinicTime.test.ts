@@ -14,6 +14,13 @@ describe("clinic timezone helpers", () => {
     expect(getClinicToday("Europe/Zagreb", instant)).toBe("2026-07-21");
   });
 
+  test("keeps the clinic-local calendar date across DST transition instants", () => {
+    expect(getClinicToday("Europe/Zagreb", new Date("2026-03-29T00:30:00Z"))).toBe("2026-03-29");
+    expect(getClinicToday("Europe/Zagreb", new Date("2026-03-29T01:30:00Z"))).toBe("2026-03-29");
+    expect(getClinicToday("Europe/Zagreb", new Date("2026-10-25T00:30:00Z"))).toBe("2026-10-25");
+    expect(getClinicToday("Europe/Zagreb", new Date("2026-10-25T01:30:00Z"))).toBe("2026-10-25");
+  });
+
   test("uses clinic-local midnight when UTC and clinic dates differ", () => {
     const instant = new Date("2026-07-20T22:30:00Z");
 
