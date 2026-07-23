@@ -20,8 +20,14 @@
 - eager dohvat detalja radi ukrasnih brojila;
 - novi role-specific dashboard bez backend projekcije.
 
-## Ograničenja
+## Tehnička odluka
+
+Puni backend, PostgreSQL, frontend, OpenAPI, Compose, Playwright, timezone i
+persona/session gateovi provedeni su na sintetičkim podacima. Konačni tehnički
+izvještaj nalazi se u
+[role-ia-technical-closure.md](role-ia-technical-closure.md).
+
+Odluka je **READY FOR HUMAN USABILITY REVIEW**.
 
 Human usability nije proveden. Produkcija, stvarni podaci i vanjski provider
-nisu autorizirani. Završna tehnička odluka upisuje se tek nakon punog backend,
-PostgreSQL, frontend, OpenAPI, Compose i Playwright gatea.
+nisu autorizirani.

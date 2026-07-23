@@ -52,3 +52,10 @@ real patient data.
 - Browser role hiding is not backend authorization evidence.
 - Human usability is recorded only after a separately run human session.
 - Test artifacts must contain synthetic data only and remain ignored locally.
+
+## Final measured result
+
+The final commands and measured counts are recorded in
+[role-ia-technical-closure.md](role-ia-technical-closure.md). The repository
+gate is complete for a local synthetic candidate; human usability remains
+unperformed.

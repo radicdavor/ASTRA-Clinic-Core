@@ -41,6 +41,7 @@ odluke.
 
 - [Role preview model](ux/role-preview-model.md)
 - [Role workflow matrix](ux/role-workflow-matrix.md)
+- [Role and information architecture technical closure](ux/role-ia-technical-closure.md)
 - [Operational list pattern](ux/operational-list-pattern.md)
 - [Human usability protocol](ux/human-usability-protocol.md)
 - [Current screen inventory](ux/current-screen-inventory.md)
