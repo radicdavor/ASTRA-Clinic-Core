@@ -1,3 +1,4 @@
+from datetime import UTC, datetime
 from secrets import token_urlsafe
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
@@ -8,8 +9,8 @@ from app.core.database import get_db
 from app.core.config import get_settings
 from app.core.security import create_access_token, verify_password
 from app.auth.dependencies import Actor, CurrentUserContext, active_clinic_memberships, get_current_actor, hash_api_key, require_active_clinic, require_permission
-from app.models.domain import ApiKey, User
-from app.schemas.common import ApiKeyCreate, ApiKeyCreated, ApiKeyOut, BrowserSessionResponse, ErrorResponse, LoginRequest, TokenResponse
+from app.models.domain import ApiKey, AuditLog, User
+from app.schemas.common import ApiKeyCreate, ApiKeyCreated, ApiKeyOut, BrowserSessionResponse, DemoPersonaSessionRequest, DemoPersonaSessionResponse, ErrorResponse, LoginRequest, TokenResponse
 from app.services.sessions import (
     create_user_session,
     csrf_token_matches,
@@ -23,6 +24,19 @@ from app.services.sessions import (
 ERROR_RESPONSES = {400: {"model": ErrorResponse}, 401: {"model": ErrorResponse}, 403: {"model": ErrorResponse}, 404: {"model": ErrorResponse}, 409: {"model": ErrorResponse}, 422: {"model": ErrorResponse}}
 
 router = APIRouter(prefix="/auth", tags=["auth"], responses=ERROR_RESPONSES)
+
+DEMO_PERSONA_EMAILS = {
+    "admin": "demo.admin@astra.local",
+    "receptionist": "demo.reception@astra.local",
+    "nurse": "demo.nurse@astra.local",
+    "physician_1": "demo.physician@astra.local",
+    "physician_2": "demo.physician2@astra.local",
+}
+DEMO_CONTROLLER_EMAILS = {
+    "demo.admin@astra.local",
+    "e2e.admin.a@example.invalid",
+    "e2e.system@example.invalid",
+}
 
 API_KEY_SCOPES = [
     {"name": "ai.patients.create", "category": "AI safe scopes", "description": "AI agent can create patients through the AI endpoint."},
@@ -137,10 +151,77 @@ def browser_logout(
         write_invalid_csrf_audit(db, session, request)
         raise HTTPException(status_code=403, detail="CSRF provjera nije uspjela")
     revoked = revoke_session(db, session)
+    controller_token = request.cookies.get(settings.demo_controller_cookie_name)
+    controller_session = get_valid_session(db, controller_token, touch=False)
+    if controller_session and (session is None or controller_session.id != session.id):
+        revoke_session(db, controller_session)
     response.delete_cookie(settings.session_cookie_name, **_delete_cookie_options(httponly=True))
     response.delete_cookie(settings.csrf_cookie_name, **_delete_cookie_options(httponly=False))
+    response.delete_cookie(settings.demo_controller_cookie_name, **_delete_cookie_options(httponly=True))
     db.commit()
     return {"logged_out": True, "revoked": revoked}
+
+
+@router.post("/demo/persona-session", response_model=DemoPersonaSessionResponse)
+def switch_demo_persona(
+    payload: DemoPersonaSessionRequest,
+    request: Request,
+    response: Response,
+    db: Session = Depends(get_db),
+) -> DemoPersonaSessionResponse:
+    settings = get_settings()
+    if not settings.demo_persona_switcher_available:
+        raise HTTPException(status_code=404, detail="Demo prikaz uloga nije dostupan")
+
+    effective_token = request.cookies.get(settings.session_cookie_name)
+    effective_session = get_valid_session(db, effective_token, touch=False)
+    if effective_session is None or not csrf_token_matches(effective_session, request.headers.get("X-CSRF-Token")):
+        raise HTTPException(status_code=403, detail="Valjana demo session i CSRF token su obvezni")
+
+    controller_token = request.cookies.get(settings.demo_controller_cookie_name) or effective_token
+    controller_session = get_valid_session(db, controller_token, touch=False)
+    controller_permissions = {
+        permission.name
+        for permission in (controller_session.user.role.permissions if controller_session and controller_session.user.role else [])
+    }
+    if (
+        controller_session is None
+        or controller_session.user.email not in DEMO_CONTROLLER_EMAILS
+        or "admin.manage_users" not in controller_permissions
+    ):
+        raise HTTPException(status_code=403, detail="Samo autorizirani sintetički evaluator može promijeniti demo personu")
+
+    persona_email = DEMO_PERSONA_EMAILS[payload.persona_key]
+    persona = db.scalar(select(User).where(User.email == persona_email, User.active.is_(True)))
+    if persona is None:
+        raise HTTPException(status_code=409, detail="Sintetička demo persona nije pripremljena")
+
+    if effective_session.id != controller_session.id:
+        effective_session.revoked_at = datetime.now(UTC)
+    persona_session, raw_session_token, raw_csrf_token = create_user_session(db, persona)
+    db.add(
+        AuditLog(
+            scope_type="system_security",
+            actor_type="user",
+            actor_user_id=controller_session.user_id,
+            action="demo_persona_switched",
+            entity_type="user_session",
+            entity_id=persona_session.id,
+            summary="Promijenjen demo prikaz uloge.",
+            request_id=getattr(request.state, "request_id", None),
+            after_json={"persona_key": payload.persona_key, "effective_user_id": persona.id},
+        )
+    )
+    response.set_cookie(settings.session_cookie_name, raw_session_token, **_cookie_options())
+    response.set_cookie(settings.csrf_cookie_name, raw_csrf_token, **_csrf_cookie_options())
+    response.set_cookie(settings.demo_controller_cookie_name, controller_token, **_cookie_options())
+    db.commit()
+    return DemoPersonaSessionResponse(
+        persona_key=payload.persona_key,
+        user={"id": persona.id, "name": persona.full_name, "email": persona.email, "role": persona.role.name},
+        csrf_token=raw_csrf_token,
+        expires_at=persona_session.expires_at,
+    )
 
 
 @router.post("/browser/revoke-all")

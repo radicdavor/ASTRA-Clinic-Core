@@ -97,12 +97,33 @@ def test_production_rejects_wildcard_cors_with_credentials():
         settings.validate_production_safety()
 
 
-@pytest.mark.parametrize("field", ["debug", "reload", "demo_mode", "demo_seed_enabled", "auto_create_default_admin"])
+@pytest.mark.parametrize("field", ["debug", "reload", "demo_mode", "demo_seed_enabled", "demo_persona_switcher_enabled", "auto_create_default_admin"])
 def test_production_rejects_unsafe_runtime_switches(field):
     settings = production_settings(**{field: True})
 
     with pytest.raises(RuntimeError):
         settings.validate_production_safety()
+
+
+def test_demo_persona_switcher_requires_every_demo_safety_condition():
+    assert Settings(
+        app_env="development",
+        demo_mode=True,
+        real_data_allowed=False,
+        demo_persona_switcher_enabled=True,
+    ).demo_persona_switcher_available is True
+    assert Settings(
+        app_env="development",
+        demo_mode=False,
+        real_data_allowed=False,
+        demo_persona_switcher_enabled=True,
+    ).demo_persona_switcher_available is False
+    assert Settings(
+        app_env="development",
+        demo_mode=True,
+        real_data_allowed=True,
+        demo_persona_switcher_enabled=True,
+    ).demo_persona_switcher_available is False
 
 
 def test_production_rejects_demo_and_stub_providers():
@@ -146,6 +167,7 @@ def test_production_compose_example_uses_placeholders_not_demo_secrets():
     assert "change-me-in-production" not in compose
     assert "astra:astra" not in compose
     assert "DEMO_MODE=false" in compose
+    assert "DEMO_PERSONA_SWITCHER_ENABLED=false" in compose
 
 
 def test_production_example_uses_one_same_origin_browser_auth_contract():

@@ -38,6 +38,7 @@ services:
       - RELOAD=false
       - DEMO_MODE=false
       - DEMO_SEED_ENABLED=false
+      - DEMO_PERSONA_SWITCHER_ENABLED=false
       - AUTO_CREATE_DEFAULT_ADMIN=false
       - REAL_DATA_ALLOWED=true
       - FISCALIZATION_MODE=${FISCALIZATION_MODE:?Set production fiscalization mode}

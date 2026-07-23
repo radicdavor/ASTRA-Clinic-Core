@@ -17,6 +17,7 @@ def public_config():
         "app_env": settings.app_env,
         "demo_mode": settings.demo_mode,
         "real_data_allowed": settings.real_data_allowed,
+        "demo_persona_switcher_enabled": settings.demo_persona_switcher_available,
         "fiscalization_mode": settings.fiscalization_mode,
         "ai_diagnosis_suggestions": diagnosis_suggestions_capability(settings),
         "warnings": settings.public_warnings,

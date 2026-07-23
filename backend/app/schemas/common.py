@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import date as DateType, datetime as DateTimeType, time as TimeType
 from decimal import Decimal
+from typing import Literal
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
@@ -1093,6 +1094,14 @@ class BrowserSessionResponse(BaseModel):
     user: dict
     csrf_token: str
     expires_at: DateTimeType
+
+
+class DemoPersonaSessionRequest(BaseModel):
+    persona_key: Literal["admin", "receptionist", "nurse", "physician_1", "physician_2"]
+
+
+class DemoPersonaSessionResponse(BrowserSessionResponse):
+    persona_key: str
 
 
 class ApiKeyCreate(BaseModel):
