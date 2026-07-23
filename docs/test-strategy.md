@@ -142,3 +142,12 @@ overlaps the later core run to provide early feedback.
 - PostgreSQL integration uses an isolated database and explicit safety guard.
 - DB-backed E2E uses synthetic data only and always attempts teardown.
 - Do not add fixed sleeps where readiness polling with a deadline is available.
+
+## PR #3 scope-remediation gate
+
+The security gate additionally includes explicit active-clinic billing denial,
+institution clinical-child denial, PHI-safe audit projection, tenant-bound
+API-key tests, and populated `0063 -> 0066` migration fixtures. Legacy tests
+must create realistic clinic memberships and object provenance; tests may not
+bypass production scope rules by using unscoped users, rooms, invoices, or API
+keys.

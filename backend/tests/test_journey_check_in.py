@@ -1,9 +1,9 @@
 from datetime import date, time, timedelta
 
 from app.core.security import hash_password
-from app.models.domain import Appointment, AuditLog, JourneyActivity, JourneyBlocker, JourneyEvent, Patient, Permission, Role, User
+from app.models.domain import Appointment, AuditLog, ClinicMembership, JourneyActivity, JourneyBlocker, JourneyEvent, Patient, Permission, Role, User
 from tests.conftest import login_token
-from tests.factories import appointment
+from tests.factories import appointment, default_clinic
 
 
 def admin_headers(client):
@@ -24,6 +24,8 @@ def reception_headers(client, db):
     role = Role(name="synthetic_reception", description="Synthetic", permissions=permissions)
     user = User(email="reception@test.local", full_name="Synthetic Reception", password_hash=hash_password("secret"), role=role)
     db.add(user)
+    db.flush()
+    db.add(ClinicMembership(user_id=user.id, clinic_id=default_clinic(db).id, active=True))
     db.flush()
     return {"Authorization": f"Bearer {login_token(client, 'reception@test.local')}"}
 

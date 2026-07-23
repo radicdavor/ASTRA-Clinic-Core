@@ -98,6 +98,7 @@ def csrf_token_matches(session: UserSession, raw_csrf_token: str | None) -> bool
 def record_session_audit(db: Session, action: str, *, user_id: int | None = None, session_id: int | None = None, summary: str | None = None) -> None:
     db.add(
         AuditLog(
+            scope_type="system_security",
             actor_type="user" if user_id else "system",
             actor_user_id=user_id,
             action=action,
@@ -125,6 +126,7 @@ def write_security_audit_event(
         with AuditSession.begin() as audit_db:
             audit_db.add(
                 AuditLog(
+                    scope_type="system_security",
                     actor_type="user" if user_id else "system",
                     actor_user_id=user_id,
                     action=action,

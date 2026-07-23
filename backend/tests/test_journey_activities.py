@@ -1,6 +1,6 @@
 from datetime import date, time
 
-from app.models.domain import JourneyActivity, PatientJourney, ProcedureIntervention
+from app.models.domain import Appointment, Clinic, JourneyActivity, PatientJourney, ProcedureIntervention, Provider, Room
 from tests.conftest import login_token
 from tests.factories import appointment, provider, room, service
 
@@ -22,10 +22,16 @@ def canonical_journey(client, db):
 
 def activity_payload(db, *, activity_key="second", day=date(2026, 7, 6), start=time(9, 30), end=time(10, 0)):
     suffix = f"{activity_key}-{day.isoformat()}-{start.isoformat()}"
+    active_clinic = db.query(Clinic).order_by(Clinic.id).first()
+    provider_obj = provider(db, name=f"dr. {suffix}")
+    room_obj = room(db, name=f"Room {suffix}")
+    provider_obj.clinic_id = active_clinic.id
+    room_obj.clinic_id = active_clinic.id
+    db.flush()
     return {
         "service_id": service(db, name=f"Service {suffix}").id,
-        "provider_id": provider(db, name=f"dr. {suffix}").id,
-        "room_id": room(db, name=f"Room {suffix}").id,
+        "provider_id": provider_obj.id,
+        "room_id": room_obj.id,
         "date": day.isoformat(),
         "start_time": start.isoformat(),
         "end_time": end.isoformat(),
@@ -61,6 +67,37 @@ def test_adds_multiple_sequential_services_to_one_physical_arrival(client, db, a
     assert listed.status_code == 200
     assert [item["activity_key"] for item in listed.json()] == ["primary", "second", "third"]
     assert {item["journey_id"] for item in listed.json()} == {journey["id"]}
+
+
+def test_added_activity_uses_only_active_clinic_resources_and_scopes_child_appointment(client, db, auth_setup):
+    journey, _ = canonical_journey(client, db)
+    local_payload = activity_payload(db)
+    created = client.post(
+        f"/api/patient-journeys/{journey['id']}/activities",
+        headers=headers(client),
+        json=local_payload,
+    )
+
+    assert created.status_code == 201
+    child_appointment = db.get(Appointment, created.json()["appointment_id"])
+    assert child_appointment.clinic_id == auth_setup["clinic"].id
+
+    foreign_clinic = Clinic(name="Foreign activity clinic")
+    foreign_provider = Provider(full_name="dr. Foreign activity", specialty="Test", clinic=foreign_clinic)
+    foreign_room = Room(name="Foreign activity room", type="ordination", clinic=foreign_clinic)
+    db.add_all([foreign_clinic, foreign_provider, foreign_room])
+    db.flush()
+    foreign_payload = activity_payload(db, activity_key="foreign", start=time(10), end=time(10, 30))
+    foreign_payload.update(provider_id=foreign_provider.id, room_id=foreign_room.id)
+
+    rejected = client.post(
+        f"/api/patient-journeys/{journey['id']}/activities",
+        headers=headers(client),
+        json=foreign_payload,
+    )
+
+    assert rejected.status_code == 403
+    assert db.query(JourneyActivity).filter_by(journey_id=journey["id"], activity_key="foreign").count() == 0
 
 
 def test_rejects_second_date_duplicate_key_and_patient_overlap(client, db, auth_setup):

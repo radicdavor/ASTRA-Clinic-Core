@@ -81,14 +81,15 @@ def test_pg_purchase_receive_invalid_line_creates_no_batches_or_movements(pg_db)
 
 
 def test_pg_complete_with_consumption_rollback_through_endpoint(pg_client, pg_db):
-    from tests.integration.test_quality_gate_api import create_user_with_permissions, login
+    from tests.integration.test_quality_gate_api import create_user_with_permissions, login, seed_clinic_objects
 
     user = create_user_with_permissions(pg_db, "materials-pg@test.local", ["appointments.write", "inventory.write"])
+    _, _, clinic_room, _ = seed_clinic_objects(pg_db, user)
     token = login(pg_client, user.email)
     svc = service(pg_db, name="PG Material Service")
     enough_item, enough_batch, _ = stock_item_with_batch(pg_db, sku="PG-MAT-ENOUGH", quantity=Decimal("5"))
     low_item, low_batch, _ = stock_item_with_batch(pg_db, sku="PG-MAT-LOW", quantity=Decimal("1"))
-    appt = appointment(pg_db, service_obj=svc)
+    appt = appointment(pg_db, room_obj=clinic_room, service_obj=svc)
     pg_db.add_all([
         ServiceMaterialTemplate(service_id=svc.id, inventory_item_id=enough_item.id, default_quantity=Decimal("3"), required=True, variable_quantity_allowed=False),
         ServiceMaterialTemplate(service_id=svc.id, inventory_item_id=low_item.id, default_quantity=Decimal("3"), required=True, variable_quantity_allowed=False),

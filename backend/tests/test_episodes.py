@@ -74,6 +74,7 @@ def test_create_appointment_with_episode_and_reject_cross_patient(client, db, au
     other = patient(db, first_name="Other")
     pr = provider(db)
     rm = room(db)
+    rm.clinic_id = auth_setup["clinic"].id
     sv = service(db)
     ep = episode(db, patient_obj=p, provider_obj=pr)
     other_ep = episode(db, patient_obj=other, provider_obj=pr, title="Other episode")

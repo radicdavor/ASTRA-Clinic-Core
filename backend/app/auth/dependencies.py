@@ -61,6 +61,20 @@ class CurrentUserContext:
         return "system.admin" in self.permissions
 
 
+@dataclass(frozen=True)
+class TenantActorContext:
+    actor: Actor
+    clinic: Clinic
+
+    @property
+    def clinic_id(self) -> int:
+        return self.clinic.id
+
+    @property
+    def institution_id(self) -> int | None:
+        return self.clinic.institution_id
+
+
 def hash_api_key(raw_key: str) -> str:
     return sha256(raw_key.encode("utf-8")).hexdigest()
 
@@ -146,6 +160,19 @@ def require_permission(permission_name: str):
     return dependency
 
 
+def require_medical_staff(actor: Actor = Depends(get_current_actor)) -> Actor:
+    if (
+        actor.user is None
+        or actor.user.role is None
+        or actor.user.role.professional_category != "medical_staff"
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Kliničke podatke ustanove smije koristiti samo ovlašteno medicinsko osoblje",
+        )
+    return actor
+
+
 def active_clinic_memberships(db: Session, user_id: int) -> list[ClinicMembership]:
     return db.scalars(
         select(ClinicMembership)
@@ -159,6 +186,7 @@ def active_clinic_memberships(db: Session, user_id: int) -> list[ClinicMembershi
 
 def require_active_clinic(permission_name: str):
     def dependency(
+        request: Request,
         actor: Actor = Depends(require_permission(permission_name)),
         x_clinic_id: int | None = Header(default=None, alias="X-Clinic-Id"),
         db: Session = Depends(get_db),
@@ -177,12 +205,62 @@ def require_active_clinic(permission_name: str):
             membership = next((item for item in memberships if item.clinic_id == x_clinic_id), None)
             if membership is None:
                 raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Korisnik nema pristup odabranoj klinici")
+        request.state.audit_clinic_id = membership.clinic_id
+        request.state.audit_institution_id = membership.clinic.institution_id
         return CurrentUserContext(
             actor=actor,
             user=actor.user,
             permissions=actor.permissions,
             active_clinic=membership.clinic,
         )
+
+    return dependency
+
+
+def require_tenant_clinic(permission_name: str):
+    """Resolve one clinic for user or API-key integration routes.
+
+    Legacy API keys without explicit tenant provenance are denied by default.
+    """
+
+    def dependency(
+        request: Request,
+        actor: Actor = Depends(require_permission(permission_name)),
+        x_clinic_id: int | None = Header(default=None, alias="X-Clinic-Id"),
+        db: Session = Depends(get_db),
+    ) -> TenantActorContext:
+        if actor.api_key is not None:
+            if actor.api_key.clinic_id is None or actor.api_key.institution_id is None:
+                raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="API ključ nema dodijeljen opseg klinike")
+            if x_clinic_id is not None and x_clinic_id != actor.api_key.clinic_id:
+                raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="API ključ ne smije odabrati drugu kliniku")
+            clinic = db.scalar(
+                select(Clinic).where(
+                    Clinic.id == actor.api_key.clinic_id,
+                    Clinic.institution_id == actor.api_key.institution_id,
+                    Clinic.active.is_(True),
+                )
+            )
+            if clinic is None:
+                raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="API ključ nema aktivan opseg klinike")
+        elif actor.user is not None:
+            memberships = active_clinic_memberships(db, actor.user.id)
+            if not memberships:
+                raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Korisnik nema aktivno članstvo ni u jednoj klinici")
+            if x_clinic_id is None:
+                if len(memberships) != 1:
+                    raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Potreban je odabir aktivne klinike")
+                membership = memberships[0]
+            else:
+                membership = next((item for item in memberships if item.clinic_id == x_clinic_id), None)
+                if membership is None:
+                    raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Korisnik nema pristup odabranoj klinici")
+            clinic = membership.clinic
+        else:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Nije moguće razriješiti opseg klinike")
+        request.state.audit_clinic_id = clinic.id
+        request.state.audit_institution_id = clinic.institution_id
+        return TenantActorContext(actor=actor, clinic=clinic)
 
     return dependency
 

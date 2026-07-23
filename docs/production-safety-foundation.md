@@ -13,6 +13,9 @@ Current security posture:
 - signed clinical documents are immutable through standard write paths;
 - corrections use addenda rather than overwriting the original document, and signed-report addenda reference the exact signed report version;
 - audit events are backend-derived and do not trust frontend-supplied institution or clinic metadata.
+- audit list responses are clinic-scoped metadata projections and exclude raw before/after payloads, free-text summaries, network identifiers and clinical content;
+- API keys are bound to one explicit clinic and institution; legacy unscoped keys fail closed;
+- episodes, derived clinical evidence, laboratory orders, therapies and workflow tasks use durable institution provenance, with unresolved/conflicting legacy rows denied.
 
 Module 3 migration assumption:
 
@@ -25,3 +28,7 @@ Not production-authorized in this increment:
 - live source-document integrations;
 - real patient data entry;
 - autonomous clinical decision-making.
+
+Migrations `0064` through `0066` are additive. Their backfills use only
+unambiguous existing relationships and never assign a default tenant to
+conflicting clinical data or legacy API keys.

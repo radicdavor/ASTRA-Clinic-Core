@@ -5,7 +5,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session, joinedload, selectinload
 
 from app.audit.service import audit, snapshot
-from app.auth.dependencies import CurrentUserContext, require_active_clinic
+from app.auth.dependencies import CurrentUserContext, require_active_clinic, require_medical_staff
 from app.core.database import get_db
 from app.models.domain import ClinicalDocument, JourneyAISummary, JourneyAISummaryFact, PatientJourney
 from app.schemas.journey_timeline import JourneySummaryOut, SummaryFactReview, TimelineItem
@@ -14,7 +14,7 @@ from app.services.journey_timeline import build_timeline, generate_local_summary
 from app.services.patient_journeys import add_event
 
 
-router = APIRouter(prefix="/api/patient-journeys", tags=["journey-timeline"])
+router = APIRouter(prefix="/api/patient-journeys", tags=["journey-timeline"], dependencies=[Depends(require_medical_staff)])
 
 
 def get_journey(db: Session, journey_id: int, clinic_id: int) -> PatientJourney:

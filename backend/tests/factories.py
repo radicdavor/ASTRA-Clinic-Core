@@ -82,8 +82,10 @@ def appointment(db, patient_obj=None, provider_obj=None, room_obj=None, service_
 def episode(db, patient_obj=None, provider_obj=None, title="Test episode"):
     patient_obj = patient_obj or patient(db)
     provider_obj = provider_obj or provider(db)
+    clinic_obj = default_clinic(db)
     obj = ClinicalEpisode(
         patient_id=patient_obj.id,
+        institution_id=clinic_obj.institution_id if clinic_obj else None,
         title=title,
         episode_type="general",
         status="active",

@@ -35,6 +35,13 @@ fallbacks.
 
 Administrative staff, billing staff and system administrators do not receive PHI access merely because they are privileged users. System administration is not a break-glass clinical access path.
 
+The same institution boundary applies to `ClinicalEpisode`,
+`ClinicalFinding`, `ClinicalOpenQuestion`, laboratory orders, therapies and
+workflow tasks through additive provenance in migrations `0064` and `0065`.
+Derived summaries, readiness projections and evidence timelines validate their
+exact source set; a global patient ID is not sufficient. Missing or conflicting
+legacy provenance fails closed.
+
 ## Write model
 
 Institution read is not institution edit.

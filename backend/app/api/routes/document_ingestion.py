@@ -6,7 +6,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session, joinedload
 
 from app.audit.service import audit, snapshot
-from app.auth.dependencies import Actor, CurrentUserContext, require_active_clinic, require_permission
+from app.auth.dependencies import Actor, CurrentUserContext, require_active_clinic, require_medical_staff, require_permission
 from app.core.database import get_db
 from app.models.domain import ClinicalDocument, DocumentProcessingJob, DocumentRequest, PatientJourney
 from app.schemas.common import ClinicalDocumentClassificationReview
@@ -23,7 +23,7 @@ from app.services.clinical_document_access import actor_institution_ids, get_ins
 from app.services.patient_journeys import add_event
 
 
-router = APIRouter(prefix="/api", tags=["document-ingestion"])
+router = APIRouter(prefix="/api", tags=["document-ingestion"], dependencies=[Depends(require_medical_staff)])
 
 
 def classification_audit_snapshot(document: ClinicalDocument) -> dict:
