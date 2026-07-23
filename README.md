@@ -36,7 +36,9 @@ provenance, denies unresolved document ownership, binds CSRF tokens to the
 active browser session, and persists rejected-session security audit events in
 an independent short transaction. The supported production browser topology is
 one HTTPS origin with `/api` and `/auth` reverse-proxied to FastAPI. See the
-[security review remediation record](docs/pr3-security-review-remediation.md).
+[security review remediation record](docs/pr3-security-review-remediation.md),
+[final scope architecture](docs/pr3-final-scope-architecture.md), and
+[security scope inventory](docs/security-scope-inventory.md).
 
 Workflow Engine MVP is documented in [`docs/WORKFLOW_ENGINE_MVP.md`](docs/WORKFLOW_ENGINE_MVP.md). It adds audited patient/episode tasks, responsibility, due dates, templates, and completion checklists without automated clinical decision-making.
 
