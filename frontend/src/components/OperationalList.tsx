@@ -55,11 +55,13 @@ export function ListFilterBar({
   children,
   advanced,
   activeFilterCount = 0,
+  showClear,
   onClear,
 }: {
   children: ReactNode;
   advanced?: ReactNode;
   activeFilterCount?: number;
+  showClear?: boolean;
   onClear?: () => void;
 }) {
   return (
@@ -75,7 +77,7 @@ export function ListFilterBar({
           <div>{advanced}</div>
         </details>
       )}
-      {onClear && activeFilterCount > 0 && (
+      {onClear && (showClear ?? activeFilterCount > 0) && (
         <button type="button" className="clear-filters" onClick={onClear}>
           <X size={15} aria-hidden="true" />
           Očisti
