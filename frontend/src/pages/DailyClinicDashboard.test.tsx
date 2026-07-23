@@ -179,6 +179,8 @@ describe("vremenska dnevna ploča", () => {
     const block = await findPatientBlock(/Kratki Pregled/);
     expect(within(block).getByText("Prvi pregled")).toBeTruthy();
     expect(within(block).getByText("Ordinacija 1")).toBeTruthy();
+    expect(within(block).getByLabelText("Naručen/a na: Prvi pregled")).toBeTruthy();
+    expect(block.getAttribute("aria-label")).toContain("Naručen/a na: Prvi pregled");
     expect(within(block).getByLabelText(/Backend kanonski status/)).toBeTruthy();
   });
 
@@ -189,6 +191,7 @@ describe("vremenska dnevna ploča", () => {
     expect(within(block).getByText("Gastroskopija")).toBeTruthy();
     expect(within(block).getByText("09:00–09:30")).toBeTruthy();
     expect(within(block).getByText("09:30–10:30")).toBeTruthy();
+    expect(within(block).getByLabelText("Naručen/a na: Prvi gastro pregled · Gastroskopija")).toBeTruthy();
     expect(block.classList.contains("timeline-patient-block")).toBe(true);
   });
 
