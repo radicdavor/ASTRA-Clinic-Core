@@ -23,9 +23,19 @@ async function login(page: Page, email: string, clinicId?: number) {
   await page.getByLabel("Lozinka").fill(seed.password);
   await page.getByRole("button", { name: "Prijava" }).click();
   if (clinicId) {
-    await page.getByLabel("Aktivna klinika").selectOption(String(clinicId));
+    await selectActiveClinic(page, clinicId);
   }
   await expect(page.getByRole("heading", { name: "Danas u poliklinici" })).toBeVisible();
+}
+
+async function selectActiveClinic(page: Page, clinicId: number) {
+  const picker = page.getByLabel("Aktivna klinika");
+  await picker.selectOption(String(clinicId));
+  const confirmation = page.getByRole("dialog", { name: "Promijeniti aktivnu kliniku?" });
+  if (await confirmation.isVisible()) {
+    await confirmation.getByRole("button", { name: "Promijeni kliniku" }).click();
+  }
+  await expect.poll(() => page.evaluate(() => localStorage.getItem("astra_active_clinic_id"))).toBe(String(clinicId));
 }
 
 async function api(page: Page, path: string, options: RequestInit = {}) {
@@ -68,8 +78,9 @@ test("DB-backed workflow uses real backend, PostgreSQL and persistent dashboard 
   await expect(page.getByText("E2E Zajednicki Pacijent")).toBeVisible();
   await expect(page.getByText("E2E Placeni Pacijent")).toBeVisible();
   await expect(page.getByLabel(/Završeno|Zavrseno/).first()).toBeVisible();
-  await expect(page.getByLabel("10:00 E2E Zajednicki Pacijent").getByText("E2E prvi gastro pregled")).toBeVisible();
-  await expect(page.getByLabel("10:00 E2E Zajednicki Pacijent").getByText("E2E gastroskopija")).toBeVisible();
+  const activities = page.getByLabel(/aktivnosti za E2E Zajednicki Pacijent/i);
+  await expect(activities.getByText("E2E prvi gastro pregled")).toBeVisible();
+  await expect(activities.getByText("E2E gastroskopija")).toBeVisible();
 
   const availability = await api(page, `/api/patients/${seed.patients.shared}/appointments`);
   expect(availability.status).toBe(200);
@@ -182,15 +193,13 @@ test("DB-backed CSRF protection blocks manual cookie-auth mutations without toke
 test("DB-backed clinic switching clears stale clinic data and reloads authorized dataset", async ({ page }) => {
   await login(page, seed.users.dual, seed.clinics.a);
 
-  const picker = page.getByLabel("Aktivna klinika");
-  await picker.selectOption(String(seed.clinics.a));
   await expect(page.getByRole("button", { name: "E2E Zajednicki Pacijent" }).first()).toBeVisible();
 
-  await picker.selectOption(String(seed.clinics.b));
+  await selectActiveClinic(page, seed.clinics.b);
   await expect(page.getByText("E2E Samo B Pacijent")).toBeVisible();
   await expect(page.getByText("E2E Placeni Pacijent")).toHaveCount(0);
 
-  await picker.selectOption(String(seed.clinics.a));
+  await selectActiveClinic(page, seed.clinics.a);
   await expect(page.getByText("E2E Placeni Pacijent")).toBeVisible();
 });
 
