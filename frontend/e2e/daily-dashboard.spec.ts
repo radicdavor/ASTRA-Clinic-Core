@@ -223,3 +223,23 @@ test("daily dashboard supports floating reception and canonical clinical workspa
   await expect(page).toHaveURL(/\/journeys\/2\?focus=encounter/);
   await expect(page.getByRole("heading", { name: "Sintetički 02 Pacijent" })).toBeVisible();
 });
+
+test("daily dashboard keeps the page within a 1024px viewport and scrolls its timeline internally", async ({ page }) => {
+  await page.setViewportSize({ width: 1024, height: 768 });
+  await page.goto("/");
+  await expect(page.getByRole("heading", { name: "Danas u poliklinici" })).toBeVisible();
+
+  const dimensions = await page.evaluate(() => {
+    const timeline = document.querySelector<HTMLElement>(".clinic-timeline");
+    return {
+      pageWidth: document.documentElement.scrollWidth,
+      viewportWidth: window.innerWidth,
+      timelineClientWidth: timeline?.clientWidth ?? 0,
+      timelineScrollWidth: timeline?.scrollWidth ?? 0,
+    };
+  });
+  expect(dimensions.pageWidth).toBeLessThanOrEqual(dimensions.viewportWidth);
+  expect(dimensions.timelineClientWidth).toBeGreaterThan(0);
+  expect(dimensions.timelineScrollWidth).toBeGreaterThanOrEqual(dimensions.timelineClientWidth);
+  await expect(page.getByRole("button", { name: "Otvori prijem" }).first()).toBeVisible();
+});

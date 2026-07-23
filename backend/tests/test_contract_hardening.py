@@ -97,12 +97,33 @@ def test_production_rejects_wildcard_cors_with_credentials():
         settings.validate_production_safety()
 
 
-@pytest.mark.parametrize("field", ["debug", "reload", "demo_mode", "demo_seed_enabled", "auto_create_default_admin"])
+@pytest.mark.parametrize("field", ["debug", "reload", "demo_mode", "demo_seed_enabled", "demo_persona_switcher_enabled", "auto_create_default_admin"])
 def test_production_rejects_unsafe_runtime_switches(field):
     settings = production_settings(**{field: True})
 
     with pytest.raises(RuntimeError):
         settings.validate_production_safety()
+
+
+def test_demo_persona_switcher_requires_every_demo_safety_condition():
+    assert Settings(
+        app_env="development",
+        demo_mode=True,
+        real_data_allowed=False,
+        demo_persona_switcher_enabled=True,
+    ).demo_persona_switcher_available is True
+    assert Settings(
+        app_env="development",
+        demo_mode=False,
+        real_data_allowed=False,
+        demo_persona_switcher_enabled=True,
+    ).demo_persona_switcher_available is False
+    assert Settings(
+        app_env="development",
+        demo_mode=True,
+        real_data_allowed=True,
+        demo_persona_switcher_enabled=True,
+    ).demo_persona_switcher_available is False
 
 
 def test_production_rejects_demo_and_stub_providers():
@@ -146,6 +167,18 @@ def test_production_compose_example_uses_placeholders_not_demo_secrets():
     assert "change-me-in-production" not in compose
     assert "astra:astra" not in compose
     assert "DEMO_MODE=false" in compose
+    assert "DEMO_PERSONA_SWITCHER_ENABLED=false" in compose
+
+
+def test_production_frontend_build_never_receives_server_side_openai_key():
+    root = Path(__file__).resolve().parents[2]
+    compose = (root / "docker-compose.prod.example.yml").read_text(encoding="utf-8")
+    dockerfile = (root / "frontend" / "Dockerfile").read_text(encoding="utf-8")
+
+    frontend_section = compose.split("  frontend:", 1)[1].split("\nvolumes:", 1)[0]
+    assert "OPENAI_API_KEY" not in frontend_section
+    assert "OPENAI_API_KEY" not in dockerfile
+    assert "ARG VITE_API_BASE_URL=" in dockerfile
 
 
 def test_production_example_uses_one_same_origin_browser_auth_contract():

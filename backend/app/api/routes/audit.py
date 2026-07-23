@@ -1,4 +1,5 @@
-from datetime import datetime
+from datetime import UTC, date, datetime, time, timedelta
+from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, Request
 from pydantic import BaseModel, ConfigDict
@@ -7,7 +8,7 @@ from sqlalchemy.orm import Session
 
 from app.auth.dependencies import CurrentUserContext, require_active_clinic
 from app.core.database import get_db
-from app.models.domain import AuditLog
+from app.models.domain import AuditLog, User
 from app.schemas.common import ErrorResponse
 from app.services.audit_access import SensitiveAccessEventIn, SensitiveAccessEventOut, audit_sensitive_access
 
@@ -34,6 +35,7 @@ class ClinicAuditEventOut(BaseModel):
     institution_id: int | None
     actor_type: str
     actor_user_id: int | None
+    actor_name: str | None
     action: str
     entity_type: str
     entity_id: int | None
@@ -41,10 +43,12 @@ class ClinicAuditEventOut(BaseModel):
     changed_fields: list[str]
     status: str | None
     reason_code: str | None
+    result: str
+    scope_label: str
     created_at: datetime
 
 
-def clinic_audit_projection(event: AuditLog) -> ClinicAuditEventOut:
+def clinic_audit_projection(event: AuditLog, *, actor_name: str | None, scope_label: str) -> ClinicAuditEventOut:
     before_fields = set((event.before_json or {}).keys())
     after_fields = set((event.after_json or {}).keys())
     after = event.after_json or {}
@@ -57,6 +61,7 @@ def clinic_audit_projection(event: AuditLog) -> ClinicAuditEventOut:
         institution_id=event.institution_id,
         actor_type=event.actor_type,
         actor_user_id=event.actor_user_id,
+        actor_name=actor_name,
         action=event.action,
         entity_type=event.entity_type,
         entity_id=event.entity_id,
@@ -64,6 +69,8 @@ def clinic_audit_projection(event: AuditLog) -> ClinicAuditEventOut:
         changed_fields=sorted(before_fields | after_fields),
         status=status if isinstance(status, str) else None,
         reason_code=reason_code if isinstance(reason_code, str) else None,
+        result="denied" if reason_code or any(value in event.action for value in ("denied", "failed", "invalid", "rejected")) else "success",
+        scope_label=scope_label,
         created_at=event.created_at,
     )
 
@@ -88,6 +95,9 @@ def audit_log(
     entity_id: int | None = None,
     action: str | None = None,
     actor_type: str | None = None,
+    actor_user_id: int | None = None,
+    date_from: date | None = None,
+    date_to: date | None = None,
     db: Session = Depends(get_db),
     context: CurrentUserContext = Depends(require_active_clinic("audit.read")),
 ):
@@ -109,7 +119,16 @@ def audit_log(
         stmt = stmt.where(AuditLog.action == action)
     if actor_type:
         stmt = stmt.where(AuditLog.actor_type == actor_type)
+    if actor_user_id:
+        stmt = stmt.where(AuditLog.actor_user_id == actor_user_id)
+    clinic_timezone = ZoneInfo(context.active_clinic.timezone or "Europe/Zagreb")
+    if date_from:
+        stmt = stmt.where(AuditLog.created_at >= datetime.combine(date_from, time.min, clinic_timezone).astimezone(UTC))
+    if date_to:
+        stmt = stmt.where(AuditLog.created_at < datetime.combine(date_to + timedelta(days=1), time.min, clinic_timezone).astimezone(UTC))
     items = db.scalars(stmt).all()
+    actor_ids = {item.actor_user_id for item in items if item.actor_user_id is not None}
+    actor_names = dict(db.execute(select(User.id, User.full_name).where(User.id.in_(actor_ids))).all()) if actor_ids else {}
     audit_sensitive_access(
         db,
         SensitiveAccessEventIn(action="audit_log.viewed", entity_type="AuditLog", entity_id=None, surface="audit_viewer"),
@@ -118,4 +137,11 @@ def audit_log(
         internal=True,
     )
     db.commit()
-    return [clinic_audit_projection(item) for item in items]
+    return [
+        clinic_audit_projection(
+            item,
+            actor_name=actor_names.get(item.actor_user_id),
+            scope_label=context.active_clinic.name,
+        )
+        for item in items
+    ]

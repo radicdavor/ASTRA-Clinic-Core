@@ -24,8 +24,6 @@ import { useApi } from "../hooks/useApi";
 import type { Provider, Room, Service } from "../types";
 import { formatUtcTimestampInClinic, getClinicToday } from "../utils/clinicTime";
 
-const today = getClinicToday();
-
 function iconForAction(action: OperationalState["action"]): ReactNode {
   if (action === "reception") return <ClipboardCheck size={15}/>;
   if (action === "encounter") return <Stethoscope size={15}/>;
@@ -90,6 +88,9 @@ function PatientBlock({
   actionRef?: (element: HTMLButtonElement | null) => void;
 }) {
   const { row, state } = block;
+  const activities = fallbackActivities(row, block.endMinutes);
+  const bookedServices = [...new Set(activities.map(activity => activity.service_name).filter(Boolean))];
+  const bookedServicesLabel = bookedServices.join(" · ") || "Usluga nije navedena";
   const top = ((block.startMinutes - rangeStart) / slotMinutes) * 52 + 8;
   const height = Math.max(48, ((block.endMinutes - block.startMinutes) / slotMinutes) * 52 - 8);
   const laneWidthPercent = 100 / block.laneCount;
@@ -100,21 +101,35 @@ function PatientBlock({
     <article
       className={`timeline-patient-block tone-${state.tone}`}
       style={{ top, height, width, left }}
-      aria-label={`${formatMinutes(block.startMinutes)} ${row.patient_name}. ${state.label}. ${state.detail}`}
+      aria-label={`${formatMinutes(block.startMinutes)} ${row.patient_name}. Naručen/a na: ${bookedServicesLabel}. ${state.label}. ${state.detail}`}
     >
       <header>
         <div className="timeline-patient-title">
           <StatusDot tone={state.tone} label={state.label} detail={state.detail}/>
-          <button type="button" className="link-button patient-name-button" onClick={() => onPrimaryAction(row, state)}>{row.patient_name}</button>
+          <div className="timeline-patient-identity">
+            <button type="button" className="link-button patient-name-button" onClick={() => onPrimaryAction(row, state)}>{row.patient_name}</button>
+            <span className="timeline-booked-services" aria-label={`Naručen/a na: ${bookedServicesLabel}`} title={`Naručen/a na: ${bookedServicesLabel}`}>
+              — {bookedServicesLabel}
+            </span>
+            {block.parallel && (
+              <span className="timeline-parallel-badge" aria-label="Paralelni termin s drugim pacijentom, liječnikom i prostorijom">
+                Paralelni termin
+              </span>
+            )}
+          </div>
         </div>
         <time>{formatMinutes(block.startMinutes)}</time>
       </header>
       <div className="timeline-activity-list" aria-label={`Današnje aktivnosti za ${row.patient_name}`}>
-        {fallbackActivities(row, block.endMinutes).map(activity => (
+        {activities.map(activity => (
           <div className="timeline-activity-row" key={activity.id}>
             <time>{activityDurationLabel(activity)}</time>
             <span>{activity.service_name}</span>
-            <small>{activity.room_name || "Bez prostorije"}</small>
+            <small aria-label={`${activity.clinician_name || "Liječnik nije naveden"}, ${activity.room_name || "Prostorija nije navedena"}`}>
+              <b>{activity.clinician_name || "Liječnik nije naveden"}</b>
+              {" · "}
+              {activity.room_name || "Prostorija nije navedena"}
+            </small>
           </div>
         ))}
       </div>
@@ -140,7 +155,7 @@ function PatientBlock({
 
 export function DailyClinicDashboard() {
   const navigate = useNavigate();
-  const [day, setDay] = useState(today);
+  const [day, setDay] = useState(() => getClinicToday());
   const [clinician, setClinician] = useState("");
   const [clinic, setClinic] = useState("");
   const [room, setRoom] = useState("");

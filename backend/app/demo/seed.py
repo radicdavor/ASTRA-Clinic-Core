@@ -14,6 +14,7 @@ from app.models.domain import (
     ClinicalPlan,
     InventoryBatch,
     InventoryItem,
+    Institution,
     JourneyActivity,
     Patient,
     PatientJourney,
@@ -41,6 +42,7 @@ DEMO_EMAILS = {
     "billing": "demo.billing@astra.local",
     "inventory_manager": "demo.inventory@astra.local",
 }
+DEMO_PHYSICIAN_2_EMAIL = "demo.physician2@astra.local"
 
 DEMO_PATIENT_EMAIL = "demo.patient@astra-clinic-core.com"
 LEGACY_DEMO_PATIENT_EMAIL = "demo.patient@astra.local"
@@ -76,12 +78,29 @@ def main() -> None:
         demo_users = {}
         for role_name, email in DEMO_EMAILS.items():
             demo_users[role_name] = ensure_demo_user(db, role_name, email, permissions)
+        demo_users["physician_2"] = ensure_demo_user(db, "physician", DEMO_PHYSICIAN_2_EMAIL, permissions)
 
+        institution = db.scalar(select(Institution).where(Institution.code == "demo-nura"))
+        if institution is None:
+            institution = Institution(code="demo-nura", name="Demo Ustanova A", active=True)
+            db.add(institution)
         gastro_clinic = db.scalar(select(Clinic).where(Clinic.name == "Gastroenterologija")) or Clinic(name="Gastroenterologija")
         aesthetic_clinic = db.scalar(select(Clinic).where(Clinic.name == "Estetika")) or Clinic(name="Estetika")
         db.add_all([gastro_clinic, aesthetic_clinic])
         db.flush()
-        for user in demo_users.values():
+        gastro_clinic.institution = institution
+        aesthetic_clinic.institution = institution
+        clinic_access = {
+            "admin": (gastro_clinic, aesthetic_clinic),
+            "physician": (gastro_clinic,),
+            "physician_2": (aesthetic_clinic,),
+            "receptionist": (gastro_clinic,),
+            "nurse": (gastro_clinic,),
+            "billing": (gastro_clinic, aesthetic_clinic),
+            "inventory_manager": (gastro_clinic, aesthetic_clinic),
+        }
+        for user_key, user in demo_users.items():
+            allowed_clinics = clinic_access[user_key]
             for clinic in (gastro_clinic, aesthetic_clinic):
                 membership = db.scalar(
                     select(ClinicMembership).where(
@@ -89,7 +108,8 @@ def main() -> None:
                         ClinicMembership.clinic_id == clinic.id,
                     )
                 )
-                if membership is None:
+                should_be_active = clinic in allowed_clinics
+                if membership is None and should_be_active:
                     db.add(
                         ClinicMembership(
                             user_id=user.id,
@@ -98,8 +118,8 @@ def main() -> None:
                             created_by_user_id=demo_users["admin"].id,
                         )
                     )
-                else:
-                    membership.active = True
+                elif membership is not None:
+                    membership.active = should_be_active
         patient = db.scalar(select(Patient).where(Patient.email.in_([DEMO_PATIENT_EMAIL, LEGACY_DEMO_PATIENT_EMAIL]))) or Patient(first_name="Demo", last_name="Pacijent", email=DEMO_PATIENT_EMAIL)
         patient.email = DEMO_PATIENT_EMAIL
         patient.email_verified_at = patient.email_verified_at or datetime.now(timezone.utc)
@@ -113,7 +133,19 @@ def main() -> None:
         location = db.scalar(select(StockLocation).where(StockLocation.name == "Demo skladiste")) or StockLocation(name="Demo skladiste", type="main")
         item = db.scalar(select(InventoryItem).where(InventoryItem.sku == "DEMO-MAT")) or InventoryItem(sku="DEMO-MAT", name="Demo potrosni materijal", current_stock=Decimal("0"), minimum_stock=Decimal("2"), reorder_point=Decimal("2"), purchase_price=Decimal("5"))
         supplier = db.scalar(select(Supplier).where(Supplier.name == "Demo dobavljac")) or Supplier(name="Demo dobavljac")
-        db.add_all([patient, provider, room, service, location, item, supplier])
+        provider_2 = db.scalar(select(Provider).where(Provider.email == DEMO_PHYSICIAN_2_EMAIL))
+        if provider_2 is None:
+            provider_2 = Provider(
+                full_name="dr. Demo Klinika B",
+                specialty="Estetska medicina",
+                email=DEMO_PHYSICIAN_2_EMAIL,
+                staff_role="physician",
+                clinic_id=aesthetic_clinic.id,
+            )
+        else:
+            provider_2.clinic_id = aesthetic_clinic.id
+            provider_2.staff_role = "physician"
+        db.add_all([patient, provider, provider_2, room, service, location, item, supplier])
         db.flush()
         if service not in room.allowed_services:
             room.allowed_services.append(service)

@@ -55,8 +55,8 @@ MODULE_DEFAULT_CONTEXT = {
 
 # Updating this value requires reviewing the full sorted route/context snapshot
 # emitted by `_registry_rows()`, not merely accepting a new hash.
-EXPECTED_API_ROUTE_REGISTRY_SHA256 = "47839362dfd4c2b77f6a0dbda254409afa040ab5394bf947c161aac4428266ec"
-EXPECTED_API_ROUTE_METHOD_COUNT = 260
+EXPECTED_API_ROUTE_REGISTRY_SHA256 = "ab07c1922bced326e79372dc93b21bfac8a3e4a23e7b2acf2bd7b6d1ffe50cbc"
+EXPECTED_API_ROUTE_METHOD_COUNT = 261
 
 
 def _scope_for_route(module_name: str, path: str) -> str | None:

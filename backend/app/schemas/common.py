@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import date as DateType, datetime as DateTimeType, time as TimeType
 from decimal import Decimal
+from typing import Literal
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
@@ -1095,6 +1096,14 @@ class BrowserSessionResponse(BaseModel):
     expires_at: DateTimeType
 
 
+class DemoPersonaSessionRequest(BaseModel):
+    persona_key: Literal["admin", "receptionist", "nurse", "physician_1", "physician_2"]
+
+
+class DemoPersonaSessionResponse(BrowserSessionResponse):
+    persona_key: str
+
+
 class ApiKeyCreate(BaseModel):
     name: str
     scopes: list[str]
@@ -2083,6 +2092,22 @@ class InvoiceOut(InvoiceCreate, ORMModel):
     updated_at: DateTimeType
     lines: list[InvoiceLineOut] = []
     payments: list[PaymentTransactionOut] = []
+
+
+class InvoiceOperationalListItemOut(BaseModel):
+    id: int
+    patient_id: int
+    patient_name: str
+    invoice_number: str
+    invoice_date: DateType
+    status: str
+    payment_status: str
+    total_amount: Decimal
+    paid_amount: Decimal
+    outstanding_amount: Decimal
+    payment_count: int
+    can_issue: bool
+    can_record_payment: bool
 
 
 class InvoiceIssueOut(InvoiceOut):

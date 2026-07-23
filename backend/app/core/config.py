@@ -39,6 +39,8 @@ class Settings(BaseSettings):
     reload: bool = False
     demo_mode: bool = True
     demo_seed_enabled: bool = False
+    demo_persona_switcher_enabled: bool = False
+    demo_controller_cookie_name: str = "astra_demo_controller"
     auto_create_default_admin: bool = False
     real_data_allowed: bool = False
     fiscalization_mode: str = "noop"
@@ -99,6 +101,8 @@ class Settings(BaseSettings):
             errors.append("Production DEMO_MODE must be false.")
         if self.demo_seed_enabled:
             errors.append("Production DEMO_SEED_ENABLED must be false.")
+        if self.demo_persona_switcher_enabled:
+            errors.append("Production DEMO_PERSONA_SWITCHER_ENABLED must be false.")
         if self.auto_create_default_admin:
             errors.append("Production AUTO_CREATE_DEFAULT_ADMIN must be false.")
         if self.ai_diagnosis_suggestions_enabled and not self.ai_diagnosis_suggestions_production_authorized:
@@ -137,6 +141,15 @@ class Settings(BaseSettings):
         if self.app_env == "production" and self.demo_mode:
             warnings.append("Production environment is still running with DEMO_MODE=true.")
         return warnings
+
+    @property
+    def demo_persona_switcher_available(self) -> bool:
+        return (
+            self.app_env != "production"
+            and self.demo_mode
+            and not self.real_data_allowed
+            and self.demo_persona_switcher_enabled
+        )
 
 
 @lru_cache

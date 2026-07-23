@@ -10,6 +10,7 @@ const MUTATION_METHODS = new Set(["POST", "PATCH", "PUT", "DELETE"]);
 const USER_KEY = "astra_user";
 const ACTIVE_CLINIC_ID_KEY = "astra_active_clinic_id";
 const ACTIVE_CLINIC_TIMEZONE_KEY = "astra_active_clinic_timezone";
+const DEMO_PERSONA_KEY = "astra_demo_persona";
 const CSRF_COOKIE_KEY = "astra_csrf";
 
 export type ToastTone = "success" | "error";
@@ -109,9 +110,18 @@ function apiErrorMessage(detail: unknown): string {
 
 export type SessionUser = { id: number; name: string; email: string; role: string };
 export type BrowserSession = { user: SessionUser; csrf_token: string; expires_at: string };
+export type DemoPersonaKey = "admin" | "receptionist" | "nurse" | "physician_1" | "physician_2";
+export type DemoPersonaSession = BrowserSession & { persona_key: DemoPersonaKey };
 
 export function setSessionUser(user: SessionUser) {
   localStorage.setItem(USER_KEY, JSON.stringify(user));
+}
+
+export function getDemoPersonaKey(): DemoPersonaKey | null {
+  const value = localStorage.getItem(DEMO_PERSONA_KEY);
+  return ["admin", "receptionist", "nurse", "physician_1", "physician_2"].includes(value ?? "")
+    ? value as DemoPersonaKey
+    : null;
 }
 
 export type UserClinic = { id: number; name: string; timezone: string };
@@ -155,6 +165,7 @@ export function clearSessionState() {
   localStorage.removeItem(USER_KEY);
   localStorage.removeItem(ACTIVE_CLINIC_ID_KEY);
   localStorage.removeItem(ACTIVE_CLINIC_TIMEZONE_KEY);
+  localStorage.removeItem(DEMO_PERSONA_KEY);
 }
 
 function handleUnauthorized() {
@@ -237,6 +248,17 @@ export async function logout() {
     credentials: "include",
   }).catch(() => undefined);
   clearSessionState();
+}
+
+export async function switchDemoPersona(personaKey: DemoPersonaKey) {
+  const session = await api<DemoPersonaSession>("/auth/demo/persona-session", {
+    method: "POST",
+    body: JSON.stringify({ persona_key: personaKey }),
+  });
+  clearSessionState();
+  setSessionUser(session.user);
+  localStorage.setItem(DEMO_PERSONA_KEY, session.persona_key);
+  return session;
 }
 
 export async function getClinicalReadinessSnapshotHistory(appointmentId: number) {
