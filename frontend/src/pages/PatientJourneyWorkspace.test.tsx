@@ -51,12 +51,29 @@ describe("fokusirani radni prostor tijeka pacijenta", () => {
     expect(screen.queryByText("Pregled pacijenta")).toBeNull();
   });
 
-  test("klinički kontekst je sekundaran, ali dokumenti su dostupni jednim otvaranjem", async () => {
+  test("klinički kontekst učitava sažetak, vremensku crtu i dokumente tek na zahtjev", async () => {
     const user = userEvent.setup();
     render(<MemoryRouter initialEntries={["/journeys/32"]}><Routes><Route path="/journeys/:id" element={<PatientJourneyWorkspace/>}/></Routes></MemoryRouter>);
     await screen.findByText("Pacijent čeka liječnika");
+
+    let urls = vi.mocked(globalThis.fetch).mock.calls.map(([input]) => String(input));
+    expect(urls.some(url => url.endsWith("/summary"))).toBe(false);
+    expect(urls.some(url => url.endsWith("/timeline"))).toBe(false);
+    expect(urls.some(url => url.includes("/clinical-documents?patient_id="))).toBe(false);
+
     await user.click(screen.getByText("Klinički kontekst"));
-    expect(screen.getByRole("tab", { name: "Dokumenti" })).toBeTruthy();
+    await waitFor(() => expect(globalThis.fetch).toHaveBeenCalledWith(expect.stringContaining("/summary"), expect.anything()));
+
+    await user.click(screen.getByRole("tab", { name: "Vremenska crta" }));
+    await waitFor(() => expect(globalThis.fetch).toHaveBeenCalledWith(expect.stringContaining("/timeline"), expect.anything()));
+
+    await user.click(screen.getByRole("tab", { name: "Dokumenti" }));
+    await waitFor(() => expect(globalThis.fetch).toHaveBeenCalledWith(expect.stringContaining("/clinical-documents?patient_id=19"), expect.anything()));
+
+    await user.click(screen.getByRole("tab", { name: "Sažetak" }));
+    urls = vi.mocked(globalThis.fetch).mock.calls.map(([input]) => String(input));
+    expect(urls.filter(url => url.endsWith("/summary"))).toHaveLength(1);
+    expect(urls.filter(url => url.endsWith("/timeline"))).toHaveLength(1);
   });
 
   test("izravni ulazak u pregled ne dohvaća podatke skrivenih faza", async () => {
@@ -73,6 +90,9 @@ describe("fokusirani radni prostor tijeka pacijenta", () => {
     expect(urls.some(url => url.endsWith("/inventory/items"))).toBe(false);
     expect(urls.some(url => url.endsWith("/visit-documents"))).toBe(false);
     expect(urls.some(url => url.endsWith("/pathology-cases"))).toBe(false);
+    expect(urls.some(url => url.endsWith("/summary"))).toBe(false);
+    expect(urls.some(url => url.endsWith("/timeline"))).toBe(false);
+    expect(urls.some(url => url.includes("/clinical-documents?patient_id="))).toBe(false);
   });
 
   test("promjena aktivnosti ne odbacuje nespremljeni klinički unos", async () => {
