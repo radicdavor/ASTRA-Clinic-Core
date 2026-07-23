@@ -9,6 +9,8 @@
     "test": "node --test scripts/program2-contract.test.mjs && vitest run",
     "e2e": "playwright test",
     "e2e:db": "node scripts/run-db-backed-e2e.mjs",
+    "usability:session": "node scripts/run-db-backed-e2e.mjs --human-session",
+    "usability:preflight": "node scripts/run-db-backed-e2e.mjs --human-session --preflight",
     "smoke": "playwright test -c playwright.config.ts e2e/semantic-smoke.spec.ts",
     "program1:evaluation-readiness": "node scripts/program1-evaluation-readiness.mjs",
     "build": "tsc && vite build",

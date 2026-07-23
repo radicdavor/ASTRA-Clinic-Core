@@ -19,7 +19,9 @@ real patient data.
 | Program 2 contract | Included in the frontend Vitest run | Static Program 2 safety contracts |
 | Route-mocked browser | `cd frontend && npm run e2e` | Browser navigation against controlled route fixtures |
 | DB-backed browser | `cd frontend && npm run e2e:db` | Isolated database, backend, frontend and Chromium workflow |
-| Pilot smoke | `cd frontend && npm run smoke` | Stable source-level semantic contract |
+| Pilot smoke | `cd frontend && npm run smoke` | Browser-level semantic role and navigation contracts |
+| Human usability preflight | `cd frontend && npm run usability:preflight` | Isolated five-persona session startup and deterministic seed |
+| Human usability session | `cd frontend && npm run usability:session` | Moderated synthetic evaluation runner; not automated usability evidence |
 | TypeScript | `cd frontend && npm run typecheck` | Type contract |
 | Build | `cd frontend && npm run build` | Production frontend bundle |
 | OpenAPI | `backend/.localrun-venv/Scripts/python.exe scripts/generate_openapi_types.py --check` | Generated frontend API types |
@@ -29,8 +31,9 @@ real patient data.
 
 ## Baseline findings
 
-- The full backend suite was not hanging. It completed 794 collected tests in
-  10 minutes 44 seconds when allowed to finish.
+- The original full backend suite was not hanging. It completed 794 collected
+  tests in 10 minutes 44 seconds when allowed to finish. The final suite
+  contains more tests and is measured separately in the closure report.
 - The former 10-minute external command limit stopped the suite shortly before
   completion and therefore misclassified a long-running suite as a timeout.
 - The completed baseline exposed one genuine fail-closed registry failure:
@@ -39,9 +42,8 @@ real patient data.
 - DB-backed Playwright uses dedicated ports and a dedicated database, but the
   original runner lacked phase-specific diagnostics, a test-run identity
   handshake and robust awaited process termination.
-- The historical pilot smoke script checks source text fragments rather than
-  user-visible semantic contracts and must be replaced without weakening
-  security assertions.
+- The historical source-fragment smoke test has been replaced by five
+  browser-level semantic persona contracts.
 
 ## Closure evidence rules
 

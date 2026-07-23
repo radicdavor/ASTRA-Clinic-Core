@@ -1,6 +1,6 @@
 import { spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
-import { mkdirSync, rmSync } from "node:fs";
+import { mkdirSync, readFileSync, rmSync } from "node:fs";
 import { createServer } from "node:net";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -20,6 +20,8 @@ const dbName = `astra_e2e_${Date.now()}`;
 const databaseUrl = process.env.ASTRA_E2E_DATABASE_URL ?? `postgresql+psycopg://astra:astra@127.0.0.1:5432/${dbName}`;
 const seedFile = process.env.ASTRA_E2E_SEED_FILE ?? join(frontendDir, ".e2e-tmp", "db-backed-seed.json");
 const children = [];
+const humanSession = process.argv.includes("--human-session");
+const preflightOnly = process.argv.includes("--preflight");
 
 function phase(message) {
   process.stdout.write(`[e2e:${runId.slice(0, 8)}] ${message}\n`);
@@ -224,18 +226,38 @@ try {
   }
   if (Date.now() >= frontendDeadline) throw new Error("frontend did not become ready");
   phase("server identity and readiness checks passed");
-  phase("running DB-backed Playwright suite");
-  await run(node, [playwrightCli, "test", "-c", "playwright.db.config.ts"], {
-    cwd: frontendDir,
-    env: {
-      ASTRA_E2E_SEED_FILE: seedFile,
-      ASTRA_E2E_BACKEND_URL: backendUrl,
-      ASTRA_E2E_FRONTEND_URL: frontendUrl,
-      ASTRA_E2E_RUN_ID: runId,
-      ASTRA_E2E_EXPECTED_APP_NAME: expectedAppName,
-    },
-  });
-  phase("DB-backed Playwright suite passed");
+  if (humanSession) {
+    const seed = JSON.parse(readFileSync(seedFile, "utf-8"));
+    const requiredPersonas = ["admin", "receptionist", "nurse", "physician_1", "physician_2"];
+    const missingPersonas = requiredPersonas.filter((persona) => !seed.personas?.[persona]);
+    if (missingPersonas.length) {
+      throw new Error(`Human usability seed is missing personas: ${missingPersonas.join(", ")}`);
+    }
+    phase("human usability session is ready (synthetic data only)");
+    process.stdout.write(`URL: ${frontendUrl}\n`);
+    process.stdout.write(`Controller account: ${seed.personas.admin}\n`);
+    process.stdout.write(`Synthetic local password: ${seed.password}\n`);
+    process.stdout.write("Use the in-app demo role selector to evaluate all five personas.\n");
+    process.stdout.write("Press Ctrl+C to stop the session and remove the isolated database.\n");
+    if (!preflightOnly) {
+      await new Promise(() => {});
+    } else {
+      phase("human usability preflight passed");
+    }
+  } else {
+    phase("running DB-backed Playwright suite");
+    await run(node, [playwrightCli, "test", "-c", "playwright.db.config.ts"], {
+      cwd: frontendDir,
+      env: {
+        ASTRA_E2E_SEED_FILE: seedFile,
+        ASTRA_E2E_BACKEND_URL: backendUrl,
+        ASTRA_E2E_FRONTEND_URL: frontendUrl,
+        ASTRA_E2E_RUN_ID: runId,
+        ASTRA_E2E_EXPECTED_APP_NAME: expectedAppName,
+      },
+    });
+    phase("DB-backed Playwright suite passed");
+  }
 } finally {
   await cleanup();
   rmSync(seedFile, { force: true });
