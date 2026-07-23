@@ -170,6 +170,17 @@ def test_production_compose_example_uses_placeholders_not_demo_secrets():
     assert "DEMO_PERSONA_SWITCHER_ENABLED=false" in compose
 
 
+def test_production_frontend_build_never_receives_server_side_openai_key():
+    root = Path(__file__).resolve().parents[2]
+    compose = (root / "docker-compose.prod.example.yml").read_text(encoding="utf-8")
+    dockerfile = (root / "frontend" / "Dockerfile").read_text(encoding="utf-8")
+
+    frontend_section = compose.split("  frontend:", 1)[1].split("\nvolumes:", 1)[0]
+    assert "OPENAI_API_KEY" not in frontend_section
+    assert "OPENAI_API_KEY" not in dockerfile
+    assert "ARG VITE_API_BASE_URL=" in dockerfile
+
+
 def test_production_example_uses_one_same_origin_browser_auth_contract():
     env_text = (Path(__file__).resolve().parents[2] / ".env.production.example").read_text(encoding="utf-8")
 
