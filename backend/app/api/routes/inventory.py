@@ -1,7 +1,7 @@
 from decimal import Decimal
 
 from fastapi import APIRouter, Depends, HTTPException, Request
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session, joinedload, selectinload
 
 from app.audit.service import audit, snapshot
@@ -13,6 +13,7 @@ from app.models.domain import (
     InventoryItem,
     Invoice,
     InvoiceLine,
+    Patient,
     PaymentTransaction,
     PurchaseOrder,
     PurchaseOrderLine,
@@ -34,6 +35,7 @@ from app.schemas.common import (
     InvoiceIssueOut,
     InvoiceLineOut,
     InvoiceLineUpdate,
+    InvoiceOperationalListItemOut,
     InvoiceOut,
     PaymentTransactionCreate,
     PaymentTransactionOut,
@@ -405,6 +407,59 @@ def receive_purchase_order(order_id: int, payload: PurchaseOrderReceiveRequest, 
 def reorder_suggestions(db: Session = Depends(get_db), actor: Actor = Depends(require_permission("procurement.read"))):
     items = db.scalars(select(InventoryItem).where(InventoryItem.current_stock <= InventoryItem.reorder_point)).all()
     return [{"item": item, "suggested_quantity": max(item.minimum_stock * 2 - item.current_stock, Decimal("1")), "reason": "Zaliha je ispod tocke ponovne narudzbe"} for item in items]
+
+
+@router.get("/invoices/operational-list", response_model=list[InvoiceOperationalListItemOut])
+def operational_invoice_list(
+    db: Session = Depends(get_db),
+    context: CurrentUserContext = Depends(require_active_clinic("billing.read")),
+):
+    payment_summary = (
+        select(
+            PaymentTransaction.invoice_id.label("invoice_id"),
+            func.coalesce(func.sum(PaymentTransaction.amount), 0).label("paid_amount"),
+            func.count(PaymentTransaction.id).label("payment_count"),
+        )
+        .group_by(PaymentTransaction.invoice_id)
+        .subquery()
+    )
+    rows = db.execute(
+        select(
+            Invoice.id,
+            Invoice.patient_id,
+            Patient.first_name,
+            Patient.last_name,
+            Invoice.invoice_number,
+            Invoice.invoice_date,
+            Invoice.status,
+            Invoice.payment_status,
+            Invoice.total_amount,
+            func.coalesce(payment_summary.c.paid_amount, 0).label("paid_amount"),
+            func.coalesce(payment_summary.c.payment_count, 0).label("payment_count"),
+        )
+        .join(Patient, Patient.id == Invoice.patient_id)
+        .outerjoin(payment_summary, payment_summary.c.invoice_id == Invoice.id)
+        .where(Invoice.clinic_id == context.active_clinic_id)
+        .order_by(Invoice.invoice_date.desc(), Invoice.id.desc())
+    ).all()
+    return [
+        InvoiceOperationalListItemOut(
+            id=row.id,
+            patient_id=row.patient_id,
+            patient_name=f"{row.first_name} {row.last_name}",
+            invoice_number=row.invoice_number,
+            invoice_date=row.invoice_date,
+            status=row.status,
+            payment_status=row.payment_status,
+            total_amount=row.total_amount,
+            paid_amount=row.paid_amount,
+            outstanding_amount=max(Decimal("0"), row.total_amount - row.paid_amount),
+            payment_count=row.payment_count,
+            can_issue="billing.write" in context.permissions,
+            can_record_payment="billing.mark_paid" in context.permissions,
+        )
+        for row in rows
+    ]
 
 
 @router.get("/invoices", response_model=list[InvoiceOut])

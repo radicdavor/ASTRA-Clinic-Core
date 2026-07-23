@@ -515,6 +515,21 @@ export type PurchaseOrder = { id: number; status: string; order_date: string; ex
 export type InvoiceLine = { id: number; invoice_id: number; description: string; quantity: string; unit_price: string; vat_rate: string; total: string };
 export type PaymentTransaction = { id: number; invoice_id: number; amount: string; method: string; reference?: string; paid_at?: string };
 export type Invoice = { id: number; patient_id?: number; appointment_id?: number; invoice_number: string; invoice_date: string; status: string; payment_status: string; total_amount: string; fiscalization_status?: string; fiscalization_provider?: string; fiscalization_message?: string; lines: InvoiceLine[]; payments: PaymentTransaction[] };
+export type InvoiceOperationalListItem = {
+  id: number;
+  patient_id: number;
+  patient_name: string;
+  invoice_number: string;
+  invoice_date: string;
+  status: string;
+  payment_status: string;
+  total_amount: string;
+  paid_amount: string;
+  outstanding_amount: string;
+  payment_count: number;
+  can_issue: boolean;
+  can_record_payment: boolean;
+};
 export type ApiKey = { id: number; name: string; scopes: string[]; active: boolean; expires_at?: string; last_used_at?: string; created_at: string };
 export type DecisionImpact = "none" | "review" | "blocks_demo" | "blocks_release";
 export type ReadinessCheck = { key: string; label: string; status: "ok" | "warning" | "critical"; message: string; count?: number | null; action?: string | null; target_path?: string | null; target_label?: string | null; decision_impact: DecisionImpact; severity_reason?: string | null };

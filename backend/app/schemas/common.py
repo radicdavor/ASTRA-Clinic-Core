@@ -2085,6 +2085,22 @@ class InvoiceOut(InvoiceCreate, ORMModel):
     payments: list[PaymentTransactionOut] = []
 
 
+class InvoiceOperationalListItemOut(BaseModel):
+    id: int
+    patient_id: int
+    patient_name: str
+    invoice_number: str
+    invoice_date: DateType
+    status: str
+    payment_status: str
+    total_amount: Decimal
+    paid_amount: Decimal
+    outstanding_amount: Decimal
+    payment_count: int
+    can_issue: bool
+    can_record_payment: bool
+
+
 class InvoiceIssueOut(InvoiceOut):
     pass
 
