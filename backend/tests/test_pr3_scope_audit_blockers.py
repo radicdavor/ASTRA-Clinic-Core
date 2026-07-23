@@ -42,6 +42,15 @@ def _headers(client, auth_setup) -> dict[str, str]:
     }
 
 
+def test_administrative_role_cannot_use_institution_clinical_scope(client, db, auth_setup):
+    auth_setup["admin"].role.professional_category = "administrative"
+    db.flush()
+
+    response = client.get("/api/episodes", headers=_headers(client, auth_setup))
+
+    assert response.status_code == 403
+
+
 def _two_institution_patient(db, auth_setup):
     clinic_a = auth_setup["clinic"]
     institution_b = Institution(code="scope-b", name="Scope Institution B", active=True)

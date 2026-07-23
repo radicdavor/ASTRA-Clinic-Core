@@ -7,10 +7,11 @@ Branch: `fix/pr3-scope-and-audit-blockers`
 Base: `feature/full-stack-production-validation` at `5850342`
 
 This inventory is the route-level review record for the PR #3 authorization
-closure. The repository contains 270 FastAPI route decorators. Every route
+closure. The repository contains 270 FastAPI route decorators and 260
+registered `/api` route-method pairs. Every route
 module was searched for direct ID loads, patient-only child queries, nullable
 tenant predicates, permission-only authorization, and client-controlled tenant
-provenance. Seventeen route modules required changes.
+provenance. Nineteen route modules required changes.
 
 The inventory records security boundaries, not business ownership. A global
 `Patient` row is identity data; it never grants access to clinical, financial,
@@ -49,6 +50,7 @@ path family was inspected.
 | invoice list/create/detail/update/issue | Invoice | clinic billing | invoice clinic equals active clinic | `get_active_clinic_invoice` and scoped list query | billing permission plus membership | `test_pr3_scope_audit_blockers.py` | enforced |
 | invoice line CRUD | InvoiceLine | clinic billing | scoped parent invoice | invoice-first loader | billing permission plus membership | `test_pr3_scope_audit_blockers.py` | enforced |
 | payment create/list and mark-paid | PaymentTransaction | clinic billing | scoped parent invoice; parent immutable | invoice-first loader | payment permission plus membership | `test_pr3_scope_audit_blockers.py` | enforced |
+| journey billing prepare, payment record and payment defer | journey billing projection | clinic billing | active-clinic journey and its invoice | scoped journey parent plus billing validator | billing/payment permission plus membership | journey-closure and route-registry suites | enforced |
 | appointment draft-invoice | Invoice | clinic billing | appointment and produced invoice in active clinic | scoped appointment loader | billing permission plus membership | `test_pr3_scope_audit_blockers.py` | enforced |
 | patient invoice list | Invoice | clinic billing | active clinic | invoice clinic predicate | billing read permission plus membership | `test_pr3_scope_audit_blockers.py` | enforced |
 | episode list/detail/create/update/close | ClinicalEpisode | institution clinical | exact authorized institution | `get_institution_episode` and institution list predicate | medical category and clinical permission | `test_pr3_scope_audit_blockers.py` | enforced |
@@ -103,3 +105,9 @@ The negative matrix covers:
 
 The route families above are also exercised by PostgreSQL integration and
 DB-backed browser tests. Frontend hiding is never treated as authorization.
+
+The lightweight registry gate classifies all 260 current `/api` route-method
+pairs and fingerprints the sorted path, method and context projection. Any
+addition, removal, move or reclassification changes the fingerprint and fails
+CI until the route inventory is explicitly reviewed. This includes financial
+mutations located outside `inventory.py`.

@@ -6,7 +6,13 @@ from app.auth.dependencies import CurrentUserContext
 from app.models.domain import Clinic, ClinicalEpisode, ClinicalPlan
 
 
+MEDICAL_STAFF_CATEGORY = "medical_staff"
+
+
 def authorized_institution_id(context: CurrentUserContext) -> int:
+    role = context.user.role
+    if role is None or role.professional_category != MEDICAL_STAFF_CATEGORY:
+        raise HTTPException(403, detail="Kliničke podatke ustanove smije koristiti samo ovlašteno medicinsko osoblje")
     institution_id = context.active_clinic.institution_id if context.active_clinic else None
     if institution_id is None:
         raise HTTPException(403, detail="Aktivna klinika nema razriješenu ustanovu")

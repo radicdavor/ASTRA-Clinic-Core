@@ -82,7 +82,9 @@ foreign-object behavior across billing, episodes/plans, findings,
 open questions, evidence, documents, signed reports, summaries and audit.
 PostgreSQL-backed tests validate tenant predicates and migration backfill.
 DB-backed browser tests validate that API enforcement remains effective through
-the user-facing integration.
+the user-facing integration. A fail-closed static registry classifies and
+fingerprints every current `/api` route-method pair, so a new endpoint cannot
+enter the API without an explicit scope-inventory review.
 
 The detailed endpoint inventory is in
 [`security-scope-inventory.md`](security-scope-inventory.md). Full evidence and

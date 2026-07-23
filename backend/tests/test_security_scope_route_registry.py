@@ -1,78 +1,74 @@
-"""Lightweight guard for PR #3 high-risk route scope registration.
+"""Fail-closed route inventory for the PR #3 security contexts.
 
-This is intentionally a static regression map, not a runtime authorization
-framework. Adding or removing a billing, episode/plan, patient-derived, or
-audit endpoint requires an explicit scope decision here and in
-docs/security-scope-inventory.md.
+This is a test-only snapshot, not a runtime authorization framework. Every
+registered /api route receives one review classification and contributes to a
+stable fingerprint. Adding, removing, moving, or reclassifying a route requires
+an explicit inventory review and fingerprint update.
 """
+
+from hashlib import sha256
 
 from app.main import app
 
 
 GLOBAL_IDENTITY = "GlobalIdentityContext"
+CLINIC_OPERATIONAL = "ClinicOperationalContext"
 CLINIC_BILLING = "ClinicBillingContext"
 INSTITUTION_CLINICAL = "InstitutionClinicalContext"
 SYSTEM_SECURITY_AUDIT = "SystemSecurityAuditContext"
+NON_SENSITIVE = "NonSensitiveOrLocalContext"
 
 
-EXPECTED_HIGH_RISK_ROUTES = {
-    # Global identity and patient projections.
-    ("POST", "/api/patients", GLOBAL_IDENTITY),
-    ("GET", "/api/patients", GLOBAL_IDENTITY),
-    ("GET", "/api/patients/possible-duplicates", GLOBAL_IDENTITY),
-    ("GET", "/api/patients/{patient_id}", GLOBAL_IDENTITY),
-    ("PATCH", "/api/patients/{patient_id}", GLOBAL_IDENTITY),
-    ("GET", "/api/patients/{patient_id}/appointments", GLOBAL_IDENTITY),
-    ("GET", "/api/patients/{patient_id}/clinical-record", INSTITUTION_CLINICAL),
-    ("GET", "/api/patients/{patient_id}/clinical-findings", INSTITUTION_CLINICAL),
-    ("GET", "/api/patients/{patient_id}/clinical-findings/{finding_id}", INSTITUTION_CLINICAL),
-    ("GET", "/api/patients/{patient_id}/clinical-open-questions", INSTITUTION_CLINICAL),
-    ("GET", "/api/patients/{patient_id}/clinical-open-questions/{question_id}", INSTITUTION_CLINICAL),
-    ("GET", "/api/patients/{patient_id}/clinical-evidence-timeline", INSTITUTION_CLINICAL),
-    ("GET", "/api/patients/{patient_id}/episodes", INSTITUTION_CLINICAL),
-    ("GET", "/api/patients/{patient_id}/invoices", CLINIC_BILLING),
-    # Episodes and plans.
-    ("GET", "/api/episodes", INSTITUTION_CLINICAL),
-    ("POST", "/api/episodes", INSTITUTION_CLINICAL),
-    ("GET", "/api/episodes/{episode_id}", INSTITUTION_CLINICAL),
-    ("PATCH", "/api/episodes/{episode_id}", INSTITUTION_CLINICAL),
-    ("POST", "/api/episodes/{episode_id}/close", INSTITUTION_CLINICAL),
-    ("GET", "/api/episodes/{episode_id}/appointments", INSTITUTION_CLINICAL),
-    ("GET", "/api/episodes/{episode_id}/clinical-plans", INSTITUTION_CLINICAL),
-    ("GET", "/api/episodes/{episode_id}/clinical-plans/active", INSTITUTION_CLINICAL),
-    ("POST", "/api/episodes/{episode_id}/clinical-plans/generate", INSTITUTION_CLINICAL),
-    ("PATCH", "/api/clinical-plans/{plan_id}", INSTITUTION_CLINICAL),
-    ("POST", "/api/clinical-plans/{plan_id}/reject", INSTITUTION_CLINICAL),
-    ("POST", "/api/clinical-plans/{plan_id}/confirm", INSTITUTION_CLINICAL),
-    ("GET", "/api/episodes/{episode_id}/clinical-timeline", INSTITUTION_CLINICAL),
-    # Billing and payments.
-    ("GET", "/api/invoices", CLINIC_BILLING),
-    ("POST", "/api/invoices", CLINIC_BILLING),
-    ("GET", "/api/invoices/{invoice_id}", CLINIC_BILLING),
-    ("PATCH", "/api/invoices/{invoice_id}", CLINIC_BILLING),
-    ("POST", "/api/appointments/{appointment_id}/draft-invoice", CLINIC_BILLING),
-    ("POST", "/api/invoices/{invoice_id}/issue", CLINIC_BILLING),
-    ("GET", "/api/invoices/{invoice_id}/lines", CLINIC_BILLING),
-    ("POST", "/api/invoices/{invoice_id}/lines", CLINIC_BILLING),
-    ("PATCH", "/api/invoices/{invoice_id}/lines/{line_id}", CLINIC_BILLING),
-    ("DELETE", "/api/invoices/{invoice_id}/lines/{line_id}", CLINIC_BILLING),
-    ("POST", "/api/invoices/{invoice_id}/payments", CLINIC_BILLING),
-    ("GET", "/api/invoices/{invoice_id}/payments", CLINIC_BILLING),
-    ("POST", "/api/invoices/{invoice_id}/mark-paid", CLINIC_BILLING),
-    # Audit.
-    ("POST", "/api/audit/access-events", SYSTEM_SECURITY_AUDIT),
-    ("GET", "/api/audit-log", SYSTEM_SECURITY_AUDIT),
+MODULE_DEFAULT_CONTEXT = {
+    "ai": GLOBAL_IDENTITY,
+    "appointments": CLINIC_OPERATIONAL,
+    "audit": SYSTEM_SECURITY_AUDIT,
+    "catalog": CLINIC_OPERATIONAL,
+    "catalog_governance": CLINIC_OPERATIONAL,
+    "clinical_documents": INSTITUTION_CLINICAL,
+    "clinical_forms": INSTITUTION_CLINICAL,
+    "daily_dashboard": CLINIC_OPERATIONAL,
+    "document_ingestion": INSTITUTION_CLINICAL,
+    "episodes": INSTITUTION_CLINICAL,
+    "intake": CLINIC_OPERATIONAL,
+    "inventory": CLINIC_OPERATIONAL,
+    "journey_activities": CLINIC_OPERATIONAL,
+    "journey_check_in": CLINIC_OPERATIONAL,
+    "journey_closure": CLINIC_OPERATIONAL,
+    "journey_encounter": INSTITUTION_CLINICAL,
+    "journey_preparation": CLINIC_OPERATIONAL,
+    "journey_timeline": INSTITUTION_CLINICAL,
+    "knowledge": NON_SENSITIVE,
+    "laboratory": INSTITUTION_CLINICAL,
+    "pathology": INSTITUTION_CLINICAL,
+    "patient_clinical_summary": INSTITUTION_CLINICAL,
+    "patient_journeys": CLINIC_OPERATIONAL,
+    "patients": GLOBAL_IDENTITY,
+    "readiness": SYSTEM_SECURITY_AUDIT,
+    "reception": CLINIC_OPERATIONAL,
+    "reports": INSTITUTION_CLINICAL,
+    "search": GLOBAL_IDENTITY,
+    "system": NON_SENSITIVE,
+    "therapies": INSTITUTION_CLINICAL,
+    "workflow": INSTITUTION_CLINICAL,
 }
 
+# Updating this value requires reviewing the full sorted route/context snapshot
+# emitted by `_registry_rows()`, not merely accepting a new hash.
+EXPECTED_API_ROUTE_REGISTRY_SHA256 = "47839362dfd4c2b77f6a0dbda254409afa040ab5394bf947c161aac4428266ec"
+EXPECTED_API_ROUTE_METHOD_COUNT = 260
 
-def _scope_for_route(module_name: str, method: str, path: str) -> str | None:
-    if module_name == "episodes":
-        return INSTITUTION_CLINICAL
-    if module_name == "audit":
-        return SYSTEM_SECURITY_AUDIT
+
+def _scope_for_route(module_name: str, path: str) -> str | None:
     if module_name == "inventory" and (
         path.startswith("/api/invoices")
         or path == "/api/appointments/{appointment_id}/draft-invoice"
+    ):
+        return CLINIC_BILLING
+    if module_name == "journey_closure" and (
+        "/billing/" in path
+        or path.endswith("/payments")
+        or path.endswith("/payments/defer")
     ):
         return CLINIC_BILLING
     if module_name == "patients":
@@ -89,19 +85,52 @@ def _scope_for_route(module_name: str, method: str, path: str) -> str | None:
             )
         ):
             return INSTITUTION_CLINICAL
-        return GLOBAL_IDENTITY
-    return None
+    return MODULE_DEFAULT_CONTEXT.get(module_name)
 
 
-def test_high_risk_routes_have_an_explicit_security_context_registration():
-    actual: set[tuple[str, str, str]] = set()
+def _registry_rows() -> list[str]:
+    rows: list[str] = []
+    unclassified: list[str] = []
     for route in app.routes:
+        if not route.path.startswith("/api"):
+            continue
         endpoint = getattr(route, "endpoint", None)
         module_name = getattr(endpoint, "__module__", "").rsplit(".", 1)[-1]
+        context = _scope_for_route(module_name, route.path)
         methods = (getattr(route, "methods", set()) or set()) - {"HEAD", "OPTIONS"}
         for method in methods:
-            context = _scope_for_route(module_name, method, route.path)
-            if context:
-                actual.add((method, route.path, context))
+            if context is None:
+                unclassified.append(f"{method} {route.path} ({module_name})")
+            else:
+                rows.append(f"{method} {route.path} [{context}]")
+    assert not unclassified, f"Neklasificirane /api rute: {sorted(unclassified)}"
+    return sorted(rows)
 
-    assert actual == EXPECTED_HIGH_RISK_ROUTES
+
+def test_every_api_route_is_reviewed_and_registry_is_fail_closed():
+    rows = _registry_rows()
+
+    assert len(rows) == EXPECTED_API_ROUTE_METHOD_COUNT
+    assert len(rows) == len(set(rows))
+    fingerprint = sha256("\n".join(rows).encode("utf-8")).hexdigest()
+    assert fingerprint == EXPECTED_API_ROUTE_REGISTRY_SHA256, (
+        "Promijenjen je API route/scope registry. Pregledajte puni route diff i "
+        "ažurirajte docs/security-scope-inventory.md prije prihvaćanja novog fingerprinta."
+    )
+
+
+def test_journey_closure_financial_mutations_are_billing_scoped():
+    rows = set(_registry_rows())
+
+    assert (
+        "POST /api/patient-journeys/{journey_id}/billing/prepare "
+        "[ClinicBillingContext]"
+    ) in rows
+    assert (
+        "POST /api/patient-journeys/{journey_id}/payments "
+        "[ClinicBillingContext]"
+    ) in rows
+    assert (
+        "POST /api/patient-journeys/{journey_id}/payments/defer "
+        "[ClinicBillingContext]"
+    ) in rows
