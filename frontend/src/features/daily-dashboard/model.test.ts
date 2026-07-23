@@ -109,6 +109,20 @@ describe("daily dashboard model", () => {
     expect(blocks.every(block => block.laneCount === 2)).toBe(true);
   });
 
+  test("labels parallel appointments only when patient, clinician and room are all different", () => {
+    const validParallel = buildTimelineBlocks([
+      row({ journey_id: 1, patient_id: 501, clinician_id: 1, room_id: 1 }),
+      row({ journey_id: 2, patient_id: 502, clinician_id: 2, room_id: 2 }),
+    ]);
+    expect(validParallel.every(block => block.parallel)).toBe(true);
+
+    const sameClinician = buildTimelineBlocks([
+      row({ journey_id: 1, patient_id: 501, clinician_id: 1, room_id: 1 }),
+      row({ journey_id: 2, patient_id: 502, clinician_id: 1, room_id: 2 }),
+    ]);
+    expect(sameClinician.every(block => !block.parallel)).toBe(true);
+  });
+
   test("prefers backend canonical operational status over frontend compatibility fallback", () => {
     const state = operationalState(row({
       workflow_stage: "ready_for_clinician",

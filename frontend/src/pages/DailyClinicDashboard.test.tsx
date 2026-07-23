@@ -10,7 +10,7 @@ function activity(id: number, time: string, end_time: string, service_name: stri
 
 const rows = [
   {
-    journey_id: 1, appointment_id: 101, time: "08:00:00", patient_name: "Kratki Pregled",
+    journey_id: 1, appointment_id: 101, time: "08:00:00", patient_id: 501, patient_name: "Kratki Pregled",
     service_id: 1, service_name: "Prvi pregled", clinician_id: 1, clinician_name: "dr. Test",
     room_id: 1, room_name: "Ordinacija 1", clinic_id: 1, clinic_name: "Klinika Sjever", intake_channel: "manual", workflow_stage: "ready_for_arrival",
     document_status: "complete", preparation_status: "complete", arrival_status: "not_arrived",
@@ -22,14 +22,14 @@ const rows = [
     activity_count: 1, current_activity_id: 1011, next_activity_id: null, activities: [activity(1011, "08:00:00", "08:30:00", "Prvi pregled")],
   },
   {
-    journey_id: 2, appointment_id: 102, time: "08:15:00", patient_name: "Preklop Pacijent",
-    service_id: 2, service_name: "Kontrola", clinician_id: 1, clinician_name: "dr. Test",
-    room_id: 1, room_name: "Ordinacija 1", clinic_id: 1, clinic_name: "Klinika Sjever", intake_channel: "web", workflow_stage: "arrived",
+    journey_id: 2, appointment_id: 102, time: "08:15:00", patient_id: 502, patient_name: "Preklop Pacijent",
+    service_id: 2, service_name: "Kontrola", clinician_id: 2, clinician_name: "dr. Paralelni",
+    room_id: 2, room_name: "Endoskopija 1", clinic_id: 1, clinic_name: "Klinika Sjever", intake_channel: "web", workflow_stage: "arrived",
     document_status: "complete", preparation_status: "complete", arrival_status: "arrived",
     check_in_status: "in_review", encounter_status: "not_started", consumables_status: "not_ready",
     billing_status: "not_ready", payment_status: "not_due", blocker_status: "clear",
     blocker_labels: [], blockers: [], reception_warning: false, reception_warning_details: [], allowed_actions: ["open_check_in"],
-    activity_count: 1, current_activity_id: 1021, next_activity_id: null, activities: [activity(1021, "08:15:00", "08:45:00", "Kontrola")],
+    activity_count: 1, current_activity_id: 1021, next_activity_id: null, activities: [{ ...activity(1021, "08:15:00", "08:45:00", "Kontrola", "Endoskopija 1"), clinician_name: "dr. Paralelni" }],
   },
   {
     journey_id: 3, appointment_id: 103, time: "09:00:00", patient_name: "Paket Gastro",
@@ -184,7 +184,7 @@ describe("vremenska dnevna ploča", () => {
     expect(screen.getAllByText("08:00").length).toBeGreaterThan(0);
     const block = await findPatientBlock(/Kratki Pregled/);
     expect(within(block).getByText("Prvi pregled")).toBeTruthy();
-    expect(within(block).getByText("Ordinacija 1")).toBeTruthy();
+    expect(within(block).getByLabelText("dr. Test, Ordinacija 1")).toBeTruthy();
     expect(within(block).getByLabelText("Naručen/a na: Prvi pregled")).toBeTruthy();
     expect(block.getAttribute("aria-label")).toContain("Naručen/a na: Prvi pregled");
     expect(within(block).getByLabelText(/Backend kanonski status/)).toBeTruthy();
@@ -208,6 +208,9 @@ describe("vremenska dnevna ploča", () => {
     expect(first).toBeTruthy();
     expect(second).toBeTruthy();
     expect(first).not.toBe(second);
+    expect(within(first).getByLabelText("dr. Test, Ordinacija 1")).toBeTruthy();
+    expect(within(second).getByLabelText("dr. Paralelni, Endoskopija 1")).toBeTruthy();
+    expect(screen.getAllByLabelText("Paralelni termin s drugim pacijentom, liječnikom i prostorijom")).toHaveLength(2);
   });
 
   test("red-flag status uses red color and opens structured details", async () => {

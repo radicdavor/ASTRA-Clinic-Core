@@ -111,6 +111,11 @@ function PatientBlock({
             <span className="timeline-booked-services" aria-label={`Naručen/a na: ${bookedServicesLabel}`} title={`Naručen/a na: ${bookedServicesLabel}`}>
               — {bookedServicesLabel}
             </span>
+            {block.parallel && (
+              <span className="timeline-parallel-badge" aria-label="Paralelni termin s drugim pacijentom, liječnikom i prostorijom">
+                Paralelni termin
+              </span>
+            )}
           </div>
         </div>
         <time>{formatMinutes(block.startMinutes)}</time>
@@ -120,7 +125,11 @@ function PatientBlock({
           <div className="timeline-activity-row" key={activity.id}>
             <time>{activityDurationLabel(activity)}</time>
             <span>{activity.service_name}</span>
-            <small>{activity.room_name || "Bez prostorije"}</small>
+            <small aria-label={`${activity.clinician_name || "Liječnik nije naveden"}, ${activity.room_name || "Prostorija nije navedena"}`}>
+              <b>{activity.clinician_name || "Liječnik nije naveden"}</b>
+              {" · "}
+              {activity.room_name || "Prostorija nije navedena"}
+            </small>
           </div>
         ))}
       </div>

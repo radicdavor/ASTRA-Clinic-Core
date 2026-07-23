@@ -52,6 +52,7 @@ export type TimelineBlock = {
   endMinutes: number;
   lane: number;
   laneCount: number;
+  parallel: boolean;
   roomName: string;
 };
 
@@ -259,7 +260,7 @@ export function buildTimelineBlocks(rows: DashboardRow[]) {
   const prepared = canonicalJourneyRows(rows).map(row => {
     const state = operationalState(row);
     const window = rowActivityWindow(row);
-    return { row, state, startMinutes: window.start, endMinutes: window.end, lane: 0, laneCount: 1, roomName: row.room_name || "Bez prostorije" };
+    return { row, state, startMinutes: window.start, endMinutes: window.end, lane: 0, laneCount: 1, parallel: false, roomName: row.room_name || "Bez prostorije" };
   }).sort((a, b) => a.startMinutes - b.startMinutes || a.endMinutes - b.endMinutes || a.row.journey_id - b.row.journey_id);
 
   const lanes: number[] = [];
@@ -274,7 +275,18 @@ export function buildTimelineBlocks(rows: DashboardRow[]) {
     block.lane = lane;
   }
   const laneCount = Math.max(1, lanes.length);
-  return prepared.map(block => ({ ...block, laneCount }));
+  return prepared.map(block => ({
+    ...block,
+    laneCount,
+    parallel: prepared.some(other =>
+      other.row.journey_id !== block.row.journey_id
+      && other.startMinutes < block.endMinutes
+      && other.endMinutes > block.startMinutes
+      && other.row.patient_id !== block.row.patient_id
+      && other.row.clinician_id !== block.row.clinician_id
+      && other.row.room_id !== block.row.room_id
+    ),
+  }));
 }
 
 export function visibleRange(blocks: TimelineBlock[]) {
