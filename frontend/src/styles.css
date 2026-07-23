@@ -376,6 +376,10 @@ th { color: #667085; font-size: 0.78rem; text-transform: uppercase; letter-spaci
 .clinical-plan-card p { display: flex; justify-content: space-between; gap: 18px; color: #172033; border-top: 1px solid #eef2f6; padding-top: 9px; }
 .clinical-plan-card p span { color: #667085; }
 .clinical-plan-card p strong { text-align: right; overflow-wrap: anywhere; }
+.clinical-derived-data-notice { display: grid; gap: .35rem; margin: 0 0 14px; border: 1px solid #bfd9d5; border-left: 4px solid #0f766e; border-radius: 8px; background: #f4fbfa; padding: 12px 14px; color: #334155; }
+.clinical-derived-data-notice strong { color: #0f5f59; }
+.clinical-derived-data-notice p { display: block; margin: 0; border: 0; padding: 0; line-height: 1.5; }
+.clinical-derived-data-notice-context { border-color: #d9e2ec; border-left-color: #64748b; background: #f8fafc; }
 .active-plan { border-color: #0f766e; background: #f1fbf9; }
 .ai-suggestion { border-color: #7c3aed; background: #fbf9ff; }
 .clinical-plan-generate, .clinical-plan-edit { margin-top: 14px; }

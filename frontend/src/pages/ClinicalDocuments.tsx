@@ -30,16 +30,16 @@ export function documentTypeLabel(value: string) {
 }
 
 export function sourceTypeLabel(value: string) {
-  const labels: Record<string, string> = { internal: "Interno", external: "Vanjski", scanned: "Skenirano", uploaded: "Upload" };
+  const labels: Record<string, string> = { internal: "Interno", external: "Vanjski", scanned: "Skenirano", uploaded: "Preneseno" };
   return labels[value] ?? value;
 }
 
 export function reviewStatusLabel(value: ClinicalDocument["review_status"]) {
   const labels: Record<ClinicalDocument["review_status"], string> = {
     draft: "Izvor zaprimljen",
-    extracted: "AI ekstrakcija izradena",
-    needs_physician_review: "Ceka lijecnicki pregled",
-    reviewed: "Lijecnicki pregledano",
+    extracted: "AI ekstrakcija izrađena",
+    needs_physician_review: "Čeka liječnički pregled",
+    reviewed: "Liječnički pregledano",
     rejected: "Dokument odbijen",
     superseded: "Zamijenjeno",
     signed: "Potpisano"
@@ -61,8 +61,8 @@ export function aiExtractionStatusLabel(value: ClinicalDocument["ai_extraction_s
   const labels: Record<ClinicalDocument["ai_extraction_status"], string> = {
     not_run: "AI ekstrakcija nije pokrenuta",
     generated: "AI prijedlog generiran",
-    edited: "AI prijedlog rucno uredjen",
-    accepted: "AI prijedlog prihvacen kroz lijecnicki pregled",
+    edited: "AI prijedlog ručno uređen",
+    accepted: "AI prijedlog prihvaćen kroz liječnički pregled",
     rejected: "AI prijedlog odbijen",
     superseded: "AI prijedlog zamijenjen"
   };
@@ -136,9 +136,9 @@ export function ClinicalDocuments() {
       <div className="page-header">
         <div>
           <h1>
-            Klinicki dokumenti <HelpHint title="Klinicki dokumenti">Dokumenti su temelj pacijentova klinickog znanja. AI sazetak postaje vidljiv u sazetku pacijenta tek nakon lijecnickog pregleda.</HelpHint>
+            Klinički dokumenti <HelpHint title="Klinički dokumenti">Izvorni dokument ostaje izvor istine. AI sažetak postaje dio pregledanog sažetka pacijenta tek nakon liječničkog pregleda.</HelpHint>
           </h1>
-          <p>Interni i vanjski nalazi, postupci, patologija, laboratorij, radiologija i upload dokumenti.</p>
+          <p>Interni i vanjski nalazi, postupci, patologija, laboratorij, radiologija i preneseni dokumenti.</p>
         </div>
         <ActionButton variant="create" className="primary" onClick={() => setShowUpload(true)} helpTitle="Dodaj dokument" help="Dodaje dokument ili OCR placeholder. Ne unosite stvarne pacijentove podatke u demo okruzenju.">
           Dodaj dokument
@@ -146,14 +146,14 @@ export function ClinicalDocuments() {
       </div>
 
       <div className="filters">
-        <input placeholder="Pretrazi dokumente" value={filter.q} onChange={(event) => setFilter({ ...filter, q: event.target.value })} />
+        <input placeholder="Pretraži dokumente" value={filter.q} onChange={(event) => setFilter({ ...filter, q: event.target.value })} />
         <input placeholder="Patient ID" value={filter.patient_id} onChange={(event) => setFilter({ ...filter, patient_id: event.target.value })} />
         <select value={filter.document_type} onChange={(event) => setFilter({ ...filter, document_type: event.target.value })}><option value="">Svi tipovi</option>{documentTypes.map((type) => <option key={type} value={type}>{documentTypeLabel(type)}</option>)}</select>
         <select value={filter.review_status} onChange={(event) => setFilter({ ...filter, review_status: event.target.value, review: "" })}>
           <option value="">Svi statusi pregleda</option>
-          <option value="draft">Draft / izvor zaprimljen</option>
-          <option value="needs_physician_review">Ceka lijecnicki pregled</option>
-          <option value="reviewed">Lijecnicki pregledano</option>
+          <option value="draft">Skica / izvor zaprimljen</option>
+          <option value="needs_physician_review">Čeka liječnički pregled</option>
+          <option value="reviewed">Liječnički pregledano</option>
           <option value="rejected">Odbijeno</option>
           <option value="superseded">Zamijenjeno</option>
         </select>

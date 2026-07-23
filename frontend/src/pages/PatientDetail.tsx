@@ -2,6 +2,7 @@ import { Link, useParams } from "react-router-dom";
 import { api } from "../api/client";
 import { ActionButton } from "../components/ActionButton";
 import { AuditTimeline } from "../components/AuditTimeline";
+import { ClinicalDerivedDataNotice } from "../components/ClinicalDerivedDataNotice";
 import { DataTable } from "../components/DataTable";
 import { HelpHint } from "../components/HelpHint";
 import { SourceBadge } from "../components/SourceBadge";
@@ -26,7 +27,7 @@ function KnowledgeCard({ title, items, help, emphasizeAttention = false }: { tit
         <ul>
           {items.map((item, index) => (
             <li key={`${title}-${index}`}>
-              {item.requires_attention && <strong>{item.severity === "warning" ? "Zahtijeva paznju: " : ""}</strong>}
+              {item.requires_attention && <strong>{item.severity === "warning" ? "Zahtijeva pažnju: " : ""}</strong>}
               {item.text}
               <small>{item.sources.map((source) => <SourceBadge key={`${source.document_id}-${item.text}`} source={source} />)}</small>
             </li>
@@ -48,27 +49,27 @@ function KnowledgeList({ title, items }: { title: string; items: string[] }) {
 
 function summaryStatusLabel(status?: PatientClinicalSummaryRecord["status"]) {
   const labels: Record<PatientClinicalSummaryRecord["status"], string> = {
-    draft_ai: "AI draft",
-    needs_review: "Ceka pregled",
+    draft_ai: "AI skica",
+    needs_review: "Čeka pregled",
     reviewed: "Pregledano",
     stale: "Zastarjelo",
     rejected: "Odbijeno",
     superseded: "Zamijenjeno"
   };
-  return status ? labels[status] : "Nema sazetka";
+  return status ? labels[status] : "Nema sažetka";
 }
 
 function findingLifecycleStatusLabel(status: ClinicalFindingReadItem["lifecycle_status"]) {
   const labels: Record<string, string> = {
     received: "Zaprimljeno",
     linked_to_patient: "Povezano s pacijentom",
-    awaiting_review: "Ceka pregled",
+    awaiting_review: "Čeka pregled",
     review_in_progress: "Pregled u tijeku",
     reviewed: "Pregledano",
-    needs_clinician_decision: "Potrebna odluka lijecnika",
+    needs_clinician_decision: "Potrebna odluka liječnika",
     decision_documented: "Odluka dokumentirana",
-    follow_up_recommended: "Preporuceno pracenje",
-    external_referral_recommended: "Preporucena vanjska obrada",
+    follow_up_recommended: "Preporučeno praćenje",
+    external_referral_recommended: "Preporučena vanjska obrada",
     closed_for_now: "Zatvoreno za sada"
   };
   return labels[status] ?? status;
@@ -78,32 +79,28 @@ function FindingsReadOnlyPanel({ findings, loading, error }: { findings: Clinica
   const permissionDenied = error?.toLowerCase().includes("dozvola") || error?.includes("403");
 
   return (
-    <WorkspaceSection title="Nalazi povezani s izvorom">
-      <section aria-label="Nalazi povezani s izvorom" aria-live="polite" className="clinical-plan-card">
-        <p>Ovo su source-linked zapisi za pregled.</p>
-        <p>Nalaz nije dijagnoza bez lijecnicke potvrde.</p>
-        <p>Ovaj prikaz ne stvara zadatak i ne salje poruku pacijentu.</p>
-        <p>Za klinicku interpretaciju odgovoran je lijecnik.</p>
-        {loading && <p role="status">Ucitavanje nalaza povezanih s izvorom...</p>}
+    <WorkspaceSection title="Nalazi povezani s izvorima">
+      <section aria-label="Nalazi povezani s izvorima" aria-live="polite" className="clinical-plan-card">
+        {loading && <p role="status">Učitavanje nalaza povezanih s izvorima...</p>}
         {error && (
           <p role="status">
             {permissionDenied
-              ? "Nemate dozvolu za prikaz source-linked nalaza. Ovo ne mijenja status pacijenta ili termina. Ostali podaci ostaju dostupni prema vasim dozvolama."
-              : "Nalazi trenutno nisu dostupni. To ne znaci da nema otvorenih klinickih pitanja. Pokusajte ponovno ili provjerite izvorne dokumente."}
+              ? "Nemate dozvolu za prikaz nalaza povezanih s izvorima. Ostali podaci ostaju dostupni prema vašim dozvolama."
+              : "Nalazi trenutno nisu dostupni. To ne znači da nema otvorenih kliničkih pitanja. Pokušajte ponovno ili provjerite izvorne dokumente."}
           </p>
         )}
         {!loading && !error && findings.findings.length === 0 && (
-          <p>Nema prikazanih source-linked finding zapisa. To ne znaci da nema klinickih rizika, da su svi dokumenti pregledani, da je pacijent klinicki rijesen ili da je plan skrbi dovrsen.</p>
+          <p>Nema prikazanih nalaza povezanih s izvorima. To ne znači da nema kliničkih rizika ili dokumenata koji čekaju pregled.</p>
         )}
         {!loading && !error && findings.findings.length > 0 && (
-          <ul aria-label="Source-linked findings zapisi">
+          <ul aria-label="Nalazi povezani s izvorima">
             {findings.findings.map((finding: ClinicalFindingReadItem) => {
               const sourceReference = finding.source_reference.trim() || "Izvor nije dovoljno specificiran - provjeriti originalni dokument.";
               return (
                 <li key={finding.id}>
                   <strong>{finding.label}</strong>
                   <small>{finding.category} / {findingLifecycleStatusLabel(finding.lifecycle_status)} / {finding.requires_review ? "Za ljudski pregled" : "Pregled nije oznacen kao obavezan"}</small>
-                  <small>Status nije automatska dijagnoza, obavijest pacijentu ili zadatak.</small>
+                  <small>Status nije dijagnoza, obavijest pacijentu ni zadatak.</small>
                   <dl>
                     <dt>Tip izvora</dt>
                     <dd>{finding.source_type || "Izvor nije dovoljno specificiran - provjeriti originalni dokument."}</dd>
@@ -129,17 +126,17 @@ function timelineEventTypeLabel(eventType: string) {
   const labels: Record<string, string> = {
     clinical_document_received: "Dokument zaprimljen",
     clinical_document_review_pending: "Dokument ceka pregled",
-    finding_recorded: "Nalaz zabiljezen",
-    finding_requires_review: "Nalaz ceka pregled",
-    open_question_suggested: "Otvoreno pitanje predlozeno",
-    open_question_awaiting_review: "Otvoreno pitanje ceka pregled",
-    extraction_candidate_generated: "Extraction candidate generiran",
-    review_pending: "Pregled ceka",
+    finding_recorded: "Nalaz zabilježen",
+    finding_requires_review: "Nalaz čeka pregled",
+    open_question_suggested: "Otvoreno pitanje predloženo",
+    open_question_awaiting_review: "Otvoreno pitanje čeka pregled",
+    extraction_candidate_generated: "Prijedlog ekstrakcije generiran",
+    review_pending: "Pregled čeka",
     review_completed: "Pregled evidentiran",
     readiness_snapshot_captured: "Snapshot spremnosti spremljen",
     readiness_snapshot_superseded: "Snapshot spremnosti zamijenjen novijim zapisom",
     acknowledgment_recorded: "Ljudski pregled signala evidentiran",
-    access_audit_recorded: "Access audit evidentiran"
+    access_audit_recorded: "Audit pristupa evidentiran"
   };
   return labels[eventType] ?? eventType;
 }
@@ -148,24 +145,21 @@ function TimelineReadOnlyPanel({ timeline, loading, error }: { timeline: Clinica
   const permissionDenied = error?.toLowerCase().includes("dozvola") || error?.includes("403");
 
   return (
-    <WorkspaceSection title="Klinicka vremenska crta">
-      <section aria-label="Klinicka vremenska crta" aria-live="polite" className="clinical-plan-card">
-        <p>Source-linked prikaz klinickih dogadjaja.</p>
-        <p>Nije klinicka odluka, ne stvara zadatak i ne salje poruku pacijentu.</p>
-        <p>Ne mijenja status termina.</p>
-        {loading && <p role="status">Ucitavanje klinicke vremenske crte...</p>}
+    <WorkspaceSection title="Klinička vremenska crta">
+      <section aria-label="Klinička vremenska crta" aria-live="polite" className="clinical-plan-card">
+        {loading && <p role="status">Učitavanje kliničke vremenske crte...</p>}
         {error && (
           <p role="status">
             {permissionDenied
-              ? "Nemate dozvolu za prikaz klinicke vremenske crte. To ne mijenja status pacijenta ili termina."
-              : "Klinicka vremenska crta trenutno nije dostupna. To ne znaci da je klinicka spremnost potvrdjena ili odbijena."}
+              ? "Nemate dozvolu za prikaz kliničke vremenske crte."
+              : "Klinička vremenska crta trenutno nije dostupna. To ne znači da je klinička spremnost potvrđena ili odbijena."}
           </p>
         )}
         {!loading && !error && timeline.events.length === 0 && (
-          <p>Nema prikazanih source-linked timeline dogadjaja. To ne znaci da nema klinickih rizika, da su svi dokumenti pregledani ili da je pacijent klinicki rijesen.</p>
+          <p>Nema prikazanih događaja povezanih s izvorima. To ne znači da nema kliničkih rizika ili dokumenata koji čekaju pregled.</p>
         )}
         {!loading && !error && timeline.events.length > 0 && (
-          <ul aria-label="Source-linked timeline dogadjaji">
+          <ul aria-label="Događaji povezani s izvorima">
             {timeline.events.map((event: ClinicalEvidenceTimelineEventPreview) => {
               const source = event.source_reference;
               const sourceReference = source.source_object_reference?.trim() || "Izvor nije dovoljno specificiran - provjeriti originalni zapis.";
@@ -174,7 +168,7 @@ function TimelineReadOnlyPanel({ timeline, loading, error }: { timeline: Clinica
               return (
                 <li key={event.event_key}>
                   <strong>{event.label}</strong>
-                  <small>{timelineEventTypeLabel(event.event_type)} / {event.requires_review ? "Ceka pregled" : "Read-only zapis"}</small>
+                  <small>{timelineEventTypeLabel(event.event_type)} / {event.requires_review ? "Čeka pregled" : "Samo za čitanje"}</small>
                   <small>{formatDateTime(event.display_timestamp)}</small>
                   <dl>
                     <dt>Tip izvora</dt>
@@ -289,7 +283,7 @@ export function PatientDetail() {
       <WorkspaceHeader
         title={formatPatientName(patient.data)}
         subtitle={formatPatientIdentity(patient.data)}
-        badge={<span className="readiness-badge readiness-check-ok">Patient Workspace</span>}
+        badge={<span className="readiness-badge readiness-check-ok">Karton pacijenta</span>}
         actions={
           <>
             <ActionButton
@@ -336,7 +330,7 @@ export function PatientDetail() {
 
       <div className="summary-strip">
         <div><span>Pregledani dokumenti</span><strong>{reviewedDocuments.length}</strong></div>
-        <div><span>Ceka pregled</span><strong>{awaitingReview.length}</strong></div>
+        <div><span>Čeka pregled</span><strong>{awaitingReview.length}</strong></div>
         <div><span>Zadnji termin</span><strong>{lastAppointment ? `${formatDate(lastAppointment.date)} / ${lastAppointment.status}` : "-"}</strong></div>
         <div><span>Sljedeci termin</span><strong>{nextAppointment ? `${formatDate(nextAppointment.date)} / ${nextAppointment.status}` : "-"}</strong></div>
         <div><span>Otvoreni racuni</span><strong>{openInvoices.length ? `${openInvoices.length} / ${unpaidTotal.toFixed(2)} EUR` : "Nema"}</strong></div>
@@ -371,14 +365,14 @@ export function PatientDetail() {
       <WorkflowTaskPanel patientId={patient.data.id} />
       <div className="patient-knowledge-layout">
         <div>
-          <WorkspaceSection title={<>{activeSummaryTitle} <HelpHint title="Sazetak pacijenta">Sazetak je pomocni prikaz i nije izvor istine. Izvor istine su pregledani, source-linked klinicki dokumenti.</HelpHint></>}>
+          <ClinicalDerivedDataNotice />
+          <WorkspaceSection title={<>{activeSummaryTitle} <HelpHint title="Sažetak pacijenta">Sažetak je pomoćni prikaz. Svaka tvrdnja mora voditi do pregledanog izvornog kliničkog dokumenta.</HelpHint></>}>
             <div className={`clinical-plan-card ${activeSummary?.status === "reviewed" && !activeSummaryIsStale ? "" : "ai-suggestion"}`}>
               <div><span>Status</span><strong>{summaryStatusLabel(activeSummary?.status)}</strong></div>
-              {activeSummaryIsStale && <p><strong>Sazetak je zastario. Generirajte novi draft iz najnovijih pregledanih dokumenata.</strong></p>}
+              {activeSummaryIsStale && <p><strong>Sažetak je zastario. Generirajte novu skicu iz najnovijih pregledanih dokumenata.</strong></p>}
               {clinicalSummary.data?.summary_warning && <p>{clinicalSummary.data.summary_warning}</p>}
-              {activeSummary?.status !== "reviewed" && <p><strong>AI draft - potreban je lijecnicki pregled.</strong></p>}
-              <p>Sazetak je pomocni prikaz. Izvor istine su pregledani, source-linked klinicki dokumenti.</p>
-              <p>{activeSummary?.summary_text ?? "Nema potvrdjenog sazetka pacijenta. Generirajte draft iz pregledanih dokumenata."}</p>
+              {activeSummary?.status !== "reviewed" && <p><strong>AI skica — potreban je liječnički pregled.</strong></p>}
+              <p>{activeSummary?.summary_text ?? "Nema potvrđenog sažetka pacijenta. Generirajte skicu iz pregledanih dokumenata."}</p>
               <div className="knowledge-grid">
                 <KnowledgeList title="Poznata stanja" items={activeSummary?.known_conditions ?? []} />
                 <KnowledgeList title="Kljucni nalazi" items={activeSummary?.key_findings ?? []} />
@@ -395,8 +389,8 @@ export function PatientDetail() {
                 </p>
               )}
               <div className="quick-actions">
-                <ActionButton variant="ai" onClick={generateSummaryDraft} helpTitle="Generiraj draft" help="Stvara AI placeholder draft iz pregledanih dokumenata. Ne postaje sluzben bez lijecnicke potvrde.">
-                  Generiraj draft
+                <ActionButton variant="ai" onClick={generateSummaryDraft} helpTitle="Generiraj AI skicu" help="Stvara AI skicu iz pregledanih dokumenata. Ne postaje pregledani sažetak bez liječničke potvrde.">
+                  Generiraj AI skicu
                 </ActionButton>
                 <ActionButton variant="update" onClick={confirmSummary} helpTitle="Potvrdi sazetak" help="Potvrdjuje zadnji draft sazetka kao lijecnicki pregledan. Izvori ostaju vidljivi.">
                   Potvrdi sazetak
@@ -410,10 +404,10 @@ export function PatientDetail() {
             tabs={[
               {
                 id: "summary",
-                label: "Sazetak",
+                label: "Sažetak",
                 content: (
                   <>
-                    <p><strong>Sluzbeno source-linked znanje</strong> dolazi iz pregledanih dokumenata i uvijek ima izvore.</p>
+                    <p><strong>Pregledano kliničko znanje</strong> dolazi iz pregledanih dokumenata i uvijek ima navedene izvore.</p>
                     <div className="knowledge-grid">
                       <KnowledgeCard title="Poznati problemi" items={clinicalSummary.data?.known_problems ?? []} />
                       <KnowledgeCard title="Zavrseni postupci" items={clinicalSummary.data?.completed_procedures ?? []} />
