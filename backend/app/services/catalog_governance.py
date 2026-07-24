@@ -126,7 +126,7 @@ def book_package(db: Session, version: ServicePackageVersion, patient_id: int, e
     first_assignment = assignment_by_item[first_item.id]
     appointment = create_appointment_with_journey(db, {
         "patient_id": patient_id, "episode_id": episode_id, "service_id": first_item.service_id,
-        "provider_id": first_assignment["provider_id"], "room_id": first_assignment["room_id"],
+        "provider_id": first_assignment["provider_id"], "room_id": first_assignment["room_id"], "clinic_id": clinic_id,
         "date": first_assignment["date"], "start_time": first_assignment["start_time"], "end_time": first_assignment["end_time"],
         "duration_minutes": first_item.default_duration_minutes, "status": "scheduled", "source": "manual",
         "notes": f"Paket {version.package.name} v{version.version}",

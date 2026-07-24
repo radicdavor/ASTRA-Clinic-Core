@@ -377,6 +377,37 @@ def test_create_appointment_api_allows_touching_patient_appointment(client, db, 
     assert response.status_code == 200
 
 
+def test_create_and_patch_appointment_reject_unresolved_room_provenance(client, db, auth_setup):
+    p = patient(db, first_name="Unresolved room")
+    provider_obj = provider(db, "dr. Scoped room")
+    provider_obj.clinic_id = auth_setup["clinic"].id
+    unresolved_room = room(db, "Unresolved provenance room")
+    unresolved_room.clinic_id = None
+    service_obj = service(db, name="Unresolved room service")
+    existing = appointment(db, provider_obj=provider_obj, service_obj=service_obj)
+    existing.clinic_id = auth_setup["clinic"].id
+    existing.room.clinic_id = auth_setup["clinic"].id
+    db.commit()
+    token = login_token(client, "admin@test.local")
+    headers = {"Authorization": f"Bearer {token}"}
+
+    created = client.post(
+        "/api/appointments",
+        headers=headers,
+        json=appointment_payload(p, provider_obj, unresolved_room, service_obj, start="11:00", end="11:30"),
+    )
+    updated = client.patch(
+        f"/api/appointments/{existing.id}",
+        headers=headers,
+        json={"room_id": unresolved_room.id},
+    )
+
+    assert created.status_code == 403
+    assert updated.status_code == 403
+    db.refresh(existing)
+    assert existing.room_id != unresolved_room.id
+
+
 def test_update_appointment_api_rejects_patient_reassignment_before_overlap_evaluation(client, db, auth_setup):
     existing = appointment(db)
     candidate = appointment(

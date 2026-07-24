@@ -123,10 +123,8 @@ def create_appointment_with_journey(db: Session, data: dict, actor: Actor, reque
     if room is None:
         raise HTTPException(404, detail="Soba nije pronadena")
     requested_clinic_id = data.get("clinic_id")
-    if requested_clinic_id is not None and room.clinic_id != requested_clinic_id:
+    if requested_clinic_id is None or room.clinic_id is None or room.clinic_id != requested_clinic_id:
         raise HTTPException(404, detail="Soba nije pronadena")
-    if requested_clinic_id is None:
-        data["clinic_id"] = room.clinic_id
     clinic = db.get(Clinic, data.get("clinic_id")) if data.get("clinic_id") is not None else None
     episode_id = data.get("episode_id")
     if episode_id:

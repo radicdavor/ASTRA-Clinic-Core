@@ -291,7 +291,7 @@ def create_appointment(
     room = db.get(Room, data["room_id"])
     if room is None:
         raise HTTPException(404, detail="Soba nije pronadena")
-    if room.clinic_id is not None and room.clinic_id != context.active_clinic_id:
+    if room.clinic_id is None or room.clinic_id != context.active_clinic_id:
         raise HTTPException(403, detail="Termin se moze kreirati samo u aktivnoj klinici")
     data["clinic_id"] = context.active_clinic_id
     appointment = create_appointment_with_journey(db, data, context.actor, request)
@@ -582,7 +582,7 @@ def update_appointment(
     next_room = db.get(Room, next_room_id)
     if next_room is None:
         raise HTTPException(404, detail="Soba nije pronadena")
-    if next_room.clinic_id is not None and next_room.clinic_id != context.active_clinic_id:
+    if next_room.clinic_id is None or next_room.clinic_id != context.active_clinic_id:
         raise HTTPException(403, detail="Termin se moze premjestiti samo unutar aktivne klinike")
     update_data["clinic_id"] = context.active_clinic_id
     next_patient_id = update_data.get("patient_id", appointment.patient_id)

@@ -10,6 +10,8 @@ def headers(client, email="admin@test.local"):
 def test_workflow_task_template_checklist_and_completion(client, db, auth_setup):
     p = patient(db)
     pr = provider(db)
+    pr.clinic_id = auth_setup["clinic"].id
+    db.flush()
     ep = episode(db, patient_obj=p, provider_obj=pr)
     auth = headers(client)
     template = client.post("/api/workflow-templates", headers=auth, json={"key": "result-review", "name": "Pregled nalaza", "default_priority": "important", "checklist_items": ["Otvori izvor", "Evidentiraj pregled"]})
