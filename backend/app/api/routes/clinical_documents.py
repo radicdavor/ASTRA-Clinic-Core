@@ -5,7 +5,7 @@ from sqlalchemy import or_, select
 from sqlalchemy.orm import Session, joinedload
 
 from app.audit.service import audit, snapshot
-from app.auth.dependencies import Actor, active_clinic_memberships, get_current_actor, require_permission
+from app.auth.dependencies import Actor, active_clinic_memberships, get_current_actor, require_medical_staff, require_permission
 from app.core.database import get_db
 from app.models.domain import AuditLog, ClinicalDocument, ClinicalDocumentAddendum, Patient
 from app.schemas.common import ClinicalDocumentAddendumCreate, ClinicalDocumentAddendumOut, ClinicalDocumentCreate, ClinicalDocumentOut, ClinicalDocumentUpdate, ClinicalDocumentUpload, ClinicalEvidenceTimelineItem, ErrorResponse
@@ -15,7 +15,12 @@ from app.services.clinical_evidence_timeline import classify_audit_log
 
 ERROR_RESPONSES = {400: {"model": ErrorResponse}, 401: {"model": ErrorResponse}, 403: {"model": ErrorResponse}, 404: {"model": ErrorResponse}, 409: {"model": ErrorResponse}, 422: {"model": ErrorResponse}}
 
-router = APIRouter(prefix="/api", tags=["clinical-documents"], responses=ERROR_RESPONSES)
+router = APIRouter(
+    prefix="/api",
+    tags=["clinical-documents"],
+    responses=ERROR_RESPONSES,
+    dependencies=[Depends(require_medical_staff)],
+)
 
 
 def patch_model(obj, data: dict) -> None:

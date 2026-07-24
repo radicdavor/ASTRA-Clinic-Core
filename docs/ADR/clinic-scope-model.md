@@ -139,3 +139,20 @@ X-Clinic-Id: <clinic id>
 ```
 
 The server validates the selected clinic against `ClinicMembership` before returning clinic-scoped data.
+
+## Integration API keys
+
+API keys use the same tenant principle without impersonating a user. Migration
+`0066_api_key_tenant_scope` adds a fixed `clinic_id` and `institution_id`.
+New keys inherit the creator's validated active clinic. A supplied
+`X-Clinic-Id` may match that clinic but cannot change it. Legacy keys with no
+tenant provenance are denied by `require_tenant_clinic` until replaced through
+an authorized key-management workflow.
+
+## Child-object rule
+
+Journey children are loaded only after the parent journey passes the
+active-clinic check. Billing children are loaded only after their invoice
+passes it. Package preview, booking, materialization, readiness
+acknowledgments, and appointment-material compatibility endpoints follow the
+same parent-first rule.

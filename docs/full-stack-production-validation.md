@@ -68,6 +68,22 @@ PR #3 is merged into `main`.
 
 Module 3 is closed for the authorized local/demo scope. Broader production validation remains separate from Module 3 functional closure.
 
+## PR #3 scope and audit blocker remediation
+
+The stacked remediation advances the single Alembic head to `0066` and closes
+the active-clinic billing, institution clinical-child provenance, audit
+projection, and API-key tenant-scope findings. Null or conflicting legacy
+provenance is deny-by-default. The safe global `Patient` directory remains an
+identity/deduplication surface and does not grant access to child records.
+
+Local evidence at the remediation HEAD: 147 fast backend tests, 737 full
+non-integration backend tests, 16 PostgreSQL integration tests, 57 frontend
+tests plus 4 contract tests, 1 route-mocked Playwright scenario, 11 DB-backed
+Playwright scenarios including explicit foreign clinical-derived-data denial,
+OpenAPI drift check, and empty/populated migration cycles
+passed. See `pr3-scope-and-audit-remediation.md` for the scope matrix and the
+mandatory separate PR #4 recovery update plan.
+
 ## Module 3.5 Lean Core validation
 
 Lean Core optimization is complete in the local synthetic scope. It retains the

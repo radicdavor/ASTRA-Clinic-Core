@@ -5,7 +5,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.audit.service import audit, snapshot
-from app.auth.dependencies import Actor, require_permission
+from app.auth.dependencies import Actor, require_medical_staff, require_permission
 from app.core.database import get_db
 from app.models.domain import ClinicalDocument, Patient, PatientClinicalSummaryRecord
 from app.schemas.common import ErrorResponse, PatientClinicalSummary, PatientClinicalSummaryRecordOut, PatientClinicalSummaryRecordUpdate
@@ -14,7 +14,12 @@ from app.services.patient_knowledge import GENERIC_OPEN_QUESTION_TEXT, add_knowl
 
 ERROR_RESPONSES = {400: {"model": ErrorResponse}, 401: {"model": ErrorResponse}, 403: {"model": ErrorResponse}, 404: {"model": ErrorResponse}, 409: {"model": ErrorResponse}, 422: {"model": ErrorResponse}}
 
-router = APIRouter(prefix="/api", tags=["patient-clinical-summary"], responses=ERROR_RESPONSES)
+router = APIRouter(
+    prefix="/api",
+    tags=["patient-clinical-summary"],
+    responses=ERROR_RESPONSES,
+    dependencies=[Depends(require_medical_staff)],
+)
 
 
 def patch_model(obj, data: dict) -> None:

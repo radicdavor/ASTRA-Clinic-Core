@@ -1,9 +1,9 @@
 from datetime import date
-from app.models.domain import AuditLog, Patient
+from app.models.domain import AuditLog, Patient, PatientClinicAssociation
 from tests.conftest import login_token
 
 def test_laboratory_order_results_flags_and_review(client, db, auth_setup):
-    patient=Patient(first_name="Demo",last_name="Laboratorij",date_of_birth=date(1980,1,1)); db.add(patient); db.commit()
+    patient=Patient(first_name="Demo",last_name="Laboratorij",date_of_birth=date(1980,1,1)); db.add(patient); db.flush(); db.add(PatientClinicAssociation(patient_id=patient.id,clinic_id=auth_setup["clinic"].id)); db.commit()
     headers={"Authorization":f"Bearer {login_token(client,'admin@test.local')}"}
     created=client.post("/api/laboratory/orders",headers=headers,json={"patient_id":patient.id,"ordered_at":"2026-07-12","external_laboratory":"Demo laboratorij","tests":[{"test_name":"CRP","unit":"mg/L","reference_low":0,"reference_high":5},{"test_name":"KKS"}]})
     assert created.status_code==200

@@ -1107,6 +1107,8 @@ class ApiKeyCreated(ORMModel):
     id: int
     name: str
     scopes: list[str]
+    clinic_id: int | None = None
+    institution_id: int | None = None
     active: bool
     expires_at: DateTimeType | None
     key: str
@@ -1116,6 +1118,8 @@ class ApiKeyOut(ORMModel):
     id: int
     name: str
     scopes: list[str]
+    clinic_id: int | None = None
+    institution_id: int | None = None
     active: bool
     expires_at: DateTimeType | None
     last_used_at: DateTimeType | None = None
@@ -1166,6 +1170,20 @@ class PatientUpdate(BaseModel):
 class PatientOut(PatientCreate, ORMModel):
     id: int
     email: str | None = None
+    created_at: DateTimeType
+    updated_at: DateTimeType
+
+
+class PatientIdentityOut(ORMModel):
+    """Global patient-directory projection. Free-text clinical/operational notes are never identity data."""
+
+    id: int
+    first_name: str
+    last_name: str
+    date_of_birth: DateType | None = None
+    oib: str | None = None
+    email: str | None = None
+    phone: str | None = None
     created_at: DateTimeType
     updated_at: DateTimeType
 

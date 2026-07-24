@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy import select
 from sqlalchemy.orm import Session, joinedload
 
-from app.auth.dependencies import Actor, require_permission
+from app.auth.dependencies import CurrentUserContext, require_active_clinic
 from app.core.database import get_db
 from app.models.domain import JourneyActivity, PatientJourney
 from app.schemas.patient_journeys import JourneyActivityCreate, JourneyActivityOut, JourneyActivityStatusUpdate
@@ -12,11 +12,11 @@ from app.services.journey_activities import create_activity, get_activity, trans
 router = APIRouter(prefix="/api/patient-journeys", tags=["journey-activities"])
 
 
-def get_journey(db: Session, journey_id: int) -> PatientJourney:
+def get_journey(db: Session, journey_id: int, clinic_id: int) -> PatientJourney:
     journey = db.scalar(
         select(PatientJourney)
         .options(joinedload(PatientJourney.appointment))
-        .where(PatientJourney.id == journey_id)
+        .where(PatientJourney.id == journey_id, PatientJourney.clinic_id == clinic_id)
     )
     if not journey:
         raise HTTPException(404, detail="Tijek pacijenta nije pronađen")
@@ -27,9 +27,9 @@ def get_journey(db: Session, journey_id: int) -> PatientJourney:
 def list_activities(
     journey_id: int,
     db: Session = Depends(get_db),
-    actor: Actor = Depends(require_permission("journey.read")),
+    context: CurrentUserContext = Depends(require_active_clinic("journey.read")),
 ):
-    get_journey(db, journey_id)
+    get_journey(db, journey_id, context.active_clinic_id)
     return db.scalars(
         select(JourneyActivity)
         .where(JourneyActivity.journey_id == journey_id)
@@ -43,9 +43,10 @@ def add_activity(
     payload: JourneyActivityCreate,
     request: Request,
     db: Session = Depends(get_db),
-    actor: Actor = Depends(require_permission("appointments.write")),
+    context: CurrentUserContext = Depends(require_active_clinic("appointments.write")),
 ):
-    journey = get_journey(db, journey_id)
+    actor = context.actor
+    journey = get_journey(db, journey_id, context.active_clinic_id)
     activity = create_activity(db, journey, payload.model_dump(), actor, request)
     db.commit()
     db.refresh(activity)
@@ -59,9 +60,10 @@ def change_activity_status(
     payload: JourneyActivityStatusUpdate,
     request: Request,
     db: Session = Depends(get_db),
-    actor: Actor = Depends(require_permission("journey.transition")),
+    context: CurrentUserContext = Depends(require_active_clinic("journey.transition")),
 ):
-    journey = get_journey(db, journey_id)
+    actor = context.actor
+    journey = get_journey(db, journey_id, context.active_clinic_id)
     activity = get_activity(db, journey_id, activity_id)
     transition_activity(db, journey, activity, payload.target_status, payload.reason, actor, request)
     db.commit()

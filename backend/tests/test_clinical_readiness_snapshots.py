@@ -8,6 +8,7 @@ from app.core.security import hash_password
 from app.models.domain import (
     ApiKey,
     AuditLog,
+    ClinicMembership,
     ClinicalEpisode,
     ClinicalPlan,
     ClinicalReadinessSnapshot,
@@ -1605,6 +1606,13 @@ def test_snapshot_permission_matrix_regression(client, db, auth_setup):
         role=supersede_role,
     )
     db.add_all([read_role, write_role, supersede_role, read_user, write_user, supersede_user])
+    db.flush()
+    db.add_all(
+        [
+            ClinicMembership(user_id=user.id, clinic_id=auth_setup["clinic"].id, created_by_user_id=auth_setup["admin"].id)
+            for user in (read_user, write_user, supersede_user)
+        ]
+    )
     db.commit()
 
     appt = appointment(db)

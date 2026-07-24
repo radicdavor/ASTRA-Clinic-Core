@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 
 from app.audit.service import audit, snapshot
 from app.auth.dependencies import Actor
-from app.models.domain import Appointment, ClinicalFormInstance, JourneyActivity, PathologyCase, PathologySpecimen, PatientJourney, ProcedureIntervention, Room
+from app.models.domain import Appointment, ClinicalFormInstance, JourneyActivity, PathologyCase, PathologySpecimen, PatientJourney, ProcedureIntervention, Provider, Room
 from app.services.appointments import validate_appointment_payload
 from app.services.patient_journeys import add_event, transition
 
@@ -62,6 +62,13 @@ def create_activity(
     else:
         dependency = None
 
+    provider = db.get(Provider, data["provider_id"])
+    room = db.get(Room, data["room_id"])
+    if provider is None or room is None:
+        raise HTTPException(404, detail="Lijecnik ili prostorija nisu pronadeni")
+    if provider.clinic_id not in {None, journey.clinic_id} or room.clinic_id != journey.clinic_id:
+        raise HTTPException(403, detail="Aktivnost smije koristiti samo resurse aktivne klinike")
+
     duration = validate_appointment_payload(
         db,
         data["date"],
@@ -74,7 +81,6 @@ def create_activity(
         service_id=data["service_id"],
         patient_id=journey.patient_id,
     )
-    room = db.get(Room, data["room_id"])
     sequence = (db.scalar(select(func.max(JourneyActivity.sequence)).where(JourneyActivity.journey_id == journey.id)) or 0) + 1
     notes = data.pop("notes", None)
     appointment = Appointment(
@@ -82,6 +88,7 @@ def create_activity(
         service_id=data["service_id"],
         provider_id=data["provider_id"],
         room_id=data["room_id"],
+        clinic_id=journey.clinic_id,
         episode_id=journey.appointment.episode_id,
         date=data["date"],
         start_time=data["start_time"],

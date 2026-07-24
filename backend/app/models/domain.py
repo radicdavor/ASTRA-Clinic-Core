@@ -220,6 +220,7 @@ class ClinicalEpisode(TimestampMixin, Base):
     __tablename__ = "clinical_episodes"
     id: Mapped[int] = mapped_column(primary_key=True)
     patient_id: Mapped[int] = mapped_column(ForeignKey("patients.id"), index=True)
+    institution_id: Mapped[int | None] = mapped_column(ForeignKey("institutions.id", ondelete="RESTRICT"), index=True)
     title: Mapped[str] = mapped_column(String(180), index=True)
     episode_type: Mapped[str] = mapped_column(String(80), default="general", index=True)
     status: Mapped[str] = mapped_column(String(40), default="open", index=True)
@@ -231,6 +232,7 @@ class ClinicalEpisode(TimestampMixin, Base):
     owner_provider_id: Mapped[int | None] = mapped_column(ForeignKey("providers.id"))
     created_by: Mapped[int | None] = mapped_column(ForeignKey("users.id"))
     patient: Mapped[Patient] = relationship()
+    institution: Mapped[Institution | None] = relationship()
     owner_provider: Mapped[Provider | None] = relationship()
 
 
@@ -269,6 +271,7 @@ class WorkflowTemplate(TimestampMixin, Base):
 class WorkflowTask(TimestampMixin, Base):
     __tablename__ = "workflow_tasks"
     id: Mapped[int] = mapped_column(primary_key=True)
+    institution_id: Mapped[int | None] = mapped_column(ForeignKey("institutions.id", ondelete="RESTRICT"), index=True)
     title: Mapped[str] = mapped_column(String(180), index=True)
     description: Mapped[str | None] = mapped_column(Text)
     status: Mapped[str] = mapped_column(String(40), default="open", index=True)
@@ -549,6 +552,7 @@ class ClinicalFinding(TimestampMixin, Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     patient_id: Mapped[int] = mapped_column(ForeignKey("patients.id"), index=True)
+    institution_id: Mapped[int | None] = mapped_column(ForeignKey("institutions.id", ondelete="RESTRICT"), index=True)
     source_document_id: Mapped[int | None] = mapped_column(ForeignKey("clinical_documents.id"), index=True)
     source_type: Mapped[str] = mapped_column(String(80), index=True)
     source_label: Mapped[str] = mapped_column(String(220))
@@ -564,6 +568,7 @@ class ClinicalFinding(TimestampMixin, Base):
     schema_version: Mapped[str] = mapped_column(String(80), default="clinical_finding.v1")
 
     patient: Mapped[Patient] = relationship()
+    institution: Mapped[Institution | None] = relationship()
     source_document: Mapped[ClinicalDocument | None] = relationship()
     reviewer: Mapped[User | None] = relationship()
 
@@ -585,6 +590,7 @@ class ClinicalOpenQuestion(TimestampMixin, Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     patient_id: Mapped[int] = mapped_column(ForeignKey("patients.id"), index=True)
+    institution_id: Mapped[int | None] = mapped_column(ForeignKey("institutions.id", ondelete="RESTRICT"), index=True)
     finding_id: Mapped[int | None] = mapped_column(ForeignKey("clinical_findings.id"), index=True)
     source_document_id: Mapped[int | None] = mapped_column(ForeignKey("clinical_documents.id"), index=True)
     source_type: Mapped[str] = mapped_column(String(80), index=True)
@@ -600,6 +606,7 @@ class ClinicalOpenQuestion(TimestampMixin, Base):
     schema_version: Mapped[str] = mapped_column(String(80), default="clinical_open_question.v1")
 
     patient: Mapped[Patient] = relationship()
+    institution: Mapped[Institution | None] = relationship()
     finding: Mapped[ClinicalFinding | None] = relationship()
     source_document: Mapped[ClinicalDocument | None] = relationship()
     reviewer: Mapped[User | None] = relationship()
@@ -1306,6 +1313,7 @@ class LabTemplate(TimestampMixin, Base):
 class LabOrder(TimestampMixin, Base):
     __tablename__ = "lab_orders"
     id: Mapped[int] = mapped_column(primary_key=True)
+    institution_id: Mapped[int | None] = mapped_column(ForeignKey("institutions.id", ondelete="RESTRICT"), index=True)
     patient_id: Mapped[int] = mapped_column(ForeignKey("patients.id"), index=True)
     episode_id: Mapped[int | None] = mapped_column(ForeignKey("clinical_episodes.id"), index=True)
     appointment_id: Mapped[int | None] = mapped_column(ForeignKey("appointments.id"), index=True)
@@ -1352,6 +1360,7 @@ class LabResult(TimestampMixin, Base):
 class Therapy(TimestampMixin, Base):
     __tablename__ = "therapies"
     id: Mapped[int] = mapped_column(primary_key=True)
+    institution_id: Mapped[int | None] = mapped_column(ForeignKey("institutions.id", ondelete="RESTRICT"), index=True)
     patient_id: Mapped[int] = mapped_column(ForeignKey("patients.id"), index=True)
     episode_id: Mapped[int | None] = mapped_column(ForeignKey("clinical_episodes.id"), index=True)
     parent_therapy_id: Mapped[int | None] = mapped_column(ForeignKey("therapies.id"), index=True)
@@ -1379,6 +1388,8 @@ class ApiKey(TimestampMixin, Base):
     name: Mapped[str] = mapped_column(String(120))
     key_hash: Mapped[str] = mapped_column(String(255), unique=True)
     scopes: Mapped[list[str]] = mapped_column(JSON, default=list)
+    clinic_id: Mapped[int | None] = mapped_column(ForeignKey("clinics.id", ondelete="RESTRICT"), index=True)
+    institution_id: Mapped[int | None] = mapped_column(ForeignKey("institutions.id", ondelete="RESTRICT"), index=True)
     active: Mapped[bool] = mapped_column(Boolean, default=True)
     expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     last_used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
@@ -1387,6 +1398,9 @@ class ApiKey(TimestampMixin, Base):
 class AuditLog(Base):
     __tablename__ = "audit_logs"
     id: Mapped[int] = mapped_column(primary_key=True)
+    scope_type: Mapped[str | None] = mapped_column(String(40), index=True)
+    clinic_id: Mapped[int | None] = mapped_column(ForeignKey("clinics.id", ondelete="RESTRICT"), index=True)
+    institution_id: Mapped[int | None] = mapped_column(ForeignKey("institutions.id", ondelete="RESTRICT"), index=True)
     actor_type: Mapped[str] = mapped_column(String(40), default="system", index=True)
     actor_user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"))
     actor_api_key_id: Mapped[int | None] = mapped_column(ForeignKey("api_keys.id"))

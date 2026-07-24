@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 from app.core.database import get_db
 from app.core.config import get_settings
 from app.core.security import create_access_token, verify_password
-from app.auth.dependencies import Actor, active_clinic_memberships, get_current_actor, hash_api_key, require_permission
+from app.auth.dependencies import Actor, CurrentUserContext, active_clinic_memberships, get_current_actor, hash_api_key, require_active_clinic, require_permission
 from app.models.domain import ApiKey, User
 from app.schemas.common import ApiKeyCreate, ApiKeyCreated, ApiKeyOut, BrowserSessionResponse, ErrorResponse, LoginRequest, TokenResponse
 from app.services.sessions import (
@@ -166,28 +166,28 @@ def my_clinics(db: Session = Depends(get_db), actor: Actor = Depends(get_current
 
 
 @router.post("/api-keys", response_model=ApiKeyCreated)
-def create_api_key(payload: ApiKeyCreate, db: Session = Depends(get_db), actor: Actor = Depends(require_permission("admin.manage_users"))):
+def create_api_key(payload: ApiKeyCreate, db: Session = Depends(get_db), context: CurrentUserContext = Depends(require_active_clinic("admin.manage_users"))):
     raw_key = "astra_" + token_urlsafe(32)
-    api_key = ApiKey(name=payload.name, key_hash=hash_api_key(raw_key), scopes=payload.scopes, expires_at=payload.expires_at, active=True)
+    api_key = ApiKey(name=payload.name, key_hash=hash_api_key(raw_key), scopes=payload.scopes, expires_at=payload.expires_at, active=True, clinic_id=context.active_clinic_id, institution_id=context.active_clinic.institution_id)
     db.add(api_key)
     db.commit()
     db.refresh(api_key)
-    return ApiKeyCreated(id=api_key.id, name=api_key.name, scopes=api_key.scopes, active=api_key.active, expires_at=api_key.expires_at, key=raw_key)
+    return ApiKeyCreated(id=api_key.id, name=api_key.name, scopes=api_key.scopes, clinic_id=api_key.clinic_id, institution_id=api_key.institution_id, active=api_key.active, expires_at=api_key.expires_at, key=raw_key)
 
 
 @router.get("/api-key-scopes")
-def api_key_scopes(actor: Actor = Depends(require_permission("admin.manage_users"))):
+def api_key_scopes(context: CurrentUserContext = Depends(require_active_clinic("admin.manage_users"))):
     return API_KEY_SCOPES
 
 
 @router.get("/api-keys", response_model=list[ApiKeyOut])
-def list_api_keys(db: Session = Depends(get_db), actor: Actor = Depends(require_permission("admin.manage_users"))):
-    return db.scalars(select(ApiKey).order_by(ApiKey.created_at.desc())).all()
+def list_api_keys(db: Session = Depends(get_db), context: CurrentUserContext = Depends(require_active_clinic("admin.manage_users"))):
+    return db.scalars(select(ApiKey).where(ApiKey.clinic_id == context.active_clinic_id).order_by(ApiKey.created_at.desc())).all()
 
 
 @router.patch("/api-keys/{api_key_id}/deactivate", response_model=ApiKeyOut)
-def deactivate_api_key(api_key_id: int, db: Session = Depends(get_db), actor: Actor = Depends(require_permission("admin.manage_users"))):
-    api_key = db.get(ApiKey, api_key_id)
+def deactivate_api_key(api_key_id: int, db: Session = Depends(get_db), context: CurrentUserContext = Depends(require_active_clinic("admin.manage_users"))):
+    api_key = db.scalar(select(ApiKey).where(ApiKey.id == api_key_id, ApiKey.clinic_id == context.active_clinic_id))
     if not api_key:
         raise HTTPException(status_code=404, detail="API kljuc nije pronaden")
     api_key.active = False

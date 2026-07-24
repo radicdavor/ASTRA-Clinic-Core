@@ -85,6 +85,7 @@ def draft_invoice_from_appointment(db: Session, appointment_id: int) -> tuple[In
         raise HTTPException(status_code=404, detail="Usluga nije pronadena")
     invoice = Invoice(
         patient_id=appointment.patient_id,
+        clinic_id=appointment.clinic_id,
         appointment_id=appointment.id,
         invoice_number=draft_invoice_number(),
         status="draft",
@@ -114,7 +115,7 @@ def draft_invoice_from_journey(db: Session, journey: PatientJourney) -> tuple[In
     activities = db.scalars(select(JourneyActivity).where(JourneyActivity.journey_id == journey.id, JourneyActivity.status == "completed").order_by(JourneyActivity.sequence)).all()
     if not activities:
         raise HTTPException(409, detail="Dolazak nema dovršenu aktivnost za naplatu")
-    invoice = Invoice(patient_id=journey.patient_id, appointment_id=journey.appointment_id, journey_id=journey.id, invoice_number=draft_invoice_number(), status="draft", payment_status="unpaid", total_amount=Decimal("0"))
+    invoice = Invoice(patient_id=journey.patient_id, clinic_id=journey.clinic_id, appointment_id=journey.appointment_id, journey_id=journey.id, invoice_number=draft_invoice_number(), status="draft", payment_status="unpaid", total_amount=Decimal("0"))
     db.add(invoice)
     db.flush()
     for activity in activities:

@@ -1,6 +1,6 @@
 from app.models.domain import AuditLog,JourneyEvent
 from tests.conftest import login_token
-from tests.factories import appointment,patient,provider,room,service
+from tests.factories import appointment,default_clinic,patient,provider,room,service
 
 def headers(client,email="admin@test.local"): return {"Authorization":f"Bearer {login_token(client,email)}"}
 
@@ -43,6 +43,7 @@ def test_manual_web_and_ai_appointment_routes_converge_to_journeys(client,db,aut
     payloads=[]
     for index in range(3):
         p=patient(db,f"Channel{index}");pr=provider(db,f"dr. Channel {index}");rm=room(db,f"Channel room {index}");sv=service(db,f"Channel service {index}")
+        rm.clinic_id=default_clinic(db).id;db.flush()
         payloads.append({"patient_id":p.id,"service_id":sv.id,"provider_id":pr.id,"room_id":rm.id,"date":"2026-07-06","start_time":f"{9+index:02d}:00","end_time":f"{9+index:02d}:30","duration_minutes":30,"status":"scheduled","source":"manual"})
     routes=("/api/appointments","/api/intake/web/appointments","/api/ai/appointments/create")
     for route,payload in zip(routes,payloads): assert client.post(route,headers=headers(client),json=payload).status_code==200

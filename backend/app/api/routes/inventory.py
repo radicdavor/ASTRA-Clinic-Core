@@ -5,7 +5,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session, joinedload, selectinload
 
 from app.audit.service import audit, snapshot
-from app.auth.dependencies import Actor, require_permission
+from app.auth.dependencies import Actor, CurrentUserContext, get_scoped_patient, require_active_clinic, require_permission
 from app.core.database import get_db
 from app.models.domain import (
     Appointment,
@@ -64,11 +64,11 @@ from app.services.billing import (
     draft_invoice_number,
     draft_invoice_from_appointment as draft_invoice_from_appointment_service,
     issue_invoice,
-    load_invoice,
     mark_invoice_paid,
     record_payment,
     update_invoice_line as update_invoice_line_service,
 )
+from app.services.billing_access import active_clinic_invoice_statement, get_active_clinic_appointment, get_active_clinic_invoice
 from app.services.procurement import (
     receive_purchase_order as receive_purchase_order_service,
     recalculate_purchase_order_total,
@@ -408,35 +408,45 @@ def reorder_suggestions(db: Session = Depends(get_db), actor: Actor = Depends(re
 
 
 @router.get("/invoices", response_model=list[InvoiceOut])
-def invoices(db: Session = Depends(get_db), actor: Actor = Depends(require_permission("billing.read"))):
-    return db.scalars(select(Invoice).options(selectinload(Invoice.lines), selectinload(Invoice.payments)).order_by(Invoice.invoice_date.desc())).all()
+def invoices(db: Session = Depends(get_db), context: CurrentUserContext = Depends(require_active_clinic("billing.read"))):
+    return db.scalars(active_clinic_invoice_statement(context).order_by(Invoice.invoice_date.desc())).all()
 
 
 @router.post("/invoices", response_model=InvoiceOut)
-def create_invoice(payload: InvoiceCreate, request: Request, db: Session = Depends(get_db), actor: Actor = Depends(require_permission("billing.write"))):
+def create_invoice(payload: InvoiceCreate, request: Request, db: Session = Depends(get_db), context: CurrentUserContext = Depends(require_active_clinic("billing.write"))):
+    get_scoped_patient(db, payload.patient_id, context)
+    if payload.appointment_id is not None:
+        appointment = get_active_clinic_appointment(db, payload.appointment_id, context)
+        if appointment.patient_id != payload.patient_id:
+            raise HTTPException(422, detail="Termin ne pripada odabranom pacijentu")
     data = payload.model_dump(exclude_none=True)
-    data["invoice_number"] = draft_invoice_number()
+    data.update(
+        clinic_id=context.active_clinic_id,
+        invoice_number=draft_invoice_number(),
+        status="draft",
+        payment_status="unpaid",
+    )
     invoice = Invoice(**data)
     db.add(invoice)
     db.flush()
-    audit_actor(db, "create", "Invoice", invoice.id, invoice.invoice_number, actor, request, None, snapshot(invoice))
+    audit_actor(db, "create", "Invoice", invoice.id, invoice.invoice_number, context.actor, request, None, snapshot(invoice))
     db.commit()
     return invoice
 
 
 @router.get("/invoices/{invoice_id}", response_model=InvoiceOut)
-def invoice(invoice_id: int, db: Session = Depends(get_db), actor: Actor = Depends(require_permission("billing.read"))):
-    invoice_obj = db.scalar(select(Invoice).options(selectinload(Invoice.lines), selectinload(Invoice.payments)).where(Invoice.id == invoice_id))
-    if not invoice_obj:
-        raise HTTPException(404, detail="Racun nije pronaden")
-    return invoice_obj
+def invoice(invoice_id: int, db: Session = Depends(get_db), context: CurrentUserContext = Depends(require_active_clinic("billing.read"))):
+    return get_active_clinic_invoice(db, invoice_id, context)
 
 
 @router.patch("/invoices/{invoice_id}", response_model=InvoiceOut)
-def update_invoice(invoice_id: int, payload: InvoiceCreate, request: Request, db: Session = Depends(get_db), actor: Actor = Depends(require_permission("billing.write"))):
-    invoice_obj = db.get(Invoice, invoice_id)
-    if not invoice_obj:
-        raise HTTPException(404, detail="Racun nije pronaden")
+def update_invoice(invoice_id: int, payload: InvoiceCreate, request: Request, db: Session = Depends(get_db), context: CurrentUserContext = Depends(require_active_clinic("billing.write"))):
+    invoice_obj = get_active_clinic_invoice(db, invoice_id, context)
+    requested_data = payload.model_dump(exclude_unset=True)
+    if "patient_id" in requested_data and requested_data["patient_id"] != invoice_obj.patient_id:
+        raise HTTPException(409, detail="Pacijent računa nije promjenjiv")
+    if "appointment_id" in requested_data and requested_data["appointment_id"] != invoice_obj.appointment_id:
+        raise HTTPException(409, detail="Termin računa nije promjenjiv")
     if invoice_obj.status != "draft":
         allowed = {"notes", "operator", "business_unit", "register_id", "vat_id", "fiscalization_status", "fiscalization_provider", "fiscalization_reference", "fiscalization_message", "fiscalized_at"}
         requested = set(payload.model_dump(exclude_unset=True).keys())
@@ -445,60 +455,60 @@ def update_invoice(invoice_id: int, payload: InvoiceCreate, request: Request, db
     before = snapshot(invoice_obj)
     update_from_payload(invoice_obj, payload)
     db.flush()
-    audit_actor(db, "update", "Invoice", invoice_obj.id, invoice_obj.invoice_number, actor, request, before, snapshot(invoice_obj))
+    audit_actor(db, "update", "Invoice", invoice_obj.id, invoice_obj.invoice_number, context.actor, request, before, snapshot(invoice_obj))
     db.commit()
     return invoice_obj
 
 
 @router.post("/appointments/{appointment_id}/draft-invoice", response_model=InvoiceOut)
-def draft_invoice_from_appointment(appointment_id: int, request: Request, db: Session = Depends(get_db), actor: Actor = Depends(require_permission("billing.write"))):
+def draft_invoice_from_appointment(appointment_id: int, request: Request, db: Session = Depends(get_db), context: CurrentUserContext = Depends(require_active_clinic("billing.write"))):
+    get_active_clinic_appointment(db, appointment_id, context)
     invoice_obj, line, created = draft_invoice_from_appointment_service(db, appointment_id)
+    if invoice_obj.clinic_id != context.active_clinic_id:
+        raise HTTPException(404, detail="Račun nije pronađen")
     if not created:
         return invoice_obj
-    audit_actor(db, "create", "Invoice", invoice_obj.id, "Nacrt racuna iz termina", actor, request, None, snapshot(invoice_obj))
+    audit_actor(db, "create", "Invoice", invoice_obj.id, "Nacrt racuna iz termina", context.actor, request, None, snapshot(invoice_obj))
     if line:
-        audit_actor(db, "create", "InvoiceLine", line.id, "Stavka usluge iz termina", actor, request, None, snapshot(line))
+        audit_actor(db, "create", "InvoiceLine", line.id, "Stavka usluge iz termina", context.actor, request, None, snapshot(line))
     db.commit()
-    return db.scalar(select(Invoice).options(selectinload(Invoice.lines), selectinload(Invoice.payments)).where(Invoice.id == invoice_obj.id))
+    return get_active_clinic_invoice(db, invoice_obj.id, context)
 
 
 @router.post("/invoices/{invoice_id}/issue", response_model=InvoiceIssueOut)
-def issue_invoice_endpoint(invoice_id: int, request: Request, db: Session = Depends(get_db), actor: Actor = Depends(require_permission("billing.write"))):
-    invoice_obj = load_invoice(db, invoice_id)
-    if not invoice_obj:
-        raise HTTPException(404, detail="Racun nije pronaden")
+def issue_invoice_endpoint(invoice_id: int, request: Request, db: Session = Depends(get_db), context: CurrentUserContext = Depends(require_active_clinic("billing.write"))):
+    invoice_obj = get_active_clinic_invoice(db, invoice_id, context)
     before = snapshot(invoice_obj)
     issue_invoice(db, invoice_obj)
     db.flush()
-    audit_actor(db, "update", "Invoice", invoice_obj.id, "Izdan racun", actor, request, before, snapshot(invoice_obj))
-    audit_actor(db, "create", "FiscalizationAttempt", invoice_obj.id, "Noop fiskalizacija racuna", actor, request, None, {"provider": invoice_obj.fiscalization_provider, "status": invoice_obj.fiscalization_status, "reference": invoice_obj.fiscalization_reference, "message": invoice_obj.fiscalization_message})
+    audit_actor(db, "update", "Invoice", invoice_obj.id, "Izdan racun", context.actor, request, before, snapshot(invoice_obj))
+    audit_actor(db, "create", "FiscalizationAttempt", invoice_obj.id, "Noop fiskalizacija racuna", context.actor, request, None, {"provider": invoice_obj.fiscalization_provider, "status": invoice_obj.fiscalization_status, "reference": invoice_obj.fiscalization_reference, "message": invoice_obj.fiscalization_message})
     db.commit()
-    return load_invoice(db, invoice_id)
+    return get_active_clinic_invoice(db, invoice_id, context)
 
 
 @router.get("/invoices/{invoice_id}/lines", response_model=list[InvoiceLineOut])
-def invoice_lines(invoice_id: int, db: Session = Depends(get_db), actor: Actor = Depends(require_permission("billing.read"))):
+def invoice_lines(invoice_id: int, db: Session = Depends(get_db), context: CurrentUserContext = Depends(require_active_clinic("billing.read"))):
+    get_active_clinic_invoice(db, invoice_id, context)
     return db.scalars(select(InvoiceLine).where(InvoiceLine.invoice_id == invoice_id).order_by(InvoiceLine.id)).all()
 
 
 @router.post("/invoices/{invoice_id}/lines", response_model=InvoiceLineOut)
-def create_invoice_line(invoice_id: int, payload: InvoiceLineCreate, request: Request, db: Session = Depends(get_db), actor: Actor = Depends(require_permission("billing.write"))):
-    invoice_obj = db.scalar(select(Invoice).options(selectinload(Invoice.lines), selectinload(Invoice.payments)).where(Invoice.id == invoice_id))
-    if not invoice_obj:
-        raise HTTPException(404, detail="Racun nije pronaden")
+def create_invoice_line(invoice_id: int, payload: InvoiceLineCreate, request: Request, db: Session = Depends(get_db), context: CurrentUserContext = Depends(require_active_clinic("billing.write"))):
+    invoice_obj = get_active_clinic_invoice(db, invoice_id, context)
     before = snapshot(invoice_obj)
     line = add_invoice_line(invoice_obj, payload)
     db.add(line)
     db.flush()
-    audit_actor(db, "create", "InvoiceLine", line.id, "Dodana stavka racuna", actor, request, None, snapshot(line))
-    audit_actor(db, "update", "Invoice", invoice_obj.id, "Preracunat racun", actor, request, before, snapshot(invoice_obj))
+    audit_actor(db, "create", "InvoiceLine", line.id, "Dodana stavka racuna", context.actor, request, None, snapshot(line))
+    audit_actor(db, "update", "Invoice", invoice_obj.id, "Preracunat racun", context.actor, request, before, snapshot(invoice_obj))
     db.commit()
     return line
 
 
 @router.patch("/invoices/{invoice_id}/lines/{line_id}", response_model=InvoiceLineOut)
-def update_invoice_line(invoice_id: int, line_id: int, payload: InvoiceLineUpdate, request: Request, db: Session = Depends(get_db), actor: Actor = Depends(require_permission("billing.write"))):
-    invoice_obj = db.scalar(select(Invoice).options(selectinload(Invoice.lines), selectinload(Invoice.payments)).where(Invoice.id == invoice_id))
+def update_invoice_line(invoice_id: int, line_id: int, payload: InvoiceLineUpdate, request: Request, db: Session = Depends(get_db), context: CurrentUserContext = Depends(require_active_clinic("billing.write"))):
+    invoice_obj = get_active_clinic_invoice(db, invoice_id, context)
     line = db.get(InvoiceLine, line_id)
     if not invoice_obj or not line or line.invoice_id != invoice_id:
         raise HTTPException(404, detail="Stavka racuna nije pronadena")
@@ -506,15 +516,15 @@ def update_invoice_line(invoice_id: int, line_id: int, payload: InvoiceLineUpdat
     before_invoice = snapshot(invoice_obj)
     update_invoice_line_service(invoice_obj, line, payload)
     db.flush()
-    audit_actor(db, "update", "InvoiceLine", line.id, "Azurirana stavka racuna", actor, request, before, snapshot(line))
-    audit_actor(db, "update", "Invoice", invoice_obj.id, "Preracunat racun", actor, request, before_invoice, snapshot(invoice_obj))
+    audit_actor(db, "update", "InvoiceLine", line.id, "Azurirana stavka racuna", context.actor, request, before, snapshot(line))
+    audit_actor(db, "update", "Invoice", invoice_obj.id, "Preracunat racun", context.actor, request, before_invoice, snapshot(invoice_obj))
     db.commit()
     return line
 
 
 @router.delete("/invoices/{invoice_id}/lines/{line_id}")
-def delete_invoice_line(invoice_id: int, line_id: int, request: Request, db: Session = Depends(get_db), actor: Actor = Depends(require_permission("billing.write"))):
-    invoice_obj = db.scalar(select(Invoice).options(selectinload(Invoice.lines), selectinload(Invoice.payments)).where(Invoice.id == invoice_id))
+def delete_invoice_line(invoice_id: int, line_id: int, request: Request, db: Session = Depends(get_db), context: CurrentUserContext = Depends(require_active_clinic("billing.write"))):
+    invoice_obj = get_active_clinic_invoice(db, invoice_id, context)
     line = db.get(InvoiceLine, line_id)
     if not invoice_obj or not line or line.invoice_id != invoice_id:
         raise HTTPException(404, detail="Stavka racuna nije pronadena")
@@ -523,46 +533,43 @@ def delete_invoice_line(invoice_id: int, line_id: int, request: Request, db: Ses
     delete_invoice_line_service(invoice_obj, line)
     db.delete(line)
     db.flush()
-    audit_actor(db, "delete", "InvoiceLine", line_id, "Obrisana stavka racuna", actor, request, before, None)
-    audit_actor(db, "update", "Invoice", invoice_obj.id, "Preracunat racun", actor, request, before_invoice, snapshot(invoice_obj))
+    audit_actor(db, "delete", "InvoiceLine", line_id, "Obrisana stavka racuna", context.actor, request, before, None)
+    audit_actor(db, "update", "Invoice", invoice_obj.id, "Preracunat racun", context.actor, request, before_invoice, snapshot(invoice_obj))
     db.commit()
     return {"ok": True}
 
 
 @router.post("/invoices/{invoice_id}/payments", response_model=PaymentTransactionOut)
-def create_payment(invoice_id: int, payload: PaymentTransactionCreate, request: Request, db: Session = Depends(get_db), actor: Actor = Depends(require_permission("billing.mark_paid"))):
-    invoice_obj = db.scalar(select(Invoice).options(selectinload(Invoice.lines), selectinload(Invoice.payments)).where(Invoice.id == invoice_id))
-    if not invoice_obj:
-        raise HTTPException(404, detail="Racun nije pronaden")
+def create_payment(invoice_id: int, payload: PaymentTransactionCreate, request: Request, db: Session = Depends(get_db), context: CurrentUserContext = Depends(require_active_clinic("billing.mark_paid"))):
+    invoice_obj = get_active_clinic_invoice(db, invoice_id, context)
     before = snapshot(invoice_obj)
-    payment = record_payment(invoice_obj, payload, actor.user_id)
+    payment = record_payment(invoice_obj, payload, context.actor.user_id)
     db.add(payment)
     db.flush()
-    audit_actor(db, "create", "PaymentTransaction", payment.id, "Evidentirano placanje", actor, request, None, snapshot(payment))
-    audit_actor(db, "update", "Invoice", invoice_obj.id, "Azuriran status placanja", actor, request, before, snapshot(invoice_obj))
+    audit_actor(db, "create", "PaymentTransaction", payment.id, "Evidentirano placanje", context.actor, request, None, snapshot(payment))
+    audit_actor(db, "update", "Invoice", invoice_obj.id, "Azuriran status placanja", context.actor, request, before, snapshot(invoice_obj))
     db.commit()
     return payment
 
 
 @router.get("/invoices/{invoice_id}/payments", response_model=list[PaymentTransactionOut])
-def invoice_payments(invoice_id: int, db: Session = Depends(get_db), actor: Actor = Depends(require_permission("billing.read"))):
+def invoice_payments(invoice_id: int, db: Session = Depends(get_db), context: CurrentUserContext = Depends(require_active_clinic("billing.read"))):
+    get_active_clinic_invoice(db, invoice_id, context)
     return db.scalars(select(PaymentTransaction).where(PaymentTransaction.invoice_id == invoice_id).order_by(PaymentTransaction.paid_at)).all()
 
 
 @router.post("/invoices/{invoice_id}/mark-paid", response_model=InvoiceOut)
-def mark_paid(invoice_id: int, request: Request, payment_method: str | None = None, db: Session = Depends(get_db), actor: Actor = Depends(require_permission("billing.mark_paid"))):
-    invoice_obj = db.scalar(select(Invoice).options(selectinload(Invoice.lines), selectinload(Invoice.payments)).where(Invoice.id == invoice_id))
-    if not invoice_obj:
-        raise HTTPException(404, detail="Racun nije pronaden")
+def mark_paid(invoice_id: int, request: Request, payment_method: str | None = None, db: Session = Depends(get_db), context: CurrentUserContext = Depends(require_active_clinic("billing.mark_paid"))):
+    invoice_obj = get_active_clinic_invoice(db, invoice_id, context)
     before = snapshot(invoice_obj)
-    payment = mark_invoice_paid(invoice_obj, payment_method, actor.user_id)
+    payment = mark_invoice_paid(invoice_obj, payment_method, context.actor.user_id)
     if payment:
         db.add(payment)
         db.flush()
-        audit_actor(db, "create", "PaymentTransaction", payment.id, "Evidentirano placanje", actor, request, None, snapshot(payment))
-    audit_actor(db, "update", "Invoice", invoice_obj.id, "Oznaceno kao placeno", actor, request, before, snapshot(invoice_obj))
+        audit_actor(db, "create", "PaymentTransaction", payment.id, "Evidentirano placanje", context.actor, request, None, snapshot(payment))
+    audit_actor(db, "update", "Invoice", invoice_obj.id, "Oznaceno kao placeno", context.actor, request, before, snapshot(invoice_obj))
     db.commit()
-    return load_invoice(db, invoice_id)
+    return get_active_clinic_invoice(db, invoice_id, context)
 
 
 @router.get("/services/{service_id}/materials")
@@ -606,10 +613,8 @@ def delete_service_material(service_id: int, template_id: int, request: Request,
 
 
 @router.get("/appointments/{appointment_id}/suggest-material-consumption")
-def suggest_material_consumption(appointment_id: int, db: Session = Depends(get_db), actor: Actor = Depends(require_permission("appointments.read"))):
-    appointment = db.get(Appointment, appointment_id)
-    if not appointment:
-        raise HTTPException(404, detail="Termin nije pronaden")
+def suggest_material_consumption(appointment_id: int, db: Session = Depends(get_db), context: CurrentUserContext = Depends(require_active_clinic("appointments.read"))):
+    appointment = get_active_clinic_appointment(db, appointment_id, context)
     templates = db.scalars(select(ServiceMaterialTemplate).options(joinedload(ServiceMaterialTemplate.item)).where(ServiceMaterialTemplate.service_id == appointment.service_id)).all()
     result = []
     for template in templates:
@@ -631,22 +636,20 @@ def suggest_material_consumption(appointment_id: int, db: Session = Depends(get_
 
 
 @router.post("/appointments/{appointment_id}/consume-materials")
-def consume_materials(appointment_id: int, request: Request, payload: AppointmentMaterialConsumptionRequest | None = None, db: Session = Depends(get_db), actor: Actor = Depends(require_permission("inventory.write"))):
-    appointment = db.get(Appointment, appointment_id)
-    if not appointment:
-        raise HTTPException(404, detail="Termin nije pronaden")
+def consume_materials(appointment_id: int, request: Request, payload: AppointmentMaterialConsumptionRequest | None = None, db: Session = Depends(get_db), context: CurrentUserContext = Depends(require_active_clinic("inventory.write"))):
+    actor = context.actor
+    appointment = get_active_clinic_appointment(db, appointment_id, context)
     movements = consume_appointment_materials(db, appointment, payload, actor, request)
     db.commit()
     return {"movements": movements}
 
 
 @router.post("/appointments/{appointment_id}/complete-with-consumption")
-def complete_with_consumption(appointment_id: int, request: Request, payload: AppointmentMaterialConsumptionRequest | None = None, db: Session = Depends(get_db), actor: Actor = Depends(require_permission("appointments.write"))):
+def complete_with_consumption(appointment_id: int, request: Request, payload: AppointmentMaterialConsumptionRequest | None = None, db: Session = Depends(get_db), context: CurrentUserContext = Depends(require_active_clinic("appointments.write"))):
+    actor = context.actor
     if "inventory.write" not in actor.permissions:
         raise HTTPException(403, detail="Nedostaje dozvola: inventory.write")
-    appointment = db.get(Appointment, appointment_id)
-    if not appointment:
-        raise HTTPException(404, detail="Termin nije pronaden")
+    appointment = get_active_clinic_appointment(db, appointment_id, context)
     before = snapshot(appointment)
     consume_appointment_materials(db, appointment, payload, actor, request)
     appointment.status = "completed"

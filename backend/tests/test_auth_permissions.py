@@ -30,6 +30,8 @@ def test_admin_can_create_api_key_raw_key_is_returned_once_and_hash_is_stored(cl
     assert "key_hash" not in body
     assert stored.key_hash != body["key"]
     assert stored.key_hash == hash_api_key(body["key"])
+    assert stored.clinic_id == auth_setup["clinic"].id
+    assert stored.institution_id == auth_setup["clinic"].institution_id
 
     list_response = client.get("/auth/api-keys", headers={"Authorization": f"Bearer {token}"})
     assert list_response.status_code == 200
@@ -98,7 +100,7 @@ def test_ai_api_key_cannot_adjust_stock_or_pay_invoice(client, db, auth_setup):
 
 def test_api_key_allowed_action_is_audited_as_api_key(client, db, auth_setup):
     raw_key = "astra_patient_key"
-    api_key = ApiKey(name="AI patients", key_hash=hash_api_key(raw_key), scopes=["ai.patients.create"], active=True)
+    api_key = ApiKey(name="AI patients", key_hash=hash_api_key(raw_key), scopes=["ai.patients.create"], clinic_id=auth_setup["clinic"].id, institution_id=auth_setup["clinic"].institution_id, active=True)
     db.add(api_key)
     db.flush()
 
@@ -110,3 +112,37 @@ def test_api_key_allowed_action_is_audited_as_api_key(client, db, auth_setup):
 
     assert response.status_code == 200
     assert any(log.actor_type == "api_key" and log.actor_api_key_id == api_key.id for log in db.query(AuditLog).all())
+
+
+def test_legacy_unscoped_api_key_is_denied_patient_access(client, db, auth_setup):
+    raw_key = "astra_unscoped_patient_key"
+    db.add(ApiKey(name="Unscoped AI", key_hash=hash_api_key(raw_key), scopes=["ai.patients.create"], active=True))
+    db.flush()
+
+    response = client.post(
+        "/api/ai/patients/create",
+        headers={"X-ASTRA-API-Key": raw_key},
+        json={"first_name": "Denied", "last_name": "Unscoped"},
+    )
+
+    assert response.status_code == 403
+
+
+def test_scoped_api_key_cannot_select_another_clinic(client, db, auth_setup):
+    raw_key = "astra_scoped_scheduler_key"
+    db.add(ApiKey(
+        name="Scoped scheduler",
+        key_hash=hash_api_key(raw_key),
+        scopes=["ai.free_slots.read"],
+        clinic_id=auth_setup["clinic"].id,
+        institution_id=auth_setup["clinic"].institution_id,
+        active=True,
+    ))
+    db.flush()
+
+    response = client.get(
+        "/api/ai/today",
+        headers={"X-ASTRA-API-Key": raw_key, "X-Clinic-Id": str(auth_setup["clinic"].id + 999)},
+    )
+
+    assert response.status_code == 403

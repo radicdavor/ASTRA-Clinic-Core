@@ -87,6 +87,19 @@ def actor_institution_ids(db: Session, actor: Actor) -> set[int]:
 
 
 def actor_institution_scope(db: Session, actor: Actor) -> ActorInstitutionScope:
+    if actor.api_key:
+        if actor.api_key.clinic_id is None or actor.api_key.institution_id is None:
+            return ActorInstitutionScope((), frozenset(), frozenset())
+        clinic = db.scalar(
+            select(Clinic).where(
+                Clinic.id == actor.api_key.clinic_id,
+                Clinic.institution_id == actor.api_key.institution_id,
+                Clinic.active.is_(True),
+            )
+        )
+        if clinic is None:
+            return ActorInstitutionScope((), frozenset(), frozenset())
+        return ActorInstitutionScope((clinic.id,), frozenset({clinic.institution_id}), frozenset({clinic.institution_key}))
     if not actor.user:
         return ActorInstitutionScope((), frozenset(), frozenset())
     memberships = active_clinic_memberships(db, actor.user.id)

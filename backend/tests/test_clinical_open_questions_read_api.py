@@ -2,7 +2,7 @@ from app.auth.dependencies import hash_api_key
 from app.models.domain import ApiKey, AuditLog, ClinicalEpisode, ClinicalFinding, ClinicalOpenQuestion, ClinicalPlan
 from app.services.seed import PERMISSIONS
 from tests.conftest import login_token
-from tests.factories import patient
+from tests.factories import default_clinic, patient
 
 
 FORBIDDEN_RESPONSE_FIELDS = {
@@ -34,8 +34,10 @@ def question_detail_endpoint(client, patient_id, question_id, headers):
 
 
 def create_finding(db, patient_obj, **overrides):
+    clinic = default_clinic(db)
     payload = {
         "patient_id": patient_obj.id,
+        "institution_id": clinic.institution_id if clinic else None,
         "source_document_id": None,
         "source_type": "clinical_document",
         "source_label": "External pathology report",
@@ -57,8 +59,10 @@ def create_finding(db, patient_obj, **overrides):
 
 
 def create_question(db, patient_obj, **overrides):
+    clinic = default_clinic(db)
     payload = {
         "patient_id": patient_obj.id,
+        "institution_id": clinic.institution_id if clinic else None,
         "finding_id": None,
         "source_document_id": None,
         "source_type": "clinical_document",

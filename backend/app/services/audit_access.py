@@ -238,6 +238,8 @@ def _find_duplicate_interaction(
             AuditLog.actor_type == context.actor.actor_type,
             AuditLog.actor_user_id == context.actor.user_id,
             AuditLog.actor_api_key_id == context.actor.api_key_id,
+            AuditLog.scope_type == "clinic",
+            AuditLog.clinic_id == context.active_clinic_id,
         )
         .order_by(AuditLog.id.desc())
         .limit(20)
@@ -282,6 +284,9 @@ def audit_sensitive_access(
         None,
         safe_payload,
         request,
+        scope_type="clinic",
+        clinic_id=clinic_id,
+        institution_id=context.active_clinic.institution_id if context.active_clinic else None,
     )
     db.flush()
     return db.scalars(select(AuditLog).order_by(AuditLog.id.desc()).limit(1)).one()

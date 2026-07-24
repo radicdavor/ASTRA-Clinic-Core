@@ -4,11 +4,11 @@ import pytest
 from fastapi import HTTPException
 from sqlalchemy import select
 
-from app.models.domain import Appointment, Clinic, ClinicMembership, Permission, Role, User
+from app.models.domain import Appointment, Clinic, ClinicMembership, PatientJourney, Permission, Role, User
 from app.core.security import hash_password
 from app.services.appointments import APPOINTMENT_STATUSES_BLOCKING_PATIENT_TIME, calculate_duration_minutes, validate_appointment_payload
 from tests.conftest import login_token
-from tests.factories import appointment, patient, provider, room, service
+from tests.factories import appointment, episode, patient, provider, room, service
 
 
 def appointment_payload(patient_obj, provider_obj, room_obj, service_obj, start="09:15", end="09:45", status="scheduled"):
@@ -377,7 +377,7 @@ def test_create_appointment_api_allows_touching_patient_appointment(client, db, 
     assert response.status_code == 200
 
 
-def test_update_appointment_api_blocks_patient_overlap(client, db, auth_setup):
+def test_update_appointment_api_rejects_patient_reassignment_before_overlap_evaluation(client, db, auth_setup):
     existing = appointment(db)
     candidate = appointment(
         db,
@@ -395,7 +395,54 @@ def test_update_appointment_api_blocks_patient_overlap(client, db, auth_setup):
     )
 
     assert response.status_code == 409
-    assert response.json()["detail"]["code"] == "patient_appointment_overlap"
+    assert "Pacijenta nije moguce promijeniti" in response.json()["detail"]
+
+
+def test_update_appointment_rejects_patient_reassignment_even_without_existing_links(client, db, auth_setup):
+    original_patient = patient(db, first_name="Immutable")
+    replacement_patient = patient(db, first_name="Other")
+    existing = appointment(db, patient_obj=original_patient)
+    token = login_token(client, "admin@test.local")
+
+    response = client.patch(
+        f"/api/appointments/{existing.id}",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"patient_id": replacement_patient.id},
+    )
+
+    assert response.status_code == 409
+    db.refresh(existing)
+    assert existing.patient_id == original_patient.id
+
+
+def test_update_appointment_cannot_change_patient_of_linked_episode_or_journey(client, db, auth_setup):
+    original_patient = patient(db, first_name="Original")
+    replacement_patient = patient(db, first_name="Replacement")
+    clinical_episode = episode(db, patient_obj=original_patient)
+    linked_appointment = appointment(db, patient_obj=original_patient)
+    linked_appointment.episode_id = clinical_episode.id
+    db.flush()
+    token = login_token(client, "admin@test.local")
+    headers = {"Authorization": f"Bearer {token}"}
+    journey_response = client.post(
+        "/api/patient-journeys",
+        headers=headers,
+        json={"appointment_id": linked_appointment.id, "intake_channel": "manual", "initial_stage": "booked"},
+    )
+    assert journey_response.status_code == 200
+    journey_id = journey_response.json()["id"]
+
+    response = client.patch(
+        f"/api/appointments/{linked_appointment.id}",
+        headers=headers,
+        json={"patient_id": replacement_patient.id},
+    )
+
+    assert response.status_code == 409
+    db.refresh(linked_appointment)
+    assert linked_appointment.patient_id == original_patient.id
+    assert linked_appointment.episode_id == clinical_episode.id
+    assert db.get(PatientJourney, journey_id).patient_id == original_patient.id
 
 
 def test_appointments_list_is_scoped_to_active_clinic(client, db, auth_setup):

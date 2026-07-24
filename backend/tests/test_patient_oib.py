@@ -1,6 +1,6 @@
 from datetime import datetime, timedelta, timezone
 
-from app.models.domain import AuditLog, Patient, PatientClinicAssociation
+from app.models.domain import AuditLog, Clinic, Patient, PatientClinicAssociation
 from tests.conftest import login_token
 
 
@@ -80,6 +80,34 @@ def test_patient_directory_is_bounded_and_stably_ordered(client, db, auth_setup)
     assert len(response.json()) == 50
     assert [item["first_name"] for item in response.json()[:3]] == ["Ime 000", "Ime 001", "Ime 002"]
     assert client.get("/api/patients?limit=51", headers=auth_headers(client)).status_code == 422
+
+
+def test_global_patient_identity_reads_never_expose_cross_clinic_free_text_notes(client, db, auth_setup):
+    foreign_clinic = Clinic(name="Foreign identity clinic")
+    foreign_patient = Patient(
+        first_name="Foreign",
+        last_name="Identity",
+        phone="099000111",
+        notes="CROSS_CLINIC_FREE_TEXT_SENTINEL",
+    )
+    db.add_all([foreign_clinic, foreign_patient])
+    db.flush()
+    db.add(PatientClinicAssociation(patient_id=foreign_patient.id, clinic_id=foreign_clinic.id, active=True))
+    db.commit()
+    headers = auth_headers(client)
+
+    directory = client.get("/api/patients?q=Foreign", headers=headers)
+    detail = client.get(f"/api/patients/{foreign_patient.id}", headers=headers)
+    duplicates = client.get(
+        "/api/patients/possible-duplicates?first_name=Foreign&last_name=Identity",
+        headers=headers,
+    )
+
+    assert directory.status_code == detail.status_code == duplicates.status_code == 200
+    assert "notes" not in directory.json()[0]
+    assert "notes" not in detail.json()
+    assert "notes" not in duplicates.json()[0]
+    assert "CROSS_CLINIC_FREE_TEXT_SENTINEL" not in directory.text + detail.text + duplicates.text
 
 
 def test_possible_duplicates_returns_identity_candidates(client, auth_setup):
