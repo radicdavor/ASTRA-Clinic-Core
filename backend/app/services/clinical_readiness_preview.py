@@ -2,9 +2,10 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.models.domain import Appointment
+from app.models.domain import Appointment, ClinicalDocument
 from app.schemas.common import ClinicalReadinessPreviewItem, ClinicalReadinessPreviewResponse
 from app.services.clinical_readiness_templates import ClinicalReadinessTemplateItem, DEMO_TEMPLATE_VERSION_WARNING, select_clinical_readiness_template
 from app.services.patient_knowledge import official_patient_documents_statement, summary_record_from_documents
@@ -15,6 +16,7 @@ PREVIEW_SUMMARY = "Klinicka spremnost prikazana je kao read-only preview. Ne blo
 TEMPLATE_LIMITATION = "Clinical readiness template je demo/pilot staticna definicija, nije produkcijsko pravilo."
 GENERIC_TEMPLATE_LIMITATION = "Nema specificnog clinical readiness templatea za ovu uslugu; koristi se genericki preview."
 NO_REVIEWED_DOCUMENTS_LIMITATION = "Nema pregledanih klinickih dokumenata za ovog pacijenta."
+UNRESOLVED_EVIDENCE_LIMITATION = "Dostupan je pregledani dokaz bez razriješenog podrijetla ustanove; spremnost nije autoritativno utvrđena na temelju tog zapisa."
 SNAPSHOT_SUPPORTED = False
 SNAPSHOT_STATUS = "not_implemented"
 SNAPSHOT_WARNING = "Snapshot nije implementiran. Ovaj prikaz je live read-only preview i ne sprema se kao trajni zapis."
@@ -131,6 +133,36 @@ def build_clinical_readiness_preview(db: Session, appointment: Appointment) -> C
     reviewed_documents = []
     institution_id = appointment.clinic.institution_id if appointment.clinic else None
     if appointment.patient_id and institution_id is not None:
+        unresolved_documents = db.scalars(
+            select(ClinicalDocument).where(
+                ClinicalDocument.patient_id == appointment.patient_id,
+                ClinicalDocument.institution_id.is_(None),
+                ClinicalDocument.physician_reviewed.is_(True),
+                ClinicalDocument.review_status == "reviewed",
+            )
+        ).all()
+        if unresolved_documents:
+            limitations.append(UNRESOLVED_EVIDENCE_LIMITATION)
+            source_warnings.append("Nerazriješeni dokaz zahtijeva ljudski pregled i ne doprinosi pozitivnoj procjeni spremnosti.")
+            items.append(
+                ClinicalReadinessPreviewItem(
+                    key="unresolved_evidence_provenance",
+                    label="Dokaz nema razriješeno podrijetlo ustanove",
+                    category="reviewed_evidence",
+                    status="needs_physician_review",
+                    severity="warning",
+                    responsible_role="physician",
+                    source_type="unresolved_evidence",
+                    source_ref=None,
+                    source_label=None,
+                    suggested_action="Pregledati podrijetlo dokaza prije oslanjanja na njega. Zapis nije automatski blocker niti klinička odluka.",
+                    blocking=False,
+                    override_allowed=False,
+                    override_role=None,
+                    override_reason_required=False,
+                    audit_required=True,
+                )
+            )
         reviewed_documents = db.scalars(official_patient_documents_statement({institution_id}, appointment.patient_id)).all()
         if not reviewed_documents:
             limitations.append(NO_REVIEWED_DOCUMENTS_LIMITATION)
