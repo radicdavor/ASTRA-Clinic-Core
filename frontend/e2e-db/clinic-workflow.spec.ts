@@ -135,8 +135,12 @@ test("DB-backed workflow uses real backend, PostgreSQL and persistent dashboard 
   await expect(page.getByRole("dialog", { name: /Kratka prijemna provjera/ })).toBeHidden();
 
   await page.reload();
+  const sharedVisit = page.getByLabel("10:00 E2E Zajednicki Pacijent");
+  await expect(sharedVisit.getByLabel("E2E prvi gastro pregled, 10:00–10:30, trajanje 30 minuta")).toBeVisible();
+  await expect(sharedVisit.getByLabel("E2E gastroskopija, 10:30–11:00, trajanje 30 minuta")).toBeVisible();
+  await expect(sharedVisit.getByText("30 min")).toHaveCount(2);
   await expect(
-    page.getByLabel("10:00 E2E Zajednicki Pacijent").locator(".timeline-state-label", { hasText: /Čeka pregled\/pretragu|Ceka pregled\/pretragu/ }),
+    sharedVisit.locator(".timeline-state-label", { hasText: /Čeka pregled\/pretragu|Ceka pregled\/pretragu/ }),
   ).toBeVisible();
 
   await page.getByRole("button", { name: "Otvori pregled" }).first().click();

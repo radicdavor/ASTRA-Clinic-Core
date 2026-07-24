@@ -4,6 +4,7 @@ import { api } from "../api/client";
 import type { ClinicalDocumentAddendumOut } from "../api/generated-openapi";
 import { ActionButton } from "../components/ActionButton";
 import { AuditTimeline } from "../components/AuditTimeline";
+import { ClinicalDerivedDataNotice } from "../components/ClinicalDerivedDataNotice";
 import { HelpHint } from "../components/HelpHint";
 import { WorkspaceHeader } from "../components/workspace/WorkspaceHeader";
 import { WorkspaceLayout } from "../components/workspace/WorkspaceLayout";
@@ -16,12 +17,12 @@ import { aiExtractionStatusLabel, documentTypeLabel, recordClassificationLabel, 
 
 function documentContributionText(document: ClinicalDocument) {
   if (document.review_status === "reviewed" && document.physician_reviewed) {
-    return "Ovaj dokument je lijecnicki pregledan i moze doprinositi source-linked znanju pacijenta.";
+    return "Dokument je liječnički pregledan i može doprinositi pregledanom kliničkom znanju pacijenta.";
   }
   if (document.review_status === "rejected" || document.review_status === "superseded") {
-    return "Ovaj dokument ne doprinosi sluzbenom klinickom znanju pacijenta.";
+    return "Dokument ne doprinosi pregledanom kliničkom znanju pacijenta.";
   }
-  return "Ovaj dokument jos ne doprinosi sluzbenom klinickom znanju pacijenta.";
+  return "Dokument još ne doprinosi pregledanom kliničkom znanju pacijenta.";
 }
 
 function documentContributionClass(document: ClinicalDocument) {
@@ -31,10 +32,10 @@ function documentContributionClass(document: ClinicalDocument) {
 
 function knowledgeImpactLabel(value: ClinicalEvidenceTimelineItem["knowledge_impact"]) {
   const labels: Record<string, string> = {
-    no_official_knowledge_impact: "Nema sluzbeni knowledge ucinak",
-    may_enable_official_knowledge: "Moze omoguciti sluzbeno znanje nakon pregleda",
-    removed_from_official_knowledge: "Uklonjeno iz sluzbenog znanja",
-    summary_view_only: "Samo summary view"
+    no_official_knowledge_impact: "Ne utječe na pregledano kliničko znanje",
+    may_enable_official_knowledge: "Može doprinijeti kliničkom znanju nakon pregleda",
+    removed_from_official_knowledge: "Uklonjeno iz pregledanog kliničkog znanja",
+    summary_view_only: "Samo prikaz sažetka"
   };
   return labels[value] ?? value;
 }
@@ -162,16 +163,16 @@ export function ClinicalDocumentDetail() {
         </div>
       </WorkspaceSection>
 
-      <WorkspaceSection title={<>Lijecnicki pregled <HelpHint title="Lijecnicki pregled">Pregled dokumenta ne donosi medicinsku odluku automatski. On samo oznacava da izvor moze doprinositi source-linked znanju pacijenta.</HelpHint></>}>
+      <WorkspaceSection title={<>Liječnički pregled <HelpHint title="Liječnički pregled">Pregled označava da izvor može doprinositi pregledanom kliničkom znanju. Ne donosi medicinsku odluku automatski.</HelpHint></>}>
         <div className={`clinical-plan-card ${documentContributionClass(current)}`}>
           <div>
-            <span>Doprinos sluzbenom znanju</span>
+            <span>Doprinos pregledanom kliničkom znanju</span>
             <strong>{documentContributionText(current)}</strong>
           </div>
           <p><span>Status pregleda</span><strong>{reviewStatusLabel(current.review_status)}</strong></p>
           <p><span>Pregledao</span><strong>{current.reviewed_by ?? "-"}</strong></p>
           <p><span>Vrijeme pregleda</span><strong>{current.reviewed_at ? formatDateTime(current.reviewed_at) : "-"}</strong></p>
-          <p><span>Pravilo</span><strong>Izvor istine su pregledani, source-linked klinicki dokumenti.</strong></p>
+          <p><span>Pravilo</span><strong>Izvor istine ostaje pregledani izvorni klinički dokument.</strong></p>
         </div>
       </WorkspaceSection>
 
@@ -206,6 +207,7 @@ export function ClinicalDocumentDetail() {
       <div className="dashboard-grid">
         <WorkspaceSection title={<>AI prijedlog ekstrakcije <HelpHint title="AI prijedlog ekstrakcije">Ovo je prijedlog za strukturiranje dokumenta. Nije sluzbena klinicka cinjenica dok lijecnik ne pregleda dokument.</HelpHint></>}>
           <div className="clinical-plan-card ai-suggestion">
+            <ClinicalDerivedDataNotice level="context" title="AI prijedlog ekstrakcije" />
             <div><span>AI prijedlog ekstrakcije</span><strong>{aiExtractionStatusLabel(current.ai_extraction_status)}</strong></div>
             {current.ai_extraction_status === "rejected" && <p><span>Napomena</span><strong>AI prijedlog je odbijen. Izvorni dokument ostaje dostupan za rucni pregled.</strong></p>}
             <div><span>Lijecnicki pregled dokumenta</span><strong>{reviewStatusLabel(current.review_status)}</strong></div>

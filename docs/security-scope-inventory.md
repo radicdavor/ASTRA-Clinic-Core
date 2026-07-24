@@ -7,7 +7,7 @@ Branch: `fix/pr3-scope-and-audit-blockers`
 Base: `feature/full-stack-production-validation` at `5850342`
 
 This inventory is the route-level review record for the PR #3 authorization
-closure. The repository contains 270 FastAPI route decorators and 260
+closure. The repository contains 270 FastAPI route decorators and 261
 registered `/api` route-method pairs. Every route
 module was searched for direct ID loads, patient-only child queries, nullable
 tenant predicates, permission-only authorization, and client-controlled tenant
@@ -106,7 +106,7 @@ The negative matrix covers:
 The route families above are also exercised by PostgreSQL integration and
 DB-backed browser tests. Frontend hiding is never treated as authorization.
 
-The lightweight registry gate classifies all 260 current `/api` route-method
+The lightweight registry gate classifies all 261 current `/api` route-method
 pairs and fingerprints the sorted path, method and context projection. Any
 addition, removal, move or reclassification changes the fingerprint and fails
 CI until the route inventory is explicitly reviewed. This includes financial

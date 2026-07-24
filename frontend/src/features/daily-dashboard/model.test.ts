@@ -1,6 +1,7 @@
 import { describe, expect, test } from "vitest";
 import {
   buildTimelineBlocks,
+  activityTimeWindow,
   canonicalJourneyRows,
   fallbackActivities,
   formatMinutes,
@@ -72,6 +73,7 @@ describe("daily dashboard model", () => {
     const source = row({ activities: [{ id: 11, sequence: 1, time: "14:00:00", service_name: "Kontrola", clinician_name: null, room_name: null, status: "ready" }] });
     expect(rowActivityWindow(source)).toEqual({ start: 14 * 60, end: 14 * 60 + 30 });
     expect(fallbackActivities(source, 14 * 60 + 30)).toHaveLength(1);
+    expect(activityTimeWindow(source.activities[0], 16 * 60)).toEqual({ start: 14 * 60, end: 14 * 60 + 30 });
   });
 
   test("falls back to clinic day start when time data is malformed", () => {
@@ -107,6 +109,20 @@ describe("daily dashboard model", () => {
     ]);
     expect(blocks.map(block => block.lane)).toEqual([0, 1, 0]);
     expect(blocks.every(block => block.laneCount === 2)).toBe(true);
+  });
+
+  test("labels parallel appointments only when patient, clinician and room are all different", () => {
+    const validParallel = buildTimelineBlocks([
+      row({ journey_id: 1, patient_id: 501, clinician_id: 1, room_id: 1 }),
+      row({ journey_id: 2, patient_id: 502, clinician_id: 2, room_id: 2 }),
+    ]);
+    expect(validParallel.every(block => block.parallel)).toBe(true);
+
+    const sameClinician = buildTimelineBlocks([
+      row({ journey_id: 1, patient_id: 501, clinician_id: 1, room_id: 1 }),
+      row({ journey_id: 2, patient_id: 502, clinician_id: 1, room_id: 2 }),
+    ]);
+    expect(sameClinician.every(block => !block.parallel)).toBe(true);
   });
 
   test("prefers backend canonical operational status over frontend compatibility fallback", () => {

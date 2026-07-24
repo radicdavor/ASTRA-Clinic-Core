@@ -8,7 +8,7 @@ import type { ActivityPreparationState, AIDiagnosisSuggestion, CheckInState, Enc
 import { AISummaryPanel, BillingPanel, BlockerPanel, CheckInChecklist, ConsumablesPanel, DocumentReadinessPanel, EncounterPanel, PatientTimeline, PaymentPanel, PreparationPanel, ReceptionMedicalHandoff, SourceDocumentViewer } from "../components/program2/Program2Panels";
 import { activityClockTime, journeyStatusLabel } from "../components/program2/journeyStatus";
 import { focusToStage, JourneyHeader, JourneyNextAction, JourneyStageStepper, stageForJourney } from "../components/program2/journey/JourneyChrome";
-import { JourneyClinicalContext } from "../components/program2/journey/JourneyClinicalContext";
+import { JourneyClinicalContext, type JourneyContextTab } from "../components/program2/journey/JourneyClinicalContext";
 import { ClinicalActivityForm, type ClinicalActivityFormHandle } from "../components/program2/ClinicalActivityForm";
 import { VisitDocumentCenter } from "../components/program2/VisitDocumentCenter";
 import { PathologyFollowUpPanel } from "../components/program2/PathologyFollowUpPanel";
@@ -67,9 +67,12 @@ export function PatientJourneyWorkspace() {
   const { id } = useParams();
   const [searchParams, setSearchParams] = useSearchParams();
   const [activeStage, setActiveStage] = useState<JourneyStageKey>(() => focusToStage(searchParams.get("focus"), "documents"));
+  const [clinicalContextOpen, setClinicalContextOpen] = useState(false);
+  const [clinicalContextTab, setClinicalContextTab] = useState<JourneyContextTab>("summary");
+  const [loadedClinicalContextTabs, setLoadedClinicalContextTabs] = useState<Set<JourneyContextTab>>(() => new Set());
   const journey = useApi<PatientJourneyDetail | null>(`/api/patient-journeys/${id}`, null);
-  const timeline = useApi<PatientJourneyTimelineItem[]>(`/api/patient-journeys/${id}/timeline`, []);
-  const summary = useApi<PatientJourneySummary | null>(`/api/patient-journeys/${id}/summary`, null);
+  const timeline = useApi<PatientJourneyTimelineItem[]>(loadedClinicalContextTabs.has("timeline") ? `/api/patient-journeys/${id}/timeline` : null, []);
+  const summary = useApi<PatientJourneySummary | null>(loadedClinicalContextTabs.has("summary") ? `/api/patient-journeys/${id}/summary` : null, null);
   const checkin = useApi<CheckInState | null>(["arrival", "encounter"].includes(activeStage) ? `/api/patient-journeys/${id}/check-in` : null, null);
   const preparation = useApi<PreparationState | null>(activeStage === "documents" ? `/api/patient-journeys/${id}/preparation` : null, null);
   const activityPreparation = useApi<ActivityPreparationState | null>(activeStage === "documents" ? `/api/patient-journeys/${id}/activity-preparation` : null, null);
@@ -79,7 +82,7 @@ export function PatientJourneyWorkspace() {
   const services = useApi<Service[]>("/api/services", []);
   const providers = useApi<Provider[]>(journey.data && !journey.data.appointment.provider ? "/api/providers" : null, []);
   const publicConfig = useApi<PublicPilotConfig>(activeStage === "encounter" ? "/api/public-config" : null, {});
-  const documents = useApi<ClinicalDocument[]>(journey.data?.patient_id ? `/api/clinical-documents?patient_id=${journey.data.patient_id}` : null, []);
+  const documents = useApi<ClinicalDocument[]>(loadedClinicalContextTabs.has("documents") && journey.data?.patient_id ? `/api/clinical-documents?patient_id=${journey.data.patient_id}` : null, []);
   const visitDocuments = useApi<VisitDocument[]>(activeStage === "documents" ? `/api/patient-journeys/${id}/visit-documents` : null, []);
   const pathologyCases = useApi<PathologyCase[]>(activeStage === "documents" ? `/api/patient-journeys/${id}/pathology-cases` : null, []);
   const [draft, setDraft] = useState<EncounterDraft>({});
@@ -147,9 +150,11 @@ export function PatientJourneyWorkspace() {
   }
   async function refresh() {
     journey.setData(await api<PatientJourneyDetail>(`/api/patient-journeys/${id}`));
-    closure.setData(await api<JourneyClosure>(`/api/patient-journeys/${id}/closure`));
-    visitDocuments.setData(await api<VisitDocument[]>(`/api/patient-journeys/${id}/visit-documents`));
-    pathologyCases.setData(await api<PathologyCase[]>(`/api/patient-journeys/${id}/pathology-cases`));
+    if (activeStage === "billing") closure.setData(await api<JourneyClosure>(`/api/patient-journeys/${id}/closure`));
+    if (activeStage === "documents") {
+      visitDocuments.setData(await api<VisitDocument[]>(`/api/patient-journeys/${id}/visit-documents`));
+      pathologyCases.setData(await api<PathologyCase[]>(`/api/patient-journeys/${id}/pathology-cases`));
+    }
   }
   function applyFormNavigation(target: PendingFormNavigation) {
     if (target.kind === "stage") { setActiveStage(target.stage); return; }
@@ -163,6 +168,17 @@ export function PatientJourneyWorkspace() {
     if (target.kind === "stage" && activeStage === target.stage) return;
     if (clinicalFormRef.current?.hasUnsavedChanges()) { setPendingFormNavigation(target); return; }
     applyFormNavigation(target);
+  }
+  function loadClinicalContextTab(tab: JourneyContextTab) {
+    setLoadedClinicalContextTabs(current => current.has(tab) ? current : new Set([...current, tab]));
+  }
+  function handleClinicalContextOpen(open: boolean) {
+    setClinicalContextOpen(open);
+    if (open) loadClinicalContextTab(clinicalContextTab);
+  }
+  function handleClinicalContextTab(tab: JourneyContextTab) {
+    setClinicalContextTab(tab);
+    if (clinicalContextOpen) loadClinicalContextTab(tab);
   }
   function selectActivity(activityId: number) { requestFormNavigation({ kind: "activity", activityId }); }
   async function startCheckIn() { openReception(); }
@@ -253,7 +269,7 @@ export function PatientJourneyWorkspace() {
     await perform(async () => { activityPreparation.setData(await api(`/api/patient-journeys/${id}/activity-preparation/${requirementId}`, { method: "PATCH", body: JSON.stringify({ state }) })); await refresh(); });
   }
   async function generateSummary() {
-    await perform(async () => { summary.setData(await api(`/api/patient-journeys/${id}/summary`, { method: "POST" })); timeline.setData(await api(`/api/patient-journeys/${id}/timeline`)); });
+    await perform(async () => { summary.setData(await api(`/api/patient-journeys/${id}/summary`, { method: "POST" })); });
   }
   async function reviewSummaryFact(summaryId: number, factId: number, action: "accept" | "reject") {
     await perform(async () => { summary.setData(await api(`/api/patient-journeys/${id}/summary/${summaryId}/facts/${factId}`, { method: "PATCH", body: JSON.stringify({ action }) })); });
@@ -323,7 +339,13 @@ export function PatientJourneyWorkspace() {
       {activeStage === "billing" && <div className="journey-stage-pair"><BillingPanel status={j.billing_status} invoice={closure.data?.invoice ?? undefined} onPrepare={prepareBilling}/><PaymentPanel status={j.payment_status} invoice={closure.data?.invoice ?? undefined} stage={j.current_stage} onPay={pay} onDefer={defer} onClose={close}/></div>}
       {activeStage === "completed" && <section className="journey-panel journey-completed"><h2>Dolazak je završen</h2><p>Pregled, materijal i naplata nemaju otvorenu operativnu radnju.</p><Link to={`/patients/${j.patient_id}`}>Otvori longitudinalni zapis pacijenta</Link></section>}
     </main>
-    <JourneyClinicalContext summary={<AISummaryPanel summary={summary.data} onGenerate={generateSummary} onReview={reviewSummaryFact}/>} timeline={<PatientTimeline items={timeline.data}/>} documents={<SourceDocumentViewer documents={documents.data} onReview={reviewDocument}/>}/>
+    <JourneyClinicalContext
+      summary={<AISummaryPanel summary={summary.data} onGenerate={generateSummary} onReview={reviewSummaryFact}/>}
+      timeline={<PatientTimeline items={timeline.data}/>}
+      documents={<SourceDocumentViewer documents={documents.data} onReview={reviewDocument}/>}
+      onOpenChange={handleClinicalContextOpen}
+      onTabChange={handleClinicalContextTab}
+    />
     {pendingFormNavigation && <div className="modal-backdrop"><section className="modal-panel clinical-draft-navigation" role="dialog" aria-modal="true" aria-labelledby="draft-navigation-title"><header><div><span className="eyebrow">Nespremljena skica</span><h2 id="draft-navigation-title">Želite li spremiti promjene?</h2></div></header><p>Promjena aktivnosti ili faze ne smije odbaciti uneseni klinički tekst bez vaše odluke.</p><footer><button type="button" onClick={() => setPendingFormNavigation(null)}>Ostani</button><button type="button" onClick={() => { clinicalFormRef.current?.discardLocalChanges(); const target = pendingFormNavigation; setPendingFormNavigation(null); applyFormNavigation(target); }}>Odbaci i nastavi</button><button type="button" className="primary" onClick={async () => { const saved = await clinicalFormRef.current?.saveDraft(); if (saved) { const target = pendingFormNavigation; setPendingFormNavigation(null); applyFormNavigation(target); } }}>Spremi skicu i nastavi</button></footer></section></div>}
     {receptionModal === "identity" && <div className="modal-backdrop" onMouseDown={event => event.target === event.currentTarget && setReceptionModal(null)}>
       <section className="modal-panel reception-modal" role="dialog" aria-modal="true" aria-labelledby="reception-identity-title">

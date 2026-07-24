@@ -39,7 +39,7 @@ from app.models.domain import (
     User,
 )
 from app.services.reports import report_digest
-from app.services.seed import PERMISSIONS
+from app.services.seed import PERMISSIONS, ROLE_PERMISSIONS, ROLE_PROFESSIONAL_CATEGORIES
 
 
 PASSWORD = "E2e-local-only-123!"
@@ -343,6 +343,15 @@ def seed() -> dict:
         )
         nurse_role = role(db, "e2e_nurse", ["clinical.documents.read_institution", "reports.read"], "medical_staff")
         foreign_physician_role = role(db, "e2e_foreign_physician", ["clinical.documents.read_institution", "reports.read"], "medical_staff")
+        demo_roles = {
+            role_name: role(
+                db,
+                f"demo_{role_name}",
+                ROLE_PERMISSIONS[role_name],
+                ROLE_PROFESSIONAL_CATEGORIES.get(role_name, "administrative"),
+            )
+            for role_name in ("admin", "receptionist", "nurse", "physician")
+        }
 
         institution_a = db.scalar(select(Institution).where(Institution.code == "e2e-nura"))
         if institution_a is None:
@@ -364,6 +373,11 @@ def seed() -> dict:
         physician_b = user(db, "e2e.physician.b@example.invalid", "dr. E2E Klinički B", physician_reader_role)
         nurse_a = user(db, "e2e.nurse.a@example.invalid", "E2E Medicinska sestra", nurse_role)
         foreign_physician = user(db, "e2e.physician.foreign@example.invalid", "dr. E2E Druga ustanova", foreign_physician_role)
+        demo_admin = user(db, "demo.admin@astra.local", "Demo Administrator", demo_roles["admin"])
+        demo_receptionist = user(db, "demo.reception@astra.local", "Demo Tajnica", demo_roles["receptionist"])
+        demo_nurse = user(db, "demo.nurse@astra.local", "Demo Medicinska sestra", demo_roles["nurse"])
+        demo_physician_1 = user(db, "demo.physician@astra.local", "dr. Demo Lijecnik 1", demo_roles["physician"])
+        demo_physician_2 = user(db, "demo.physician2@astra.local", "dr. Demo Lijecnik 2", demo_roles["physician"])
         db.flush()
         for user_obj, clinic_obj in [
             (admin_a, clinic_a),
@@ -374,6 +388,12 @@ def seed() -> dict:
             (physician_b, clinic_b),
             (nurse_a, clinic_a),
             (foreign_physician, clinic_c),
+            (demo_admin, clinic_a),
+            (demo_admin, clinic_b),
+            (demo_receptionist, clinic_a),
+            (demo_nurse, clinic_a),
+            (demo_physician_1, clinic_a),
+            (demo_physician_2, clinic_b),
         ]:
             link_membership(db, user_obj, clinic_obj)
 
@@ -383,8 +403,8 @@ def seed() -> dict:
         room_a1 = room(db, "E2E A ordinacija", clinic_a, [consult, gastro, colon])
         room_a2 = room(db, "E2E A endoskopija", clinic_a, [gastro, colon])
         room_b1 = room(db, "E2E B ordinacija", clinic_b, [consult, gastro, colon])
-        provider_a = provider(db, "dr. E2E A", "e2e.doctor.a@example.invalid", clinic_a)
-        provider_b = provider(db, "dr. E2E B", "e2e.doctor.b@example.invalid", clinic_b)
+        provider_a = provider(db, demo_physician_1.full_name, demo_physician_1.email, clinic_a)
+        provider_b = provider(db, demo_physician_2.full_name, demo_physician_2.email, clinic_b)
         db.flush()
 
         shared = patient(db, "E2E", "Zajednicki Pacijent", "e2e.patient.shared@example.invalid")
@@ -664,6 +684,13 @@ def seed() -> dict:
                 "physicianB": physician_b.email,
                 "nurseA": nurse_a.email,
                 "foreignPhysician": foreign_physician.email,
+            },
+            "personas": {
+                "admin": demo_admin.email,
+                "receptionist": demo_receptionist.email,
+                "nurse": demo_nurse.email,
+                "physician_1": demo_physician_1.email,
+                "physician_2": demo_physician_2.email,
             },
             "clinics": {"a": clinic_a.id, "b": clinic_b.id, "foreign": clinic_c.id},
             "patients": {"shared": shared.id, "onlyB": only_b.id, "paid": paid_patient.id, "foreign": foreign_patient.id},

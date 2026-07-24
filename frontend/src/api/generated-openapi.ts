@@ -174,6 +174,7 @@ export type CheckInOut = {
 
 export type ClinicAuditEventOut = {
   action: string;
+  actor_name: string | null;
   actor_type: string;
   actor_user_id: number | null;
   changed_fields: Array<string>;
@@ -185,6 +186,8 @@ export type ClinicAuditEventOut = {
   institution_id: number | null;
   reason_code: string | null;
   request_id: string | null;
+  result: string;
+  scope_label: string;
   scope_type: string;
   status: string | null;
 };
@@ -942,6 +945,18 @@ export type DeferPayment = {
   reason: string;
 };
 
+export type DemoPersonaSessionRequest = {
+  persona_key: 'admin' | 'receptionist' | 'nurse' | 'physician_1' | 'physician_2';
+};
+
+export type DemoPersonaSessionResponse = {
+  csrf_token: string;
+  expires_at: string;
+  persona_key: string;
+  user: {
+};
+};
+
 export type DiagnosisSuggestion = {
   code: string;
   title: string;
@@ -1277,6 +1292,22 @@ export type InvoiceLineUpdate = {
   service_id?: number | null;
   unit_price?: number | string | null;
   vat_rate?: number | string | null;
+};
+
+export type InvoiceOperationalListItemOut = {
+  can_issue: boolean;
+  can_record_payment: boolean;
+  id: number;
+  invoice_date: string;
+  invoice_number: string;
+  outstanding_amount: string;
+  paid_amount: string;
+  patient_id: number;
+  patient_name: string;
+  payment_count: number;
+  payment_status: string;
+  status: string;
+  total_amount: string;
 };
 
 export type InvoiceOut = {

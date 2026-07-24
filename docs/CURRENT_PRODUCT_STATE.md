@@ -21,7 +21,10 @@ Primary routes: `/`, `/patients`, `/appointments`, `/journeys/:id`, `/reception`
 
 ## Current readiness decision
 
-The technical candidate may be prepared only for **human synthetic usability evaluation** after all repository gates pass. Human evidence has not been claimed. Pilot readiness does not authorize pilot execution. Deployment status remains local/controlled demo only.
+The role and information-architecture technical candidate is **READY FOR HUMAN
+USABILITY REVIEW** after the documented repository gates passed. Human
+evidence has not been claimed. Pilot readiness does not authorize pilot
+execution. Deployment status remains local/controlled demo only.
 
 The current demo includes a synthetic one-arrival example with a first gastroenterology consultation at 15:00 followed by gastroscopy at 15:30.
 

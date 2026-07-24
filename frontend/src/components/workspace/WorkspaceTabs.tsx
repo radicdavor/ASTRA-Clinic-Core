@@ -2,11 +2,24 @@ import { KeyboardEvent, ReactNode, useRef, useState } from "react";
 
 export type WorkspaceTab = { id: string; label: string; content: ReactNode };
 
-export function WorkspaceTabs({ tabs }: { tabs: WorkspaceTab[] }) {
-  const [active, setActive] = useState(tabs[0]?.id ?? "");
+type WorkspaceTabsProps = {
+  tabs: WorkspaceTab[];
+  activeId?: string;
+  onChange?: (id: string) => void;
+  ariaLabel?: string;
+};
+
+export function WorkspaceTabs({ tabs, activeId, onChange, ariaLabel = "Sekcije radnog prostora" }: WorkspaceTabsProps) {
+  const [internalActive, setInternalActive] = useState(tabs[0]?.id ?? "");
   const tabRefs = useRef<Array<HTMLButtonElement | null>>([]);
+  const active = activeId ?? internalActive;
   const current = tabs.find((tab) => tab.id === active) ?? tabs[0];
   const currentIndex = tabs.findIndex((tab) => tab.id === current?.id);
+
+  function selectTab(id: string) {
+    if (activeId === undefined) setInternalActive(id);
+    onChange?.(id);
+  }
 
   function handleKeyDown(event: KeyboardEvent<HTMLButtonElement>, index: number) {
     if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
@@ -16,13 +29,13 @@ export function WorkspaceTabs({ tabs }: { tabs: WorkspaceTab[] }) {
       : event.key === "End"
         ? tabs.length - 1
         : (index + (event.key === "ArrowRight" ? 1 : -1) + tabs.length) % tabs.length;
-    setActive(tabs[nextIndex].id);
+    selectTab(tabs[nextIndex].id);
     tabRefs.current[nextIndex]?.focus();
   }
 
   return (
     <div className="workspace-tabs">
-      <div className="workspace-tab-list" role="tablist" aria-label="Sekcije radnog prostora">
+      <div className="workspace-tab-list" role="tablist" aria-label={ariaLabel}>
         {tabs.map((tab, index) => (
           <button
             key={tab.id}
@@ -34,7 +47,7 @@ export function WorkspaceTabs({ tabs }: { tabs: WorkspaceTab[] }) {
             aria-controls={`workspace-panel-${tab.id}`}
             tabIndex={index === currentIndex ? 0 : -1}
             className={tab.id === current?.id ? "active" : ""}
-            onClick={() => setActive(tab.id)}
+            onClick={() => selectTab(tab.id)}
             onKeyDown={(event) => handleKeyDown(event, index)}
           >
             {tab.label}
