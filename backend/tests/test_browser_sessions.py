@@ -179,6 +179,60 @@ def test_unknown_browser_session_audit_does_not_store_raw_token(client, db, auth
     assert raw_token not in (event.summary or "")
 
 
+def test_equivalent_anonymous_session_probes_are_durably_bounded(client, db, auth_setup):
+    raw_token = "q" * 64
+    for _ in range(40):
+        client.cookies.set("astra_session", raw_token)
+        assert client.get("/auth/session").status_code == 401
+
+    db.expire_all()
+    events = db.query(AuditLog).filter(AuditLog.action == "auth.browser_session_invalid").all()
+    assert len(events) < 4
+    assert sum(event.occurrence_count for event in events) == 40
+    assert all(event.aggregation_key and event.first_seen_at and event.last_seen_at for event in events)
+    serialized = " ".join(str(event.after_json) + (event.summary or "") for event in events)
+    assert raw_token not in serialized
+
+
+def test_anonymous_session_aggregation_keeps_rejection_reasons_separate(client, db, auth_setup):
+    client.cookies.set("astra_session", "malformed")
+    assert client.get("/auth/session").status_code == 401
+    client.cookies.set("astra_session", "u" * 64)
+    assert client.get("/auth/session").status_code == 401
+
+    db.expire_all()
+    events = db.query(AuditLog).filter(AuditLog.action == "auth.browser_session_invalid").all()
+    assert {event.after_json["reason_code"] for event in events} == {"malformed", "unknown"}
+    assert sum(event.occurrence_count for event in events) == 2
+
+
+def test_anonymous_session_aggregation_opens_new_window_and_cleans_expired_rows(db):
+    now = datetime.now(UTC).replace(second=0, microsecond=0)
+    assert write_security_audit_event(
+        db.get_bind(),
+        "auth.browser_session_invalid",
+        reason_code="unknown",
+        method="GET",
+        route="/auth/session",
+        aggregate_anonymous=True,
+        occurred_at=now,
+    )
+    assert write_security_audit_event(
+        db.get_bind(),
+        "auth.browser_session_invalid",
+        reason_code="unknown",
+        method="GET",
+        route="/auth/session",
+        aggregate_anonymous=True,
+        occurred_at=now + timedelta(minutes=6),
+    )
+
+    db.expire_all()
+    events = db.query(AuditLog).filter(AuditLog.action == "auth.browser_session_invalid").all()
+    assert len(events) == 2
+    assert sum(event.occurrence_count for event in events) == 2
+
+
 def test_malformed_browser_session_audit_is_classified(client, db, auth_setup):
     raw_token = "malformed raw session token"
     client.cookies.set("astra_session", raw_token)
