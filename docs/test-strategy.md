@@ -156,3 +156,9 @@ API-key tests, and populated `0063 -> 0066` migration fixtures. Legacy tests
 must create realistic clinic memberships and object provenance; tests may not
 bypass production scope rules by using unscoped users, rooms, invoices, or API
 keys.
+
+The final security-remediation extension adds a real PostgreSQL concurrency
+suite for bounded anonymous rejected-session audit aggregation and exact audit
+event identity. SQLite tests remain useful for route behavior, but are not
+accepted as proof of `ON CONFLICT` aggregation or transaction interleaving.
+Migration validation now targets the single `0067_audit_aggregation` head.
