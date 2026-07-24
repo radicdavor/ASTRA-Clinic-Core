@@ -100,11 +100,27 @@ export function rowActivityWindow(row: DashboardRow) {
   return { start, end: Math.max(end, start + minimumBlockMinutes) };
 }
 
-export function activityDurationLabel(activity: DashboardActivity) {
+export function activityTimeWindow(activity: DashboardActivity, fallbackEnd?: number) {
   const start = minutesFromTime(activity.time);
-  const end = minutesFromTime(activity.end_time);
-  if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) return activity.time.slice(0, 5);
+  const explicitEnd = minutesFromTime(activity.end_time);
+  if (!Number.isFinite(start)) return { start: dayStart, end: dayStart + minimumBlockMinutes };
+  const defaultEnd = start + minimumBlockMinutes;
+  const end = Number.isFinite(explicitEnd) && explicitEnd > start
+    ? explicitEnd
+    : Number.isFinite(fallbackEnd) && fallbackEnd! > start
+      ? Math.min(fallbackEnd!, defaultEnd)
+      : defaultEnd;
+  return { start, end };
+}
+
+export function activityDurationLabel(activity: DashboardActivity, fallbackEnd?: number) {
+  const { start, end } = activityTimeWindow(activity, fallbackEnd);
   return `${formatMinutes(start)}–${formatMinutes(end)}`;
+}
+
+export function activityDurationMinutes(activity: DashboardActivity, fallbackEnd?: number) {
+  const { start, end } = activityTimeWindow(activity, fallbackEnd);
+  return end - start;
 }
 
 export function orderedActivities(row: DashboardRow) {

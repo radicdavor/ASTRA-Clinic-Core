@@ -1,6 +1,7 @@
 import { describe, expect, test } from "vitest";
 import {
   buildTimelineBlocks,
+  activityTimeWindow,
   canonicalJourneyRows,
   fallbackActivities,
   formatMinutes,
@@ -72,6 +73,7 @@ describe("daily dashboard model", () => {
     const source = row({ activities: [{ id: 11, sequence: 1, time: "14:00:00", service_name: "Kontrola", clinician_name: null, room_name: null, status: "ready" }] });
     expect(rowActivityWindow(source)).toEqual({ start: 14 * 60, end: 14 * 60 + 30 });
     expect(fallbackActivities(source, 14 * 60 + 30)).toHaveLength(1);
+    expect(activityTimeWindow(source.activities[0], 16 * 60)).toEqual({ start: 14 * 60, end: 14 * 60 + 30 });
   });
 
   test("falls back to clinic day start when time data is malformed", () => {

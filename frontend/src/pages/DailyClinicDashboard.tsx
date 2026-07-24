@@ -5,6 +5,8 @@ import { DateInput } from "../components/DateInput";
 import { ReceptionFloatingModal } from "../components/program2/ReceptionFloatingModal";
 import {
   activityDurationLabel,
+  activityDurationMinutes,
+  activityTimeWindow,
   buildTimelineBlocks,
   fallbackActivities,
   focusFor,
@@ -121,17 +123,34 @@ function PatientBlock({
         <time>{formatMinutes(block.startMinutes)}</time>
       </header>
       <div className="timeline-activity-list" aria-label={`Današnje aktivnosti za ${row.patient_name}`}>
-        {activities.map(activity => (
-          <div className="timeline-activity-row" key={activity.id}>
-            <time>{activityDurationLabel(activity)}</time>
-            <span>{activity.service_name}</span>
-            <small aria-label={`${activity.clinician_name || "Liječnik nije naveden"}, ${activity.room_name || "Prostorija nije navedena"}`}>
-              <b>{activity.clinician_name || "Liječnik nije naveden"}</b>
-              {" · "}
-              {activity.room_name || "Prostorija nije navedena"}
-            </small>
-          </div>
-        ))}
+        {activities.map(activity => {
+          const activityWindow = activityTimeWindow(activity, block.endMinutes);
+          const visitDuration = Math.max(1, block.endMinutes - block.startMinutes);
+          const segmentStart = Math.max(block.startMinutes, activityWindow.start);
+          const segmentEnd = Math.min(block.endMinutes, Math.max(segmentStart + 1, activityWindow.end));
+          const topPercent = ((segmentStart - block.startMinutes) / visitDuration) * 100;
+          const heightPercent = ((segmentEnd - segmentStart) / visitDuration) * 100;
+          const duration = activityDurationMinutes(activity, block.endMinutes);
+          return (
+            <div
+              className="timeline-activity-row"
+              key={activity.id}
+              style={{ top: `${topPercent}%`, height: `${heightPercent}%` }}
+              aria-label={`${activity.service_name}, ${activityDurationLabel(activity, block.endMinutes)}, trajanje ${duration} minuta`}
+            >
+              <time>
+                <span>{activityDurationLabel(activity, block.endMinutes)}</span>
+                <strong>{duration} min</strong>
+              </time>
+              <span>{activity.service_name}</span>
+              <small aria-label={`${activity.clinician_name || "Liječnik nije naveden"}, ${activity.room_name || "Prostorija nije navedena"}`}>
+                <b>{activity.clinician_name || "Liječnik nije naveden"}</b>
+                {" · "}
+                {activity.room_name || "Prostorija nije navedena"}
+              </small>
+            </div>
+          );
+        })}
       </div>
       <footer>
         <span className="timeline-state-label">{state.label}</span>

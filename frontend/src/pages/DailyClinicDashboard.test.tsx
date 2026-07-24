@@ -197,6 +197,16 @@ describe("vremenska dnevna ploča", () => {
     expect(within(block).getByText("Gastroskopija")).toBeTruthy();
     expect(within(block).getByText("09:00–09:30")).toBeTruthy();
     expect(within(block).getByText("09:30–10:30")).toBeTruthy();
+    expect(within(block).getByText("30 min")).toBeTruthy();
+    expect(within(block).getByText("60 min")).toBeTruthy();
+    const segments = block.querySelectorAll(".timeline-activity-row");
+    expect(segments).toHaveLength(2);
+    expect((segments[0] as HTMLElement).style.top).toBe("0%");
+    expect(parseFloat((segments[0] as HTMLElement).style.height)).toBeCloseTo(33.333, 2);
+    expect(parseFloat((segments[1] as HTMLElement).style.top)).toBeCloseTo(33.333, 2);
+    expect(parseFloat((segments[1] as HTMLElement).style.height)).toBeCloseTo(66.667, 2);
+    expect(segments[0].getAttribute("aria-label")).toContain("trajanje 30 minuta");
+    expect(segments[1].getAttribute("aria-label")).toContain("trajanje 60 minuta");
     expect(within(block).getByLabelText("Naručen/a na: Prvi gastro pregled · Gastroskopija")).toBeTruthy();
     expect(block.classList.contains("timeline-patient-block")).toBe(true);
   });
@@ -247,7 +257,8 @@ describe("vremenska dnevna ploča", () => {
     renderDashboard();
     const block = await findPatientBlock(/Bez Kraja/);
     expect(within(block).getByText("Kratka kontrola")).toBeTruthy();
-    expect(within(block).getAllByText("14:00").length).toBeGreaterThan(0);
+    expect(within(block).getByText("14:00–14:30")).toBeTruthy();
+    expect(within(block).getByText("30 min")).toBeTruthy();
   });
 
   test("activities outside 07:00-20:00 extend the visible time axis", async () => {
