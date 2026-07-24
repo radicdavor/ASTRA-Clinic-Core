@@ -57,9 +57,14 @@ python scripts/run_test_gate.py full
 # or: make backend-full
 ```
 
-The full layer runs `pytest -ra --durations=50`. The Module 3.5 baseline was 681
-passed in 710.93 s before the optimization commits. It remains the authoritative
-backend regression gate and reports the slowest 50 tests.
+The full layer runs every non-integration backend module in two deterministic,
+process-isolated shards and then runs the explicit PostgreSQL integration
+directory. Each shard uses `pytest -ra --durations=50`. Process isolation avoids
+the nonlinear Windows slowdown observed when hundreds of full-metadata SQLite
+fixtures accumulated in one long-lived pytest process; it does not remove or
+skip any test module. The Module 3.5 baseline was 681 passed in 710.93 s before
+the optimization commits. The full gate remains the authoritative backend
+regression gate and reports the slowest 50 tests per shard.
 
 The final isolated PostgreSQL run collected 688 tests and produced 687 passed,
 one POSIX-entrypoint skip on Windows and 982 warnings in 762.09 s (789.23 s
