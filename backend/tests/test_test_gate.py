@@ -23,6 +23,33 @@ def test_gate_arguments_keep_full_and_integration_layers_distinct():
     assert "tests/integration" not in gate_arguments("fast")
 
 
+def test_full_gate_shards_cover_each_core_test_module_once():
+    shards = GATE["full_core_test_shards"]()
+    flattened = [path for shard in shards for path in shard]
+    backend = Path(__file__).resolve().parents[1]
+    expected = sorted(
+        path.relative_to(backend).as_posix()
+        for path in (backend / "tests").glob("test_*.py")
+    )
+
+    assert len(shards) == GATE["FULL_CORE_SHARD_COUNT"]
+    assert all(shards)
+    assert len(flattened) == len(set(flattened))
+    assert sorted(flattened) == expected
+
+
+def test_full_gate_runs_core_shards_before_postgresql_integration():
+    observed = []
+
+    assert GATE["run_full_gate"](
+        ["--maxfail=1"],
+        runner=lambda arguments: observed.append(arguments) or 0,
+    ) == 0
+    assert len(observed) == GATE["FULL_CORE_SHARD_COUNT"] + 1
+    assert all("-m" in arguments and "not integration" in arguments for arguments in observed[:-1])
+    assert observed[-1][:3] == ["tests/integration", "-q", "-rs"]
+
+
 def test_runner_adds_backend_to_import_path_before_pytest(monkeypatch):
     backend = GATE["BACKEND"]
     observed = {}
