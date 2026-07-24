@@ -3,7 +3,7 @@ from datetime import datetime
 from app.models.domain import Appointment, AuditLog, ClinicalEpisode, ClinicalPlan, ClinicalReadinessSnapshot, PatientClinicalSummaryRecord
 from app.services.clinical_readiness_preview import build_clinical_readiness_preview
 from tests.conftest import login_token
-from tests.factories import appointment, clinical_document, episode, patient, service
+from tests.factories import appointment, clinic, clinical_document, episode, patient, service
 
 
 def auth_headers(client):
@@ -431,6 +431,24 @@ def test_valid_official_evidence_remains_usable_while_unresolved_limitation_is_v
     assert any(item.get("source_ref") == f"ClinicalDocument:{valid.id}" for item in body["items"])
     assert any(item["key"] == "unresolved_evidence_provenance" for item in body["items"])
     assert all(item.get("source_ref") != f"ClinicalDocument:{unresolved.id}" for item in body["items"])
+
+
+def test_foreign_clinic_unresolved_evidence_is_not_disclosed_in_readiness(client, db, auth_setup):
+    appt = appointment(db, service_obj=service(db, name="Kolonoskopija scoped unresolved evidence"))
+    appt.clinic_id = auth_setup["clinic"].id
+    foreign_clinic = clinic(db, "Foreign unresolved evidence clinic")
+    unresolved = clinical_document(db, appt.patient, physician_reviewed=True)
+    unresolved.clinic_id = foreign_clinic.id
+    unresolved.institution_id = None
+    unresolved.review_status = "reviewed"
+    db.commit()
+
+    response = preview(client, appt.id, auth_headers(client))
+
+    assert response.status_code == 200
+    body = response.json()
+    assert all(item["key"] != "unresolved_evidence_provenance" for item in body["items"])
+    assert all("nije autoritativno" not in limitation for limitation in body["limitations"])
 
 
 def test_patient_clinical_summary_remains_excluded_with_service_templates(client, db, auth_setup):

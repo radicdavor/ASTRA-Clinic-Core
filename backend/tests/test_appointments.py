@@ -338,6 +338,7 @@ def test_create_appointment_api_blocks_cross_clinic_same_patient_overlap(client,
     db.add(clinic_b)
     db.flush()
     room_b.clinic_id = clinic_b.id
+    provider_b.clinic_id = clinic_b.id
     db.add(ClinicMembership(user_id=auth_setup["admin"].id, clinic_id=clinic_b.id, created_by_user_id=auth_setup["admin"].id))
     db.commit()
     token = login_token(client, "admin@test.local")
@@ -361,6 +362,7 @@ def test_create_appointment_api_allows_touching_patient_appointment(client, db, 
     p = patient(db)
     existing = appointment(db, patient_obj=p)
     provider_obj = provider(db, "dr. Touch api")
+    provider_obj.clinic_id = auth_setup["clinic"].id
     room_obj = room(db, "Touch api room")
     room_obj.clinic_id = auth_setup["clinic"].id
     service_obj = service(db, name="Touch api service")
@@ -406,6 +408,61 @@ def test_create_and_patch_appointment_reject_unresolved_room_provenance(client, 
     assert updated.status_code == 403
     db.refresh(existing)
     assert existing.room_id != unresolved_room.id
+
+
+def test_create_and_patch_appointment_reject_unresolved_and_foreign_provider_provenance(client, db, auth_setup):
+    p = patient(db, first_name="Unresolved provider")
+    room_obj = room(db, "Scoped provider room")
+    room_obj.clinic_id = auth_setup["clinic"].id
+    service_obj = service(db, name="Unresolved provider service")
+    scoped_provider = provider(db, "dr. Scoped appointment provider")
+    scoped_provider.clinic_id = auth_setup["clinic"].id
+    unresolved_provider = provider(db, "dr. Unresolved appointment provider")
+    unresolved_provider.clinic_id = None
+    foreign_clinic = Clinic(name="Foreign provider clinic")
+    db.add(foreign_clinic)
+    db.flush()
+    foreign_provider = provider(db, "dr. Foreign appointment provider")
+    foreign_provider.clinic_id = foreign_clinic.id
+    existing = appointment(
+        db,
+        patient_obj=p,
+        provider_obj=scoped_provider,
+        room_obj=room_obj,
+        service_obj=service_obj,
+    )
+    existing.clinic_id = auth_setup["clinic"].id
+    db.commit()
+    token = login_token(client, "admin@test.local")
+    headers = {"Authorization": f"Bearer {token}"}
+
+    unresolved_create = client.post(
+        "/api/appointments",
+        headers=headers,
+        json=appointment_payload(p, unresolved_provider, room_obj, service_obj, start="11:00", end="11:30"),
+    )
+    foreign_create = client.post(
+        "/api/appointments",
+        headers=headers,
+        json=appointment_payload(p, foreign_provider, room_obj, service_obj, start="12:00", end="12:30"),
+    )
+    unresolved_patch = client.patch(
+        f"/api/appointments/{existing.id}",
+        headers=headers,
+        json={"provider_id": unresolved_provider.id},
+    )
+    foreign_patch = client.patch(
+        f"/api/appointments/{existing.id}",
+        headers=headers,
+        json={"provider_id": foreign_provider.id},
+    )
+
+    assert unresolved_create.status_code == 404
+    assert foreign_create.status_code == 404
+    assert unresolved_patch.status_code == 403
+    assert foreign_patch.status_code == 403
+    db.refresh(existing)
+    assert existing.provider_id == scoped_provider.id
 
 
 def test_update_appointment_api_rejects_patient_reassignment_before_overlap_evaluation(client, db, auth_setup):

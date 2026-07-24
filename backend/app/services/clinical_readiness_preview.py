@@ -136,6 +136,7 @@ def build_clinical_readiness_preview(db: Session, appointment: Appointment) -> C
         unresolved_documents = db.scalars(
             select(ClinicalDocument).where(
                 ClinicalDocument.patient_id == appointment.patient_id,
+                ClinicalDocument.clinic_id == appointment.clinic_id,
                 ClinicalDocument.institution_id.is_(None),
                 ClinicalDocument.physician_reviewed.is_(True),
                 ClinicalDocument.review_status == "reviewed",
