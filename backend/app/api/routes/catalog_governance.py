@@ -19,7 +19,7 @@ def validate_package_assignments_for_active_clinic(db: Session, assignments: lis
     for assignment in assignments:
         room = db.scalar(select(Room).where(Room.id == assignment.room_id, Room.clinic_id == clinic_id))
         provider = db.get(Provider, assignment.provider_id)
-        if room is None or provider is None:
+        if room is None or provider is None or provider.clinic_id != clinic_id:
             raise HTTPException(404, detail="Prostorija ili liječnik nisu pronađeni")
 
 

@@ -62,6 +62,8 @@ def appointment(db, patient_obj=None, provider_obj=None, room_obj=None, service_
     clinic_obj = room_obj.clinic or default_clinic(db)
     if clinic_obj and room_obj.clinic_id is None:
         room_obj.clinic_id = clinic_obj.id
+    if clinic_obj and provider_obj.clinic_id is None:
+        provider_obj.clinic_id = clinic_obj.id
     obj = Appointment(
         patient_id=patient_obj.id,
         provider_id=provider_obj.id,

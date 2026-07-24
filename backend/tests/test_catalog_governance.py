@@ -30,6 +30,10 @@ def test_governed_form_definition_publish_and_explicit_binding(client, db, auth_
 
 def test_published_package_materializes_multiple_activities_in_one_journey(client, db, auth_setup):
     appt = appointment(db)
+    appt.clinic_id = auth_setup["clinic"].id
+    appt.provider.clinic_id = auth_setup["clinic"].id
+    appt.room.clinic_id = auth_setup["clinic"].id
+    db.flush()
     visit = client.post("/api/patient-journeys", headers=headers(client), json={"appointment_id": appt.id, "intake_channel": "manual", "initial_stage": "booked"}).json()
     package = client.post("/api/service-packages", headers=headers(client), json={"package_key": "two-step-test", "name": "Dvije sintetičke usluge", "specialty_key": "general"}).json()
     version = client.post(f"/api/service-packages/{package['id']}/versions", headers=headers(client), json={"items": [
@@ -51,6 +55,10 @@ def test_published_package_materializes_multiple_activities_in_one_journey(clien
 
 def test_package_preview_booking_and_retry_create_one_coordinated_arrival(client, db, auth_setup):
     appt = appointment(db)
+    appt.clinic_id = auth_setup["clinic"].id
+    appt.provider.clinic_id = auth_setup["clinic"].id
+    appt.room.clinic_id = auth_setup["clinic"].id
+    db.flush()
     package = client.post("/api/service-packages", headers=headers(client), json={"package_key": "gastro-three-step-test", "name": "Sintetički gastro paket", "description": "Prvi pregled, gastroskopija i kolonoskopija", "specialty_key": "gastroenterology"}).json()
     version = client.post(f"/api/service-packages/{package['id']}/versions", headers=headers(client), json={"items": [
         {"service_id": appt.service_id, "activity_key": "first-consultation", "activity_kind": "specialist_consultation", "specialty_key": "gastroenterology", "sequence": 1, "default_duration_minutes": 30, "preparation_requirements_json": []},

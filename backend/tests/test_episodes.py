@@ -13,6 +13,8 @@ def auth_headers(client):
 def test_create_update_close_episode(client, db, auth_setup):
     p = patient(db)
     pr = provider(db)
+    pr.clinic_id = auth_setup["clinic"].id
+    db.flush()
     headers = auth_headers(client)
 
     created = client.post(
@@ -49,6 +51,29 @@ def test_create_update_close_episode(client, db, auth_setup):
     assert "close" in actions
 
 
+def test_episode_owner_rejects_provider_without_resolved_institution(client, db, auth_setup):
+    p = patient(db, first_name="Unresolved owner")
+    unresolved = provider(db, "dr. Unresolved owner")
+    unresolved.clinic_id = None
+    db.flush()
+
+    response = client.post(
+        "/api/episodes",
+        headers=auth_headers(client),
+        json={
+            "patient_id": p.id,
+            "title": "Unresolved owner episode",
+            "episode_type": "gastroenterology",
+            "status": "active",
+            "priority": "routine",
+            "start_date": "2026-07-05",
+            "owner_provider_id": unresolved.id,
+        },
+    )
+
+    assert response.status_code == 404
+
+
 def test_list_patient_episodes_and_episode_appointments(client, db, auth_setup):
     p = patient(db)
     pr = provider(db)
@@ -75,6 +100,7 @@ def test_create_appointment_with_episode_and_reject_cross_patient(client, db, au
     pr = provider(db)
     rm = room(db)
     rm.clinic_id = auth_setup["clinic"].id
+    pr.clinic_id = auth_setup["clinic"].id
     sv = service(db)
     ep = episode(db, patient_obj=p, provider_obj=pr)
     other_ep = episode(db, patient_obj=other, provider_obj=pr, title="Other episode")

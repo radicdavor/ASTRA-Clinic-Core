@@ -1,4 +1,4 @@
-from app.models.domain import AuditLog, Clinic, ClinicalDocument, Patient, PatientClinicAssociation
+from app.models.domain import AuditLog, Clinic, ClinicalDocument, Institution, Patient, PatientClinicAssociation
 from tests.conftest import login_token
 from tests.factories import appointment
 
@@ -318,3 +318,123 @@ def test_audit_log_view_does_not_recursively_audit_itself(client, db, auth_setup
     assert first.status_code == 200
     assert second.status_code == 200
     assert db.query(AuditLog).filter(AuditLog.action == "audit_log.viewed").count() == 2
+
+
+def test_direct_audit_reference_requires_existing_scoped_event(client, db, auth_setup):
+    token = login_token(client, "admin@test.local")
+    local = AuditLog(
+        scope_type="clinic",
+        clinic_id=auth_setup["clinic"].id,
+        institution_id=auth_setup["clinic"].institution_id,
+        action="update",
+        entity_type="Appointment",
+        entity_id=11,
+    )
+    foreign_clinic = Clinic(name="Foreign direct audit reference")
+    db.add_all([local, foreign_clinic])
+    db.flush()
+    foreign = AuditLog(scope_type="clinic", clinic_id=foreign_clinic.id, action="update", entity_type="Appointment", entity_id=12)
+    db.add(foreign)
+    db.flush()
+
+    def record(entity_id):
+        return client.post(
+            "/api/audit/access-events",
+            headers={"Authorization": f"Bearer {token}"},
+            json={"action": "audit_log.viewed", "entity_type": "AuditLog", "entity_id": entity_id, "surface": "audit_viewer"},
+        )
+
+    allowed = record(local.id)
+    forbidden = record(foreign.id)
+    missing = record(999999)
+
+    assert allowed.status_code == 200
+    assert allowed.json()["entity_id"] == local.id
+    assert forbidden.status_code == 403
+    assert missing.status_code == 404
+
+
+def test_direct_system_audit_reference_requires_explicit_system_permission(client, db, auth_setup):
+    token = login_token(client, "admin@test.local")
+    system_event = AuditLog(scope_type="system_security", action="auth.browser_session_invalid", entity_type="user_session")
+    db.add(system_event)
+    db.flush()
+    auth_setup["admin"].role.permissions = [
+        permission for permission in auth_setup["admin"].role.permissions if permission.name != "system.admin"
+    ]
+    db.flush()
+
+    response = client.post(
+        "/api/audit/access-events",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"action": "audit_log.viewed", "entity_type": "AuditLog", "entity_id": system_event.id, "surface": "audit_viewer"},
+    )
+
+    assert response.status_code == 403
+
+
+def test_direct_institution_audit_reference_requires_matching_medical_scope(client, db, auth_setup):
+    token = login_token(client, "admin@test.local")
+    foreign_institution = Institution(code="audit-foreign", name="Foreign audit institution")
+    local = AuditLog(
+        scope_type="institution_clinical",
+        institution_id=auth_setup["clinic"].institution_id,
+        action="clinical_document_reviewed",
+        entity_type="ClinicalDocument",
+        entity_id=21,
+    )
+    foreign = AuditLog(
+        scope_type="institution_clinical",
+        action="clinical_document_reviewed",
+        entity_type="ClinicalDocument",
+        entity_id=22,
+    )
+    db.add_all([foreign_institution, local])
+    db.flush()
+    foreign.institution_id = foreign_institution.id
+    db.add(foreign)
+    db.flush()
+
+    def record(entity_id):
+        return client.post(
+            "/api/audit/access-events",
+            headers={"Authorization": f"Bearer {token}"},
+            json={"action": "audit_log.viewed", "entity_type": "AuditLog", "entity_id": entity_id, "surface": "audit_viewer"},
+        )
+
+    assert record(local.id).status_code == 200
+    assert record(foreign.id).status_code == 403
+
+
+def test_sensitive_access_returns_exact_event_created_even_if_later_id_exists(client, db, auth_setup, monkeypatch):
+    from app.audit.service import audit as real_audit
+
+    token = login_token(client, "admin@test.local")
+    patient = scoped_patient(db, auth_setup, first_name="Exact", last_name="Event")
+
+    def audit_with_concurrent_later_event(*args, **kwargs):
+        event = real_audit(*args, **kwargs)
+        session = args[0]
+        session.flush()
+        session.add(
+            AuditLog(
+                scope_type="clinic",
+                clinic_id=auth_setup["clinic"].id,
+                action="concurrent_event",
+                entity_type="Appointment",
+                entity_id=999,
+            )
+        )
+        session.flush()
+        return event
+
+    monkeypatch.setattr("app.services.audit_access.audit", audit_with_concurrent_later_event)
+    response = client.post(
+        "/api/audit/access-events",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"action": "patient.viewed", "entity_type": "Patient", "entity_id": patient.id, "surface": "patient_workspace"},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["action"] == "patient.viewed"
+    assert response.json()["entity_id"] == patient.id

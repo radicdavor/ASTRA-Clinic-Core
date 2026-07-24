@@ -50,7 +50,7 @@ def get_institution_clinical_plan(db: Session, plan_id: int, context: CurrentUse
 
 def provider_belongs_to_institution(db: Session, provider_clinic_id: int | None, context: CurrentUserContext) -> bool:
     if provider_clinic_id is None:
-        return True
+        return False
     return db.scalar(
         select(Clinic.id).where(
             Clinic.id == provider_clinic_id,

@@ -8,6 +8,8 @@ import logging
 import re
 
 from sqlalchemy import delete, select
+from sqlalchemy.dialects.postgresql import insert as postgresql_insert
+from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.core.config import get_settings
@@ -16,6 +18,8 @@ from app.models.domain import AuditLog, User, UserSession
 
 logger = logging.getLogger(__name__)
 SESSION_TOKEN_PATTERN = re.compile(r"^[A-Za-z0-9_-]{64}$")
+ANONYMOUS_AUDIT_WINDOW_MINUTES = 5
+ANONYMOUS_AUDIT_RETENTION_DAYS = 90
 
 
 def hash_session_secret(raw: str) -> str:
@@ -119,24 +123,56 @@ def write_security_audit_event(
     request_id: str | None = None,
     method: str | None = None,
     route: str | None = None,
+    aggregate_anonymous: bool = False,
+    occurred_at: datetime | None = None,
 ) -> bool:
     """Persist sanitized authentication metadata outside the request transaction."""
     AuditSession = sessionmaker(bind=bind, expire_on_commit=False)
     try:
         with AuditSession.begin() as audit_db:
-            audit_db.add(
-                AuditLog(
-                    scope_type="system_security",
-                    actor_type="user" if user_id else "system",
-                    actor_user_id=user_id,
-                    action=action,
-                    entity_type="user_session",
-                    entity_id=session_id,
-                    summary="Browser session security event.",
-                    request_id=request_id,
-                    after_json={"reason_code": reason_code, "method": method, "route": route},
+            now = occurred_at or datetime.now(UTC)
+            values = {
+                "scope_type": "system_security",
+                "actor_type": "user" if user_id else "system",
+                "actor_user_id": user_id,
+                "action": action,
+                "entity_type": "user_session",
+                "entity_id": session_id,
+                "summary": "Browser session security event.",
+                "request_id": request_id,
+                "after_json": {"reason_code": reason_code, "method": method, "route": route},
+                "occurrence_count": 1,
+                "first_seen_at": now,
+                "last_seen_at": now,
+            }
+            if aggregate_anonymous and user_id is None and session_id is None:
+                bucket_minute = (now.minute // ANONYMOUS_AUDIT_WINDOW_MINUTES) * ANONYMOUS_AUDIT_WINDOW_MINUTES
+                bucket = now.replace(minute=bucket_minute, second=0, microsecond=0)
+                safe_material = f"{action}|{reason_code}|{method or ''}|{route or ''}|{bucket.isoformat()}"
+                values["aggregation_key"] = sha256(safe_material.encode("utf-8")).hexdigest()
+                values["request_id"] = None
+                dialect_name = audit_db.get_bind().dialect.name
+                insert_factory = postgresql_insert if dialect_name == "postgresql" else sqlite_insert if dialect_name == "sqlite" else None
+                if insert_factory is None:
+                    raise RuntimeError(f"Unsupported audit aggregation dialect: {dialect_name}")
+                statement = insert_factory(AuditLog).values(**values)
+                statement = statement.on_conflict_do_update(
+                    index_elements=[AuditLog.aggregation_key],
+                    set_={
+                        "occurrence_count": AuditLog.occurrence_count + 1,
+                        "last_seen_at": now,
+                    },
                 )
-            )
+                audit_db.execute(statement)
+                cutoff = now - timedelta(days=ANONYMOUS_AUDIT_RETENTION_DAYS)
+                audit_db.execute(
+                    delete(AuditLog).where(
+                        AuditLog.aggregation_key.is_not(None),
+                        AuditLog.last_seen_at < cutoff,
+                    )
+                )
+            else:
+                audit_db.add(AuditLog(**values))
         return True
     except Exception as exc:
         logger.error(
@@ -183,6 +219,7 @@ def write_invalid_session_audit(db: Session, raw_session_token: str | None, requ
         request_id=getattr(request.state, "request_id", None),
         method=request.method,
         route=route,
+        aggregate_anonymous=user_id is None and session_id is None,
     )
 
 

@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session, joinedload
 from app.audit.service import audit, snapshot
 from app.auth.dependencies import Actor, CurrentUserContext, get_current_actor, require_active_clinic, require_permission
 from app.core.database import get_db
-from app.models.domain import Appointment, ClinicalEpisode, ClinicalReadinessReviewAcknowledgment, ClinicalReadinessSnapshot, Patient, Room, Service
+from app.models.domain import Appointment, ClinicalEpisode, ClinicalReadinessReviewAcknowledgment, ClinicalReadinessSnapshot, Patient, Provider, Room, Service
 from app.schemas.common import AppointmentCreate, AppointmentOut, AppointmentUpdate, ClinicalReadinessAcknowledgmentDetailResponse, ClinicalReadinessAcknowledgmentListResponse, ClinicalReadinessAcknowledgmentReadItem, ClinicalReadinessPreviewResponse, ClinicalReadinessSnapshotCaptureRequest, ClinicalReadinessSnapshotDetailResponse, ClinicalReadinessSnapshotHistoryItem, ClinicalReadinessSnapshotHistoryResponse, ClinicalReadinessSnapshotResponse, ClinicalReadinessSnapshotSupersedeRequest, ClinicalReadinessSnapshotSupersedeResponse, ErrorResponse
 from app.services.appointments import create_appointment_with_journey, validate_appointment_payload
 from app.services.clinical_readiness_preview import build_clinical_readiness_preview
@@ -291,7 +291,7 @@ def create_appointment(
     room = db.get(Room, data["room_id"])
     if room is None:
         raise HTTPException(404, detail="Soba nije pronadena")
-    if room.clinic_id is not None and room.clinic_id != context.active_clinic_id:
+    if room.clinic_id is None or room.clinic_id != context.active_clinic_id:
         raise HTTPException(403, detail="Termin se moze kreirati samo u aktivnoj klinici")
     data["clinic_id"] = context.active_clinic_id
     appointment = create_appointment_with_journey(db, data, context.actor, request)
@@ -582,8 +582,14 @@ def update_appointment(
     next_room = db.get(Room, next_room_id)
     if next_room is None:
         raise HTTPException(404, detail="Soba nije pronadena")
-    if next_room.clinic_id is not None and next_room.clinic_id != context.active_clinic_id:
+    if next_room.clinic_id is None or next_room.clinic_id != context.active_clinic_id:
         raise HTTPException(403, detail="Termin se moze premjestiti samo unutar aktivne klinike")
+    next_provider_id = update_data.get("provider_id", appointment.provider_id)
+    next_provider = db.get(Provider, next_provider_id)
+    if next_provider is None:
+        raise HTTPException(404, detail="Lijecnik nije pronaden")
+    if next_provider.clinic_id is None or next_provider.clinic_id != context.active_clinic_id:
+        raise HTTPException(403, detail="Termin se moze dodijeliti samo lijecniku aktivne klinike")
     update_data["clinic_id"] = context.active_clinic_id
     next_patient_id = update_data.get("patient_id", appointment.patient_id)
     if next_patient_id != appointment.patient_id:

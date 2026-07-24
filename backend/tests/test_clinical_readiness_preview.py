@@ -3,7 +3,7 @@ from datetime import datetime
 from app.models.domain import Appointment, AuditLog, ClinicalEpisode, ClinicalPlan, ClinicalReadinessSnapshot, PatientClinicalSummaryRecord
 from app.services.clinical_readiness_preview import build_clinical_readiness_preview
 from tests.conftest import login_token
-from tests.factories import appointment, clinical_document, episode, patient, service
+from tests.factories import appointment, clinic, clinical_document, episode, patient, service
 
 
 def auth_headers(client):
@@ -388,6 +388,67 @@ def test_unreviewed_ai_extraction_remains_excluded_with_service_templates(client
     body = response.json()
     assert all(item.get("source_ref") != f"ClinicalDocument:{doc.id}" for item in body["items"])
     assert not any(item["label"] == "Postoji otvoreno pitanje iz nepregledanog AI prijedloga" for item in body["items"])
+
+
+def test_unresolved_reviewed_evidence_is_explicit_limitation_and_not_positive_source(client, db, auth_setup):
+    colonoscopy = service(db, name="Kolonoskopija unresolved evidence")
+    appt = appointment(db, service_obj=colonoscopy)
+    appt.clinic_id = auth_setup["clinic"].id
+    unresolved = clinical_document(db, appt.patient, physician_reviewed=True)
+    unresolved.institution_id = None
+    unresolved.review_status = "reviewed"
+    db.commit()
+
+    response = preview(client, appt.id, auth_headers(client))
+
+    assert response.status_code == 200
+    body = response.json()
+    item = next(item for item in body["items"] if item["key"] == "unresolved_evidence_provenance")
+    assert item["status"] == "needs_physician_review"
+    assert item["source_type"] == "unresolved_evidence"
+    assert body["status"] == "needs_physician_review"
+    assert any("nije autoritativno" in limitation for limitation in body["limitations"])
+    assert all(item.get("source_ref") != f"ClinicalDocument:{unresolved.id}" for item in body["items"])
+
+
+def test_valid_official_evidence_remains_usable_while_unresolved_limitation_is_visible(client, db, auth_setup):
+    colonoscopy = service(db, name="Kolonoskopija mixed evidence")
+    appt = appointment(db, service_obj=colonoscopy)
+    appt.clinic_id = auth_setup["clinic"].id
+    valid = clinical_document(db, appt.patient, physician_reviewed=True)
+    valid.institution_id = auth_setup["clinic"].institution_id
+    valid.review_status = "reviewed"
+    valid.recommendations = ["Otvoreno pitanje iz valjanog izvora"]
+    unresolved = clinical_document(db, appt.patient, physician_reviewed=True)
+    unresolved.institution_id = None
+    unresolved.review_status = "reviewed"
+    db.commit()
+
+    response = preview(client, appt.id, auth_headers(client))
+
+    assert response.status_code == 200
+    body = response.json()
+    assert any(item.get("source_ref") == f"ClinicalDocument:{valid.id}" for item in body["items"])
+    assert any(item["key"] == "unresolved_evidence_provenance" for item in body["items"])
+    assert all(item.get("source_ref") != f"ClinicalDocument:{unresolved.id}" for item in body["items"])
+
+
+def test_foreign_clinic_unresolved_evidence_is_not_disclosed_in_readiness(client, db, auth_setup):
+    appt = appointment(db, service_obj=service(db, name="Kolonoskopija scoped unresolved evidence"))
+    appt.clinic_id = auth_setup["clinic"].id
+    foreign_clinic = clinic(db, "Foreign unresolved evidence clinic")
+    unresolved = clinical_document(db, appt.patient, physician_reviewed=True)
+    unresolved.clinic_id = foreign_clinic.id
+    unresolved.institution_id = None
+    unresolved.review_status = "reviewed"
+    db.commit()
+
+    response = preview(client, appt.id, auth_headers(client))
+
+    assert response.status_code == 200
+    body = response.json()
+    assert all(item["key"] != "unresolved_evidence_provenance" for item in body["items"])
+    assert all("nije autoritativno" not in limitation for limitation in body["limitations"])
 
 
 def test_patient_clinical_summary_remains_excluded_with_service_templates(client, db, auth_setup):

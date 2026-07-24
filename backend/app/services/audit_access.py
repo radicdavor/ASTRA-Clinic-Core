@@ -187,12 +187,49 @@ def _scoped_invoice(db: Session, invoice_id: int, clinic_id: int) -> Invoice:
     return invoice
 
 
-def _resolve_scoped_entity(db: Session, payload: SensitiveAccessEventIn, context: CurrentUserContext) -> tuple[int | None, int | None]:
+def _authorized_audit_reference(db: Session, audit_id: int, context: CurrentUserContext) -> AuditLog:
+    event = db.get(AuditLog, audit_id)
+    if event is None:
+        _not_found()
+    if event.scope_type == "clinic":
+        if event.clinic_id is None or event.clinic_id != context.active_clinic_id:
+            raise HTTPException(status_code=403, detail="Audit zapis nije dostupan u aktivnoj klinici")
+        return event
+    if event.scope_type in {"institution", "institution_clinical"}:
+        role = context.user.role
+        active_institution_id = context.active_clinic.institution_id if context.active_clinic else None
+        if (
+            role is None
+            or role.professional_category != "medical_staff"
+            or event.institution_id is None
+            or event.institution_id != active_institution_id
+        ):
+            raise HTTPException(status_code=403, detail="Klinički audit zapis nije dostupan u aktivnoj ustanovi")
+        return event
+    if event.scope_type == "system_security":
+        if "system.admin" not in context.permissions:
+            raise HTTPException(status_code=403, detail="Nedostaje dozvola za sigurnosni audit")
+        return event
+    raise HTTPException(status_code=403, detail="Audit zapis nema razriješen sigurnosni scope")
+
+
+def _resolve_scoped_entity(
+    db: Session,
+    payload: SensitiveAccessEventIn,
+    context: CurrentUserContext,
+    *,
+    allow_collection_reference: bool = False,
+) -> tuple[int | None, int | None]:
     if context.active_clinic_id is None:
         raise HTTPException(status_code=403, detail="Aktivna klinika nije razriješena")
     clinic_id = context.active_clinic_id
     if payload.action == "audit_log.viewed":
-        return payload.entity_id, clinic_id
+        if payload.entity_id is None:
+            if allow_collection_reference:
+                return None, clinic_id
+            raise HTTPException(status_code=422, detail="ID audit zapisa je obavezan")
+        event = _authorized_audit_reference(db, payload.entity_id, context)
+        return event.id, clinic_id
     if payload.entity_id is None:
         raise HTTPException(status_code=422, detail="ID objekta je obavezan za audit događaj")
 
@@ -262,7 +299,12 @@ def audit_sensitive_access(
         raise HTTPException(status_code=409, detail="Audit događaj se smije zapisati samo iz stvarnog radnog tijeka")
     _ensure_event_permission(context, definition)
 
-    entity_id, clinic_id = _resolve_scoped_entity(db, payload, context)
+    entity_id, clinic_id = _resolve_scoped_entity(
+        db,
+        payload,
+        context,
+        allow_collection_reference=internal,
+    )
     duplicate = _find_duplicate_interaction(db, payload, context, entity_id)
     if duplicate:
         return duplicate
@@ -272,7 +314,7 @@ def audit_sensitive_access(
         "clinic_id": clinic_id,
         "interaction_id": payload.interaction_id,
     }
-    audit(
+    event = audit(
         db,
         payload.action,
         payload.entity_type,
@@ -289,4 +331,4 @@ def audit_sensitive_access(
         institution_id=context.active_clinic.institution_id if context.active_clinic else None,
     )
     db.flush()
-    return db.scalars(select(AuditLog).order_by(AuditLog.id.desc()).limit(1)).one()
+    return event

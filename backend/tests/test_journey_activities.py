@@ -100,6 +100,24 @@ def test_added_activity_uses_only_active_clinic_resources_and_scopes_child_appoi
     assert db.query(JourneyActivity).filter_by(journey_id=journey["id"], activity_key="foreign").count() == 0
 
 
+def test_activity_rejects_provider_without_resolved_clinic_provenance(client, db, auth_setup):
+    journey, _ = canonical_journey(client, db)
+    payload = activity_payload(db, activity_key="unresolved-provider")
+    unresolved_provider = provider(db, "dr. Unresolved activity")
+    unresolved_provider.clinic_id = None
+    payload["provider_id"] = unresolved_provider.id
+    db.flush()
+
+    response = client.post(
+        f"/api/patient-journeys/{journey['id']}/activities",
+        headers=headers(client),
+        json=payload,
+    )
+
+    assert response.status_code == 403
+    assert db.query(JourneyActivity).filter_by(journey_id=journey["id"], activity_key="unresolved-provider").count() == 0
+
+
 def test_rejects_second_date_duplicate_key_and_patient_overlap(client, db, auth_setup):
     journey, _ = canonical_journey(client, db)
     wrong_day = client.post(

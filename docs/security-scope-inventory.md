@@ -41,11 +41,11 @@ path family was inspected.
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | patient create/list/duplicates/identity detail | Patient identity | global identity | authenticated identity workflow only | `PatientIdentityOut`; narrative notes excluded | patient/scheduling permission | `test_patient_oib.py` | intentional global identity |
 | patient appointment availability | Appointment availability | global identity | global patient time-conflict metadata only | availability projection | scheduling permission | `test_appointments.py` | intentional global availability |
-| appointment CRUD, status and slot routes | Appointment | clinic operations | active clinic, except explicit global patient overlap check | active-clinic appointment loader and clinic validation | appointment permission | `test_appointments.py` | enforced |
+| appointment CRUD, status and slot routes | Appointment | clinic operations | active clinic, except explicit global patient overlap check; unresolved rooms denied | exact active-clinic room validation and scoped appointment loader | appointment permission | `test_appointments.py` | enforced |
 | patient-journey CRUD and transition routes | PatientJourney | clinic operations | active clinic | journey parent loader | journey permission | `test_patient_journeys.py` | enforced |
 | journey activity, check-in, encounter, preparation, closure and timeline routes | journey children | clinic operations | scoped journey parent | parent-first active-clinic loader | route-specific journey permission | journey route suites and `test_remaining_patient_scope.py` | enforced |
 | reception and daily-dashboard routes | reception projection | clinic operations | active clinic | clinic-filtered dashboard/journey query | reception/dashboard permission | dashboard and check-in suites | enforced |
-| package preview, booking and materialization | package activities | clinic operations | active clinic and same-clinic resources | scoped catalog and appointment services | scheduling/catalog permission | `test_catalog_governance.py` | enforced |
+| package preview, booking and materialization | package activities | clinic operations | active clinic and exactly same-clinic room/provider resources | scoped catalog and appointment services | scheduling/catalog permission | `test_catalog_governance.py` | enforced |
 | appointment-material compatibility routes | material consumption | clinic operations | active clinic appointment | scoped appointment loader | material permission | inventory and remaining-scope suites | enforced |
 | invoice list/create/detail/update/issue | Invoice | clinic billing | invoice clinic equals active clinic | `get_active_clinic_invoice` and scoped list query | billing permission plus membership | `test_pr3_scope_audit_blockers.py` | enforced |
 | invoice line CRUD | InvoiceLine | clinic billing | scoped parent invoice | invoice-first loader | billing permission plus membership | `test_pr3_scope_audit_blockers.py` | enforced |
@@ -60,7 +60,7 @@ path family was inspected.
 | finding list/detail | ClinicalFinding | institution clinical | exact authorized institution | institution predicate in SQL | clinical read permission | finding read API and blocker suites | enforced |
 | open-question list/detail | ClinicalOpenQuestion | institution clinical | exact authorized institution | institution predicate in SQL | clinical read permission | open-question read API and blocker suites | enforced |
 | evidence timeline | derived evidence | institution clinical | exact institution source set | institution-filtered evidence builder | clinical read permission | evidence-timeline and DB-backed browser suites | enforced |
-| clinical-summary and readiness routes | derived clinical projection | institution clinical | one official reviewed source set from one institution | exact-source-set validator | summary/readiness permission | readiness snapshot and security suites | enforced |
+| clinical-summary and readiness routes | derived clinical projection | institution clinical | one official reviewed source set from one institution; unresolved evidence is explicit review-required limitation | exact-source-set validator and unresolved-evidence projection | summary/readiness permission | readiness snapshot and security suites | enforced |
 | clinical-document list/search/detail/download/write/review/addendum | ClinicalDocument | institution clinical | exact document institution; unresolved denied | canonical clinical-document access service | document operation permission | document provenance security suites | enforced |
 | signed-report view/print/addendum/delivery/history | SignedReport | institution clinical | exact report/document institution | report service through scoped document | report permission | signed-report security suites | enforced |
 | clinical-form routes | ClinicalFormInstance | institution clinical | scoped journey/activity/document parent | parent-first loaders | form permission | clinical-form suites | enforced |
@@ -68,9 +68,14 @@ path family was inspected.
 | laboratory order/result routes | LaboratoryOrder | institution clinical | direct institution provenance | institution predicate; unresolved denied | laboratory permission | laboratory and remaining-scope suites | enforced |
 | therapy routes | Therapy | institution clinical | direct institution provenance | institution predicate; unresolved denied | therapy permission | therapy and remaining-scope suites | enforced |
 | workflow clinical tasks | WorkflowTask | institution clinical | direct institution provenance | institution predicate; unresolved denied | workflow permission | `test_remaining_patient_scope.py` | enforced |
-| audit access-event write | SensitiveAccessEvent | system/audit write | provenance derived by backend | validated request/object context | authenticated controlled event write | `test_audit.py` | enforced |
+| audit access-event write | SensitiveAccessEvent | system/audit write | provenance derived by backend; direct audit references loaded and authorized | validated request/object context and exact returned ORM event | authenticated controlled event write | `test_audit.py`, PostgreSQL remediation suite | enforced |
 | audit-log list | AuditLog | system security audit | active clinic for standard view; null and foreign scope denied | `list_active_clinic_audit_events` | explicit audit permission plus membership | audit and blocker suites | enforced |
 | API-key issuance and AI intake | ApiKey/limited intake | tenant integration | fixed key clinic and institution | `require_tenant_clinic`; header cannot switch tenant | explicit key scopes | auth-permission and blocker suites | enforced |
+
+Anonymous rejected-session security signals use bounded, database-atomic
+five-minute aggregation. The aggregation fingerprint contains only sanitized
+event classification and normalized route metadata. It is not a credential,
+identity, IP-address, or patient fingerprint.
 
 ## Loader convention
 

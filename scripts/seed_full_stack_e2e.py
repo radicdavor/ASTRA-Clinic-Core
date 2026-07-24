@@ -38,6 +38,7 @@ from app.models.domain import (
     SignedClinicalReport,
     User,
 )
+from app.services.clinic_time import clinic_local_date
 from app.services.reports import report_digest
 from app.services.seed import PERMISSIONS
 
@@ -50,7 +51,7 @@ def clinic_today() -> date:
     override = os.getenv("ASTRA_E2E_DATE")
     if override:
         return date.fromisoformat(override)
-    return datetime.now(timezone.utc).date()
+    return clinic_local_date("Europe/Zagreb")
 
 
 def get_or_create_permission(db, name: str) -> Permission:

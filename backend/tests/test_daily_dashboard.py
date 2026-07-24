@@ -22,6 +22,7 @@ def scope_appointment(db, auth_setup, appt, clinic_obj=None):
     clinic_obj = clinic_obj or auth_setup["clinic"]
     appt.clinic_id = clinic_obj.id
     appt.room.clinic_id = clinic_obj.id
+    appt.provider.clinic_id = clinic_obj.id
     if not db.query(ClinicMembership).filter_by(user_id=auth_setup["admin"].id, clinic_id=clinic_obj.id).first():
         db.add(ClinicMembership(user_id=auth_setup["admin"].id, clinic_id=clinic_obj.id, created_by_user_id=auth_setup["admin"].id))
     if not db.query(PatientClinicAssociation).filter_by(patient_id=appt.patient_id, clinic_id=clinic_obj.id).first():
