@@ -55,21 +55,38 @@ classified; no `0067` object appears in the unclassified comparison output.
 
 ## Validation evidence
 
-Measured locally on 24 July 2026:
+Measured locally on 24–25 July 2026:
 
 - focused owning-module suite: `120 passed, 1 skipped`;
 - focused remediation checks after final adjustments: passed;
 - PostgreSQL remediation concurrency suite: `2 passed`;
 - empty PostgreSQL migration and downgrade/re-upgrade cycle: passed;
+- backend fast gate: `149 passed`;
+- backend full core shards: `226 passed, 1 skipped` and `547 passed`;
+- PostgreSQL integration gate: `18 passed`;
+- frontend contract/Vitest: `4 passed` and `57 passed`;
+- frontend typecheck, smoke, and production build: passed;
+- route-mocked Playwright: `1 passed`;
+- isolated PostgreSQL DB-backed Playwright: `11 passed`;
+- OpenAPI generated-type check: passed;
+- development and synthetic production-example Compose configuration: passed;
 - Python compile and `git diff --check`: passed.
 
-Full backend, frontend, browser, Compose, CI, independent review, and the new
-sealed Codex Security scan are closure gates and must be recorded here only
-after they are actually executed.
+The first full backend run exposed one legacy dashboard fixture whose provider
+had unresolved clinic provenance; the fixture was corrected and the complete
+gate was rerun. The first DB-backed browser run also reproduced a clinic-local
+midnight defect in its synthetic seed: the seed used the UTC date while the
+dashboard correctly used `Europe/Zagreb`. The seed now uses the canonical
+clinic-time helper and the complete isolated browser suite passes.
+
+`npm audit` separately reports three High dependency advisories in the current
+lockfile (`postcss`, `react-router`, and `react-router-dom`). They were not part
+of the six sealed diff-scan findings and are not silently rewritten in this
+narrow remediation. They remain explicit dependency-maintenance follow-up
+work rather than evidence that the six source findings are closed.
 
 ## Current decision
 
-Remediation is locally implemented and focused checks pass. PR #3 remains
-Draft until the full local gate, current-head CI, independent remediation
-review, merge into the PR #3 integration branch, and a new sealed full diff
-scan all pass.
+Remediation is locally implemented and the full local gate passes. PR #3
+remains Draft until current-head CI, independent remediation review, merge
+into the PR #3 integration branch, and a new sealed full diff scan all pass.
