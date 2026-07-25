@@ -9,7 +9,7 @@ from app.auth.dependencies import hash_api_key
 from app.core.security import hash_password
 from app.models.domain import ApiKey, AuditLog, PatientJourney, Role, User, UserSession
 from app.services.request_ids import REQUEST_ID_PATTERN, normalize_request_id
-from app.services.sessions import write_security_audit_event
+from app.services.sessions import SECURITY_AUDIT_EVENT_POLICIES, write_security_audit_event
 from tests.conftest import login_token
 from tests.factories import default_clinic, episode, patient, provider, room, service
 
@@ -123,6 +123,22 @@ def test_openapi_scheduling_contract_does_not_embed_clinical_episode(client):
     assert "episode" not in operational.get("properties", {})
     assert "episode" not in appointment.get("properties", {})
     assert "episode_id" in operational["properties"]
+
+
+def test_every_browser_security_event_has_an_explicit_persistence_class():
+    expected = {
+        "auth.browser_login_success": "individual",
+        "auth.browser_logout": "individual",
+        "auth.browser_session_revoked": "individual",
+        "auth.browser_session_invalid": "bounded_counter",
+        "auth.browser_csrf_invalid": "bounded_counter",
+        "auth.browser_credential_conflict": "bounded_counter",
+    }
+
+    assert {
+        action: policy.persistence_mode
+        for action, policy in SECURITY_AUDIT_EVENT_POLICIES.items()
+    } == expected
 
 
 def test_scheduling_read_update_and_episode_siblings_use_operational_projection(

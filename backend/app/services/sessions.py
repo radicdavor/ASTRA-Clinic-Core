@@ -48,19 +48,42 @@ class SecurityAuditEventPolicy:
 
 
 SECURITY_AUDIT_EVENT_POLICIES: dict[str, SecurityAuditEventPolicy] = {
-    action: SecurityAuditEventPolicy(
-        action=action,
-        persistence_mode="bounded_counter",
-        aggregation_window_minutes=ANONYMOUS_AUDIT_WINDOW_MINUTES,
-        retention_days=ANONYMOUS_AUDIT_RETENTION_DAYS,
-        include_actor_identity_in_key=True,
-    )
-    for action in (
-        "auth.browser_session_invalid",
-        "auth.browser_csrf_invalid",
-        "auth.browser_credential_conflict",
-    )
+    **{
+        action: SecurityAuditEventPolicy(
+            action=action,
+            persistence_mode="individual",
+            aggregation_window_minutes=None,
+            retention_days=None,
+            include_actor_identity_in_key=True,
+        )
+        for action in (
+            "auth.browser_login_success",
+            "auth.browser_logout",
+            "auth.browser_session_revoked",
+        )
+    },
+    **{
+        action: SecurityAuditEventPolicy(
+            action=action,
+            persistence_mode="bounded_counter",
+            aggregation_window_minutes=ANONYMOUS_AUDIT_WINDOW_MINUTES,
+            retention_days=ANONYMOUS_AUDIT_RETENTION_DAYS,
+            include_actor_identity_in_key=True,
+        )
+        for action in (
+            "auth.browser_session_invalid",
+            "auth.browser_csrf_invalid",
+            "auth.browser_credential_conflict",
+        )
+    },
 }
+
+
+def _security_audit_policy(action: str) -> SecurityAuditEventPolicy:
+    policy = SECURITY_AUDIT_EVENT_POLICIES.get(action)
+    if policy is None:
+        raise ValueError("Security audit action has no persistence policy")
+    return policy
 
 
 def _safe_reason_code(value: str) -> str:
@@ -158,6 +181,9 @@ def csrf_token_matches(session: UserSession, raw_csrf_token: str | None) -> bool
 
 
 def record_session_audit(db: Session, action: str, *, user_id: int | None = None, session_id: int | None = None, summary: str | None = None) -> None:
+    policy = _security_audit_policy(action)
+    if policy.persistence_mode != "individual":
+        raise ValueError("Bounded security audit actions require independent persistence")
     db.add(
         AuditLog(
             scope_type="system_security",
@@ -190,9 +216,7 @@ def write_security_audit_event(
     try:
         with AuditSession.begin() as audit_db:
             now = occurred_at or datetime.now(UTC)
-            policy = SECURITY_AUDIT_EVENT_POLICIES.get(action)
-            if policy is None:
-                raise ValueError("Security audit action has no persistence policy")
+            policy = _security_audit_policy(action)
             safe_reason = _safe_reason_code(reason_code)
             safe_method = _safe_http_method(method)
             safe_route = _safe_route_template(route)
