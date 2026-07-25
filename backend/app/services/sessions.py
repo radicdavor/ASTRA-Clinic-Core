@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
+from dataclasses import dataclass
 from hashlib import sha256
 from hmac import compare_digest
 from secrets import token_urlsafe
 import logging
 import re
+from typing import Literal
 
 from sqlalchemy import delete, select
 from sqlalchemy.dialects.postgresql import insert as postgresql_insert
@@ -14,12 +16,68 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from app.core.config import get_settings
 from app.models.domain import AuditLog, User, UserSession
+from app.services.request_ids import normalize_request_id
 
 
 logger = logging.getLogger(__name__)
 SESSION_TOKEN_PATTERN = re.compile(r"^[A-Za-z0-9_-]{64}$")
 ANONYMOUS_AUDIT_WINDOW_MINUTES = 5
 ANONYMOUS_AUDIT_RETENTION_DAYS = 90
+SECURITY_AUDIT_CLEANUP_BATCH_SIZE = 100
+SECURITY_AUDIT_REASON_CODES = frozenset(
+    {
+        "missing",
+        "malformed",
+        "unknown",
+        "revoked",
+        "expired",
+        "inactive_user",
+        "active",
+        "session_hash_mismatch",
+    }
+)
+
+
+@dataclass(frozen=True)
+class SecurityAuditEventPolicy:
+    action: str
+    persistence_mode: Literal["individual", "bounded_counter"]
+    aggregation_window_minutes: int | None
+    retention_days: int | None
+    include_actor_identity_in_key: bool
+
+
+SECURITY_AUDIT_EVENT_POLICIES: dict[str, SecurityAuditEventPolicy] = {
+    action: SecurityAuditEventPolicy(
+        action=action,
+        persistence_mode="bounded_counter",
+        aggregation_window_minutes=ANONYMOUS_AUDIT_WINDOW_MINUTES,
+        retention_days=ANONYMOUS_AUDIT_RETENTION_DAYS,
+        include_actor_identity_in_key=True,
+    )
+    for action in (
+        "auth.browser_session_invalid",
+        "auth.browser_csrf_invalid",
+        "auth.browser_credential_conflict",
+    )
+}
+
+
+def _safe_reason_code(value: str) -> str:
+    return value if value in SECURITY_AUDIT_REASON_CODES else "unknown"
+
+
+def _safe_http_method(value: str | None) -> str | None:
+    if value is None:
+        return None
+    normalized = value.upper()
+    return normalized if normalized in {"GET", "HEAD", "OPTIONS", "POST", "PUT", "PATCH", "DELETE"} else None
+
+
+def _safe_route_template(value: str | None) -> str | None:
+    if value is None or len(value) > 160 or not value.startswith("/"):
+        return None
+    return value if re.fullmatch(r"/[A-Za-z0-9_{}./:-]*", value) else None
 
 
 def hash_session_secret(raw: str) -> str:
@@ -128,9 +186,16 @@ def write_security_audit_event(
 ) -> bool:
     """Persist sanitized authentication metadata outside the request transaction."""
     AuditSession = sessionmaker(bind=bind, expire_on_commit=False)
+    canonical_request_id = normalize_request_id(request_id)
     try:
         with AuditSession.begin() as audit_db:
             now = occurred_at or datetime.now(UTC)
+            policy = SECURITY_AUDIT_EVENT_POLICIES.get(action)
+            if policy is None:
+                raise ValueError("Security audit action has no persistence policy")
+            safe_reason = _safe_reason_code(reason_code)
+            safe_method = _safe_http_method(method)
+            safe_route = _safe_route_template(route)
             values = {
                 "scope_type": "system_security",
                 "actor_type": "user" if user_id else "system",
@@ -139,16 +204,21 @@ def write_security_audit_event(
                 "entity_type": "user_session",
                 "entity_id": session_id,
                 "summary": "Browser session security event.",
-                "request_id": request_id,
-                "after_json": {"reason_code": reason_code, "method": method, "route": route},
+                "request_id": canonical_request_id,
+                "after_json": {"reason_code": safe_reason, "method": safe_method, "route": safe_route},
                 "occurrence_count": 1,
                 "first_seen_at": now,
                 "last_seen_at": now,
             }
-            if aggregate_anonymous and user_id is None and session_id is None:
-                bucket_minute = (now.minute // ANONYMOUS_AUDIT_WINDOW_MINUTES) * ANONYMOUS_AUDIT_WINDOW_MINUTES
+            if policy.persistence_mode == "bounded_counter":
+                window = policy.aggregation_window_minutes or ANONYMOUS_AUDIT_WINDOW_MINUTES
+                bucket_minute = (now.minute // window) * window
                 bucket = now.replace(minute=bucket_minute, second=0, microsecond=0)
-                safe_material = f"{action}|{reason_code}|{method or ''}|{route or ''}|{bucket.isoformat()}"
+                actor_material = f"{user_id or ''}|{session_id or ''}" if policy.include_actor_identity_in_key else ""
+                safe_material = (
+                    f"{action}|{safe_reason}|{safe_method or ''}|{safe_route or ''}|"
+                    f"{actor_material}|{bucket.isoformat()}"
+                )
                 values["aggregation_key"] = sha256(safe_material.encode("utf-8")).hexdigest()
                 values["request_id"] = None
                 dialect_name = audit_db.get_bind().dialect.name
@@ -164,12 +234,19 @@ def write_security_audit_event(
                     },
                 )
                 audit_db.execute(statement)
-                cutoff = now - timedelta(days=ANONYMOUS_AUDIT_RETENTION_DAYS)
-                audit_db.execute(
-                    delete(AuditLog).where(
+                cutoff = now - timedelta(days=policy.retention_days or ANONYMOUS_AUDIT_RETENTION_DAYS)
+                expired_ids = (
+                    select(AuditLog.id)
+                    .where(
                         AuditLog.aggregation_key.is_not(None),
+                        AuditLog.last_seen_at.is_not(None),
                         AuditLog.last_seen_at < cutoff,
                     )
+                    .order_by(AuditLog.last_seen_at, AuditLog.id)
+                    .limit(SECURITY_AUDIT_CLEANUP_BATCH_SIZE)
+                )
+                audit_db.execute(
+                    delete(AuditLog).where(AuditLog.id.in_(expired_ids))
                 )
             else:
                 audit_db.add(AuditLog(**values))
@@ -177,7 +254,7 @@ def write_security_audit_event(
     except Exception as exc:
         logger.error(
             "Security audit persistence failed; request_id=%s action=%s error_type=%s",
-            request_id,
+            canonical_request_id,
             action,
             type(exc).__name__,
         )
