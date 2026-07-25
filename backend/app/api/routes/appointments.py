@@ -8,12 +8,11 @@ from app.audit.service import audit, snapshot
 from app.auth.dependencies import Actor, CurrentUserContext, get_current_actor, require_active_clinic, require_permission
 from app.core.database import get_db
 from app.models.domain import Appointment, ClinicalEpisode, ClinicalReadinessReviewAcknowledgment, ClinicalReadinessSnapshot, Patient, Provider, Room, Service
-from app.schemas.common import AppointmentCreate, AppointmentOut, AppointmentUpdate, ClinicalReadinessAcknowledgmentDetailResponse, ClinicalReadinessAcknowledgmentListResponse, ClinicalReadinessAcknowledgmentReadItem, ClinicalReadinessPreviewResponse, ClinicalReadinessSnapshotCaptureRequest, ClinicalReadinessSnapshotDetailResponse, ClinicalReadinessSnapshotHistoryItem, ClinicalReadinessSnapshotHistoryResponse, ClinicalReadinessSnapshotResponse, ClinicalReadinessSnapshotSupersedeRequest, ClinicalReadinessSnapshotSupersedeResponse, ErrorResponse
-from app.services.appointments import create_appointment_with_journey, validate_appointment_payload
+from app.schemas.common import AppointmentCreate, AppointmentOperationalOut, AppointmentUpdate, ClinicalReadinessAcknowledgmentDetailResponse, ClinicalReadinessAcknowledgmentListResponse, ClinicalReadinessAcknowledgmentReadItem, ClinicalReadinessPreviewResponse, ClinicalReadinessSnapshotCaptureRequest, ClinicalReadinessSnapshotDetailResponse, ClinicalReadinessSnapshotHistoryItem, ClinicalReadinessSnapshotHistoryResponse, ClinicalReadinessSnapshotResponse, ClinicalReadinessSnapshotSupersedeRequest, ClinicalReadinessSnapshotSupersedeResponse, ErrorResponse
+from app.services.appointments import create_appointment_with_journey, resolve_appointment_episode_reference, validate_appointment_payload
 from app.services.clinical_readiness_preview import build_clinical_readiness_preview
 from app.services.clinical_readiness_acknowledgments import get_clinical_readiness_review_acknowledgment, list_clinical_readiness_review_acknowledgments, record_acknowledgment_read_denied_audit
 from app.services.clinical_readiness_snapshots import SnapshotIdempotencyConflict, capture_clinical_readiness_snapshot, supersede_clinical_readiness_snapshot
-from app.services.clinical_scope import get_institution_episode
 from app.services.clinical_document_access import actor_institution_scope, institution_id_for_clinic
 
 ERROR_RESPONSES = {
@@ -43,8 +42,6 @@ def appointment_load_options():
         joinedload(Appointment.service),
         joinedload(Appointment.provider),
         joinedload(Appointment.room),
-        joinedload(Appointment.episode).joinedload(ClinicalEpisode.patient),
-        joinedload(Appointment.episode).joinedload(ClinicalEpisode.owner_provider),
     )
 
 
@@ -272,15 +269,15 @@ def _get_acknowledgment_read_appointment_or_404(
 
 
 def validate_episode_for_patient(db: Session, episode_id: int | None, patient_id: int, context: CurrentUserContext) -> ClinicalEpisode | None:
-    if episode_id is None:
-        return None
-    episode = get_institution_episode(db, episode_id, context)
-    if episode.patient_id != patient_id:
-        raise HTTPException(422, detail="Klinicka epizoda mora pripadati istom pacijentu kao termin")
-    return episode
+    return resolve_appointment_episode_reference(
+        db,
+        episode_id=episode_id,
+        patient_id=patient_id,
+        institution_id=context.active_clinic.institution_id if context.active_clinic else None,
+    )
 
 
-@router.post("/appointments", response_model=AppointmentOut)
+@router.post("/appointments", response_model=AppointmentOperationalOut)
 def create_appointment(
     payload: AppointmentCreate,
     request: Request,
@@ -299,7 +296,7 @@ def create_appointment(
     return get_appointment_or_404(db, appointment.id)
 
 
-@router.get("/appointments", response_model=list[AppointmentOut])
+@router.get("/appointments", response_model=list[AppointmentOperationalOut])
 def list_appointments(
     date_from: date | None = None,
     date_to: date | None = None,
@@ -335,7 +332,7 @@ def list_appointments(
     return db.scalars(stmt.limit(limit)).all()
 
 
-@router.get("/appointments/{appointment_id}", response_model=AppointmentOut)
+@router.get("/appointments/{appointment_id}", response_model=AppointmentOperationalOut)
 def get_appointment(
     appointment_id: int,
     db: Session = Depends(get_db),
@@ -565,7 +562,7 @@ def supersede_appointment_clinical_readiness_snapshot(
     )
 
 
-@router.patch("/appointments/{appointment_id}", response_model=AppointmentOut)
+@router.patch("/appointments/{appointment_id}", response_model=AppointmentOperationalOut)
 def update_appointment(
     appointment_id: int,
     payload: AppointmentUpdate,
@@ -659,7 +656,7 @@ def delete_appointment(
     return {"ok": True}
 
 
-@router.get("/schedule/day", response_model=list[AppointmentOut])
+@router.get("/schedule/day", response_model=list[AppointmentOperationalOut])
 def day_schedule(
     date: date = Query(...),
     db: Session = Depends(get_db),

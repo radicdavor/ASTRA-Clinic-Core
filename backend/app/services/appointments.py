@@ -33,6 +33,31 @@ APPOINTMENT_STATUSES_BLOCKING_PATIENT_TIME = {
 BLOCKING_STATUSES = APPOINTMENT_STATUSES_BLOCKING_PATIENT_TIME
 
 PATIENT_SCHEDULING_LOCK_NAMESPACE = 42001
+
+
+def resolve_appointment_episode_reference(
+    db: Session,
+    *,
+    episode_id: int | None,
+    patient_id: int,
+    institution_id: int | None,
+) -> ClinicalEpisode | None:
+    """Resolve an opaque scheduling reference without granting clinical read."""
+
+    if episode_id is None:
+        return None
+    if institution_id is None:
+        raise HTTPException(404, detail="Klinicka epizoda nije pronadena")
+    episode = db.scalar(
+        select(ClinicalEpisode).where(
+            ClinicalEpisode.id == episode_id,
+            ClinicalEpisode.patient_id == patient_id,
+            ClinicalEpisode.institution_id == institution_id,
+        )
+    )
+    if episode is None:
+        raise HTTPException(404, detail="Klinicka epizoda nije pronadena")
+    return episode
 SOURCE_TO_INTAKE = {"web_booking": "web", "ai_agent": "ai_secretary"}
 
 
@@ -129,13 +154,12 @@ def create_appointment_with_journey(db: Session, data: dict, actor: Actor, reque
     if provider is None or provider.clinic_id is None or provider.clinic_id != requested_clinic_id:
         raise HTTPException(404, detail="Lijecnik nije pronaden")
     clinic = db.get(Clinic, data.get("clinic_id")) if data.get("clinic_id") is not None else None
-    episode_id = data.get("episode_id")
-    if episode_id:
-        episode = db.get(ClinicalEpisode, episode_id)
-        if not episode or clinic is None or episode.institution_id != clinic.institution_id:
-            raise HTTPException(404, detail="Klinicka epizoda nije pronadena")
-        if episode.patient_id != patient_id:
-            raise HTTPException(422, detail="Klinicka epizoda mora pripadati istom pacijentu kao termin")
+    resolve_appointment_episode_reference(
+        db,
+        episode_id=data.get("episode_id"),
+        patient_id=patient_id,
+        institution_id=clinic.institution_id if clinic else None,
+    )
     data["duration_minutes"] = validate_appointment_payload(
         db,
         data["date"],

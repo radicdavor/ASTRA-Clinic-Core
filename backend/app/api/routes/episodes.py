@@ -218,7 +218,12 @@ def episode_appointments(episode_id: int, db: Session = Depends(get_db), context
     episode = get_episode_or_404(db, episode_id, context)
     return db.scalars(
         select(Appointment)
-        .options(joinedload(Appointment.patient), joinedload(Appointment.service), joinedload(Appointment.provider), joinedload(Appointment.room), joinedload(Appointment.episode).joinedload(ClinicalEpisode.patient), joinedload(Appointment.episode).joinedload(ClinicalEpisode.owner_provider))
+        .options(
+            joinedload(Appointment.patient),
+            joinedload(Appointment.service),
+            joinedload(Appointment.provider),
+            joinedload(Appointment.room),
+        )
         .join(Clinic, Clinic.id == Appointment.clinic_id)
         .where(Appointment.episode_id == episode_id, Clinic.institution_id == episode.institution_id)
         .order_by(Appointment.date.desc(), Appointment.start_time.desc())

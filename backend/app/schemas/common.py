@@ -1839,7 +1839,12 @@ class AppointmentOut(AppointmentCreate, ORMModel):
     service: ServiceOut | None = None
     provider: ProviderOut | None = None
     room: RoomOut | None = None
-    episode: ClinicalEpisodeOut | None = None
+
+
+class AppointmentOperationalOut(AppointmentOut):
+    """Scheduling-only projection; ``episode_id`` remains an opaque reference."""
+
+    model_config = ConfigDict(from_attributes=True, extra="forbid")
 
 
 class AppointmentClinicSummary(BaseModel):
