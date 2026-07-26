@@ -226,13 +226,32 @@ test("DB-backed medical staff can read scoped clinical readiness", async ({ page
   }
 });
 
-test("DB-backed browser session survives refresh and logout revokes protected access", async ({ page }) => {
+test("DB-backed browser session survives failed logout and successful retry revokes protected access", async ({ page }) => {
   await login(page, seed.users.receptionA);
   await expect(page.getByText("Danas u poliklinici")).toBeVisible();
   await page.reload();
   await expect(page.getByText("Danas u poliklinici")).toBeVisible();
   await expect.poll(() => page.evaluate(() => sessionStorage.getItem("astra_token"))).toBeNull();
   await expect.poll(() => page.evaluate(() => localStorage.getItem("astra_token"))).toBeNull();
+
+  let failFirstLogout = true;
+  await page.route("**/auth/browser/logout", async (route) => {
+    if (failFirstLogout) {
+      failFirstLogout = false;
+      await route.fulfill({
+        status: 403,
+        contentType: "application/json",
+        body: JSON.stringify({ detail: "CSRF provjera nije uspjela" }),
+      });
+      return;
+    }
+    await route.continue();
+  });
+
+  await page.getByTitle("Odjava").click();
+  await expect(page.getByText("Odjava nije uspjela. Pokušajte ponovno.")).toBeVisible();
+  await expect(page).not.toHaveURL(/\/login$/);
+  await expect(page.getByText("Danas u poliklinici")).toBeVisible();
 
   await page.getByTitle("Odjava").click();
   await expect(page).toHaveURL(/\/login$/);

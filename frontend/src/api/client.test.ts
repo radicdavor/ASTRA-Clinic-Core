@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, test, vi } from "vitest";
-import { api, clearSessionState, login } from "./client";
+import { api, clearSessionState, login, logout, setSessionUser } from "./client";
 
 describe("browser session client", () => {
   beforeEach(() => {
@@ -48,5 +48,40 @@ describe("browser session client", () => {
     expect(localStorage.getItem("astra_user")).toBeNull();
     expect(localStorage.getItem("astra_active_clinic_id")).toBeNull();
     expect(localStorage.getItem("astra_active_clinic_timezone")).toBeNull();
+  });
+
+  test("logout rejects an HTTP error and preserves local session state", async () => {
+    setSessionUser({ id: 1, name: "Admin", email: "admin@example.invalid", role: "admin" });
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(
+      JSON.stringify({ detail: "CSRF provjera nije uspjela" }),
+      { status: 403, headers: { "Content-Type": "application/json" } },
+    )));
+
+    await expect(logout()).rejects.toMatchObject({ status: 403 });
+
+    expect(localStorage.getItem("astra_user")).toContain("Admin");
+  });
+
+  test("logout propagates a network failure and preserves local session state", async () => {
+    setSessionUser({ id: 1, name: "Admin", email: "admin@example.invalid", role: "admin" });
+    vi.stubGlobal("fetch", vi.fn(async () => {
+      throw new TypeError("Network request failed");
+    }));
+
+    await expect(logout()).rejects.toThrow("Network request failed");
+
+    expect(localStorage.getItem("astra_user")).toContain("Admin");
+  });
+
+  test("logout rejects an unconfirmed success response and preserves local session state", async () => {
+    setSessionUser({ id: 1, name: "Admin", email: "admin@example.invalid", role: "admin" });
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(
+      JSON.stringify({ logged_out: false, revoked: false }),
+      { status: 200, headers: { "Content-Type": "application/json" } },
+    )));
+
+    await expect(logout()).rejects.toThrow("Odjava nije potvrđena.");
+
+    expect(localStorage.getItem("astra_user")).toContain("Admin");
   });
 });
