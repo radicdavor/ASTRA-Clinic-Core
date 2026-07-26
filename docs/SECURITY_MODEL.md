@@ -34,3 +34,22 @@ Structured audit records include:
 - request id
 
 Security-sensitive workflows must be covered by tests before production use.
+
+## Operational projections
+
+Operational appointment, search, workflow and patient-journey responses use
+purpose-built schemas. They may expose the minimum identity, time, service,
+room and status data needed for clinic operations, but they never embed patient
+or appointment free-text notes. Clinical narrative is available only through
+separately authorized clinical or patient-detail routes.
+
+Response shapes are stable across roles. Frontend field hiding is never used as
+an authorization boundary.
+
+## Clinical document classification
+
+New manually created or directly inserted clinical documents default to
+`unclassified`. Standard clinical read paths deny them until an authorized
+human reviewer assigns a supported classification. Trusted signed-report and
+reviewed ingestion paths must set `clinical` explicitly. Classification
+defaults are fail-closed in both the application model and database schema.

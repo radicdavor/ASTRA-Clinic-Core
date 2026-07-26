@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session, joinedload
 from app.audit.service import audit, snapshot
 from app.auth.dependencies import Actor, CurrentUserContext, get_scoped_patient, require_active_clinic, require_medical_staff, require_permission
 from app.core.database import get_db
-from app.models.domain import Appointment, Clinic, Provider, WorkflowChecklistItem, WorkflowTask, WorkflowTemplate
+from app.models.domain import Appointment, Clinic, ClinicalEpisode, Patient, Provider, WorkflowChecklistItem, WorkflowTask, WorkflowTemplate
 from app.schemas.common import ErrorResponse, WorkflowTaskCreate, WorkflowTaskOut, WorkflowTaskUpdate, WorkflowTemplateCreate, WorkflowTemplateOut
 from app.services.clinical_scope import authorized_institution_id, get_institution_episode, provider_belongs_to_institution
 
@@ -24,9 +24,25 @@ def task_query(institution_id: int):
     return (
         select(WorkflowTask)
         .options(
-            joinedload(WorkflowTask.patient),
-            joinedload(WorkflowTask.episode),
-            joinedload(WorkflowTask.assignee_provider),
+            joinedload(WorkflowTask.patient).load_only(
+                Patient.id,
+                Patient.first_name,
+                Patient.last_name,
+                Patient.date_of_birth,
+            ),
+            joinedload(WorkflowTask.episode).load_only(
+                ClinicalEpisode.id,
+                ClinicalEpisode.title,
+                ClinicalEpisode.episode_type,
+                ClinicalEpisode.status,
+            ),
+            joinedload(WorkflowTask.assignee_provider).load_only(
+                Provider.id,
+                Provider.full_name,
+                Provider.specialty,
+                Provider.staff_role,
+                Provider.clinic_id,
+            ),
             joinedload(WorkflowTask.checklist),
         )
         .where(WorkflowTask.institution_id == institution_id)

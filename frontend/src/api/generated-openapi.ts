@@ -1472,7 +1472,7 @@ export type JourneyOut = {
   events?: Array<JourneyEventOut>;
   id: number;
   intake_channel: string;
-  patient: app__schemas__patient_journeys__PatientBrief;
+  patient: PatientReceptionIdentityOut;
   patient_id: number;
   payment_status: string;
   preparation_status: string;
@@ -1615,7 +1615,7 @@ export type LabOrderOut = {
   id: number;
   notes: string | null;
   ordered_at: string;
-  patient: app__schemas__laboratory__PatientBrief;
+  patient: PatientBrief;
   patient_id: number;
   results: Array<LabResultOut>;
   review_conclusion: string | null;
@@ -1785,6 +1785,13 @@ export type PatientAppointmentAvailabilityOut = {
   status: string;
 };
 
+export type PatientBrief = {
+  date_of_birth?: string | null;
+  first_name: string;
+  id: number;
+  last_name: string;
+};
+
 export type PatientClinicalRecordItem = {
   addendum_count?: number;
   author?: string | null;
@@ -1923,11 +1930,13 @@ export type PatientOut = {
 export type PatientReceptionIdentityOut = {
   date_of_birth?: string | null;
   email?: string | null;
+  email_verified_at?: string | null;
   first_name: string;
   id: number;
   last_name: string;
   oib?: string | null;
   phone?: string | null;
+  updated_at: string;
 };
 
 export type PatientUpdate = {
@@ -2265,6 +2274,29 @@ export type RoomOut = {
   visible_in_catalog?: boolean;
 };
 
+export type SearchAppointmentOut = {
+  clinic_id?: number | null;
+  date: string;
+  end_time: string;
+  id: number;
+  patient_id: number;
+  patient_name: string;
+  provider_id: number;
+  provider_name: string;
+  room_id: number;
+  room_name: string;
+  service_id: number;
+  service_name: string;
+  start_time: string;
+  status: string;
+};
+
+export type SearchResponse = {
+  appointments: Array<SearchAppointmentOut>;
+  patients: Array<PatientIdentityOut>;
+  services: Array<ServiceOperationalOut>;
+};
+
 export type SensitiveAccessEventIn = {
   action: 'patient.viewed' | 'clinical_workspace.opened' | 'clinical_form.viewed' | 'signed_report.viewed' | 'source_document.viewed' | 'source_document.downloaded' | 'billing_details.viewed' | 'patient_export.created' | 'clinical_report.printed' | 'audit_log.viewed';
   entity_id?: number | null;
@@ -2463,7 +2495,7 @@ export type TherapyOut = {
   name: string;
   notes: string | null;
   parent_therapy_id: number | null;
-  patient: app__schemas__therapies__PatientBrief;
+  patient: PatientBrief;
   patient_id: number;
   prescriber: string | null;
   start_date: string;
@@ -2533,6 +2565,13 @@ export type WorkflowChecklistItemOut = {
   task_id: number;
 };
 
+export type WorkflowEpisodeOperationalOut = {
+  episode_type: string;
+  id: number;
+  status: string;
+  title: string;
+};
+
 export type WorkflowTaskCreate = {
   appointment_id?: number | null;
   assignee_provider_id?: number | null;
@@ -2556,13 +2595,13 @@ export type WorkflowTaskOut = {
   created_by?: number | null;
   description?: string | null;
   due_date?: string | null;
-  episode?: ClinicalEpisodeOut | null;
+  episode?: WorkflowEpisodeOperationalOut | null;
   episode_id?: number | null;
   id: number;
-  patient?: PatientOut | null;
+  patient?: PatientOperationalIdentityOut | null;
   patient_id: number;
   priority: string;
-  provider?: ProviderOut | null;
+  provider?: ProviderOperationalOut | null;
   responsible_role?: string | null;
   status: string;
   template_id?: number | null;
@@ -2599,30 +2638,4 @@ export type WorkflowTemplateOut = {
   key: string;
   name: string;
   updated_at: string;
-};
-
-export type app__schemas__laboratory__PatientBrief = {
-  date_of_birth?: string | null;
-  first_name: string;
-  id: number;
-  last_name: string;
-};
-
-export type app__schemas__patient_journeys__PatientBrief = {
-  date_of_birth?: string | null;
-  email?: string | null;
-  email_verified_at?: string | null;
-  first_name: string;
-  id: number;
-  last_name: string;
-  notes?: string | null;
-  oib?: string | null;
-  phone?: string | null;
-};
-
-export type app__schemas__therapies__PatientBrief = {
-  date_of_birth?: string | null;
-  first_name: string;
-  id: number;
-  last_name: string;
 };

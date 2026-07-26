@@ -1,6 +1,7 @@
 from datetime import date, datetime, time
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 from app.core.clinical_registries import ACTIVITY_KINDS, SPECIALTY_KEYS
+from app.schemas.common import PatientReceptionIdentityOut
 
 class JourneyCreate(BaseModel):
     appointment_id:int
@@ -79,10 +80,6 @@ class JourneyActivityOut(BaseModel):
     model_config=ConfigDict(from_attributes=True)
     id:int;journey_id:int;appointment_id:int|None;service_id:int;activity_key:str;activity_kind:str;specialty_key:str;clinic_id:int|None;primary_provider_id:int|None;room_id:int|None;sequence:int;depends_on_activity_id:int|None;required:bool;planned_start:datetime;planned_end:datetime;actual_start:datetime|None;actual_end:datetime|None;status:str;not_performed_reason:str|None;form_resolution_status:str;billing_status:str;consumables_status:str;created_at:datetime;updated_at:datetime
 
-class PatientBrief(BaseModel):
-    model_config=ConfigDict(from_attributes=True)
-    id:int;first_name:str;last_name:str;date_of_birth:date|None=None;oib:str|None=None;email:str|None=None;phone:str|None=None;notes:str|None=None;email_verified_at:datetime|None=None
-
 class JourneyOut(BaseModel):
     model_config=ConfigDict(from_attributes=True)
-    id:int;patient_id:int;appointment_id:int;intake_channel:str;current_stage:str;document_status:str;preparation_status:str;check_in_status:str;encounter_status:str;consumables_status:str;billing_status:str;payment_status:str;closed_at:datetime|None;created_at:datetime;updated_at:datetime;patient:PatientBrief;appointment:JourneyAppointmentBrief;activities:list[JourneyActivityOut]=[];events:list[JourneyEventOut]=[];blockers:list[JourneyBlockerOut]=[]
+    id:int;patient_id:int;appointment_id:int;intake_channel:str;current_stage:str;document_status:str;preparation_status:str;check_in_status:str;encounter_status:str;consumables_status:str;billing_status:str;payment_status:str;closed_at:datetime|None;created_at:datetime;updated_at:datetime;patient:PatientReceptionIdentityOut;appointment:JourneyAppointmentBrief;activities:list[JourneyActivityOut]=[];events:list[JourneyEventOut]=[];blockers:list[JourneyBlockerOut]=[]

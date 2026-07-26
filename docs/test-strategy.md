@@ -161,7 +161,8 @@ The final security-remediation extension adds a real PostgreSQL concurrency
 suite for bounded anonymous rejected-session audit aggregation and exact audit
 event identity. SQLite tests remain useful for route behavior, but are not
 accepted as proof of `ON CONFLICT` aggregation or transaction interleaving.
-Migration validation now targets the single `0067_audit_aggregation` head.
+Migration validation now targets the single
+`0068_document_classification_default` head.
 
 The third full-rescan remediation adds contract, HTTP, PostgreSQL and DB-backed
 browser coverage for three boundaries:
@@ -176,3 +177,9 @@ browser coverage for three boundaries:
 The DB-backed E2E seed uses synthetic note sentinels and verifies they are absent
 from appointment, reception and browser output. It also verifies non-medical
 readiness denial and allowed scoped nurse/physician readiness access.
+
+The fourth full-rescan remediation extends that contract to patient-journey and
+global-search responses. Its regression gate also verifies that manual and
+directly inserted documents default to `unclassified`, that PostgreSQL applies
+the same fail-closed default, and that populated historical migrations preserve
+existing classifications rather than rewriting clinical history.

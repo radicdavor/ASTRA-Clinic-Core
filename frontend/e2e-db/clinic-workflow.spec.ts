@@ -58,7 +58,11 @@ async function selectActiveClinic(page: Page, clinicId: number) {
   if (await confirmation.isVisible()) {
     await confirmation.getByRole("button", { name: "Promijeni kliniku" }).click();
   }
-  await expect.poll(() => page.evaluate(() => localStorage.getItem("astra_active_clinic_id"))).toBe(String(clinicId));
+  await page.waitForFunction(
+    (expectedClinicId) => localStorage.getItem("astra_active_clinic_id") === expectedClinicId,
+    String(clinicId),
+  );
+  await page.waitForLoadState("domcontentloaded");
 }
 
 async function api(page: Page, path: string, options: RequestInit = {}) {
@@ -178,10 +182,19 @@ test("DB-backed operational appointment surfaces never expose free-text notes", 
     `/api/appointments?date_from=${seed.date}&date_to=${seed.date}`,
   );
   const reception = await api(page, `/api/reception/day?date=${seed.date}`);
-  const serialized = JSON.stringify([appointments.body, reception.body]);
+  const search = await api(page, "/api/search?q=E2E%20Zajednicki");
+  const journey = await api(page, `/api/patient-journeys/${seed.journeys.a}`);
+  const serialized = JSON.stringify([
+    appointments.body,
+    reception.body,
+    search.body,
+    journey.body,
+  ]);
 
   expect(appointments.status).toBe(200);
   expect(reception.status).toBe(200);
+  expect(search.status).toBe(200);
+  expect(journey.status).toBe(200);
   expect(serialized).not.toContain("SECRET_PATIENT_NOTE_SENTINEL");
   expect(serialized).not.toContain("SECRET_APPOINTMENT_NOTE_SENTINEL");
   expect(await page.locator("body").innerText()).not.toContain("SECRET_PATIENT_NOTE_SENTINEL");
