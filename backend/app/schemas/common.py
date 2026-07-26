@@ -1203,6 +1203,8 @@ class PatientReceptionIdentityOut(PatientOperationalIdentityOut):
     oib: str | None = None
     email: str | None = None
     phone: str | None = None
+    email_verified_at: DateTimeType | None = None
+    updated_at: DateTimeType
 
 
 class ServiceCreate(BaseModel):
@@ -1659,7 +1661,7 @@ class ClinicalDocumentOut(ClinicalDocumentBase, ORMModel):
     author_user_id: int | None = None
     author_professional_role: str | None = None
     is_clinical_record: bool = True
-    record_classification: str = "clinical"
+    record_classification: str = "unclassified"
     review_status: str
     ai_extraction_status: str
     ai_extraction_generated_at: DateTimeType | None = None
@@ -1911,6 +1913,31 @@ class AppointmentReceptionOut(AppointmentOperationalOut):
     """Reception projection adds verification contact fields, never notes."""
 
     patient: PatientReceptionIdentityOut | None = None
+
+
+class SearchAppointmentOut(BaseModel):
+    """Minimum appointment match returned by the global operational search."""
+
+    id: int
+    patient_id: int
+    service_id: int
+    provider_id: int
+    room_id: int
+    clinic_id: int | None = None
+    date: DateType
+    start_time: TimeType
+    end_time: TimeType
+    status: str
+    patient_name: str
+    service_name: str
+    provider_name: str
+    room_name: str
+
+
+class SearchResponse(BaseModel):
+    patients: list[PatientIdentityOut]
+    services: list[ServiceOperationalOut]
+    appointments: list[SearchAppointmentOut]
 
 
 class AITodayOut(BaseModel):
@@ -2258,6 +2285,13 @@ class WorkflowTaskUpdate(BaseModel):
         return value
 
 
+class WorkflowEpisodeOperationalOut(ORMModel):
+    id: int
+    title: str
+    episode_type: str
+    status: str
+
+
 class WorkflowTaskOut(ORMModel):
     id: int
     title: str
@@ -2273,9 +2307,9 @@ class WorkflowTaskOut(ORMModel):
     template_id: int | None = None
     created_by: int | None = None
     completed_at: DateTimeType | None = None
-    patient: PatientOut | None = None
-    episode: ClinicalEpisodeOut | None = None
-    provider: ProviderOut | None = Field(default=None, validation_alias="assignee_provider")
+    patient: PatientOperationalIdentityOut | None = None
+    episode: WorkflowEpisodeOperationalOut | None = None
+    provider: ProviderOperationalOut | None = Field(default=None, validation_alias="assignee_provider")
     checklist: list[WorkflowChecklistItemOut] = []
     created_at: DateTimeType
     updated_at: DateTimeType

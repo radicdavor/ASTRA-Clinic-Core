@@ -149,9 +149,9 @@ export type WorkflowTask = {
   responsible_role?: string | null;
   template_id?: number | null;
   completed_at?: string | null;
-  patient?: Patient;
-  episode?: ClinicalEpisode | null;
-  provider?: Provider | null;
+  patient?: Pick<Patient, "id" | "first_name" | "last_name" | "date_of_birth">;
+  episode?: Pick<ClinicalEpisode, "id" | "title" | "episode_type" | "status"> | null;
+  provider?: Pick<Provider, "id" | "full_name" | "specialty" | "staff_role" | "clinic_id"> | null;
   checklist: WorkflowChecklistItem[];
   created_at: string;
   updated_at: string;
