@@ -2,6 +2,7 @@ import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import { useEffect, useRef, useState } from "react";
 import { BookOpenCheck, Boxes, Building2, CalendarDays, CheckSquare2, ChevronDown, ClipboardCheck, ClipboardList, FileSearch, FileText, KeyRound, LayoutDashboard, LogOut, MoreHorizontal, PackageSearch, Pill, Settings, ShieldCheck, Stethoscope, TestTube, Users } from "lucide-react";
 import { clearSessionState, getActiveClinicId, getSessionUser, logout, notifyUser, setActiveClinicId, setActiveClinicTimezone, type UserClinicsResponse } from "../api/client";
+import { ClinicContextProvider } from "../contexts/ClinicContext";
 import { useApi } from "../hooks/useApi";
 import { ToastHost } from "./ToastHost";
 
@@ -56,6 +57,12 @@ export function AppShell() {
   const [logoutInProgress, setLogoutInProgress] = useState(false);
   const logoutInProgressRef = useRef(false);
   const fallbackDemoMode = import.meta.env.VITE_APP_ENV !== "production";
+  const activeClinicRecord = clinicAccess.data?.clinics.find((clinic) => String(clinic.id) === activeClinic) ?? null;
+  const clinicContext = {
+    ready: !clinicAccess.loading && activeClinicRecord !== null,
+    clinicId: activeClinicRecord ? String(activeClinicRecord.id) : null,
+    timezone: activeClinicRecord?.timezone ?? null,
+  };
   const showDemoBanner = publicConfig.data ? publicConfig.data.demo_mode || !publicConfig.data.real_data_allowed : fallbackDemoMode;
   const warningText = publicConfig.data?.warnings?.join(" ") || "Demo/development okruzenje - ne unositi stvarne podatke pacijenata.";
   const role = (getSessionUser()?.role ?? "").replace(/^demo_/, "") || "receptionist";
@@ -169,12 +176,19 @@ export function AppShell() {
             <LogOut size={18} />
           </button>
         </header>
-        {clinicAccess.data?.requires_selection && !activeClinic ? (
-          <section className="page-card clinic-context-empty">
-            <h1>Odaberite aktivnu kliniku</h1>
-            <p>Korisnik ima pristup u više klinika. Odaberite kliniku u gornjoj traci kako bi se prikazali dnevni podaci.</p>
-          </section>
-        ) : <Outlet />}
+        <ClinicContextProvider value={clinicContext}>
+          {clinicAccess.loading ? (
+            <section className="page-card clinic-context-empty" aria-live="polite">
+              <h1>Učitavanje klinike</h1>
+              <p>Priprema se siguran prikaz aktivne klinike.</p>
+            </section>
+          ) : clinicAccess.data?.requires_selection && !activeClinic ? (
+            <section className="page-card clinic-context-empty">
+              <h1>Odaberite aktivnu kliniku</h1>
+              <p>Korisnik ima pristup u više klinika. Odaberite kliniku u gornjoj traci kako bi se prikazali dnevni podaci.</p>
+            </section>
+          ) : <Outlet />}
+        </ClinicContextProvider>
       </main>
       <ToastHost />
     </div>

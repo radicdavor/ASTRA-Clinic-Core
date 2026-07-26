@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
+import { ClinicContextProvider, type ClinicContextValue } from "../contexts/ClinicContext";
 import { DailyClinicDashboard } from "./DailyClinicDashboard";
 
 function activity(id: number, time: string, end_time: string, service_name: string, room_name = "Ordinacija 1", status = "ready") {
@@ -153,9 +154,19 @@ function installFetchMock() {
   });
 }
 
-function renderDashboard() {
-  return render(<MemoryRouter initialEntries={["/"]}><Routes><Route path="/" element={<DailyClinicDashboard/>}/><Route path="/journeys/:id" element={<p>Otvoren radni prostor</p>}/></Routes></MemoryRouter>);
-}
+  function renderDashboard() {
+    return render(<MemoryRouter initialEntries={["/"]}><Routes><Route path="/" element={<DailyClinicDashboard/>}/><Route path="/journeys/:id" element={<p>Otvoren radni prostor</p>}/></Routes></MemoryRouter>);
+  }
+
+  function dashboardWithClinicContext(value: ClinicContextValue) {
+    return (
+      <ClinicContextProvider value={value}>
+        <MemoryRouter initialEntries={["/"]}>
+          <Routes><Route path="/" element={<DailyClinicDashboard/>}/></Routes>
+        </MemoryRouter>
+      </ClinicContextProvider>
+    );
+  }
 
 async function findPatientBlock(label: RegExp) {
   await screen.findByText(label);
@@ -288,5 +299,24 @@ describe("vremenska dnevna ploča", () => {
     await user.click(advanced.querySelector("summary") as HTMLElement);
     await user.selectOptions(screen.getByRole("combobox", { name: "Klinika" }), "2");
     await waitFor(() => expect(fetch).toHaveBeenCalledWith(expect.stringMatching(/dashboard\/day\?.*clinic_id=2/), expect.anything()));
+  });
+
+  test("waits for the active clinic timezone before requesting the clinic-local day", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    vi.setSystemTime(new Date("2026-07-26T22:30:00.000Z"));
+    try {
+      const view = render(dashboardWithClinicContext({ ready: false, clinicId: null, timezone: null }));
+      expect(vi.mocked(fetch).mock.calls.filter(([input]) => String(input).includes("/api/dashboard/day"))).toHaveLength(0);
+
+      view.rerender(dashboardWithClinicContext({ ready: true, clinicId: "1", timezone: "Europe/Zagreb" }));
+
+      await waitFor(() => expect(fetch).toHaveBeenCalledWith(
+        expect.stringMatching(/dashboard\/day\?.*selected_date=2026-07-27/),
+        expect.anything(),
+      ));
+      expect(screen.getByDisplayValue("2026-07-27")).toBeTruthy();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
