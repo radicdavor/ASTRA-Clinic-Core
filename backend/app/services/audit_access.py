@@ -82,7 +82,7 @@ class AuditAccessEventDefinition:
     action: str
     entity_types: frozenset[str]
     required_permission: str
-    enabled_for_direct_endpoint: bool = True
+    enabled_for_direct_endpoint: bool = False
     required_professional_category: str | None = None
 
 
@@ -275,33 +275,6 @@ def _resolve_scoped_entity(
     raise HTTPException(status_code=422, detail="Nepodržana vrsta objekta za audit događaj")
 
 
-def _find_duplicate_interaction(
-    db: Session,
-    payload: SensitiveAccessEventIn,
-    context: CurrentUserContext,
-    entity_id: int | None,
-) -> AuditLog | None:
-    if not payload.interaction_id:
-        return None
-    entity_clause = AuditLog.entity_id.is_(None) if entity_id is None else AuditLog.entity_id == entity_id
-    candidates = db.scalars(
-        select(AuditLog)
-        .where(
-            AuditLog.action == payload.action,
-            AuditLog.entity_type == payload.entity_type,
-            entity_clause,
-            AuditLog.actor_type == context.actor.actor_type,
-            AuditLog.actor_user_id == context.actor.user_id,
-            AuditLog.actor_api_key_id == context.actor.api_key_id,
-            AuditLog.scope_type == "clinic",
-            AuditLog.clinic_id == context.active_clinic_id,
-        )
-        .order_by(AuditLog.id.desc())
-        .limit(20)
-    ).all()
-    return next((item for item in candidates if (item.after_json or {}).get("interaction_id") == payload.interaction_id), None)
-
-
 def audit_sensitive_access(
     db: Session,
     payload: SensitiveAccessEventIn,
@@ -323,14 +296,9 @@ def audit_sensitive_access(
         context,
         allow_collection_reference=internal,
     )
-    duplicate = _find_duplicate_interaction(db, payload, context, entity_id)
-    if duplicate:
-        return duplicate
-
     safe_payload = {
         "surface": payload.surface,
         "clinic_id": clinic_id,
-        "interaction_id": payload.interaction_id,
     }
     event = audit(
         db,

@@ -344,7 +344,7 @@ def test_document_appointment_must_belong_to_same_patient(client, db, auth_setup
             "title": "Krivi termin",
         },
     )
-    assert response.status_code == 422
+    assert response.status_code == 404
 
 
 def test_limited_user_cannot_read_clinical_documents(client, db, auth_setup):

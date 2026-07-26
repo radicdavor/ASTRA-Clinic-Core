@@ -295,7 +295,7 @@ def test_credential_conflict_burst_is_bounded(client, db, auth_setup):
         ("clinical_report.printed", "SignedClinicalReport"),
     ),
 )
-def test_non_medical_admin_is_rejected_before_clinical_object_resolution(
+def test_direct_clinical_access_assertion_is_rejected_before_object_resolution(
     client, db, auth_setup, action, entity_type
 ):
     auth_setup["admin"].role.professional_category = "administrative_staff"
@@ -313,11 +313,11 @@ def test_non_medical_admin_is_rejected_before_clinical_object_resolution(
         },
     )
 
-    assert response.status_code == 403
+    assert response.status_code == 409
     assert db.query(AuditLog).filter(AuditLog.action == action).count() == before
 
 
-def test_medical_staff_can_record_scoped_clinical_access(client, db, auth_setup):
+def test_medical_staff_cannot_self_assert_authoritative_clinical_access(client, db, auth_setup):
     payload = _payload(db, start="14:00", end="14:30")
     token = login_token(client, "admin@test.local")
     appointment_response = client.post(
@@ -340,7 +340,5 @@ def test_medical_staff_can_record_scoped_clinical_access(client, db, auth_setup)
         },
     )
 
-    assert response.status_code == 200
-    event = db.get(AuditLog, response.json()["id"])
-    assert event.actor_user_id == auth_setup["admin"].id
-    assert "SYNTHETIC_EPISODE" not in str(event.after_json)
+    assert response.status_code == 409
+    assert db.query(AuditLog).filter(AuditLog.action == "clinical_workspace.opened").count() == 0

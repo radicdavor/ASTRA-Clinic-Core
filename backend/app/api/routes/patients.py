@@ -216,10 +216,24 @@ def possible_patient_duplicates(
 
 
 @router.get("/patients/{patient_id}", response_model=PatientIdentityOut)
-def get_patient(patient_id: int, db: Session = Depends(get_db), context: CurrentUserContext = Depends(require_active_clinic("patients.read"))):
+def get_patient(
+    patient_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+    context: CurrentUserContext = Depends(require_active_clinic("patients.read")),
+):
     patient = db.get(Patient, patient_id)
     if not patient:
         raise HTTPException(404, detail="Pacijent nije pronađen")
+    actor = context.actor
+    audit(
+        db, "patient.viewed", "Patient", patient.id, "Otvoren je operativni identitet pacijenta",
+        actor.user_id, actor.actor_type, actor.api_key_id, None,
+        {"surface": "patient_workspace"}, request,
+        scope_type="clinic", clinic_id=context.active_clinic_id,
+        institution_id=context.active_clinic.institution_id if context.active_clinic else None,
+    )
+    db.commit()
     return patient
 
 

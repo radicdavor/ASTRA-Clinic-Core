@@ -150,8 +150,9 @@ def test_gate_evidence_timeline_read_only(client, db, auth_setup):
 
     timeline = client.get(f"/api/clinical-documents/{doc.id}/evidence-timeline", headers=headers)
     assert timeline.status_code == 200
-    after_document = client.get(f"/api/clinical-documents/{doc.id}", headers=headers).json()
     assert db.query(AuditLog).count() == before_audit_count
+    after_document = client.get(f"/api/clinical-documents/{doc.id}", headers=headers).json()
+    assert db.query(AuditLog).count() == before_audit_count + 1
     assert after_document["review_status"] == before_document["review_status"]
     assert after_document["ai_extraction_status"] == before_document["ai_extraction_status"]
     assert timeline.json()[0]["knowledge_impact"] == "may_enable_official_knowledge"

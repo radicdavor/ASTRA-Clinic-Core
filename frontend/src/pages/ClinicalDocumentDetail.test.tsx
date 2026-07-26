@@ -73,7 +73,7 @@ describe("ClinicalDocumentDetail addenda", () => {
 
     expect(within(addenda).getByText("Naknadno pojašnjenje")).toBeTruthy();
     expect(within(addenda).getByText("Odvojena potpisana dopuna.")).toBeTruthy();
-    expect(screen.getByDisplayValue("Originalni sadržaj")).toBeTruthy();
+    expect(await screen.findByDisplayValue("Originalni sadržaj")).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Spremi dopunu" })).toBeNull();
   });
 });

@@ -16,6 +16,7 @@ from app.models.domain import (
     InventoryItem,
     JourneyActivity,
     Patient,
+    PatientClinicAssociation,
     PatientJourney,
     PatientClinicalSummaryRecord,
     Permission,
@@ -60,6 +61,7 @@ def ensure_demo_user(db, role_name: str, email: str, permissions_by_name):
     if role is None:
         role = Role(name=f"demo_{role_name}", description=f"Demo {role_name}")
         db.add(role)
+    role.professional_category = "medical_staff" if role_name in {"physician", "nurse"} else "administrative"
     role.permissions = [permissions_by_name[name] for name in ROLE_PERMISSIONS[role_name] if name in permissions_by_name]
     user = db.scalar(select(User).where(User.email == email))
     if user is None:
@@ -115,6 +117,23 @@ def main() -> None:
         supplier = db.scalar(select(Supplier).where(Supplier.name == "Demo dobavljac")) or Supplier(name="Demo dobavljac")
         db.add_all([patient, provider, room, service, location, item, supplier])
         db.flush()
+        patient_association = db.scalar(
+            select(PatientClinicAssociation).where(
+                PatientClinicAssociation.patient_id == patient.id,
+                PatientClinicAssociation.clinic_id == gastro_clinic.id,
+            )
+        )
+        if patient_association is None:
+            db.add(
+                PatientClinicAssociation(
+                    patient_id=patient.id,
+                    clinic_id=gastro_clinic.id,
+                    active=True,
+                    created_by_user_id=demo_users["admin"].id,
+                )
+            )
+        else:
+            patient_association.active = True
         if service not in room.allowed_services:
             room.allowed_services.append(service)
 
@@ -397,9 +416,11 @@ def main() -> None:
                     ai_extraction_generated_at=extraction_timestamp,
                     ai_extraction_updated_at=extraction_timestamp,
                     physician_reviewed=reviewed,
-                    reviewed_by=None,
+                    reviewed_by=demo_users["physician"].id if reviewed else None,
                     reviewed_at=extraction_timestamp if reviewed else None,
                     record_classification="clinical",
+                    classification_reviewed_by=demo_users["physician"].id,
+                    classification_reviewed_at=extraction_timestamp,
                     **values,
                 )
                 db.add(document)
@@ -411,7 +432,11 @@ def main() -> None:
                 document.ai_extraction_generated_at = document.ai_extraction_generated_at or extraction_timestamp
                 document.ai_extraction_updated_at = extraction_timestamp
                 document.physician_reviewed = reviewed
+                document.reviewed_by = demo_users["physician"].id if reviewed else None
                 document.reviewed_at = extraction_timestamp if reviewed else None
+                document.record_classification = "clinical"
+                document.classification_reviewed_by = demo_users["physician"].id
+                document.classification_reviewed_at = extraction_timestamp
 
         reviewed_document_ids = [
             document.id

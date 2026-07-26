@@ -6,7 +6,7 @@ from fastapi import HTTPException
 from sqlalchemy import select
 from sqlalchemy.orm import Session, joinedload
 
-from app.models.domain import Appointment, ClinicalDocument, Patient
+from app.models.domain import Appointment, ClinicalDocument, Patient, PatientClinicAssociation
 
 
 def get_document_or_404(db: Session, document_id: int) -> ClinicalDocument:
@@ -20,16 +20,36 @@ def get_document_or_404(db: Session, document_id: int) -> ClinicalDocument:
     return document
 
 
-def validate_document_links(db: Session, patient_id: int, appointment_id: int | None) -> Appointment | None:
-    if not db.get(Patient, patient_id):
-        raise HTTPException(404, detail="Pacijent nije pronaden")
+def validate_document_provenance_links(
+    db: Session,
+    *,
+    patient_id: int,
+    clinic_id: int,
+    appointment_id: int | None,
+) -> Appointment | None:
+    """Validate document ownership without disclosing a global patient match."""
+    patient = db.scalar(
+        select(Patient)
+        .join(PatientClinicAssociation, PatientClinicAssociation.patient_id == Patient.id)
+        .where(
+            Patient.id == patient_id,
+            PatientClinicAssociation.clinic_id == clinic_id,
+            PatientClinicAssociation.active.is_(True),
+        )
+    )
+    if patient is None:
+        raise HTTPException(404, detail="Pacijent nije pronađen")
     if appointment_id is None:
         return None
-    appointment = db.get(Appointment, appointment_id)
-    if not appointment:
+    appointment = db.scalar(
+        select(Appointment).where(
+            Appointment.id == appointment_id,
+            Appointment.patient_id == patient_id,
+            Appointment.clinic_id == clinic_id,
+        )
+    )
+    if appointment is None:
         raise HTTPException(404, detail="Termin nije pronaden")
-    if appointment.patient_id != patient_id:
-        raise HTTPException(422, detail="Dokument i termin moraju pripadati istom pacijentu")
     return appointment
 
 

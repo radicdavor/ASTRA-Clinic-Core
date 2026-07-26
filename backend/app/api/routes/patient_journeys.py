@@ -36,7 +36,11 @@ def list_journeys(day:date|None=None,patient_id:int|None=None,stage:str|None=Non
  return db.scalars(stmt).unique().all()
 
 @router.get("/{journey_id}",response_model=JourneyOut)
-def journey_detail(journey_id:int,db:Session=Depends(get_db),context:CurrentUserContext=Depends(require_active_clinic("journey.read"))): return get_journey(db,journey_id,context.active_clinic_id)
+def journey_detail(journey_id:int,request:Request,db:Session=Depends(get_db),context:CurrentUserContext=Depends(require_active_clinic("journey.read"))):
+ item=get_journey(db,journey_id,context.active_clinic_id);actor=context.actor
+ audit(db,"clinical_workspace.opened","PatientJourney",item.id,"Otvoren je klinički radni prostor",actor.user_id,actor.actor_type,actor.api_key_id,None,{"surface":"clinical_workspace"},request,scope_type="clinic",clinic_id=context.active_clinic_id,institution_id=context.active_clinic.institution_id if context.active_clinic else None)
+ db.commit()
+ return item
 
 @router.post("",response_model=JourneyOut)
 def create(payload:JourneyCreate,request:Request,db:Session=Depends(get_db),context:CurrentUserContext=Depends(require_active_clinic("journey.create"))):

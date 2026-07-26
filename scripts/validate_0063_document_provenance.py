@@ -124,7 +124,10 @@ def check() -> None:
     assert rows[f"{MARKER}APPOINTMENT"] == expected_b
     assert rows[f"{MARKER}UNRESOLVED"] is None
     assert rows[f"{MARKER}CONFLICTING"] is None
-    assert set(classifications.values()) == {"clinical"}
+    # These pre-0063 fixtures intentionally contain no human-review or active
+    # Patient-Clinic provenance. The 0069 trust correction must retain their
+    # institution resolution while demoting their classification fail-closed.
+    assert set(classifications.values()) == {"unclassified"}
 
 
 if __name__ == "__main__":

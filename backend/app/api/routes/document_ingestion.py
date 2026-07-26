@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date, datetime, timezone
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse
@@ -19,7 +19,8 @@ from app.services.document_ingestion import (
     queue_ocr,
     source_path,
 )
-from app.services.clinical_document_access import actor_institution_ids, get_institution_scoped_clinical_document_for_read
+from app.services.clinical_document_access import actor_institution_ids, actor_is_medical_staff, get_institution_scoped_clinical_document_for_read
+from app.services.clinical_documents import validate_document_provenance_links
 from app.services.patient_journeys import add_event
 
 
@@ -64,11 +65,13 @@ def get_job(db: Session, document_id: int, job_id: int) -> DocumentProcessingJob
 
 
 def get_document_for_classification_review(db: Session, document_id: int, actor: Actor) -> ClinicalDocument:
+    if actor.user_id is None:
+        raise HTTPException(403, detail="Pregled dokumenta zahtijeva prijavljenog korisnika")
+    if not actor_is_medical_staff(actor):
+        raise HTTPException(403, detail="Klasifikaciju kliničkog dokumenta potvrđuje medicinsko osoblje")
     document = db.get(ClinicalDocument, document_id)
     if not document:
         raise HTTPException(404, detail="Dokument nije pronađen")
-    if actor.user_id is None:
-        raise HTTPException(403, detail="Pregled dokumenta zahtijeva prijavljenog korisnika")
     if document.institution_id is not None and document.institution_id in actor_institution_ids(db, actor):
         return document
     raise HTTPException(404, detail="Dokument nije pronađen")
@@ -242,13 +245,25 @@ def review_document_classification(
     if document.record_classification != "unclassified":
         raise HTTPException(409, detail="Već potvrđena klasifikacija ne može se naknadno mijenjati")
     before = classification_audit_snapshot(document)
+    if document.clinic_id is None:
+        raise HTTPException(409, detail="Dokument nema razriješenu kliniku")
+    validate_document_provenance_links(
+        db,
+        patient_id=document.patient_id,
+        clinic_id=document.clinic_id,
+        appointment_id=document.appointment_id,
+    )
+    now = datetime.now(timezone.utc)
     document.record_classification = payload.record_classification
     document.is_clinical_record = payload.record_classification == "clinical"
+    document.classification_reviewed_by = actor.user_id
+    document.classification_reviewed_at = now
     provenance = dict(document.provenance_json or {})
     provenance["classification_review"] = {
         "record_classification": payload.record_classification,
         "note": payload.note,
         "reviewed_by": actor.user_id,
+        "reviewed_at": now.isoformat(),
     }
     document.provenance_json = provenance
     audit(db, "document_classification_reviewed", "ClinicalDocument", document.id, "Ljudski potvrđena klasifikacija izvornog dokumenta", actor.user_id, actor.actor_type, actor.api_key_id, before, classification_audit_snapshot(document), request)

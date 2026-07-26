@@ -194,19 +194,6 @@ def get_institution_scoped_clinical_document_for_read(
     document = get_document_or_404(db, document_id)
     actor_scope = actor_institution_scope(db, actor)
     institution = ensure_institution_clinical_read(db, document, actor, actor_scope)
-    existing_read_audit = db.scalar(
-        select(AuditLog.id)
-        .where(
-            AuditLog.action == action,
-            AuditLog.entity_type == "ClinicalDocument",
-            AuditLog.entity_id == document.id,
-            AuditLog.actor_user_id == actor.user_id,
-            AuditLog.actor_api_key_id == actor.api_key_id,
-        )
-        .limit(1)
-    )
-    if existing_read_audit:
-        return document
     audit(
         db,
         action,
