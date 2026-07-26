@@ -183,3 +183,10 @@ global-search responses. Its regression gate also verifies that manual and
 directly inserted documents default to `unclassified`, that PostgreSQL applies
 the same fail-closed default, and that populated historical migrations preserve
 existing classifications rather than rewriting clinical history.
+
+The fifth full-rescan remediation adds an exact schema allowlist for the patient
+identity nested in every `ClinicalDocumentOut`. Four HTTP regressions cover
+document list, search, detail and patient-document list. A query-bound test
+verifies that the joined patient load excludes `notes`, and the isolated
+DB-backed browser suite verifies that synthetic patient-note sentinels are
+absent from both network responses and rendered document screens.
