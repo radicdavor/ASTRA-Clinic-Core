@@ -58,7 +58,11 @@ async function selectActiveClinic(page: Page, clinicId: number) {
   if (await confirmation.isVisible()) {
     await confirmation.getByRole("button", { name: "Promijeni kliniku" }).click();
   }
-  await expect.poll(() => page.evaluate(() => localStorage.getItem("astra_active_clinic_id"))).toBe(String(clinicId));
+  await page.waitForFunction(
+    (expectedClinicId) => localStorage.getItem("astra_active_clinic_id") === expectedClinicId,
+    String(clinicId),
+  );
+  await page.waitForLoadState("domcontentloaded");
 }
 
 async function api(page: Page, path: string, options: RequestInit = {}) {
