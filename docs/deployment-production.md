@@ -161,6 +161,37 @@ docker compose --env-file .env.production -f docker-compose.prod.example.yml exe
 docker compose --env-file .env.production -f docker-compose.prod.example.yml exec backend python -m app.cli session-cleanup
 ```
 
+### Legacy clinic-membership transition
+
+Revision `0057_clinic_scope_foundation` carries forward only clinic memberships
+that can be derived from an exact provider e-mail match, an appointment creator
+or identity verifier, or the sole active clinic in a single-clinic installation.
+It never assigns an arbitrary clinic when more than one clinic is possible.
+
+After upgrading a populated pre-0057 database, inspect the durable operator
+queue:
+
+```bash
+python -m app.cli clinic-membership-migration-status
+```
+
+Exit code `2` means one or more active legacy users require an owner decision.
+After verifying the correct clinic outside ASTRA, a `system.admin` operator can
+resolve exactly one recorded issue:
+
+```bash
+python -m app.cli resolve-clinic-membership \
+  --user-email legacy-user@example.invalid \
+  --clinic-id 3 \
+  --operator-email owner@example.invalid \
+  --note "Owner verified the legacy clinic assignment"
+```
+
+The command cannot assign users without a pending migration issue. It records
+the chosen clinic, operator, time, and note. Downgrading below `0057` removes
+the membership and issue tables; a later re-upgrade deterministically derives
+the same evidence-backed memberships and recreates unresolved operator issues.
+
 ## Trusted reverse proxy and audit client address
 
 The production example uses one isolated `proxy_net` network between Nginx and

@@ -44,6 +44,19 @@ jobs:
         run: |
           test "$(alembic heads | wc -l)" -eq 1
           alembic upgrade head
+          alembic downgrade 0056_reception_note_patient_concurrency
+          python ../scripts/validate_0057_clinic_membership_transition.py cleanup
+          python ../scripts/validate_0057_clinic_membership_transition.py seed-single
+          alembic upgrade head
+          python ../scripts/validate_0057_clinic_membership_transition.py check-single
+          alembic downgrade 0056_reception_note_patient_concurrency
+          python ../scripts/validate_0057_clinic_membership_transition.py cleanup
+          python ../scripts/validate_0057_clinic_membership_transition.py seed-multi
+          alembic upgrade head
+          python ../scripts/validate_0057_clinic_membership_transition.py check-multi
+          alembic downgrade 0056_reception_note_patient_concurrency
+          alembic upgrade head
+          python ../scripts/validate_0057_clinic_membership_transition.py check-multi
           alembic downgrade 0062_signed_report_addendum_integrity
           python ../scripts/validate_0063_document_provenance.py seed
           alembic upgrade 0063_clinical_document_institution_provenance

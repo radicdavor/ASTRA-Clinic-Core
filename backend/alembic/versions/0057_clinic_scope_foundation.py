@@ -35,6 +35,31 @@ def upgrade():
     op.create_index("ix_clinic_memberships_clinic_active", "clinic_memberships", ["clinic_id", "active"])
 
     op.create_table(
+        "clinic_membership_migration_issues",
+        sa.Column("id", sa.Integer(), nullable=False),
+        sa.Column("user_id", sa.Integer(), nullable=False),
+        sa.Column("reason", sa.String(length=80), nullable=False),
+        sa.Column("candidate_clinic_ids", sa.JSON(), nullable=False),
+        sa.Column("status", sa.String(length=40), nullable=False, server_default="pending"),
+        sa.Column("resolution_clinic_id", sa.Integer(), nullable=True),
+        sa.Column("resolution_note", sa.Text(), nullable=True),
+        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
+        sa.Column("resolved_at", sa.DateTime(timezone=True), nullable=True),
+        sa.Column("resolved_by_user_id", sa.Integer(), nullable=True),
+        sa.CheckConstraint("status in ('pending', 'resolved')", name="ck_clinic_membership_migration_issue_status"),
+        sa.ForeignKeyConstraint(["resolution_clinic_id"], ["clinics.id"], ondelete="RESTRICT"),
+        sa.ForeignKeyConstraint(["resolved_by_user_id"], ["users.id"], ondelete="RESTRICT"),
+        sa.ForeignKeyConstraint(["user_id"], ["users.id"], ondelete="CASCADE"),
+        sa.PrimaryKeyConstraint("id"),
+        sa.UniqueConstraint("user_id", name="uq_clinic_membership_migration_issue_user"),
+    )
+    op.create_index(
+        "ix_clinic_membership_migration_issues_status",
+        "clinic_membership_migration_issues",
+        ["status"],
+    )
+
+    op.create_table(
         "patient_clinic_associations",
         sa.Column("id", sa.Integer(), nullable=False),
         sa.Column("patient_id", sa.Integer(), nullable=False),
@@ -191,9 +216,97 @@ def upgrade():
         GROUP BY scoped.patient_id, scoped.clinic_id
         """
     )
+    op.execute(
+        """
+        INSERT INTO clinic_memberships (user_id, clinic_id, active)
+        SELECT DISTINCT users.id, providers.clinic_id, true
+        FROM users
+        JOIN providers ON lower(providers.email) = lower(users.email)
+        JOIN clinics ON clinics.id = providers.clinic_id AND clinics.active = true
+        WHERE users.active = true
+          AND providers.active = true
+          AND providers.clinic_id IS NOT NULL
+        ON CONFLICT (user_id, clinic_id) DO NOTHING
+        """
+    )
+    op.execute(
+        """
+        INSERT INTO clinic_memberships (user_id, clinic_id, active)
+        SELECT DISTINCT appointments.created_by, appointments.clinic_id, true
+        FROM appointments
+        JOIN users ON users.id = appointments.created_by AND users.active = true
+        JOIN clinics ON clinics.id = appointments.clinic_id AND clinics.active = true
+        WHERE appointments.created_by IS NOT NULL
+          AND appointments.clinic_id IS NOT NULL
+        ON CONFLICT (user_id, clinic_id) DO NOTHING
+        """
+    )
+    op.execute(
+        """
+        INSERT INTO clinic_memberships (user_id, clinic_id, active)
+        SELECT DISTINCT appointments.identity_verified_by, appointments.clinic_id, true
+        FROM appointments
+        JOIN users ON users.id = appointments.identity_verified_by AND users.active = true
+        JOIN clinics ON clinics.id = appointments.clinic_id AND clinics.active = true
+        WHERE appointments.identity_verified_by IS NOT NULL
+          AND appointments.clinic_id IS NOT NULL
+        ON CONFLICT (user_id, clinic_id) DO NOTHING
+        """
+    )
+    op.execute(
+        """
+        INSERT INTO clinic_memberships (user_id, clinic_id, active)
+        SELECT users.id, single_clinic.id, true
+        FROM users
+        CROSS JOIN (
+            SELECT min(id) AS id
+            FROM clinics
+            WHERE active = true
+            HAVING count(*) = 1
+        ) AS single_clinic
+        WHERE users.active = true
+          AND NOT EXISTS (
+              SELECT 1 FROM clinic_memberships
+              WHERE clinic_memberships.user_id = users.id
+          )
+        ON CONFLICT (user_id, clinic_id) DO NOTHING
+        """
+    )
+    op.execute(
+        """
+        INSERT INTO clinic_membership_migration_issues
+            (user_id, reason, candidate_clinic_ids, status)
+        SELECT
+            users.id,
+            CASE
+                WHEN EXISTS (SELECT 1 FROM clinics WHERE clinics.active = true)
+                THEN 'ambiguous_clinic_membership'
+                ELSE 'no_active_clinic'
+            END,
+            COALESCE(
+                (SELECT json_agg(clinics.id ORDER BY clinics.id) FROM clinics WHERE clinics.active = true),
+                CAST('[]' AS JSON)
+            ),
+            'pending'
+        FROM users
+        WHERE users.active = true
+          AND NOT EXISTS (
+              SELECT 1 FROM clinic_memberships
+              WHERE clinic_memberships.user_id = users.id
+                AND clinic_memberships.active = true
+          )
+        ON CONFLICT (user_id) DO NOTHING
+        """
+    )
 
 
 def downgrade():
+    op.drop_index(
+        "ix_clinic_membership_migration_issues_status",
+        table_name="clinic_membership_migration_issues",
+    )
+    op.drop_table("clinic_membership_migration_issues")
+
     op.drop_index("ix_invoices_clinic_id", table_name="invoices")
     op.drop_constraint("fk_invoices_clinic_id_clinics", "invoices", type_="foreignkey")
     op.drop_column("invoices", "clinic_id")
