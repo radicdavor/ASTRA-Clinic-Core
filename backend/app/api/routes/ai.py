@@ -8,7 +8,7 @@ from app.audit.service import audit, snapshot
 from app.auth.dependencies import TenantActorContext, require_tenant_clinic
 from app.core.database import get_db
 from app.models.domain import Appointment, Patient, PatientClinicAssociation, Room
-from app.schemas.common import AppointmentCreate, AppointmentOperationalOut, ErrorResponse, PatientCreate, PatientOut
+from app.schemas.common import AITodayOut, AppointmentCreate, AppointmentOperationalOut, ErrorResponse, PatientCreate, PatientOut
 from app.services.appointments import BLOCKING_STATUSES, create_appointment_with_journey, resolve_appointment_episode_reference
 
 ERROR_RESPONSES = {400: {"model": ErrorResponse}, 401: {"model": ErrorResponse}, 403: {"model": ErrorResponse}, 404: {"model": ErrorResponse}, 409: {"model": ErrorResponse}, 422: {"model": ErrorResponse}}
@@ -50,7 +50,7 @@ def ai_create_appointment(payload: AppointmentCreate, request: Request, db: Sess
     return appointment
 
 
-@router.get("/today")
+@router.get("/today", response_model=AITodayOut)
 def ai_today(db: Session = Depends(get_db), context: TenantActorContext = Depends(require_tenant_clinic("ai.free_slots.read"))):
     today = date.today()
     appointments = db.scalars(select(Appointment).options(joinedload(Appointment.patient), joinedload(Appointment.service), joinedload(Appointment.provider), joinedload(Appointment.room)).where(Appointment.date == today, Appointment.clinic_id == context.clinic_id).order_by(Appointment.start_time)).all()

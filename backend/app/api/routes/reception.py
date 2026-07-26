@@ -8,7 +8,7 @@ from app.audit.service import audit, snapshot
 from app.auth.dependencies import CurrentUserContext, require_active_clinic
 from app.core.database import get_db
 from app.models.domain import Appointment, Provider, Room
-from app.schemas.common import AppointmentOperationalOut, ErrorResponse, ReceptionArrivalRequest, ReceptionSlot
+from app.schemas.common import AppointmentReceptionOut, ErrorResponse, ReceptionArrivalRequest, ReceptionSlot
 
 ERROR_RESPONSES = {
     400: {"model": ErrorResponse},
@@ -104,7 +104,7 @@ def reception_day(
     return ten_minute_reception_slots(db.scalars(stmt).all())
 
 
-@router.post("/appointments/{appointment_id}/mark-arrived", response_model=AppointmentOperationalOut)
+@router.post("/appointments/{appointment_id}/mark-arrived", response_model=AppointmentReceptionOut)
 def mark_appointment_arrived(
     appointment_id: int,
     payload: ReceptionArrivalRequest,
@@ -152,7 +152,7 @@ def mark_appointment_arrived(
     )
 
 
-@router.post("/appointments/{appointment_id}/start-service", response_model=AppointmentOperationalOut)
+@router.post("/appointments/{appointment_id}/start-service", response_model=AppointmentReceptionOut)
 def start_appointment_service(
     appointment_id: int,
     request: Request,

@@ -14,6 +14,7 @@ from tests.factories import default_clinic, episode, patient, provider, room, se
 
 def _payload(db, *, start: str, end: str):
     patient_obj = patient(db, f"Secure{start.replace(':', '')}")
+    patient_obj.notes = "SECRET_PATIENT_NOTE_SENTINEL"
     provider_obj = provider(db, f"dr. Secure {start}")
     room_obj = room(db, f"Secure room {start}")
     service_obj = service(db, f"Secure service {start}")
@@ -36,6 +37,7 @@ def _payload(db, *, start: str, end: str):
         "duration_minutes": 30,
         "status": "scheduled",
         "source": "manual",
+        "notes": "SECRET_APPOINTMENT_NOTE_SENTINEL",
     }
 
 
@@ -63,6 +65,8 @@ def test_scheduling_create_responses_never_materialize_episode_phi(
     assert "episode" not in body
     assert "SYNTHETIC_EPISODE_SUMMARY_SENTINEL" not in response.text
     assert "SYNTHETIC_EPISODE_NOTES_SENTINEL" not in response.text
+    assert "SECRET_PATIENT_NOTE_SENTINEL" not in response.text
+    assert "SECRET_APPOINTMENT_NOTE_SENTINEL" not in response.text
 
 
 def test_ai_api_key_receives_only_operational_appointment_projection(client, db, auth_setup):
@@ -89,6 +93,8 @@ def test_ai_api_key_receives_only_operational_appointment_projection(client, db,
     assert response.json()["episode_id"] is not None
     assert "episode" not in response.json()
     assert "SYNTHETIC_EPISODE_" not in response.text
+    assert "SECRET_PATIENT_NOTE_SENTINEL" not in response.text
+    assert "SECRET_APPOINTMENT_NOTE_SENTINEL" not in response.text
 
 
 def test_episode_mismatch_and_foreign_reference_share_generic_not_found(client, db, auth_setup):
@@ -153,7 +159,7 @@ def test_scheduling_read_update_and_episode_siblings_use_operational_projection(
     appointment_id = created.json()["id"]
     episode_id = created.json()["episode_id"]
 
-    responses = (
+    operational_responses = (
         client.get(f"/api/appointments/{appointment_id}", headers=headers),
         client.get("/api/appointments?date_from=2026-07-06&date_to=2026-07-06", headers=headers),
         client.get("/api/schedule/day?date=2026-07-06", headers=headers),
@@ -162,13 +168,22 @@ def test_scheduling_read_update_and_episode_siblings_use_operational_projection(
             headers=headers,
             json={"status": "arrived"},
         ),
-        client.get(f"/api/episodes/{episode_id}/appointments", headers=headers),
     )
 
-    for response in responses:
+    for response in operational_responses:
         assert response.status_code == 200
         assert '"episode":' not in response.text
         assert "SYNTHETIC_EPISODE_" not in response.text
+        assert "SECRET_PATIENT_NOTE_SENTINEL" not in response.text
+        assert "SECRET_APPOINTMENT_NOTE_SENTINEL" not in response.text
+
+    clinical_episode_response = client.get(
+        f"/api/episodes/{episode_id}/appointments",
+        headers=headers,
+    )
+    assert clinical_episode_response.status_code == 200
+    assert '"episode":' not in clinical_episode_response.text
+    assert "SYNTHETIC_EPISODE_" not in clinical_episode_response.text
 
 
 @pytest.mark.parametrize(

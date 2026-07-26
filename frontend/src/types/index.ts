@@ -211,15 +211,13 @@ export type Appointment = {
   duration_minutes: number;
   status: string;
   source: string;
-  notes?: string;
   arrived_at?: string | null;
   identity_verified_at?: string | null;
   identity_verified_by?: number | null;
-  patient?: Patient;
-  service?: Service;
-  provider?: Provider;
-  room?: Room;
-  episode?: ClinicalEpisode | null;
+  patient?: Omit<Patient, "notes">;
+  service?: Pick<Service, "id" | "name" | "code" | "duration_minutes">;
+  provider?: Pick<Provider, "id" | "full_name" | "specialty" | "staff_role" | "clinic_id">;
+  room?: Pick<Room, "id" | "name" | "type" | "clinic_id">;
 };
 
 export type PatientAppointmentAvailability = {

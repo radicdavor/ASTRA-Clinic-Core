@@ -328,12 +328,11 @@ export function AppointmentDetail() {
         <p>
           <span>Klinicka epizoda</span>
           <strong>
-            {appointment.data.episode ? <Link to={`/episodes/${appointment.data.episode.id}`}>{appointment.data.episode.title}</Link> : "Termin nije povezan s klinickom epizodom."}
+            {appointment.data.episode_id ? <Link to={`/episodes/${appointment.data.episode_id}`}>Otvori klinicku epizodu</Link> : "Termin nije povezan s klinickom epizodom."}
           </strong>
         </p>
-        <p><span>Napomena</span><strong>{appointment.data.notes ?? "-"}</strong></p>
       </div>
-      {!appointment.data.episode && (
+      {!appointment.data.episode_id && (
         <div className="duplicate-warning">
           <strong>Termin nije povezan s klinickom epizodom.</strong>
           <p>To nije blokada za v0.1-pilot, ali za klinicko pracenje preporucuje se povezati termin s epizodom pacijenta.</p>
