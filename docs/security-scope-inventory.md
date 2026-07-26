@@ -7,7 +7,7 @@ Branch: `fix/pr3-scope-and-audit-blockers`
 Base: `feature/full-stack-production-validation` at `5850342`
 
 This inventory is the route-level review record for the PR #3 authorization
-closure. The repository contains 270 FastAPI route decorators and 260
+closure. The repository contains 272 FastAPI route decorators and 262
 registered `/api` route-method pairs. Every route
 module was searched for direct ID loads, patient-only child queries, nullable
 tenant predicates, permission-only authorization, and client-controlled tenant
@@ -62,7 +62,7 @@ path family was inspected.
 | open-question list/detail | ClinicalOpenQuestion | institution clinical | exact authorized institution | institution predicate in SQL | clinical read permission | open-question read API and blocker suites | enforced |
 | evidence timeline | derived evidence | institution clinical | exact institution source set | institution-filtered evidence builder | clinical read permission | evidence-timeline and DB-backed browser suites | enforced |
 | clinical-summary and readiness routes | derived clinical projection | institution clinical | one official reviewed source set from one institution; unresolved evidence is explicit review-required limitation | exact-source-set validator and unresolved-evidence projection | summary/readiness permission | readiness snapshot and security suites | enforced |
-| clinical-document list/search/detail/download/write/review/addendum | ClinicalDocument | institution clinical | exact document institution; unresolved and unclassified denied | canonical clinical-document access service; embedded patient data uses an exact four-field identity allowlist; manual and database defaults are `unclassified` until human review | document operation permission | document provenance suites, exact patient-projection contract tests, `test_pr3_fourth_security_document_classification.py` | enforced |
+| clinical-document list/search/detail/download/write/review/addendum and unclassified review queue | ClinicalDocument | institution clinical | exact document institution; unclassified documents appear only in the reviewer queue and never in the trusted clinical projection | canonical clinical-document access service; reviewer queue requires medical category plus `documents.review`, uses an exact four-field patient identity allowlist, and classification remains an explicit audited transition | document operation permission | document provenance suites, exact patient-projection contract tests, `test_document_ingestion.py`, `test_pr3_fourth_security_document_classification.py` | enforced |
 | signed-report view/print/addendum/delivery/history | SignedReport | institution clinical | exact report/document institution | report service through scoped document | report permission | signed-report security suites | enforced |
 | clinical-form routes | ClinicalFormInstance | institution clinical | scoped journey/activity/document parent | parent-first loaders | form permission | clinical-form suites | enforced |
 | pathology routes | PathologyCase/Specimen | institution clinical | scoped journey and clinical parent | parent-first scoped loader | pathology permission | pathology suites | enforced |
@@ -112,7 +112,7 @@ The negative matrix covers:
 The route families above are also exercised by PostgreSQL integration and
 DB-backed browser tests. Frontend hiding is never treated as authorization.
 
-The lightweight registry gate classifies all 260 current `/api` route-method
+The lightweight registry gate classifies all 262 current `/api` route-method
 pairs and fingerprints the sorted path, method and context projection. Any
 addition, removal, move or reclassification changes the fingerprint and fails
 CI until the route inventory is explicitly reviewed. This includes financial

@@ -2525,6 +2525,22 @@ export type TokenResponse = {
 };
 };
 
+export type UnclassifiedDocumentReviewOut = {
+  clinic_id: number;
+  created_at: string;
+  document_date: string | null;
+  document_type: string;
+  id: number;
+  institution_id: number;
+  patient: ClinicalDocumentPatientIdentityOut;
+  patient_id: number;
+  received_at: string | null;
+  record_classification: string;
+  review_status: string;
+  source_type: string;
+  title: string;
+};
+
 export type ValidationError = {
   loc: Array<string | number>;
   msg: string;

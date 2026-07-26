@@ -123,6 +123,22 @@ export type ClinicalDocument = {
   can_add_addendum?: boolean;
 };
 
+export type UnclassifiedDocumentReview = {
+  id: number;
+  patient_id: number;
+  clinic_id: number;
+  institution_id: number;
+  title: string;
+  document_type: string;
+  source_type: string;
+  document_date?: string | null;
+  received_at?: string | null;
+  created_at: string;
+  review_status: string;
+  record_classification: "unclassified";
+  patient: ClinicalDocumentPatientIdentity;
+};
+
 export type PatientKnowledgeSource = {
   document_id: number;
   title: string;

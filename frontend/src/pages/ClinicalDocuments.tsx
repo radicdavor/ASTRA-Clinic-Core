@@ -1,13 +1,13 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
-import { api } from "../api/client";
+import { api, getSessionUser } from "../api/client";
 import { ActionButton } from "../components/ActionButton";
 import { DataTable } from "../components/DataTable";
 import { DateInput } from "../components/DateInput";
 import { HelpHint } from "../components/HelpHint";
 import { QuickPatientModal } from "../components/QuickPatientModal";
 import { useApi } from "../hooks/useApi";
-import { ClinicalDocument, Patient } from "../types";
+import { ClinicalDocument, Patient, UnclassifiedDocumentReview } from "../types";
 import { formatDate } from "../utils/date";
 import { formatPatientName } from "../utils/patientIdentity";
 
@@ -70,6 +70,8 @@ export function aiExtractionStatusLabel(value: ClinicalDocument["ai_extraction_s
 }
 
 export function ClinicalDocuments() {
+  const user = getSessionUser();
+  const canReviewClassification = ["physician", "nurse", "document_reviewer"].includes(user?.role ?? "");
   const [params] = useSearchParams();
   const initialPatientId = params.get("patient_id") ?? "";
   const initialReviewStatus = params.get("review_status") ?? "";
@@ -112,6 +114,10 @@ export function ClinicalDocuments() {
     return `/api/clinical-documents${next.toString() ? `?${next.toString()}` : ""}`;
   }, [filter]);
   const documents = useApi<ClinicalDocument[]>(query, []);
+  const classificationQueue = useApi<UnclassifiedDocumentReview[]>(
+    canReviewClassification ? "/api/document-classification-queue" : null,
+    []
+  );
 
   async function upload(event: FormEvent) {
     event.preventDefault();
@@ -127,7 +133,9 @@ export function ClinicalDocuments() {
         raw_text: draft.raw_text || null
       })
     });
-    documents.setData([created, ...documents.data]);
+    if (canReviewClassification) {
+      classificationQueue.setData(await api<UnclassifiedDocumentReview[]>("/api/document-classification-queue"));
+    }
     setShowUpload(false);
   }
 
@@ -194,6 +202,30 @@ export function ClinicalDocuments() {
         </form>
       )}
       {showQuickPatient&&<QuickPatientModal initialQuery={patientSearch} onClose={()=>setShowQuickPatient(false)} onCreated={patient=>{setSelectedPatient(patient);setPatientSearch(formatPatientName(patient));patientResults.setData([patient]);setShowQuickPatient(false)}}/>}
+
+      {canReviewClassification && (
+        <section className="workspace-section" aria-labelledby="classification-queue-heading">
+          <div className="section-heading">
+            <div>
+              <h2 id="classification-queue-heading">Čeka ljudsku klasifikaciju</h2>
+              <p>Dokumenti ovdje još nisu dio kliničkog kartona. Ovlašteno medicinsko osoblje mora potvrditi njihovu vrstu.</p>
+            </div>
+            <span className="readiness-badge readiness-check-warning">{classificationQueue.data.length} za pregled</span>
+          </div>
+          {classificationQueue.error && <p role="alert">Red za klasifikaciju trenutačno nije dostupan.</p>}
+          <DataTable
+            rows={classificationQueue.data}
+            empty={classificationQueue.loading ? "Učitavanje reda…" : "Nema dokumenata koji čekaju klasifikaciju."}
+            columns={[
+              { header: "Dokument", render: (row) => <strong>{row.title}</strong> },
+              { header: "Pacijent", render: (row) => formatPatientName(row.patient) },
+              { header: "Datum", render: (row) => formatDate(row.document_date) },
+              { header: "Tip", render: (row) => documentTypeLabel(row.document_type) },
+              { header: "Radnja", render: (row) => <Link className="button-link" to={`/clinical-documents/${row.id}/classification`}>Pregledaj i klasificiraj</Link> }
+            ]}
+          />
+        </section>
+      )}
 
       <DataTable rows={documents.data} columns={[
         { header: "Dokument", render: (row) => <Link to={`/clinical-documents/${row.id}`}>{row.title}</Link> },

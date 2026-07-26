@@ -1,6 +1,6 @@
 import pytest
 
-from app.models.domain import AuditLog, ClinicalDocument, DocumentProcessingJob
+from app.models.domain import AuditLog, Clinic, ClinicalDocument, DocumentProcessingJob, Institution, Patient
 from app.services.document_ingestion import EmailIngestionEnvelope, evaluate_email_ingestion
 from tests.conftest import login_token
 from tests.factories import appointment
@@ -106,6 +106,90 @@ def test_classification_is_candidate_and_requires_review(client, db, auth_setup)
     assert reviewed.json()["record_classification"] == "clinical"
     assert client.get(f"/api/clinical-documents/{document['id']}", headers=headers(client)).status_code == 200
     assert db.query(DocumentProcessingJob).filter_by(clinical_document_id=document["id"], status="completed").count() == 1
+
+
+def test_unclassified_review_queue_is_minimal_institution_scoped_and_actionable(client, db, auth_setup):
+    created = journey(client, db)
+    local = ingest_text(client, created["id"], "queue-local.txt").json()
+    local_model = db.get(ClinicalDocument, local["id"])
+    local_model.patient.notes = "PATIENT_NOTE_SENTINEL"
+    local_model.raw_text = "DOCUMENT_TEXT_SENTINEL"
+
+    foreign_institution = Institution(code="foreign-review", name="Foreign Review Institution", active=True)
+    foreign_clinic = Clinic(name="Foreign Review Clinic", institution_key="foreign-review", institution=foreign_institution)
+    foreign_patient = Patient(first_name="Foreign", last_name="Patient", notes="FOREIGN_NOTE_SENTINEL")
+    db.add_all([foreign_institution, foreign_clinic, foreign_patient])
+    db.flush()
+    db.add(
+        ClinicalDocument(
+            patient_id=foreign_patient.id,
+            clinic_id=foreign_clinic.id,
+            institution_id=foreign_institution.id,
+            title="Foreign unclassified document",
+            source_type="uploaded",
+            document_type="other",
+            raw_text="FOREIGN_DOCUMENT_SENTINEL",
+            record_classification="unclassified",
+            review_status="draft",
+            ai_extraction_status="not_run",
+            physician_reviewed=False,
+        )
+    )
+    db.commit()
+
+    response = client.get("/api/document-classification-queue", headers=headers(client))
+
+    assert response.status_code == 200
+    assert [item["id"] for item in response.json()] == [local["id"]]
+    item = response.json()[0]
+    assert set(item) == {
+        "id",
+        "patient_id",
+        "clinic_id",
+        "institution_id",
+        "title",
+        "document_type",
+        "source_type",
+        "document_date",
+        "received_at",
+        "created_at",
+        "review_status",
+        "record_classification",
+        "patient",
+    }
+    assert set(item["patient"]) == {"id", "first_name", "last_name", "date_of_birth"}
+    serialized = response.text
+    assert "PATIENT_NOTE_SENTINEL" not in serialized
+    assert "DOCUMENT_TEXT_SENTINEL" not in serialized
+    assert "FOREIGN_NOTE_SENTINEL" not in serialized
+    assert "FOREIGN_DOCUMENT_SENTINEL" not in serialized
+
+    detail = client.get(f"/api/document-classification-queue/{local['id']}", headers=headers(client))
+    assert detail.status_code == 200
+    assert set(detail.json()["patient"]) == {"id", "first_name", "last_name", "date_of_birth"}
+
+    reviewed = client.post(
+        f"/api/clinical-documents/{local['id']}/classification/review",
+        headers=headers(client),
+        json={"record_classification": "clinical", "note": "Ljudski potvrđena klasifikacija."},
+    )
+    assert reviewed.status_code == 200
+    assert client.get(f"/api/document-classification-queue/{local['id']}", headers=headers(client)).status_code == 404
+    assert client.get("/api/document-classification-queue", headers=headers(client)).json() == []
+
+
+def test_unclassified_review_queue_requires_medical_reviewer_permission(client, db, auth_setup):
+    created = journey(client, db)
+    document = ingest_text(client, created["id"], "queue-denied.txt").json()
+
+    listing = client.get("/api/document-classification-queue", headers=headers(client, "limited@test.local"))
+    detail = client.get(
+        f"/api/document-classification-queue/{document['id']}",
+        headers=headers(client, "limited@test.local"),
+    )
+
+    assert listing.status_code == 403
+    assert detail.status_code == 403
 
 
 def test_nonclinical_classification_keeps_source_out_of_clinical_record(client, db, auth_setup):

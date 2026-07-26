@@ -1,6 +1,6 @@
 from datetime import date, datetime, timezone
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Request, UploadFile
 from fastapi.responses import FileResponse
 from sqlalchemy import select
 from sqlalchemy.orm import Session, joinedload
@@ -10,7 +10,7 @@ from app.auth.dependencies import Actor, CurrentUserContext, require_active_clin
 from app.core.database import get_db
 from app.models.domain import ClinicalDocument, DocumentProcessingJob, DocumentRequest, PatientJourney
 from app.schemas.common import ClinicalDocumentClassificationReview
-from app.schemas.document_ingestion import DocumentIngestionOut, DocumentJobOut
+from app.schemas.document_ingestion import DocumentIngestionOut, DocumentJobOut, UnclassifiedDocumentReviewOut
 from app.services.document_ingestion import (
     ingest_source_document,
     process_classification_job,
@@ -75,6 +75,81 @@ def get_document_for_classification_review(db: Session, document_id: int, actor:
     if document.institution_id is not None and document.institution_id in actor_institution_ids(db, actor):
         return document
     raise HTTPException(404, detail="Dokument nije pronađen")
+
+
+def unclassified_review_statement(db: Session, actor: Actor):
+    institution_ids = actor_institution_ids(db, actor)
+    if not institution_ids:
+        raise HTTPException(403, detail="Pregled klasifikacije zahtijeva ustanovu medicinskog osoblja")
+    return (
+        select(ClinicalDocument)
+        .options(joinedload(ClinicalDocument.patient))
+        .where(
+            ClinicalDocument.record_classification == "unclassified",
+            ClinicalDocument.institution_id.in_(institution_ids),
+            ClinicalDocument.clinic_id.is_not(None),
+        )
+    )
+
+
+@router.get("/document-classification-queue", response_model=list[UnclassifiedDocumentReviewOut])
+def list_unclassified_documents(
+    request: Request,
+    limit: int = Query(default=50, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+    db: Session = Depends(get_db),
+    actor: Actor = Depends(require_permission("documents.review")),
+):
+    documents = db.scalars(
+        unclassified_review_statement(db, actor)
+        .order_by(ClinicalDocument.created_at.asc(), ClinicalDocument.id.asc())
+        .offset(offset)
+        .limit(limit)
+    ).all()
+    audit(
+        db,
+        "document_classification_queue_viewed",
+        "ClinicalDocument",
+        None,
+        "Otvoren red dokumenata koji čekaju ljudsku klasifikaciju",
+        actor.user_id,
+        actor.actor_type,
+        actor.api_key_id,
+        None,
+        {"surface": "classification_queue", "returned_count": len(documents)},
+        request,
+    )
+    db.commit()
+    return documents
+
+
+@router.get("/document-classification-queue/{document_id}", response_model=UnclassifiedDocumentReviewOut)
+def get_unclassified_document(
+    document_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+    actor: Actor = Depends(require_permission("documents.review")),
+):
+    document = db.scalar(
+        unclassified_review_statement(db, actor).where(ClinicalDocument.id == document_id)
+    )
+    if not document:
+        raise HTTPException(404, detail="Dokument nije pronađen")
+    audit(
+        db,
+        "document_classification_queue_item_viewed",
+        "ClinicalDocument",
+        document.id,
+        "Otvoren dokument radi ljudske klasifikacije",
+        actor.user_id,
+        actor.actor_type,
+        actor.api_key_id,
+        None,
+        classification_audit_snapshot(document),
+        request,
+    )
+    db.commit()
+    return document
 
 
 @router.post("/patient-journeys/{journey_id}/documents/ingest", response_model=DocumentIngestionOut)
