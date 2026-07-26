@@ -1197,6 +1197,17 @@ class PatientOperationalIdentityOut(ORMModel):
     date_of_birth: DateType | None = None
 
 
+class ClinicalDocumentPatientIdentityOut(BaseModel):
+    """Purpose-limited patient identity embedded in clinical-document responses."""
+
+    model_config = ConfigDict(from_attributes=True, extra="forbid")
+
+    id: int
+    first_name: str
+    last_name: str
+    date_of_birth: DateType | None = None
+
+
 class PatientReceptionIdentityOut(PatientOperationalIdentityOut):
     """Identity and contact fields needed for reception verification."""
 
@@ -1669,7 +1680,7 @@ class ClinicalDocumentOut(ClinicalDocumentBase, ORMModel):
     physician_reviewed: bool
     reviewed_by: int | None = None
     reviewed_at: DateTimeType | None = None
-    patient: PatientOut | None = None
+    patient: ClinicalDocumentPatientIdentityOut | None = None
     created_at: DateTimeType
     updated_at: DateTimeType
     can_edit: bool = False

@@ -1,7 +1,7 @@
 import { Patient } from "../types";
 import { formatDate } from "./date";
 
-export function formatPatientName(patient?: Patient | null) {
+export function formatPatientName(patient?: Pick<Patient, "first_name" | "last_name"> | null) {
   if (!patient) return "";
   return `${patient.first_name ?? ""} ${patient.last_name ?? ""}`.trim();
 }

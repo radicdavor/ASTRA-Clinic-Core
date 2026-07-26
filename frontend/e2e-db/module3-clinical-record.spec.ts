@@ -22,6 +22,11 @@ type Seed = {
 const seedPath = process.env.ASTRA_E2E_SEED_FILE;
 if (!seedPath) throw new Error("ASTRA_E2E_SEED_FILE is required for DB-backed E2E tests.");
 const seed = JSON.parse(readFileSync(seedPath, "utf-8")) as Seed;
+const patientNoteSentinels = [
+  "SECRET_PATIENT_NOTE_SENTINEL",
+  "CROSS_INSTITUTION_PATIENT_NOTE_SENTINEL",
+  "LOCAL_PATIENT_NOTE_SENTINEL",
+] as const;
 
 async function login(page: Page, email: string, clinicId: number) {
   await page.goto("/login");
@@ -55,6 +60,38 @@ async function api(page: Page, path: string, options: RequestInit = {}) {
     { path, options, backendUrl: process.env.ASTRA_E2E_BACKEND_URL ?? "http://127.0.0.1:8011" },
   ) as Promise<{ status: number; body: unknown }>;
 }
+
+function expectMinimalDocumentPatientIdentity(body: unknown) {
+  const documents = Array.isArray(body) ? body : [body];
+  for (const document of documents as Array<{ patient?: Record<string, unknown> | null }>) {
+    expect(document.patient).toBeTruthy();
+    expect(Object.keys(document.patient ?? {}).sort()).toEqual(
+      ["date_of_birth", "first_name", "id", "last_name"].sort(),
+    );
+  }
+  const serialized = JSON.stringify(body);
+  for (const sentinel of patientNoteSentinels) expect(serialized).not.toContain(sentinel);
+}
+
+test("DB-backed clinical-document surfaces expose only minimal patient identity", async ({ page }) => {
+  await login(page, seed.users.physicianA, seed.clinics.a);
+
+  const responses = [
+    await api(page, "/api/clinical-documents"),
+    await api(page, "/api/clinical-documents/search?q=E2E"),
+    await api(page, `/api/clinical-documents/${seed.clinical.signedDocument}`),
+    await api(page, `/api/patients/${seed.patients.shared}/clinical-documents`),
+  ];
+  for (const response of responses) {
+    expect(response.status).toBe(200);
+    expectMinimalDocumentPatientIdentity(response.body);
+  }
+
+  await page.goto("/clinical-documents");
+  for (const sentinel of patientNoteSentinels) await expect(page.getByText(sentinel)).toHaveCount(0);
+  await page.goto(`/clinical-documents/${seed.clinical.signedDocument}`);
+  for (const sentinel of patientNoteSentinels) await expect(page.getByText(sentinel)).toHaveCount(0);
+});
 
 test("DB-backed physician reads same-institution report, edits own draft and preserves signed snapshot", async ({ page }) => {
   await login(page, seed.users.physicianA, seed.clinics.a);

@@ -53,3 +53,9 @@ New manually created or directly inserted clinical documents default to
 human reviewer assigns a supported classification. Trusted signed-report and
 reviewed ingestion paths must set `clinical` explicitly. Classification
 defaults are fail-closed in both the application model and database schema.
+
+Clinical-document responses embed only a purpose-limited patient identity:
+database ID, first name, last name and date of birth. Authorization to read a
+document does not authorize the broad global patient record. In particular,
+patient notes, contact data, OIB and unrelated administrative or clinical
+fields are not part of the clinical-document response schema.
