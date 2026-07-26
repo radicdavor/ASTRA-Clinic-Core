@@ -1,9 +1,11 @@
 from datetime import date, time
 
+import pytest
 from sqlalchemy import select
 
 from app.core.security import hash_password
 from app.auth.dependencies import hash_api_key
+from app.main import app
 from app.models.domain import (
     ApiKey,
     Appointment,
@@ -24,6 +26,7 @@ from app.models.domain import (
     Service,
     User,
 )
+from app.schemas.common import ClinicalDocumentOut, ClinicalDocumentPatientIdentityOut, PatientOut
 from tests.conftest import login_token
 
 
@@ -96,6 +99,13 @@ MEDICAL_READ = ["clinical.documents.read_institution", "clinical_documents.read"
 MEDICAL_EDIT = MEDICAL_READ + ["clinical.documents.edit_own_draft", "clinical_documents.review"]
 MEDICAL_ADDENDUM = MEDICAL_READ + ["clinical.documents.add_addendum"]
 
+CLINICAL_DOCUMENT_PATIENT_IDENTITY_KEYS = {
+    "id",
+    "first_name",
+    "last_name",
+    "date_of_birth",
+}
+
 
 def clinical_doc(
     db,
@@ -125,6 +135,62 @@ def clinical_doc(
     db.add(document)
     db.flush()
     return document
+
+
+@pytest.mark.parametrize(
+    ("surface", "path"),
+    [
+        ("list", "/api/clinical-documents"),
+        ("search", "/api/clinical-documents/search?q=Klini"),
+        ("detail", "/api/clinical-documents/{document_id}"),
+        ("patient-list", "/api/patients/{patient_id}/clinical-documents"),
+    ],
+)
+def test_clinical_document_responses_embed_only_minimal_patient_identity(
+    client,
+    db,
+    surface,
+    path,
+):
+    clinic_a, _, clinic_other, patient, _ = setup_scope(db)
+    reader = user_with_role(db, f"document-projection-{surface}@test.local", MEDICAL_READ, "medical_staff", clinic_a)
+    db.add(PatientClinicAssociation(patient_id=patient.id, clinic_id=clinic_other.id, active=True))
+    patient.notes = (
+        "CROSS_INSTITUTION_PATIENT_NOTE_SENTINEL "
+        "LOCAL_PATIENT_NOTE_SENTINEL"
+    )
+    local_document = clinical_doc(db, patient, clinic_a, status="reviewed")
+    foreign_document = clinical_doc(db, patient, clinic_other, status="reviewed")
+    db.commit()
+    auth = headers(client, reader.email)
+
+    response = client.get(
+        path.format(document_id=local_document.id, patient_id=patient.id),
+        headers=auth,
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    document = body if surface == "detail" else next(item for item in body if item["id"] == local_document.id)
+    assert set(document["patient"]) == CLINICAL_DOCUMENT_PATIENT_IDENTITY_KEYS
+    assert "CROSS_INSTITUTION_PATIENT_NOTE_SENTINEL" not in response.text
+    assert "LOCAL_PATIENT_NOTE_SENTINEL" not in response.text
+    if surface != "detail":
+        assert foreign_document.id not in {item["id"] for item in body}
+    assert client.get(f"/api/clinical-documents/{foreign_document.id}", headers=auth).status_code == 404
+
+
+def test_clinical_document_patient_identity_schema_is_an_exact_allowlist():
+    assert ClinicalDocumentOut.model_fields["patient"].annotation != PatientOut | None
+    assert set(ClinicalDocumentPatientIdentityOut.model_fields) == CLINICAL_DOCUMENT_PATIENT_IDENTITY_KEYS
+
+    schemas = app.openapi()["components"]["schemas"]
+    patient_schema = schemas["ClinicalDocumentPatientIdentityOut"]
+    assert set(patient_schema["properties"]) == CLINICAL_DOCUMENT_PATIENT_IDENTITY_KEYS
+    assert "notes" not in patient_schema["properties"]
+    assert "ClinicalDocumentPatientIdentityOut" in str(
+        schemas["ClinicalDocumentOut"]["properties"]["patient"]
+    )
 
 
 def test_unresolved_document_is_hidden_from_all_standard_clinical_read_paths(client, db):

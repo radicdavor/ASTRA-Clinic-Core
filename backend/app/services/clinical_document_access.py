@@ -15,6 +15,7 @@ from app.models.domain import (
     ClinicalDocumentAddendum,
     Clinic,
     Institution,
+    Patient,
     SignedClinicalReport,
 )
 from app.services.clinical_documents import get_document_or_404
@@ -231,7 +232,15 @@ def get_institution_scoped_clinical_document_for_read(
 def institution_scoped_clinical_documents_statement(db: Session, actor: Actor):
     return (
         institution_provenance_scoped_documents_statement(db, actor)
-        .options(joinedload(ClinicalDocument.patient), joinedload(ClinicalDocument.clinic))
+        .options(
+            joinedload(ClinicalDocument.patient).load_only(
+                Patient.id,
+                Patient.first_name,
+                Patient.last_name,
+                Patient.date_of_birth,
+            ),
+            joinedload(ClinicalDocument.clinic),
+        )
         .where(
             ClinicalDocument.is_clinical_record.is_(True),
             ClinicalDocument.record_classification.in_(INSTITUTION_READABLE_RECORD_CLASSIFICATIONS),
