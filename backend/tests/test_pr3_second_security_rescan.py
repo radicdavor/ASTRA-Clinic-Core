@@ -15,6 +15,10 @@ from tests.factories import default_clinic, episode, patient, provider, room, se
 def _payload(db, *, start: str, end: str):
     patient_obj = patient(db, f"Secure{start.replace(':', '')}")
     patient_obj.notes = "SECRET_PATIENT_NOTE_SENTINEL"
+    digits = start.replace(":", "")
+    patient_obj.oib = f"9999999{digits}"
+    patient_obj.email = f"secret-{digits}@example.test"
+    patient_obj.phone = f"091{digits}999"
     provider_obj = provider(db, f"dr. Secure {start}")
     room_obj = room(db, f"Secure room {start}")
     service_obj = service(db, f"Secure service {start}")
@@ -122,11 +126,13 @@ def test_episode_mismatch_and_foreign_reference_share_generic_not_found(client, 
 def test_openapi_scheduling_contract_does_not_embed_clinical_episode(client):
     schema = client.get("/openapi.json").json()
     operational = schema["components"]["schemas"]["AppointmentOperationalOut"]
-    appointment = schema["components"]["schemas"]["AppointmentOut"]
 
     assert "episode" not in operational.get("properties", {})
-    assert "episode" not in appointment.get("properties", {})
     assert "episode_id" in operational["properties"]
+    assert "notes" not in operational["properties"]
+    assert "AppointmentOut" not in schema["components"]["schemas"]
+    episode_response = schema["paths"]["/api/episodes/{episode_id}/appointments"]["get"]["responses"]["200"]["content"]["application/json"]["schema"]
+    assert episode_response["items"]["$ref"].endswith("/AppointmentOperationalOut")
 
 
 def test_every_browser_security_event_has_an_explicit_persistence_class():
@@ -182,8 +188,44 @@ def test_scheduling_read_update_and_episode_siblings_use_operational_projection(
         headers=headers,
     )
     assert clinical_episode_response.status_code == 200
+    assert clinical_episode_response.json()
+    assert set(clinical_episode_response.json()[0]) == {
+        "id",
+        "patient_id",
+        "service_id",
+        "provider_id",
+        "room_id",
+        "clinic_id",
+        "episode_id",
+        "date",
+        "start_time",
+        "end_time",
+        "duration_minutes",
+        "status",
+        "source",
+        "arrived_at",
+        "identity_verified_at",
+        "identity_verified_by",
+        "created_at",
+        "updated_at",
+        "patient",
+        "service",
+        "provider",
+        "room",
+    }
     assert '"episode":' not in clinical_episode_response.text
     assert "SYNTHETIC_EPISODE_" not in clinical_episode_response.text
+    assert "SECRET_PATIENT_NOTE_SENTINEL" not in clinical_episode_response.text
+    assert "SECRET_APPOINTMENT_NOTE_SENTINEL" not in clinical_episode_response.text
+    assert "secret-0900@example.test" not in clinical_episode_response.text
+    assert "0910900999" not in clinical_episode_response.text
+    assert "99999990900" not in clinical_episode_response.text
+    assert set(clinical_episode_response.json()[0]["patient"]) == {
+        "id",
+        "first_name",
+        "last_name",
+        "date_of_birth",
+    }
 
 
 @pytest.mark.parametrize(

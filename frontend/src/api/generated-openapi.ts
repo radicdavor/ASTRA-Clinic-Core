@@ -97,31 +97,6 @@ export type AppointmentOperationalOut = {
   updated_at: string;
 };
 
-export type AppointmentOut = {
-  arrived_at?: string | null;
-  created_at: string;
-  date: string;
-  duration_minutes: number;
-  end_time: string;
-  episode_id?: number | null;
-  id: number;
-  identity_verified_at?: string | null;
-  identity_verified_by?: number | null;
-  notes?: string | null;
-  patient?: PatientOut | null;
-  patient_id: number;
-  provider?: ProviderOut | null;
-  provider_id: number;
-  room?: RoomOut | null;
-  room_id: number;
-  service?: ServiceOut | null;
-  service_id: number;
-  source?: string;
-  start_time: string;
-  status?: string;
-  updated_at: string;
-};
-
 export type AppointmentReceptionOut = {
   arrived_at?: string | null;
   clinic_id?: number | null;
