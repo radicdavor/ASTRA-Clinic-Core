@@ -93,4 +93,3 @@ def test_openapi_operational_contract_gate_excludes_free_text(client):
     assert "WorkflowEpisodeOperationalOut" in str(
         schemas["WorkflowTaskOut"]["properties"]["episode"]
     )
-
