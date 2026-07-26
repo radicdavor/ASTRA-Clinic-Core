@@ -68,7 +68,7 @@ def clinic_audit_projection(event: AuditLog) -> ClinicAuditEventOut:
     )
 
 
-@router.post("/audit/access-events", response_model=SensitiveAccessEventOut)
+@router.post("/audit/access-events", response_model=SensitiveAccessEventOut, deprecated=True)
 def record_sensitive_access_event(
     payload: SensitiveAccessEventIn,
     request: Request,

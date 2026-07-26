@@ -34,7 +34,7 @@ def test_foreign_and_missing_audit_references_have_identical_not_found_response(
     foreign_response = record(foreign.id)
     missing_response = record(foreign.id + 1_000_000)
 
-    assert foreign_response.status_code == missing_response.status_code == 404
+    assert foreign_response.status_code == missing_response.status_code == 409
     assert foreign_response.json() == missing_response.json()
     assert (
         db.query(AuditLog)
@@ -106,7 +106,7 @@ def test_inaccessible_audit_scope_variants_are_indistinguishable_from_missing(
     missing = record(max(event.id for event in events) + 1_000_000)
     for event in events:
         response = record(event.id)
-        assert response.status_code == missing.status_code == 404
+        assert response.status_code == missing.status_code == 409
         assert response.json() == missing.json()
 
     viewed_ids = {
@@ -118,7 +118,7 @@ def test_inaccessible_audit_scope_variants_are_indistinguishable_from_missing(
     assert viewed_ids.isdisjoint({event.id for event in events})
 
 
-def test_allowed_clinic_audit_reference_records_exact_object(client, db, auth_setup):
+def test_direct_clinic_audit_reference_cannot_create_authoritative_event(client, db, auth_setup):
     token = login_token(client, "admin@test.local")
     allowed = AuditLog(
         scope_type="clinic",
@@ -142,5 +142,10 @@ def test_allowed_clinic_audit_reference_records_exact_object(client, db, auth_se
         },
     )
 
-    assert response.status_code == 200
-    assert response.json()["entity_id"] == allowed.id
+    assert response.status_code == 409
+    assert (
+        db.query(AuditLog)
+        .filter(AuditLog.action == "audit_log.viewed", AuditLog.entity_id == allowed.id)
+        .count()
+        == 0
+    )

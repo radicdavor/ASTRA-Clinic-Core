@@ -31,7 +31,7 @@ def test_appointment_update_audit_contains_before_and_after(client, db, auth_set
     assert log.clinic_id == auth_setup["clinic"].id
 
 
-def test_sensitive_access_event_records_safe_payload(client, db, auth_setup):
+def test_client_cannot_assert_authoritative_sensitive_access(client, db, auth_setup):
     token = login_token(client, "admin@test.local")
     patient = scoped_patient(db, auth_setup)
 
@@ -47,21 +47,8 @@ def test_sensitive_access_event_records_safe_payload(client, db, auth_setup):
         },
     )
 
-    assert response.status_code == 200
-    log = db.query(AuditLog).filter(AuditLog.action == "patient.viewed").one()
-    assert log.entity_type == "Patient"
-    assert log.entity_id == patient.id
-    assert log.actor_user_id == auth_setup["admin"].id
-    assert log.request_id == "audit-access-patient"
-    assert log.summary == "Sensitive access event: patient.viewed"
-    assert log.after_json == {
-        "surface": "patient_workspace",
-        "clinic_id": auth_setup["clinic"].id,
-        "interaction_id": "patient-open-001",
-    }
-    serialized = str(log.after_json) + str(log.summary)
-    assert "Sinteticki" not in serialized
-    assert "Pacijent" not in serialized
+    assert response.status_code == 409
+    assert db.query(AuditLog).filter(AuditLog.action == "patient.viewed").count() == 0
 
 
 def test_sensitive_access_event_rejects_mismatched_action_and_entity(client, db, auth_setup):
@@ -147,7 +134,7 @@ def test_sensitive_access_event_rejects_cross_clinic_object_without_disclosure(c
         },
     )
 
-    assert response.status_code == 404
+    assert response.status_code == 409
     assert db.query(AuditLog).filter(AuditLog.action == "patient.viewed").count() == 0
 
 
@@ -168,7 +155,7 @@ def test_sensitive_access_event_requires_write_permission(client, db, auth_setup
     assert response.status_code == 403
 
 
-def test_sensitive_access_event_deduplicates_interaction_id(client, db, auth_setup):
+def test_unique_client_interaction_ids_cannot_multiply_authoritative_events(client, db, auth_setup):
     token = login_token(client, "admin@test.local")
     patient = scoped_patient(db, auth_setup)
     payload = {
@@ -180,15 +167,14 @@ def test_sensitive_access_event_deduplicates_interaction_id(client, db, auth_set
     }
 
     first = client.post("/api/audit/access-events", headers={"Authorization": f"Bearer {token}"}, json=payload)
+    payload["interaction_id"] = "different-open-002"
     second = client.post("/api/audit/access-events", headers={"Authorization": f"Bearer {token}"}, json=payload)
 
-    assert first.status_code == 200
-    assert second.status_code == 200
-    assert first.json()["id"] == second.json()["id"]
-    assert db.query(AuditLog).filter(AuditLog.action == "patient.viewed").count() == 1
+    assert first.status_code == second.status_code == 409
+    assert db.query(AuditLog).filter(AuditLog.action == "patient.viewed").count() == 0
 
 
-def test_source_document_access_event_requires_scoped_document(client, db, auth_setup):
+def test_client_cannot_assert_source_document_download(client, db, auth_setup):
     token = login_token(client, "admin@test.local")
     patient = scoped_patient(db, auth_setup)
     document = ClinicalDocument(
@@ -214,10 +200,8 @@ def test_source_document_access_event_requires_scoped_document(client, db, auth_
         },
     )
 
-    assert response.status_code == 200
-    log = db.query(AuditLog).filter(AuditLog.action == "source_document.downloaded").one()
-    assert log.entity_id == document.id
-    assert log.after_json["clinic_id"] == auth_setup["clinic"].id
+    assert response.status_code == 409
+    assert db.query(AuditLog).filter(AuditLog.action == "source_document.downloaded").count() == 0
 
 
 def test_direct_patient_export_access_event_is_rejected_without_export_workflow(client, db, auth_setup):
@@ -249,7 +233,7 @@ def test_audit_log_view_is_itself_audited(client, db, auth_setup):
     assert log.entity_type == "AuditLog"
     assert log.entity_id is None
     assert log.request_id == "audit-log-opened"
-    assert log.after_json == {"surface": "audit_viewer", "clinic_id": auth_setup["clinic"].id, "interaction_id": None}
+    assert log.after_json == {"surface": "audit_viewer", "clinic_id": auth_setup["clinic"].id}
     assert log.scope_type == "clinic"
     assert log.clinic_id == auth_setup["clinic"].id
 
@@ -320,7 +304,7 @@ def test_audit_log_view_does_not_recursively_audit_itself(client, db, auth_setup
     assert db.query(AuditLog).filter(AuditLog.action == "audit_log.viewed").count() == 2
 
 
-def test_direct_audit_reference_requires_existing_scoped_event(client, db, auth_setup):
+def test_direct_audit_reference_is_not_an_authoritative_access_path(client, db, auth_setup):
     token = login_token(client, "admin@test.local")
     local = AuditLog(
         scope_type="clinic",
@@ -348,9 +332,7 @@ def test_direct_audit_reference_requires_existing_scoped_event(client, db, auth_
     forbidden = record(foreign.id)
     missing = record(999999)
 
-    assert allowed.status_code == 200
-    assert allowed.json()["entity_id"] == local.id
-    assert forbidden.status_code == missing.status_code == 404
+    assert allowed.status_code == forbidden.status_code == missing.status_code == 409
     assert forbidden.json() == missing.json()
 
 
@@ -370,7 +352,7 @@ def test_direct_system_audit_reference_requires_explicit_system_permission(clien
         json={"action": "audit_log.viewed", "entity_type": "AuditLog", "entity_id": system_event.id, "surface": "audit_viewer"},
     )
 
-    assert response.status_code == 404
+    assert response.status_code == 409
 
 
 def test_direct_institution_audit_reference_requires_matching_medical_scope(client, db, auth_setup):
@@ -402,42 +384,25 @@ def test_direct_institution_audit_reference_requires_matching_medical_scope(clie
             json={"action": "audit_log.viewed", "entity_type": "AuditLog", "entity_id": entity_id, "surface": "audit_viewer"},
         )
 
-    assert record(local.id).status_code == 200
+    assert record(local.id).status_code == 409
     foreign_response = record(foreign.id)
     missing_response = record(foreign.id + 1_000_000)
-    assert foreign_response.status_code == missing_response.status_code == 404
+    assert foreign_response.status_code == missing_response.status_code == 409
     assert foreign_response.json() == missing_response.json()
 
 
-def test_sensitive_access_returns_exact_event_created_even_if_later_id_exists(client, db, auth_setup, monkeypatch):
-    from app.audit.service import audit as real_audit
-
+def test_direct_sensitive_access_does_not_call_authoritative_audit_writer(client, db, auth_setup, monkeypatch):
     token = login_token(client, "admin@test.local")
     patient = scoped_patient(db, auth_setup, first_name="Exact", last_name="Event")
 
-    def audit_with_concurrent_later_event(*args, **kwargs):
-        event = real_audit(*args, **kwargs)
-        session = args[0]
-        session.flush()
-        session.add(
-            AuditLog(
-                scope_type="clinic",
-                clinic_id=auth_setup["clinic"].id,
-                action="concurrent_event",
-                entity_type="Appointment",
-                entity_id=999,
-            )
-        )
-        session.flush()
-        return event
+    def unexpected_audit(*args, **kwargs):
+        raise AssertionError("Direct endpoint must not call authoritative audit writer")
 
-    monkeypatch.setattr("app.services.audit_access.audit", audit_with_concurrent_later_event)
+    monkeypatch.setattr("app.services.audit_access.audit", unexpected_audit)
     response = client.post(
         "/api/audit/access-events",
         headers={"Authorization": f"Bearer {token}"},
         json={"action": "patient.viewed", "entity_type": "Patient", "entity_id": patient.id, "surface": "patient_workspace"},
     )
 
-    assert response.status_code == 200
-    assert response.json()["action"] == "patient.viewed"
-    assert response.json()["entity_id"] == patient.id
+    assert response.status_code == 409
