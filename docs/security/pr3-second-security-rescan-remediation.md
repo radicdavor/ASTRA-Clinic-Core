@@ -65,7 +65,7 @@ The dedicated second-rescan test module covers:
 
 ## Executed local validation
 
-Remediation code head before this documentation commit: `524b5de`.
+Remediation code head before the final evidence update: `966fa8f`.
 
 | Gate | Result |
 | --- | --- |
@@ -93,6 +93,13 @@ Keeping them inside a parallel SQLite/core shard caused two processes to
 compete for the same destructive PostgreSQL fixture; moving them to the
 single integration phase restored real process isolation without increasing
 timeouts or reducing coverage.
+
+The first GitHub DB-backed run exposed a second calendar dependency: on a
+Sunday, the overlap scenario received the intentional non-working-day
+validation before it could exercise overlap detection. The synthetic E2E seed
+now advances weekend inputs to the next working day, and the browser selects
+that seed date after login, reload and clinic switching. A local run with the
+clock override fixed to Sunday (`2026-07-26`) passed all 11 DB-backed tests.
 
 ## Migration evidence
 
