@@ -193,6 +193,40 @@ def test_clinical_document_patient_identity_schema_is_an_exact_allowlist():
     )
 
 
+def test_clinical_document_list_loads_only_allowlisted_patient_columns(
+    client,
+    db,
+    sql_query_counter,
+):
+    clinic_a, _, _, patient, _ = setup_scope(db)
+    reader = user_with_role(
+        db,
+        "document-projection-query@test.local",
+        MEDICAL_READ,
+        "medical_staff",
+        clinic_a,
+    )
+    clinical_doc(db, patient, clinic_a, status="reviewed")
+    db.commit()
+
+    with sql_query_counter.track() as query_count:
+        response = client.get(
+            "/api/clinical-documents",
+            headers=headers(client, reader.email),
+        )
+
+    assert response.status_code == 200
+    document_selects = [
+        statement.lower()
+        for statement in query_count.statements
+        if "clinical_documents" in statement.lower()
+        and "join patients" in statement.lower()
+    ]
+    assert len(document_selects) == 1
+    assert "patients_1.notes" not in document_selects[0]
+    assert query_count.count <= 4
+
+
 def test_unresolved_document_is_hidden_from_all_standard_clinical_read_paths(client, db):
     clinic_a, _, _, patient, _ = setup_scope(db)
     doctor = user_with_role(db, "unresolved-scope@test.local", MEDICAL_READ + ["documents.view_source"], "medical_staff", clinic_a)
