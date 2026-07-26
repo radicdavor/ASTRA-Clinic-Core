@@ -65,9 +65,19 @@ def resolve_activity_form(journey_id: int, activity_id: int, request: Request, d
 
 
 @router.get("/patient-journeys/{journey_id}/activities/{activity_id}/form", response_model=ClinicalFormInstanceOut)
-def activity_form(journey_id: int, activity_id: int, db: Session = Depends(get_db), context: CurrentUserContext = Depends(require_active_clinic("encounter.read"))):
+def activity_form(journey_id: int, activity_id: int, request: Request, db: Session = Depends(get_db), context: CurrentUserContext = Depends(require_active_clinic("encounter.read"))):
     journey(db, journey_id, context.active_clinic_id)
-    return instance(db, journey_id, activity_id)
+    item = instance(db, journey_id, activity_id)
+    actor = context.actor
+    audit(
+        db, "clinical_form.viewed", "ClinicalFormInstance", item.id, "Otvoren je klinički obrazac",
+        actor.user_id, actor.actor_type, actor.api_key_id, None,
+        {"surface": "clinical_workspace"}, request,
+        scope_type="clinic", clinic_id=context.active_clinic_id,
+        institution_id=context.active_clinic.institution_id if context.active_clinic else None,
+    )
+    db.commit()
+    return item
 
 
 @router.patch("/patient-journeys/{journey_id}/activities/{activity_id}/form", response_model=ClinicalFormInstanceOut)

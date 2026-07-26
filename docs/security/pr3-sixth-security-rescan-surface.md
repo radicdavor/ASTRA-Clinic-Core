@@ -37,6 +37,10 @@ to grant institution-wide clinical visibility.
 The compatibility endpoint remains present but returns a controlled conflict
 for all authoritative actions and does not write an `AuditLog` row.
 Client-generated `interaction_id` values are not used as forensic proof.
+Patient detail, journey detail, clinical-form detail and invoice detail record
+their access on the server after successful scope resolution. Document,
+signed-report and print routes retain their existing server-owned events.
+Separate successful HTTP reads remain separate forensic events.
 
 ## Clinical-document write and classification paths
 

@@ -38,6 +38,13 @@ Existing authorized resource routes remain the owners of their access,
 download, print and mutation audit events. The internal collection-view event
 for the audit list remains server-only.
 
+The patient detail, journey workspace, clinical-form detail and invoice detail
+routes now emit their authoritative access event only after successful object
+scope resolution. Clinical-document and signed-report reads keep their
+existing server-side audit boundary. Every separate successful resource
+request is recorded; client-generated interaction identifiers are neither a
+trust signal nor a deduplication key.
+
 ### Patient–Clinic document provenance
 
 A single document-provenance validator now requires:
@@ -63,7 +70,8 @@ does not create an association, document or success audit.
 
 ## Validation recorded during implementation
 
-- targeted sixth-rescan regressions: `6 passed`
+- targeted sixth-rescan regressions: `7 passed`
+- post-review backend fast gate: `149 passed`
 - audit, prior security and document-ingestion package: `69 passed`
 - clinical-document and institution-access package: `77 passed`
 - signed-report package: `8 passed`
@@ -86,8 +94,9 @@ does not create an association, document or success audit.
 
 The three pre-existing `npm audit high` dependency findings are a separate
 dependency-security follow-up and are not modified by this remediation.
-GitHub CI and the post-merge full security rescan remain pending until the
-remediation branch is published.
+GitHub CI for remediation SHA `5ef987a` passed all six current checks. A
+post-review audit-ownership correction requires a new CI run before merge.
+The post-merge full security rescan remains pending.
 
 ## Boundaries
 

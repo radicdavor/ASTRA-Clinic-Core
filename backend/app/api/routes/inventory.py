@@ -435,8 +435,14 @@ def create_invoice(payload: InvoiceCreate, request: Request, db: Session = Depen
 
 
 @router.get("/invoices/{invoice_id}", response_model=InvoiceOut)
-def invoice(invoice_id: int, db: Session = Depends(get_db), context: CurrentUserContext = Depends(require_active_clinic("billing.read"))):
-    return get_active_clinic_invoice(db, invoice_id, context)
+def invoice(invoice_id: int, request: Request, db: Session = Depends(get_db), context: CurrentUserContext = Depends(require_active_clinic("billing.read"))):
+    item = get_active_clinic_invoice(db, invoice_id, context)
+    audit_actor(
+        db, "billing_details.viewed", "Invoice", item.id, "Otvoreni su detalji računa",
+        context.actor, request, None, {"surface": "billing_panel"},
+    )
+    db.commit()
+    return item
 
 
 @router.patch("/invoices/{invoice_id}", response_model=InvoiceOut)

@@ -154,6 +154,24 @@ def test_client_generated_ids_never_create_authoritative_access_events(client, d
     assert db.query(AuditLog).filter_by(action="patient.viewed").count() == 0
 
 
+def test_actual_patient_access_is_server_audited_once_per_request(client, db, auth_setup):
+    patient = Patient(first_name="Server", last_name="Audited")
+    db.add(patient)
+    db.flush()
+
+    for _ in range(2):
+        response = client.get(f"/api/patients/{patient.id}", headers=_headers(client))
+        assert response.status_code == 200
+
+    events = db.query(AuditLog).filter_by(
+        action="patient.viewed",
+        entity_type="Patient",
+        entity_id=patient.id,
+    ).all()
+    assert len(events) == 2
+    assert all((event.after_json or {}).get("surface") == "patient_workspace" for event in events)
+
+
 def test_legacy_clinical_intent_is_not_trusted_without_classification_review(db, auth_setup):
     patient = Patient(first_name="Legacy", last_name="Intent")
     db.add(patient)
