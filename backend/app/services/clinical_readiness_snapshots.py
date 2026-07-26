@@ -8,7 +8,8 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.audit.service import audit
-from app.models.domain import Appointment, ClinicalReadinessSnapshot
+from app.auth.dependencies import Actor
+from app.models.domain import Appointment, ClinicalReadinessSnapshot, User
 from app.services.clinical_readiness_preview import build_clinical_readiness_preview
 
 
@@ -149,6 +150,9 @@ def _capture_clinical_readiness_snapshot_without_commit(
     appointment = db.get(Appointment, appointment_id)
     if not appointment:
         raise LookupError("Termin nije pronaden")
+    actor_user = db.get(User, actor_user_id)
+    if actor_user is None:
+        raise LookupError("Actor user nije pronaden")
 
     if normalized_idempotency_key:
         existing_snapshot = db.scalar(
@@ -163,7 +167,11 @@ def _capture_clinical_readiness_snapshot_without_commit(
                 return existing_snapshot
             raise SnapshotIdempotencyConflict("Idempotency key je vec iskoristen za drugi snapshot capture")
 
-    preview = build_clinical_readiness_preview(db, appointment)
+    preview = build_clinical_readiness_preview(
+        db,
+        appointment,
+        actor=Actor(actor_type="user", user=actor_user),
+    )
     if preview.patient_id is None or preview.service_id is None:
         raise ValueError("Termin mora imati pacijenta i uslugu za snapshot capture")
 

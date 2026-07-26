@@ -2,9 +2,11 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
+from fastapi import HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.auth.dependencies import Actor, actor_has_medical_staff_category
 from app.models.domain import Appointment, ClinicalDocument
 from app.schemas.common import ClinicalReadinessPreviewItem, ClinicalReadinessPreviewResponse
 from app.services.clinical_readiness_templates import ClinicalReadinessTemplateItem, DEMO_TEMPLATE_VERSION_WARNING, select_clinical_readiness_template
@@ -57,7 +59,17 @@ def template_item_to_preview_item(
     )
 
 
-def build_clinical_readiness_preview(db: Session, appointment: Appointment) -> ClinicalReadinessPreviewResponse:
+def build_clinical_readiness_preview(
+    db: Session,
+    appointment: Appointment,
+    *,
+    actor: Actor,
+) -> ClinicalReadinessPreviewResponse:
+    if not actor_has_medical_staff_category(actor):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Kliničku spremnost smije koristiti samo ovlašteno medicinsko osoblje",
+        )
     items: list[ClinicalReadinessPreviewItem] = []
     limitations = [DEMO_LIMITATION]
     source_warnings: list[str] = []

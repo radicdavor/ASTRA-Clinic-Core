@@ -5,7 +5,7 @@ from sqlalchemy import or_, select
 from sqlalchemy.orm import Session, joinedload
 
 from app.audit.service import audit, snapshot
-from app.auth.dependencies import Actor, CurrentUserContext, get_current_actor, require_active_clinic, require_permission
+from app.auth.dependencies import Actor, CurrentUserContext, actor_has_medical_staff_category, get_current_actor, require_active_clinic, require_medical_staff, require_permission
 from app.core.database import get_db
 from app.models.domain import Appointment, ClinicalEpisode, ClinicalReadinessReviewAcknowledgment, ClinicalReadinessSnapshot, Patient, Provider, Room, Service
 from app.schemas.common import AppointmentCreate, AppointmentOperationalOut, AppointmentUpdate, ClinicalReadinessAcknowledgmentDetailResponse, ClinicalReadinessAcknowledgmentListResponse, ClinicalReadinessAcknowledgmentReadItem, ClinicalReadinessPreviewResponse, ClinicalReadinessSnapshotCaptureRequest, ClinicalReadinessSnapshotDetailResponse, ClinicalReadinessSnapshotHistoryItem, ClinicalReadinessSnapshotHistoryResponse, ClinicalReadinessSnapshotResponse, ClinicalReadinessSnapshotSupersedeRequest, ClinicalReadinessSnapshotSupersedeResponse, ErrorResponse
@@ -237,6 +237,18 @@ def _require_acknowledgment_read_actor(
             request=request,
         )
         raise HTTPException(403, detail="Nedostaje dozvola: clinical_readiness.acknowledgments.read")
+    if not actor_has_medical_staff_category(actor):
+        _record_acknowledgment_denied_read(
+            db,
+            actor=actor,
+            access_type=access_type,
+            denial_category="non_medical_staff",
+            route=route,
+            appointment_id=appointment_id,
+            acknowledgment_id=acknowledgment_id,
+            request=request,
+        )
+        raise HTTPException(403, detail="Kliničku spremnost smije koristiti samo ovlašteno medicinsko osoblje")
     return actor
 
 
@@ -344,7 +356,11 @@ def get_appointment(
     return appointment
 
 
-@router.get("/appointments/{appointment_id}/clinical-readiness-preview", response_model=ClinicalReadinessPreviewResponse)
+@router.get(
+    "/appointments/{appointment_id}/clinical-readiness-preview",
+    response_model=ClinicalReadinessPreviewResponse,
+    dependencies=[Depends(require_medical_staff)],
+)
 def get_appointment_clinical_readiness_preview(
     appointment_id: int,
     db: Session = Depends(get_db),
@@ -354,10 +370,14 @@ def get_appointment_clinical_readiness_preview(
     appointment = get_appointment_or_404(db, appointment_id)
     if appointment.clinic_id != context.active_clinic_id:
         raise HTTPException(404, detail="Termin nije pronaden")
-    return build_clinical_readiness_preview(db, appointment)
+    return build_clinical_readiness_preview(db, appointment, actor=context.actor)
 
 
-@router.post("/appointments/{appointment_id}/clinical-readiness-snapshots", response_model=ClinicalReadinessSnapshotResponse)
+@router.post(
+    "/appointments/{appointment_id}/clinical-readiness-snapshots",
+    response_model=ClinicalReadinessSnapshotResponse,
+    dependencies=[Depends(require_medical_staff)],
+)
 def capture_appointment_clinical_readiness_snapshot(
     appointment_id: int,
     payload: ClinicalReadinessSnapshotCaptureRequest,
@@ -386,7 +406,11 @@ def capture_appointment_clinical_readiness_snapshot(
     return snapshot_response(snapshot_obj)
 
 
-@router.get("/appointments/{appointment_id}/clinical-readiness-snapshots", response_model=ClinicalReadinessSnapshotHistoryResponse)
+@router.get(
+    "/appointments/{appointment_id}/clinical-readiness-snapshots",
+    response_model=ClinicalReadinessSnapshotHistoryResponse,
+    dependencies=[Depends(require_medical_staff)],
+)
 def appointment_clinical_readiness_snapshot_history(
     appointment_id: int,
     db: Session = Depends(get_db),
@@ -411,7 +435,11 @@ def appointment_clinical_readiness_snapshot_history(
     )
 
 
-@router.get("/appointments/{appointment_id}/clinical-readiness-snapshots/{snapshot_id}", response_model=ClinicalReadinessSnapshotDetailResponse)
+@router.get(
+    "/appointments/{appointment_id}/clinical-readiness-snapshots/{snapshot_id}",
+    response_model=ClinicalReadinessSnapshotDetailResponse,
+    dependencies=[Depends(require_medical_staff)],
+)
 def appointment_clinical_readiness_snapshot_detail(
     appointment_id: int,
     snapshot_id: int,
@@ -434,7 +462,10 @@ def appointment_clinical_readiness_snapshot_detail(
     return snapshot_detail_response(snapshot_obj)
 
 
-@router.get("/appointments/{appointment_id}/clinical-readiness/acknowledgments", response_model=ClinicalReadinessAcknowledgmentListResponse)
+@router.get(
+    "/appointments/{appointment_id}/clinical-readiness/acknowledgments",
+    response_model=ClinicalReadinessAcknowledgmentListResponse,
+)
 def appointment_clinical_readiness_acknowledgments(
     appointment_id: int,
     request: Request,
@@ -469,7 +500,10 @@ def appointment_clinical_readiness_acknowledgments(
     )
 
 
-@router.get("/appointments/{appointment_id}/clinical-readiness/acknowledgments/{acknowledgment_id}", response_model=ClinicalReadinessAcknowledgmentDetailResponse)
+@router.get(
+    "/appointments/{appointment_id}/clinical-readiness/acknowledgments/{acknowledgment_id}",
+    response_model=ClinicalReadinessAcknowledgmentDetailResponse,
+)
 def appointment_clinical_readiness_acknowledgment_detail(
     appointment_id: int,
     acknowledgment_id: int,
@@ -522,7 +556,11 @@ def appointment_clinical_readiness_acknowledgment_detail(
     )
 
 
-@router.post("/appointments/{appointment_id}/clinical-readiness-snapshots/{snapshot_id}/supersede", response_model=ClinicalReadinessSnapshotSupersedeResponse)
+@router.post(
+    "/appointments/{appointment_id}/clinical-readiness-snapshots/{snapshot_id}/supersede",
+    response_model=ClinicalReadinessSnapshotSupersedeResponse,
+    dependencies=[Depends(require_medical_staff)],
+)
 def supersede_appointment_clinical_readiness_snapshot(
     appointment_id: int,
     snapshot_id: int,

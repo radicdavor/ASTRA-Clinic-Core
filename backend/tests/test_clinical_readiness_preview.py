@@ -1,5 +1,6 @@
 from datetime import datetime
 
+from app.auth.dependencies import Actor
 from app.models.domain import Appointment, AuditLog, ClinicalEpisode, ClinicalPlan, ClinicalReadinessSnapshot, PatientClinicalSummaryRecord
 from app.services.clinical_readiness_preview import build_clinical_readiness_preview
 from tests.conftest import login_token
@@ -127,11 +128,15 @@ def test_patient_clinical_summary_alone_is_not_used_as_source_of_truth(client, d
     assert "Sazetak ne smije postati readiness izvor" not in labels
 
 
-def test_missing_service_returns_blocking_item_without_db_write(db):
+def test_missing_service_returns_blocking_item_without_db_write(db, auth_setup):
     p = patient(db)
     appt = Appointment(id=999, patient_id=p.id, service_id=None)
 
-    response = build_clinical_readiness_preview(db, appt)
+    response = build_clinical_readiness_preview(
+        db,
+        appt,
+        actor=Actor(actor_type="user", user=auth_setup["admin"]),
+    )
 
     assert response.status == "blocked"
     assert any(item.key == "missing_service" and item.blocking for item in response.items)

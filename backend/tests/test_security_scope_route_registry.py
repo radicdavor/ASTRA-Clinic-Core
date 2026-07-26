@@ -55,11 +55,13 @@ MODULE_DEFAULT_CONTEXT = {
 
 # Updating this value requires reviewing the full sorted route/context snapshot
 # emitted by `_registry_rows()`, not merely accepting a new hash.
-EXPECTED_API_ROUTE_REGISTRY_SHA256 = "47839362dfd4c2b77f6a0dbda254409afa040ab5394bf947c161aac4428266ec"
+EXPECTED_API_ROUTE_REGISTRY_SHA256 = "baef1db686ac8bd9ea324d1896b8b8437463b909b90d40a91923558b4b6a5102"
 EXPECTED_API_ROUTE_METHOD_COUNT = 260
 
 
 def _scope_for_route(module_name: str, path: str) -> str | None:
+    if module_name == "appointments" and "/clinical-readiness" in path:
+        return INSTITUTION_CLINICAL
     if module_name == "inventory" and (
         path.startswith("/api/invoices")
         or path == "/api/appointments/{appointment_id}/draft-invoice"

@@ -380,6 +380,8 @@ def test_capture_endpoint_requires_authentication(client, db):
 
 def test_capture_endpoint_requires_snapshot_write_permission(client, db, auth_setup):
     appt = appointment(db)
+    auth_setup["limited"].role.professional_category = "medical_staff"
+    db.flush()
     headers = {"Authorization": f"Bearer {login_token(client, 'limited@test.local')}"}
 
     response = capture_endpoint(client, appt.id, headers=headers)
@@ -496,6 +498,7 @@ def test_history_endpoint_requires_authentication(client, db):
 
 def test_history_endpoint_requires_read_permission(client, db, auth_setup):
     appt = appointment(db)
+    auth_setup["limited"].role.professional_category = "medical_staff"
     auth_setup["limited"].role.permissions = []
     db.commit()
     headers = {"Authorization": f"Bearer {login_token(client, 'limited@test.local')}"}
@@ -596,6 +599,7 @@ def test_history_endpoint_is_read_only_and_writes_no_audit(client, db, auth_setu
 
 def test_capture_endpoint_still_requires_write_permission_with_read_permission(client, db, auth_setup):
     appt = appointment(db)
+    auth_setup["limited"].role.professional_category = "medical_staff"
     auth_setup["limited"].role.permissions = [permission for permission in auth_setup["admin"].role.permissions if permission.name == "clinical_readiness.snapshots.read"]
     db.commit()
     headers = {"Authorization": f"Bearer {login_token(client, 'limited@test.local')}"}
@@ -628,6 +632,7 @@ def test_detail_endpoint_requires_read_permission(client, db, auth_setup):
         actor_user_id=auth_setup["admin"].id,
         reason="Detail permission guard.",
     )
+    auth_setup["limited"].role.professional_category = "medical_staff"
     auth_setup["limited"].role.permissions = []
     db.commit()
     headers = {"Authorization": f"Bearer {login_token(client, 'limited@test.local')}"}
@@ -1188,6 +1193,8 @@ def test_supersession_endpoint_requires_supersede_permission(client, db, auth_se
         actor_user_id=auth_setup["admin"].id,
         reason="Endpoint permission.",
     )
+    auth_setup["limited"].role.professional_category = "medical_staff"
+    db.flush()
     headers = {"Authorization": f"Bearer {login_token(client, 'limited@test.local')}"}
 
     response = supersede_endpoint(client, appt.id, snapshot.id, headers=headers)
@@ -1196,12 +1203,12 @@ def test_supersession_endpoint_requires_supersede_permission(client, db, auth_se
     assert "clinical_readiness.snapshots.supersede" in response.json()["detail"]
 
 
-def test_api_key_supersession_denied_even_with_snapshot_scope(client, db):
+def test_api_key_supersession_denied_even_with_snapshot_scope(client, db, auth_setup):
     appt = appointment(db)
     snapshot = capture_clinical_readiness_snapshot(
         db,
         appointment_id=appt.id,
-        actor_user_id=1,
+        actor_user_id=auth_setup["admin"].id,
         reason="API key old snapshot.",
     )
     api_key = ApiKey(
@@ -1584,9 +1591,9 @@ def test_snapshot_permission_matrix_regression(client, db, auth_setup):
     read_permission = db.query(Permission).filter(Permission.name == "clinical_readiness.snapshots.read").one()
     write_permission = db.query(Permission).filter(Permission.name == "clinical_readiness.snapshots.write").one()
     supersede_permission = db.query(Permission).filter(Permission.name == "clinical_readiness.snapshots.supersede").one()
-    read_role = Role(name="snapshot-read-only", description="Snapshot read only", permissions=[read_permission])
-    write_role = Role(name="snapshot-write-only", description="Snapshot write only", permissions=[write_permission])
-    supersede_role = Role(name="snapshot-supersede-only", description="Snapshot supersede only", permissions=[supersede_permission])
+    read_role = Role(name="snapshot-read-only", description="Snapshot read only", professional_category="medical_staff", permissions=[read_permission])
+    write_role = Role(name="snapshot-write-only", description="Snapshot write only", professional_category="medical_staff", permissions=[write_permission])
+    supersede_role = Role(name="snapshot-supersede-only", description="Snapshot supersede only", professional_category="medical_staff", permissions=[supersede_permission])
     read_user = User(
         email="snapshot-read@test.local",
         full_name="Snapshot Read",
