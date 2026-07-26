@@ -1,10 +1,11 @@
 from datetime import date
+import json
 
 from app.auth.dependencies import hash_api_key
 from app.models.domain import ApiKey
-from app.schemas.common import AppointmentOperationalOut
+from app.schemas.common import AppointmentOperationalOut, AppointmentOut
 from tests.conftest import login_token
-from tests.factories import appointment
+from tests.factories import appointment, patient
 
 
 def test_operational_appointment_projection_omits_free_text_fields(db):
@@ -20,6 +21,22 @@ def test_operational_appointment_projection_omits_free_text_fields(db):
     serialized = str(payload)
     assert "SECRET_APPOINTMENT_NOTE_SENTINEL" not in serialized
     assert "SECRET_PATIENT_NOTE_SENTINEL" not in serialized
+
+
+def test_operational_appointment_projection_is_smaller_than_legacy_broad_projection(db):
+    appt = appointment(db)
+    appt.notes = "SECRET_APPOINTMENT_NOTE_SENTINEL"
+    appt.patient.notes = "SECRET_PATIENT_NOTE_SENTINEL"
+    db.flush()
+
+    broad = AppointmentOut.model_validate(appt).model_dump(mode="json")
+    operational = AppointmentOperationalOut.model_validate(appt).model_dump(mode="json")
+    broad_bytes = len(json.dumps(broad, separators=(",", ":")).encode())
+    operational_bytes = len(json.dumps(operational, separators=(",", ":")).encode())
+
+    assert operational_bytes < broad_bytes
+    assert "notes" in broad
+    assert "notes" not in operational
 
 
 def test_openapi_operational_appointment_contracts_are_narrow(client):
@@ -53,6 +70,31 @@ def test_openapi_operational_appointment_contracts_are_narrow(client):
     for (method, path), expected_model in expected_models.items():
         response_schema = paths[path][method]["responses"]["200"]["content"]["application/json"]["schema"]
         assert expected_model in str(response_schema)
+
+
+def test_operational_appointment_list_keeps_query_count_bounded(
+    client, db, auth_setup, sql_query_counter
+):
+    first = appointment(db)
+    appointment(
+        db,
+        patient_obj=patient(db, "Second", "Patient"),
+        provider_obj=first.provider,
+        room_obj=first.room,
+        service_obj=first.service,
+    )
+    db.commit()
+    token = login_token(client, "admin@test.local")
+
+    with sql_query_counter.track() as query_count:
+        response = client.get(
+            "/api/appointments",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+
+    assert response.status_code == 200
+    assert len(response.json()) == 2
+    assert query_count.count <= 2
 
 
 def test_reception_and_ai_today_responses_omit_note_sentinels(client, db, auth_setup):
