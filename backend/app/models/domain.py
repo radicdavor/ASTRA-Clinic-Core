@@ -350,6 +350,8 @@ class ClinicalDocument(TimestampMixin, Base):
     author_professional_role: Mapped[str | None] = mapped_column(String(80))
     is_clinical_record: Mapped[bool] = mapped_column(Boolean, default=True, index=True)
     record_classification: Mapped[str] = mapped_column(String(40), default="unclassified", index=True)
+    classification_reviewed_by: Mapped[int | None] = mapped_column(ForeignKey("users.id"), index=True)
+    classification_reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     institution: Mapped[str | None] = mapped_column(String(180))
     raw_text: Mapped[str | None] = mapped_column(Text)
     ai_summary: Mapped[str | None] = mapped_column(Text)
@@ -383,6 +385,7 @@ class ClinicalDocument(TimestampMixin, Base):
     appointment: Mapped[Appointment | None] = relationship()
     author_user: Mapped[User | None] = relationship(foreign_keys=[author_user_id])
     reviewer: Mapped[User | None] = relationship(foreign_keys=[reviewed_by])
+    classification_reviewer: Mapped[User | None] = relationship(foreign_keys=[classification_reviewed_by])
 
 
 class ClinicalDocumentAddendum(TimestampMixin, Base):

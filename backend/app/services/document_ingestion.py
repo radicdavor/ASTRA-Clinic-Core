@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 from app.core.config import get_settings
 from app.models.domain import ClinicalDocument, DocumentProcessingJob, PatientJourney
 from app.services.clinical_document_access import require_document_institution_for_clinic
+from app.services.clinical_documents import validate_document_provenance_links
 
 
 ALLOWED_UPLOAD_CHANNELS = {
@@ -137,6 +138,12 @@ def ingest_source_document(
         raise HTTPException(422, detail="Datoteka je prazna")
     if len(content) > settings.document_max_upload_bytes:
         raise HTTPException(413, detail="Datoteka je veća od dopuštene veličine")
+    validate_document_provenance_links(
+        db,
+        patient_id=journey.patient_id,
+        clinic_id=journey.clinic_id,
+        appointment_id=journey.appointment_id,
+    )
 
     digest = sha256(content).hexdigest()
     suffix = Path(filename).suffix.lower()[:12]

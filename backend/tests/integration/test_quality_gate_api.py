@@ -7,7 +7,7 @@ from sqlalchemy.exc import DBAPIError
 
 from app.auth.dependencies import hash_api_key
 from app.core.security import hash_password
-from app.models.domain import ApiKey, Appointment, AuditLog, ClinicalDocument, ClinicalFormDefinition, ClinicalFormInstance, ClinicalFormVersion, Clinic, ClinicMembership, Institution, Invoice, InvoiceLine, JourneyActivity, JourneyCheckIn, Patient, PatientJourney, Permission, Provider, Role, Room, Service, SignedClinicalReport, User
+from app.models.domain import ApiKey, Appointment, AuditLog, ClinicalDocument, ClinicalFormDefinition, ClinicalFormInstance, ClinicalFormVersion, Clinic, ClinicMembership, Institution, Invoice, InvoiceLine, JourneyActivity, JourneyCheckIn, Patient, PatientClinicAssociation, PatientJourney, Permission, Provider, Role, Room, Service, SignedClinicalReport, User
 from app.services.reports import report_digest
 
 
@@ -178,6 +178,7 @@ def test_postgresql_institution_clinical_record_role_boundaries(pg_client, pg_db
     )
     administrator = create_institution_user(pg_db, "pg-admin-record@test.local", ["clinical.documents.read_institution"], clinic_a, "administrative_staff")
     foreign_physician = create_institution_user(pg_db, "pg-foreign-record@test.local", ["clinical.documents.read_institution"], other_clinic)
+    pg_db.add(PatientClinicAssociation(patient_id=patient.id, clinic_id=clinic_b.id, active=True))
     clinical = ClinicalDocument(
         patient_id=patient.id,
         clinic_id=clinic_b.id,

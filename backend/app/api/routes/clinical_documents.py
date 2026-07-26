@@ -10,7 +10,7 @@ from app.core.database import get_db
 from app.models.domain import AuditLog, ClinicalDocument, ClinicalDocumentAddendum, Patient
 from app.schemas.common import ClinicalDocumentAddendumCreate, ClinicalDocumentAddendumOut, ClinicalDocumentCreate, ClinicalDocumentOut, ClinicalDocumentUpdate, ClinicalDocumentUpload, ClinicalEvidenceTimelineItem, ErrorResponse
 from app.services.clinical_document_access import actor_institution_scope, clinical_document_capabilities, create_document_addendum, ensure_institution_clinical_read, get_authored_draft_for_edit, get_institution_scoped_clinical_document_for_read, institution_scoped_clinical_documents_statement, require_document_institution_for_clinic, validate_document_provenance
-from app.services.clinical_documents import extract_document_knowledge, get_document_or_404, has_extracted_content, initial_ai_extraction_status, initial_document_review_status, mark_document_ai_extraction_edited, mark_document_needs_review, validate_document_links
+from app.services.clinical_documents import extract_document_knowledge, get_document_or_404, has_extracted_content, initial_ai_extraction_status, initial_document_review_status, mark_document_ai_extraction_edited, mark_document_needs_review, validate_document_provenance_links
 from app.services.clinical_evidence_timeline import classify_audit_log
 
 ERROR_RESPONSES = {400: {"model": ErrorResponse}, 401: {"model": ErrorResponse}, 403: {"model": ErrorResponse}, 404: {"model": ErrorResponse}, 409: {"model": ErrorResponse}, 422: {"model": ErrorResponse}}
@@ -88,7 +88,12 @@ def create_clinical_document(
 ):
     values = payload.model_dump()
     values["clinic_id"] = default_document_clinic_id(db, values.get("clinic_id"), values.get("appointment_id"), actor)
-    validate_document_links(db, payload.patient_id, payload.appointment_id)
+    validate_document_provenance_links(
+        db,
+        patient_id=payload.patient_id,
+        clinic_id=values["clinic_id"],
+        appointment_id=payload.appointment_id,
+    )
     values["institution_id"] = require_document_institution_for_clinic(db, values["clinic_id"])
     now = datetime.now(timezone.utc)
     initial_ai_status = initial_ai_extraction_status(values)
@@ -134,7 +139,12 @@ def upload_clinical_document(
 ):
     attachment_path = f"local-placeholder/{payload.attachment_name}" if payload.attachment_name else None
     clinic_id = default_document_clinic_id(db, payload.clinic_id, payload.appointment_id, actor)
-    validate_document_links(db, payload.patient_id, payload.appointment_id)
+    validate_document_provenance_links(
+        db,
+        patient_id=payload.patient_id,
+        clinic_id=clinic_id,
+        appointment_id=payload.appointment_id,
+    )
     document = ClinicalDocument(
         patient_id=payload.patient_id,
         clinic_id=clinic_id,
@@ -237,7 +247,12 @@ def update_clinical_document(
             raise HTTPException(409, detail="Podrijetlo kliničkog dokumenta je nepromjenjivo")
     if document.checksum_sha256 and "attachment_path" in update_data and update_data["attachment_path"] != document.attachment_path:
         raise HTTPException(409, detail="Putanja pohranjenog izvornog dokumenta je nepromjenjiva")
-    validate_document_links(db, update_data.get("patient_id", document.patient_id), update_data.get("appointment_id", document.appointment_id))
+    validate_document_provenance_links(
+        db,
+        patient_id=document.patient_id,
+        clinic_id=document.clinic_id,
+        appointment_id=document.appointment_id,
+    )
     before = snapshot(document)
     patch_model(document, update_data)
     validate_document_provenance(db, document)

@@ -19,6 +19,7 @@ from app.models.domain import (
     SignedClinicalReport,
     User,
 )
+from app.services.clinical_documents import validate_document_provenance_links
 
 def report_digest(rendered_content: str, structured_data: dict) -> str:
     canonical = json.dumps(structured_data, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
@@ -56,6 +57,12 @@ def create_signed_report(db: Session, instance: ClinicalFormInstance, actor_user
     document_clinic = db.get(Clinic, document_clinic_id)
     if not document_clinic or document_clinic.institution_id is None:
         raise HTTPException(409, detail="Nije moguće dokazati ustanovu potpisanog nalaza")
+    validate_document_provenance_links(
+        db,
+        patient_id=journey.patient_id,
+        clinic_id=document_clinic_id,
+        appointment_id=activity.appointment_id,
+    )
     document = ClinicalDocument(
         patient_id=journey.patient_id,
         clinic_id=document_clinic_id,
@@ -70,6 +77,8 @@ def create_signed_report(db: Session, instance: ClinicalFormInstance, actor_user
         author_professional_role=signer.role.name if signer.role else None,
         is_clinical_record=True,
         record_classification="clinical",
+        classification_reviewed_by=actor_user_id,
+        classification_reviewed_at=instance.signed_at,
         institution="ASTRA Clinic",
         raw_text=instance.rendered_summary or "",
         review_status="signed",
