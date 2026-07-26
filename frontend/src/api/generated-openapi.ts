@@ -337,7 +337,7 @@ export type ClinicalDocumentOut = {
   is_clinical_record?: boolean;
   key_findings?: Array<string> | null;
   origin?: string | null;
-  patient?: PatientOut | null;
+  patient?: ClinicalDocumentPatientIdentityOut | null;
   patient_id: number;
   physician_reviewed: boolean;
   raw_text?: string | null;
@@ -349,6 +349,13 @@ export type ClinicalDocumentOut = {
   source_type?: string;
   title: string;
   updated_at: string;
+};
+
+export type ClinicalDocumentPatientIdentityOut = {
+  date_of_birth?: string | null;
+  first_name: string;
+  id: number;
+  last_name: string;
 };
 
 export type ClinicalDocumentUpdate = {

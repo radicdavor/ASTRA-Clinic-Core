@@ -83,6 +83,13 @@ export type ClinicalDecisionTimelineItem = {
   created_at: string;
 };
 
+export type ClinicalDocumentPatientIdentity = {
+  id: number;
+  first_name: string;
+  last_name: string;
+  date_of_birth?: string | null;
+};
+
 export type ClinicalDocument = {
   id: number;
   patient_id: number;
@@ -108,7 +115,7 @@ export type ClinicalDocument = {
   reviewed_at?: string | null;
   attachment_path?: string | null;
   appointment_id?: number | null;
-  patient?: Patient;
+  patient?: ClinicalDocumentPatientIdentity;
   created_at: string;
   updated_at: string;
   can_edit?: boolean;
