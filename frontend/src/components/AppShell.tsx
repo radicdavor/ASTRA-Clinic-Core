@@ -1,7 +1,7 @@
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { BookOpenCheck, Boxes, Building2, CalendarDays, CheckSquare2, ChevronDown, ClipboardCheck, ClipboardList, FileSearch, FileText, KeyRound, LayoutDashboard, LogOut, MoreHorizontal, PackageSearch, Pill, Settings, ShieldCheck, Stethoscope, TestTube, Users } from "lucide-react";
-import { getActiveClinicId, getSessionUser, logout, setActiveClinicId, setActiveClinicTimezone, type UserClinicsResponse } from "../api/client";
+import { clearSessionState, getActiveClinicId, getSessionUser, logout, notifyUser, setActiveClinicId, setActiveClinicTimezone, type UserClinicsResponse } from "../api/client";
 import { useApi } from "../hooks/useApi";
 import { ToastHost } from "./ToastHost";
 
@@ -53,6 +53,8 @@ export function AppShell() {
   const publicConfig = useApi<{ demo_mode: boolean; real_data_allowed: boolean; warnings?: string[] } | null>("/api/public-config", null);
   const clinicAccess = useApi<UserClinicsResponse | null>("/auth/me/clinics", null);
   const [activeClinic, setActiveClinic] = useState(getActiveClinicId() ?? "");
+  const [logoutInProgress, setLogoutInProgress] = useState(false);
+  const logoutInProgressRef = useRef(false);
   const fallbackDemoMode = import.meta.env.VITE_APP_ENV !== "production";
   const showDemoBanner = publicConfig.data ? publicConfig.data.demo_mode || !publicConfig.data.real_data_allowed : fallbackDemoMode;
   const warningText = publicConfig.data?.warnings?.join(" ") || "Demo/development okruzenje - ne unositi stvarne podatke pacijenata.";
@@ -84,6 +86,22 @@ export function AppShell() {
     { to: "/program1/synthetic-review", label: "Program 1 Demo", icon: TestTube },
     { to: "/program1/synthetic-evaluation", label: "Program 1 Evaluacija", icon: ClipboardCheck },
   ]});
+
+  async function handleLogout() {
+    if (logoutInProgressRef.current) return;
+    logoutInProgressRef.current = true;
+    setLogoutInProgress(true);
+    try {
+      await logout();
+      clearSessionState();
+      navigate("/login");
+    } catch {
+      notifyUser("Odjava nije uspjela. Pokušajte ponovno.", "error", "Odjava nije uspjela");
+    } finally {
+      logoutInProgressRef.current = false;
+      setLogoutInProgress(false);
+    }
+  }
 
   return (
     <div className="shell">
@@ -144,10 +162,9 @@ export function AppShell() {
           <button
             className="icon-button"
             title="Odjava"
-            onClick={async () => {
-              await logout();
-              navigate("/login");
-            }}
+            aria-label="Odjava"
+            disabled={logoutInProgress}
+            onClick={handleLogout}
           >
             <LogOut size={18} />
           </button>

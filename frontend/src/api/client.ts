@@ -109,6 +109,7 @@ function apiErrorMessage(detail: unknown): string {
 
 export type SessionUser = { id: number; name: string; email: string; role: string };
 export type BrowserSession = { user: SessionUser; csrf_token: string; expires_at: string };
+export type BrowserLogoutResponse = { logged_out: boolean; revoked: boolean };
 
 export function setSessionUser(user: SessionUser) {
   localStorage.setItem(USER_KEY, JSON.stringify(user));
@@ -227,16 +228,23 @@ export async function fetchSession() {
   return session;
 }
 
-export async function logout() {
+export async function logout(): Promise<BrowserLogoutResponse> {
   const csrf = cookieValue(CSRF_COOKIE_KEY);
   const headers = new Headers({ "Content-Type": "application/json" });
   if (csrf) headers.set("X-CSRF-Token", csrf);
-  await fetch(`${API_BASE_URL}/auth/browser/logout`, {
+  const response = await fetch(`${API_BASE_URL}/auth/browser/logout`, {
     method: "POST",
     headers,
     credentials: "include",
-  }).catch(() => undefined);
-  clearSessionState();
+  });
+  if (!response.ok) {
+    throw new ApiError("Odjava nije uspjela.", null, response.status);
+  }
+  const result = await response.json().catch(() => null) as BrowserLogoutResponse | null;
+  if (result?.logged_out !== true) {
+    throw new ApiError("Odjava nije potvrđena.", null, response.status);
+  }
+  return result;
 }
 
 export async function getClinicalReadinessSnapshotHistory(appointmentId: number) {

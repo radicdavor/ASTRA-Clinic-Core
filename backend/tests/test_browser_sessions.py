@@ -47,6 +47,28 @@ def test_logout_revokes_browser_session_and_cookie_no_longer_authenticates(clien
     assert client.get("/auth/session").status_code == 401
 
 
+def test_failed_logout_preserves_session_until_successful_retry(client, db, auth_setup):
+    login = client.post("/auth/browser/login", json={"email": "admin@test.local", "password": "secret"})
+    csrf = login.json()["csrf_token"]
+    session = db.query(UserSession).one()
+
+    failed_logout = client.post("/auth/browser/logout", headers={"X-CSRF-Token": "wrong-token"})
+
+    assert failed_logout.status_code == 403
+    db.refresh(session)
+    assert session.revoked_at is None
+    assert client.get("/auth/session").status_code == 200
+
+    successful_logout = client.post("/auth/browser/logout", headers={"X-CSRF-Token": csrf})
+
+    assert successful_logout.status_code == 200
+    assert successful_logout.json() == {"logged_out": True, "revoked": True}
+    assert "Max-Age=0" in successful_logout.headers["set-cookie"]
+    db.refresh(session)
+    assert session.revoked_at is not None
+    assert client.get("/auth/session").status_code == 401
+
+
 def test_logout_is_idempotent_without_session_cookie(client, auth_setup):
     response = client.post("/auth/browser/logout")
 

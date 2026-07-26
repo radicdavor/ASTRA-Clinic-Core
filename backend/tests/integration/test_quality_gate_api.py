@@ -7,7 +7,7 @@ from sqlalchemy.exc import DBAPIError
 
 from app.auth.dependencies import hash_api_key
 from app.core.security import hash_password
-from app.models.domain import ApiKey, Appointment, AuditLog, ClinicalDocument, ClinicalFormDefinition, ClinicalFormInstance, ClinicalFormVersion, Clinic, ClinicMembership, Institution, Invoice, InvoiceLine, JourneyActivity, JourneyCheckIn, Patient, PatientClinicAssociation, PatientJourney, Permission, Provider, Role, Room, Service, SignedClinicalReport, User
+from app.models.domain import ApiKey, Appointment, AuditLog, ClinicalDocument, ClinicalFormDefinition, ClinicalFormInstance, ClinicalFormVersion, Clinic, ClinicMembership, Institution, Invoice, InvoiceLine, JourneyActivity, JourneyCheckIn, Patient, PatientClinicAssociation, PatientJourney, Permission, Provider, Role, Room, Service, SignedClinicalReport, User, UserSession
 from app.services.reports import report_digest
 
 
@@ -89,6 +89,34 @@ def test_postgresql_migrations_created_key_tables(pg_db):
 
     assert REQUIRED_TABLES.issubset(table_names)
     assert pg_db.scalar(select(JourneyCheckIn).limit(1)) is None
+
+
+def test_postgresql_failed_logout_preserves_session_until_successful_retry(pg_client, pg_db):
+    user = create_user_with_permissions(pg_db, "pg-logout@test.local", [])
+    pg_db.commit()
+    login_response = pg_client.post(
+        "/auth/browser/login",
+        json={"email": user.email, "password": "secret"},
+    )
+    assert login_response.status_code == 200
+    csrf = login_response.json()["csrf_token"]
+    session = pg_db.query(UserSession).one()
+
+    failed_logout = pg_client.post("/auth/browser/logout", headers={"X-CSRF-Token": "wrong-token"})
+
+    assert failed_logout.status_code == 403
+    pg_db.refresh(session)
+    assert session.revoked_at is None
+    assert pg_client.get("/auth/session").status_code == 200
+
+    successful_logout = pg_client.post("/auth/browser/logout", headers={"X-CSRF-Token": csrf})
+
+    assert successful_logout.status_code == 200
+    assert successful_logout.json() == {"logged_out": True, "revoked": True}
+    assert "Max-Age=0" in successful_logout.headers["set-cookie"]
+    pg_db.refresh(session)
+    assert session.revoked_at is not None
+    assert pg_client.get("/auth/session").status_code == 401
 
 
 def test_postgresql_rejects_signed_report_content_update_and_delete_and_preserves_snapshot(pg_client, pg_db):
