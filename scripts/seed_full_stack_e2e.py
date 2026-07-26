@@ -391,7 +391,11 @@ def seed() -> dict:
         db.flush()
 
         shared = patient(db, "E2E", "Zajednicki Pacijent", "e2e.patient.shared@example.invalid")
-        shared.notes = "SECRET_PATIENT_NOTE_SENTINEL"
+        shared.notes = (
+            "SECRET_PATIENT_NOTE_SENTINEL "
+            "CROSS_INSTITUTION_PATIENT_NOTE_SENTINEL "
+            "LOCAL_PATIENT_NOTE_SENTINEL"
+        )
         only_b = patient(db, "E2E", "Samo B Pacijent", "e2e.patient.onlyb@example.invalid")
         paid_patient = patient(db, "E2E", "Placeni Pacijent", "e2e.patient.paid@example.invalid")
         foreign_patient = patient(db, "E2E", "Druga Ustanova Pacijent", "e2e.patient.foreign@example.invalid")
