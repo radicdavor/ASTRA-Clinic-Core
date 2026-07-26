@@ -20,6 +20,7 @@ from app.models.domain import (
     PatientJourney,
     SignedClinicalReport,
 )
+from app.services.clinical_scope import MEDICAL_STAFF_CATEGORY
 
 
 SensitiveAccessAction = Literal[
@@ -82,6 +83,7 @@ class AuditAccessEventDefinition:
     entity_types: frozenset[str]
     required_permission: str
     enabled_for_direct_endpoint: bool = True
+    required_professional_category: str | None = None
 
 
 ACCESS_EVENT_DEFINITIONS: dict[str, AuditAccessEventDefinition] = {
@@ -90,26 +92,31 @@ ACCESS_EVENT_DEFINITIONS: dict[str, AuditAccessEventDefinition] = {
         "clinical_workspace.opened",
         frozenset({"PatientJourney"}),
         "encounter.read",
+        required_professional_category=MEDICAL_STAFF_CATEGORY,
     ),
     "clinical_form.viewed": AuditAccessEventDefinition(
         "clinical_form.viewed",
         frozenset({"ClinicalFormInstance"}),
         "clinical_forms.read",
+        required_professional_category=MEDICAL_STAFF_CATEGORY,
     ),
     "signed_report.viewed": AuditAccessEventDefinition(
         "signed_report.viewed",
         frozenset({"SignedClinicalReport"}),
         "reports.read",
+        required_professional_category=MEDICAL_STAFF_CATEGORY,
     ),
     "source_document.viewed": AuditAccessEventDefinition(
         "source_document.viewed",
         frozenset({"ClinicalDocument"}),
         "documents.view_source",
+        required_professional_category=MEDICAL_STAFF_CATEGORY,
     ),
     "source_document.downloaded": AuditAccessEventDefinition(
         "source_document.downloaded",
         frozenset({"ClinicalDocument"}),
         "documents.view_source",
+        required_professional_category=MEDICAL_STAFF_CATEGORY,
     ),
     "billing_details.viewed": AuditAccessEventDefinition(
         "billing_details.viewed",
@@ -126,12 +133,17 @@ ACCESS_EVENT_DEFINITIONS: dict[str, AuditAccessEventDefinition] = {
         "clinical_report.printed",
         frozenset({"SignedClinicalReport"}),
         "reports.print",
+        required_professional_category=MEDICAL_STAFF_CATEGORY,
     ),
     "audit_log.viewed": AuditAccessEventDefinition("audit_log.viewed", frozenset({"AuditLog"}), "audit.read"),
 }
 
 
 def _ensure_event_permission(context: CurrentUserContext, definition: AuditAccessEventDefinition) -> None:
+    if definition.required_professional_category is not None:
+        role = context.user.role
+        if role is None or role.professional_category != definition.required_professional_category:
+            raise HTTPException(status_code=403, detail="Klinički pristup smije evidentirati samo medicinsko osoblje")
     if definition.required_permission not in context.permissions:
         raise HTTPException(status_code=403, detail=f"Nedostaje dozvola: {definition.required_permission}")
 

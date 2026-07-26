@@ -7,9 +7,9 @@ from sqlalchemy.orm import Session, joinedload
 from app.audit.service import audit, snapshot
 from app.auth.dependencies import TenantActorContext, require_tenant_clinic
 from app.core.database import get_db
-from app.models.domain import Appointment, ClinicalEpisode, Patient, PatientClinicAssociation, Room
-from app.schemas.common import AppointmentCreate, AppointmentOut, ErrorResponse, PatientCreate, PatientOut
-from app.services.appointments import BLOCKING_STATUSES, create_appointment_with_journey
+from app.models.domain import Appointment, Patient, PatientClinicAssociation, Room
+from app.schemas.common import AppointmentCreate, AppointmentOperationalOut, ErrorResponse, PatientCreate, PatientOut
+from app.services.appointments import BLOCKING_STATUSES, create_appointment_with_journey, resolve_appointment_episode_reference
 
 ERROR_RESPONSES = {400: {"model": ErrorResponse}, 401: {"model": ErrorResponse}, 403: {"model": ErrorResponse}, 404: {"model": ErrorResponse}, 409: {"model": ErrorResponse}, 422: {"model": ErrorResponse}}
 
@@ -29,19 +29,19 @@ def ai_create_patient(payload: PatientCreate, request: Request, db: Session = De
     return patient
 
 
-@router.post("/appointments/create", response_model=AppointmentOut)
+@router.post("/appointments/create", response_model=AppointmentOperationalOut)
 def ai_create_appointment(payload: AppointmentCreate, request: Request, db: Session = Depends(get_db), context: TenantActorContext = Depends(require_tenant_clinic("ai.appointments.create"))):
     actor = context.actor
     data = payload.model_dump()
     room = db.scalar(select(Room).where(Room.id == data["room_id"], Room.clinic_id == context.clinic_id))
     if room is None:
         raise HTTPException(404, detail="Prostorija nije pronađena")
-    if data.get("episode_id") is not None:
-        episode = db.scalar(select(ClinicalEpisode).where(ClinicalEpisode.id == data["episode_id"], ClinicalEpisode.institution_id == context.institution_id))
-        if episode is None:
-            raise HTTPException(404, detail="Klinička epizoda nije pronađena")
-        if episode.patient_id != data["patient_id"]:
-            raise HTTPException(422, detail="Klinička epizoda mora pripadati istom pacijentu kao termin")
+    resolve_appointment_episode_reference(
+        db,
+        episode_id=data.get("episode_id"),
+        patient_id=data["patient_id"],
+        institution_id=context.institution_id,
+    )
     data["clinic_id"] = context.clinic_id
     data["source"] = "ai_agent"
     appointment = create_appointment_with_journey(db,data,actor,request)

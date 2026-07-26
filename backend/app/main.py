@@ -1,4 +1,3 @@
-from uuid import uuid4
 import logging
 from urllib.parse import urlparse
 
@@ -9,6 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.api.routes import ai, appointments, audit, auth, catalog, catalog_governance, clinical_documents, clinical_forms, daily_dashboard, document_ingestion, episodes, intake, inventory, journey_activities, journey_check_in, journey_closure, journey_encounter, journey_preparation, journey_timeline, knowledge, laboratory, pathology, patient_clinical_summary, patient_journeys, patients, readiness, reception, reports, search, system, therapies, workflow
 from app.core.config import get_settings
 from app.services.schema_readiness import check_configured_database_schema_readiness
+from app.services.request_ids import normalize_request_id
 
 logger = logging.getLogger(__name__)
 
@@ -149,7 +149,7 @@ async def protect_browser_session_mutations(request: Request, call_next):
 
 @app.middleware("http")
 async def add_request_id(request: Request, call_next):
-    request_id = request.headers.get("X-Request-ID", str(uuid4()))
+    request_id = normalize_request_id(request.headers.get("X-Request-ID"))
     request.state.request_id = request_id
     response = await call_next(request)
     response.headers["X-Request-ID"] = request_id

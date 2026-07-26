@@ -49,9 +49,10 @@ _PERMISSION_CACHE: dict[str, Permission] = {}
 
 def clinic_today() -> date:
     override = os.getenv("ASTRA_E2E_DATE")
-    if override:
-        return date.fromisoformat(override)
-    return clinic_local_date("Europe/Zagreb")
+    day = date.fromisoformat(override) if override else clinic_local_date("Europe/Zagreb")
+    while day.weekday() >= 5:
+        day += timedelta(days=1)
+    return day
 
 
 def get_or_create_permission(db, name: str) -> Permission:

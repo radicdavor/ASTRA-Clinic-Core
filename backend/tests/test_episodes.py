@@ -143,8 +143,9 @@ def test_create_appointment_with_episode_and_reject_cross_patient(client, db, au
     )
 
     assert ok_response.status_code == 200
-    assert ok_response.json()["episode"]["id"] == ep.id
-    assert rejected.status_code == 422
+    assert ok_response.json()["episode_id"] == ep.id
+    assert "episode" not in ok_response.json()
+    assert rejected.status_code == 404
 
 
 def test_readiness_includes_clinical_episodes(client, auth_setup):

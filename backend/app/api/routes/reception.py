@@ -7,8 +7,8 @@ from sqlalchemy.orm import Session, joinedload
 from app.audit.service import audit, snapshot
 from app.auth.dependencies import CurrentUserContext, require_active_clinic
 from app.core.database import get_db
-from app.models.domain import Appointment, ClinicalEpisode, Provider, Room
-from app.schemas.common import AppointmentOut, ErrorResponse, ReceptionArrivalRequest, ReceptionSlot
+from app.models.domain import Appointment, Provider, Room
+from app.schemas.common import AppointmentOperationalOut, ErrorResponse, ReceptionArrivalRequest, ReceptionSlot
 
 ERROR_RESPONSES = {
     400: {"model": ErrorResponse},
@@ -33,8 +33,6 @@ def appointment_load_options():
         joinedload(Appointment.service),
         joinedload(Appointment.provider),
         joinedload(Appointment.room),
-        joinedload(Appointment.episode).joinedload(ClinicalEpisode.patient),
-        joinedload(Appointment.episode).joinedload(ClinicalEpisode.owner_provider),
     )
 
 
@@ -106,7 +104,7 @@ def reception_day(
     return ten_minute_reception_slots(db.scalars(stmt).all())
 
 
-@router.post("/appointments/{appointment_id}/mark-arrived", response_model=AppointmentOut)
+@router.post("/appointments/{appointment_id}/mark-arrived", response_model=AppointmentOperationalOut)
 def mark_appointment_arrived(
     appointment_id: int,
     payload: ReceptionArrivalRequest,
@@ -154,7 +152,7 @@ def mark_appointment_arrived(
     )
 
 
-@router.post("/appointments/{appointment_id}/start-service", response_model=AppointmentOut)
+@router.post("/appointments/{appointment_id}/start-service", response_model=AppointmentOperationalOut)
 def start_appointment_service(
     appointment_id: int,
     request: Request,
