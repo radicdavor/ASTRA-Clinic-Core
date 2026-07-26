@@ -349,7 +349,7 @@ class ClinicalDocument(TimestampMixin, Base):
     author_user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), index=True)
     author_professional_role: Mapped[str | None] = mapped_column(String(80))
     is_clinical_record: Mapped[bool] = mapped_column(Boolean, default=True, index=True)
-    record_classification: Mapped[str] = mapped_column(String(40), default="clinical", index=True)
+    record_classification: Mapped[str] = mapped_column(String(40), default="unclassified", index=True)
     institution: Mapped[str | None] = mapped_column(String(180))
     raw_text: Mapped[str | None] = mapped_column(Text)
     ai_summary: Mapped[str | None] = mapped_column(Text)

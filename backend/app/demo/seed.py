@@ -399,6 +399,7 @@ def main() -> None:
                     physician_reviewed=reviewed,
                     reviewed_by=None,
                     reviewed_at=extraction_timestamp if reviewed else None,
+                    record_classification="clinical",
                     **values,
                 )
                 db.add(document)

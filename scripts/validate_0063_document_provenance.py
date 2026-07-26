@@ -106,12 +106,25 @@ def check() -> None:
                 {"marker": f"{MARKER}%"},
             ).all()
         )
+        classifications = dict(
+            connection.execute(
+                text(
+                    """
+                    SELECT document.title, document.record_classification
+                    FROM clinical_documents AS document
+                    WHERE document.title LIKE :marker
+                    """
+                ),
+                {"marker": f"{MARKER}%"},
+            ).all()
+        )
         expected_a = connection.scalar(text("SELECT id FROM institutions WHERE code = 'pr3-migration-a'"))
         expected_b = connection.scalar(text("SELECT id FROM institutions WHERE code = 'pr3-migration-b'"))
     assert rows[f"{MARKER}AGREED"] == expected_a
     assert rows[f"{MARKER}APPOINTMENT"] == expected_b
     assert rows[f"{MARKER}UNRESOLVED"] is None
     assert rows[f"{MARKER}CONFLICTING"] is None
+    assert set(classifications.values()) == {"clinical"}
 
 
 if __name__ == "__main__":

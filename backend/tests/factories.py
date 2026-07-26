@@ -140,6 +140,7 @@ def clinical_document(db, patient_obj=None, physician_reviewed=True):
         physician_reviewed=physician_reviewed,
         review_status="reviewed" if physician_reviewed else "needs_physician_review",
         ai_extraction_status="accepted" if physician_reviewed else "generated",
+        record_classification="clinical",
     )
     db.add(obj)
     db.flush()

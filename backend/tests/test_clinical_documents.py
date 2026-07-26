@@ -10,6 +10,19 @@ def auth_headers(client):
     return {"Authorization": f"Bearer {token}"}
 
 
+def classify_manual_document(client, document_id, headers):
+    response = client.post(
+        f"/api/clinical-documents/{document_id}/classification/review",
+        headers=headers,
+        json={
+            "record_classification": "clinical",
+            "note": "Ljudski potvrđena klasifikacija sintetičkog izvora.",
+        },
+    )
+    assert response.status_code == 200
+    return response
+
+
 KNOWLEDGE_CATEGORIES = [
     "known_problems",
     "completed_procedures",
@@ -53,6 +66,7 @@ def test_create_extract_review_document_updates_patient_summary(client, db, auth
     assert created.json()["ai_extraction_generated_at"] is None
     assert created.json()["physician_reviewed"] is False
     document_id = created.json()["id"]
+    classify_manual_document(client, document_id, headers)
 
     summary_before = client.get(f"/api/patients/{p.id}/clinical-summary", headers=headers)
     assert summary_before.status_code == 200
@@ -192,6 +206,9 @@ def test_clinical_document_detail_exposes_source_ai_and_review_lifecycle(client,
     document_id = created.json()["id"]
 
     detail_before = client.get(f"/api/clinical-documents/{document_id}", headers=headers)
+    assert detail_before.status_code == 403
+    classify_manual_document(client, document_id, headers)
+    detail_before = client.get(f"/api/clinical-documents/{document_id}", headers=headers)
     assert detail_before.status_code == 200
     assert detail_before.json()["raw_text"] == "Kolonoskopija: polip odstranjen. Ceka se PHD nalaz."
     assert detail_before.json()["review_status"] == "draft"
@@ -267,6 +284,7 @@ def test_clinical_document_evidence_timeline_returns_classified_document_events(
     )
     assert created.status_code == 200
     document_id = created.json()["id"]
+    classify_manual_document(client, document_id, headers)
 
     extracted = client.post(f"/api/clinical-documents/{document_id}/extract", headers=headers)
     assert extracted.status_code == 200
@@ -281,7 +299,13 @@ def test_clinical_document_evidence_timeline_returns_classified_document_events(
     assert response.status_code == 200
     body = response.json()
     actions = [item["action"] for item in body]
-    assert actions == ["ai_document_summary_rejected", "clinical_document_reviewed", "ai_document_extracted", "create"]
+    assert actions == [
+        "ai_document_summary_rejected",
+        "clinical_document_reviewed",
+        "ai_document_extracted",
+        "document_classification_reviewed",
+        "create",
+    ]
     assert [item["id"] for item in body] == sorted([item["id"] for item in body], reverse=True)
     assert all(item["object_type"] == "ClinicalDocument" for item in body)
     assert all(item["object_id"] == document_id for item in body)
@@ -620,6 +644,7 @@ def test_review_without_ai_extraction_keeps_ai_status_not_run(client, db, auth_s
     )
     assert created.status_code == 200
     document_id = created.json()["id"]
+    classify_manual_document(client, document_id, headers)
 
     reviewed = client.post(f"/api/clinical-documents/{document_id}/review", headers=headers)
     assert reviewed.status_code == 200
