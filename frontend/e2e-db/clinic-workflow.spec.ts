@@ -4,13 +4,21 @@ import { readFileSync } from "node:fs";
 type Seed = {
   date: string;
   password: string;
-  users: { adminA: string; receptionA: string; dual: string; systemAdmin: string };
+  users: {
+    adminA: string;
+    receptionA: string;
+    dual: string;
+    systemAdmin: string;
+    physicianA: string;
+    nurseA: string;
+  };
   clinics: { a: number; b: number };
   patients: { shared: number; onlyB: number; paid: number };
   journeys: { a: number; b: number; onlyB: number; paid: number };
   services: { consult: number; gastro: number; colon: number };
   providers: { a: number; b: number };
   rooms: { a1: number; a2: number; b1: number };
+  appointments: { clinicBConflict: number; clinicAVisit: number };
 };
 
 const seedPath = process.env.ASTRA_E2E_SEED_FILE;
@@ -136,6 +144,7 @@ test("DB-backed workflow uses real backend, PostgreSQL and persistent dashboard 
     }),
   });
   expect([200, 201]).toContain(nonOverlap.status);
+  expect(JSON.stringify(nonOverlap.body)).not.toContain("Synthetic DB-backed E2E non-overlap appointment");
 
   await page.reload();
   await selectDashboardDate(page, seed.date);
@@ -159,6 +168,49 @@ test("DB-backed workflow uses real backend, PostgreSQL and persistent dashboard 
   await page.getByRole("button", { name: "Otvori pregled" }).first().click();
   await expect(page).toHaveURL(/\/journeys\/\d+\?focus=encounter/);
   await expect(page.getByRole("heading", { name: /E2E Zajednicki Pacijent/ })).toBeVisible();
+});
+
+test("DB-backed operational appointment surfaces never expose free-text notes", async ({ page }) => {
+  await login(page, seed.users.receptionA, seed.clinics.a);
+
+  const appointments = await api(
+    page,
+    `/api/appointments?date_from=${seed.date}&date_to=${seed.date}`,
+  );
+  const reception = await api(page, `/api/reception/day?date=${seed.date}`);
+  const serialized = JSON.stringify([appointments.body, reception.body]);
+
+  expect(appointments.status).toBe(200);
+  expect(reception.status).toBe(200);
+  expect(serialized).not.toContain("SECRET_PATIENT_NOTE_SENTINEL");
+  expect(serialized).not.toContain("SECRET_APPOINTMENT_NOTE_SENTINEL");
+  expect(await page.locator("body").innerText()).not.toContain("SECRET_PATIENT_NOTE_SENTINEL");
+  expect(await page.locator("body").innerText()).not.toContain("SECRET_APPOINTMENT_NOTE_SENTINEL");
+});
+
+test("DB-backed non-medical administrator cannot resolve clinical readiness", async ({ page }) => {
+  await login(page, seed.users.adminA, seed.clinics.a);
+
+  const response = await api(
+    page,
+    `/api/appointments/${seed.appointments.clinicAVisit}/clinical-readiness-preview`,
+  );
+
+  expect(response.status).toBe(403);
+});
+
+test("DB-backed medical staff can read scoped clinical readiness", async ({ page }) => {
+  for (const email of [seed.users.nurseA, seed.users.physicianA]) {
+    await page.context().clearCookies();
+    await page.goto("/login");
+    await login(page, email, seed.clinics.a);
+    const response = await api(
+      page,
+      `/api/appointments/${seed.appointments.clinicAVisit}/clinical-readiness-preview`,
+    );
+    expect(response.status).toBe(200);
+    expect(JSON.stringify(response.body)).toContain('"is_preview":true');
+  }
 });
 
 test("DB-backed browser session survives refresh and logout revokes protected access", async ({ page }) => {

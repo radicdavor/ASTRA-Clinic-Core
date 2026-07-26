@@ -244,7 +244,7 @@ assertIncludes("src/pages/PatientDetail.tsx", "Zadnji termin");
 assertIncludes("src/pages/PatientDetail.tsx", "Otvoreni racuni");
 assertIncludes("src/pages/Patients.tsx", "/patients/${row.id}");
 assertIncludes("src/pages/AppointmentDetail.tsx", "/patients/${appointment.data.patient.id}");
-assertIncludes("src/pages/AppointmentDetail.tsx", "/episodes/${appointment.data.episode.id}");
+assertIncludes("src/pages/AppointmentDetail.tsx", "/episodes/${appointment.data.episode_id}");
 assertIncludes("src/pages/AppointmentDetail.tsx", "Termin nije povezan s klinickom epizodom.");
 assertIncludes("src/pages/AppointmentDetail.tsx", "Klinicka spremnost - preview");
 assertIncludes("src/pages/AppointmentDetail.tsx", "Read-only prikaz mogucih uvjeta za ovaj planirani klinicki cin. Ne donosi odluke i ne blokira postupak.");
