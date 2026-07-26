@@ -5,7 +5,7 @@ from typing import Literal
 
 from fastapi import HTTPException, Request
 from pydantic import BaseModel, ConfigDict, Field
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
 from app.audit.service import audit
@@ -200,29 +200,35 @@ def _scoped_invoice(db: Session, invoice_id: int, clinic_id: int) -> Invoice:
 
 
 def _authorized_audit_reference(db: Session, audit_id: int, context: CurrentUserContext) -> AuditLog:
-    event = db.get(AuditLog, audit_id)
+    predicates = [
+        (
+            (AuditLog.scope_type == "clinic")
+            & (AuditLog.clinic_id == context.active_clinic_id)
+        )
+    ]
+    role = context.user.role
+    active_institution_id = context.active_clinic.institution_id if context.active_clinic else None
+    if (
+        role is not None
+        and role.professional_category == MEDICAL_STAFF_CATEGORY
+        and active_institution_id is not None
+    ):
+        predicates.append(
+            AuditLog.scope_type.in_(("institution", "institution_clinical"))
+            & (AuditLog.institution_id == active_institution_id)
+        )
+    if "system.admin" in context.permissions:
+        predicates.append(AuditLog.scope_type == "system_security")
+
+    event = db.scalar(
+        select(AuditLog).where(
+            AuditLog.id == audit_id,
+            or_(*predicates),
+        )
+    )
     if event is None:
         _not_found()
-    if event.scope_type == "clinic":
-        if event.clinic_id is None or event.clinic_id != context.active_clinic_id:
-            raise HTTPException(status_code=403, detail="Audit zapis nije dostupan u aktivnoj klinici")
-        return event
-    if event.scope_type in {"institution", "institution_clinical"}:
-        role = context.user.role
-        active_institution_id = context.active_clinic.institution_id if context.active_clinic else None
-        if (
-            role is None
-            or role.professional_category != "medical_staff"
-            or event.institution_id is None
-            or event.institution_id != active_institution_id
-        ):
-            raise HTTPException(status_code=403, detail="Klinički audit zapis nije dostupan u aktivnoj ustanovi")
-        return event
-    if event.scope_type == "system_security":
-        if "system.admin" not in context.permissions:
-            raise HTTPException(status_code=403, detail="Nedostaje dozvola za sigurnosni audit")
-        return event
-    raise HTTPException(status_code=403, detail="Audit zapis nema razriješen sigurnosni scope")
+    return event
 
 
 def _resolve_scoped_entity(

@@ -350,8 +350,8 @@ def test_direct_audit_reference_requires_existing_scoped_event(client, db, auth_
 
     assert allowed.status_code == 200
     assert allowed.json()["entity_id"] == local.id
-    assert forbidden.status_code == 403
-    assert missing.status_code == 404
+    assert forbidden.status_code == missing.status_code == 404
+    assert forbidden.json() == missing.json()
 
 
 def test_direct_system_audit_reference_requires_explicit_system_permission(client, db, auth_setup):
@@ -370,7 +370,7 @@ def test_direct_system_audit_reference_requires_explicit_system_permission(clien
         json={"action": "audit_log.viewed", "entity_type": "AuditLog", "entity_id": system_event.id, "surface": "audit_viewer"},
     )
 
-    assert response.status_code == 403
+    assert response.status_code == 404
 
 
 def test_direct_institution_audit_reference_requires_matching_medical_scope(client, db, auth_setup):
@@ -403,7 +403,10 @@ def test_direct_institution_audit_reference_requires_matching_medical_scope(clie
         )
 
     assert record(local.id).status_code == 200
-    assert record(foreign.id).status_code == 403
+    foreign_response = record(foreign.id)
+    missing_response = record(foreign.id + 1_000_000)
+    assert foreign_response.status_code == missing_response.status_code == 404
+    assert foreign_response.json() == missing_response.json()
 
 
 def test_sensitive_access_returns_exact_event_created_even_if_later_id_exists(client, db, auth_setup, monkeypatch):

@@ -162,3 +162,17 @@ suite for bounded anonymous rejected-session audit aggregation and exact audit
 event identity. SQLite tests remain useful for route behavior, but are not
 accepted as proof of `ON CONFLICT` aggregation or transaction interleaving.
 Migration validation now targets the single `0067_audit_aggregation` head.
+
+The third full-rescan remediation adds contract, HTTP, PostgreSQL and DB-backed
+browser coverage for three boundaries:
+
+- operational appointment responses cannot serialize patient or appointment
+  free-text notes;
+- patient clinical-readiness routes require the canonical medical professional
+  category before object resolution;
+- direct audit references resolve inside the caller's authorized scope so
+  foreign and absent IDs have identical not-found behavior.
+
+The DB-backed E2E seed uses synthetic note sentinels and verifies they are absent
+from appointment, reception and browser output. It also verifies non-medical
+readiness denial and allowed scoped nurse/physician readiness access.

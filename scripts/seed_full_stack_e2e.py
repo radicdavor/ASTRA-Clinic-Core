@@ -324,6 +324,7 @@ def seed() -> dict:
             db,
             "e2e_physician",
             [
+                "appointments.read",
                 "clinical.documents.read_institution",
                 "clinical.documents.edit_own_draft",
                 "clinical.documents.add_addendum",
@@ -340,10 +341,10 @@ def seed() -> dict:
         physician_reader_role = role(
             db,
             "e2e_physician_reader",
-            ["clinical.documents.read_institution", "clinical.documents.edit_own_draft", "reports.read"],
+            ["appointments.read", "clinical.documents.read_institution", "clinical.documents.edit_own_draft", "reports.read"],
             "medical_staff",
         )
-        nurse_role = role(db, "e2e_nurse", ["clinical.documents.read_institution", "reports.read"], "medical_staff")
+        nurse_role = role(db, "e2e_nurse", ["appointments.read", "clinical.documents.read_institution", "reports.read"], "medical_staff")
         foreign_physician_role = role(db, "e2e_foreign_physician", ["clinical.documents.read_institution", "reports.read"], "medical_staff")
 
         institution_a = db.scalar(select(Institution).where(Institution.code == "e2e-nura"))
@@ -390,6 +391,7 @@ def seed() -> dict:
         db.flush()
 
         shared = patient(db, "E2E", "Zajednicki Pacijent", "e2e.patient.shared@example.invalid")
+        shared.notes = "SECRET_PATIENT_NOTE_SENTINEL"
         only_b = patient(db, "E2E", "Samo B Pacijent", "e2e.patient.onlyb@example.invalid")
         paid_patient = patient(db, "E2E", "Placeni Pacijent", "e2e.patient.paid@example.invalid")
         foreign_patient = patient(db, "E2E", "Druga Ustanova Pacijent", "e2e.patient.foreign@example.invalid")
@@ -402,6 +404,7 @@ def seed() -> dict:
 
         b_appt = appointment(db, shared, consult, provider_b, room_b1, clinic_b, day, time(9, 0), time(9, 30), admin_a)
         a_appt = appointment(db, shared, consult, provider_a, room_a1, clinic_a, day, time(10, 0), time(10, 30), admin_a)
+        a_appt.notes = "SECRET_APPOINTMENT_NOTE_SENTINEL"
         paid_appt = appointment(db, paid_patient, gastro, provider_a, room_a2, clinic_a, day, time(12, 0), time(12, 30), admin_a)
         only_b_appt = appointment(db, only_b, gastro, provider_b, room_b1, clinic_b, day, time(11, 0), time(11, 30), admin_a)
         db.flush()

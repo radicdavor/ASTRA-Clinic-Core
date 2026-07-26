@@ -1188,6 +1188,23 @@ class PatientIdentityOut(ORMModel):
     updated_at: DateTimeType
 
 
+class PatientOperationalIdentityOut(ORMModel):
+    """Minimum patient identity embedded in routine scheduling responses."""
+
+    id: int
+    first_name: str
+    last_name: str
+    date_of_birth: DateType | None = None
+
+
+class PatientReceptionIdentityOut(PatientOperationalIdentityOut):
+    """Identity and contact fields needed for reception verification."""
+
+    oib: str | None = None
+    email: str | None = None
+    phone: str | None = None
+
+
 class ServiceCreate(BaseModel):
     name: str
     code: str | None = None
@@ -1204,6 +1221,13 @@ class ServiceOut(ServiceCreate, ORMModel):
     id: int
     clinic_ids: list[int] = []
     room_ids: list[int] = []
+
+
+class ServiceOperationalOut(ORMModel):
+    id: int
+    name: str
+    code: str | None = None
+    duration_minutes: int
 
 
 class ServiceUpdate(BaseModel):
@@ -1272,6 +1296,14 @@ class ProviderOut(ORMModel):
     created_at: DateTimeType
     updated_at: DateTimeType
     clinic: ClinicOut | None = None
+
+
+class ProviderOperationalOut(ORMModel):
+    id: int
+    full_name: str
+    specialty: str | None = None
+    staff_role: str = "physician"
+    clinic_id: int | None = None
 
 
 class ProviderCreate(BaseModel):
@@ -1365,6 +1397,13 @@ class RoomOut(ORMModel):
     created_at: DateTimeType
     updated_at: DateTimeType
     clinic: ClinicOut | None = None
+
+
+class RoomOperationalOut(ORMModel):
+    id: int
+    name: str
+    type: str | None = None
+    clinic_id: int | None = None
 
 
 class RoomCreate(BaseModel):
@@ -1841,10 +1880,42 @@ class AppointmentOut(AppointmentCreate, ORMModel):
     room: RoomOut | None = None
 
 
-class AppointmentOperationalOut(AppointmentOut):
-    """Scheduling-only projection; ``episode_id`` remains an opaque reference."""
+class AppointmentOperationalOut(ORMModel):
+    """Purpose-limited scheduling projection with no free-text fields."""
 
-    model_config = ConfigDict(from_attributes=True, extra="forbid")
+    id: int
+    patient_id: int
+    service_id: int
+    provider_id: int
+    room_id: int
+    clinic_id: int | None = None
+    episode_id: int | None = None
+    date: DateType
+    start_time: TimeType
+    end_time: TimeType
+    duration_minutes: int
+    status: str
+    source: str
+    arrived_at: DateTimeType | None = None
+    identity_verified_at: DateTimeType | None = None
+    identity_verified_by: int | None = None
+    created_at: DateTimeType
+    updated_at: DateTimeType
+    patient: PatientOperationalIdentityOut | None = None
+    service: ServiceOperationalOut | None = None
+    provider: ProviderOperationalOut | None = None
+    room: RoomOperationalOut | None = None
+
+
+class AppointmentReceptionOut(AppointmentOperationalOut):
+    """Reception projection adds verification contact fields, never notes."""
+
+    patient: PatientReceptionIdentityOut | None = None
+
+
+class AITodayOut(BaseModel):
+    date: DateType
+    appointments: list[AppointmentOperationalOut]
 
 
 class AppointmentClinicSummary(BaseModel):
@@ -1887,7 +1958,7 @@ class ReceptionArrivalRequest(BaseModel):
 
 class ReceptionSlot(BaseModel):
     time: str
-    appointment: AppointmentOut | None = None
+    appointment: AppointmentReceptionOut | None = None
     span: int = 1
     empty: bool = True
 
