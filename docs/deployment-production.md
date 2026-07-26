@@ -161,6 +161,19 @@ docker compose --env-file .env.production -f docker-compose.prod.example.yml exe
 docker compose --env-file .env.production -f docker-compose.prod.example.yml exec backend python -m app.cli session-cleanup
 ```
 
+## Trusted reverse proxy and audit client address
+
+The production example uses one isolated `proxy_net` network between Nginx and
+the backend. Nginx replaces, rather than appends, inbound
+`X-Forwarded-For`/`X-Real-IP` values with the TCP peer address. The backend
+accepts those headers only when the direct peer belongs to
+`TRUSTED_PROXY_NETWORKS`.
+
+Keep `TRUSTED_PROXY_NETWORKS` restricted to the actual reverse-proxy network.
+Do not use `0.0.0.0/0` or expose the backend service directly. If an external
+load balancer is added, terminate its forwarding chain at the configured Nginx
+edge and update the allowlist as a reviewed deployment change.
+
 Schedule session cleanup with cron or the host task scheduler at an interval
 appropriate to the installation. It must not become a loop inside the API
 process. Backup and restore remain outside this module and require the separate

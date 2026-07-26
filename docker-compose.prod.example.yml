@@ -16,6 +16,8 @@ services:
       timeout: 5s
       retries: 10
     restart: unless-stopped
+    networks:
+      - data_net
 
   backend:
     build: ./backend
@@ -34,6 +36,7 @@ services:
       - BROWSER_PUBLIC_ORIGIN=${BROWSER_PUBLIC_ORIGIN:?Set canonical HTTPS browser origin}
       - CORS_ORIGINS=${CORS_ORIGINS:?Set explicit production CORS_ORIGINS}
       - CORS_ORIGIN_REGEX=
+      - TRUSTED_PROXY_NETWORKS=172.30.0.0/24
       - DEBUG=false
       - RELOAD=false
       - DEMO_MODE=false
@@ -60,6 +63,9 @@ services:
       retries: 5
       start_period: 30s
     restart: unless-stopped
+    networks:
+      - data_net
+      - proxy_net
 
   frontend:
     build:
@@ -72,6 +78,16 @@ services:
       backend:
         condition: service_healthy
     restart: unless-stopped
+    networks:
+      - proxy_net
 
 volumes:
   postgres_data:
+
+networks:
+  data_net:
+    internal: true
+  proxy_net:
+    ipam:
+      config:
+        - subnet: 172.30.0.0/24

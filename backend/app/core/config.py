@@ -1,4 +1,5 @@
 from functools import lru_cache
+from ipaddress import ip_network
 from typing import Literal
 
 from pydantic import SecretStr
@@ -35,6 +36,7 @@ class Settings(BaseSettings):
     browser_public_origin: str = ""
     cors_origins: str = "http://localhost:5173,http://127.0.0.1:5173"
     cors_origin_regex: str | None = r"^https?://(localhost|127\.0\.0\.1|10\.\d{1,3}\.\d{1,3}\.\d{1,3}|192\.168\.\d{1,3}\.\d{1,3}|172\.(1[6-9]|2\d|3[0-1])\.\d{1,3}\.\d{1,3})(:\d+)?$"
+    trusted_proxy_networks: str = ""
     debug: bool = False
     reload: bool = False
     demo_mode: bool = True
@@ -59,6 +61,10 @@ class Settings(BaseSettings):
     @property
     def cors_origin_list(self) -> list[str]:
         return [origin.strip() for origin in self.cors_origins.split(",") if origin.strip()]
+
+    @property
+    def trusted_proxy_network_list(self) -> list[str]:
+        return [network.strip() for network in self.trusted_proxy_networks.split(",") if network.strip()]
 
     def production_safety_errors(self) -> list[str]:
         if self.app_env != "production":
@@ -91,6 +97,11 @@ class Settings(BaseSettings):
             errors.append("Production CORS_ORIGINS must not use localhost origins.")
         if self.cors_origin_regex:
             errors.append("Production CORS_ORIGIN_REGEX must be empty; use explicit CORS_ORIGINS.")
+        try:
+            for network in self.trusted_proxy_network_list:
+                ip_network(network, strict=False)
+        except ValueError:
+            errors.append("TRUSTED_PROXY_NETWORKS must contain only valid IP networks.")
         if self.debug:
             errors.append("Production DEBUG must be false.")
         if self.reload:

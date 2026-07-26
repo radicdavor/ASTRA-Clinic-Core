@@ -140,12 +140,17 @@ def test_production_error_messages_do_not_leak_secret_values():
 
 def test_production_compose_example_uses_placeholders_not_demo_secrets():
     compose = (Path(__file__).resolve().parents[2] / "docker-compose.prod.example.yml").read_text(encoding="utf-8")
+    nginx = (Path(__file__).resolve().parents[2] / "frontend" / "nginx.conf").read_text(encoding="utf-8")
 
     assert "APP_ENV=production" in compose
     assert "change-this-local-secret" not in compose
     assert "change-me-in-production" not in compose
     assert "astra:astra" not in compose
     assert "DEMO_MODE=false" in compose
+    assert "TRUSTED_PROXY_NETWORKS=172.30.0.0/24" in compose
+    assert "subnet: 172.30.0.0/24" in compose
+    assert "proxy_set_header X-Forwarded-For $remote_addr;" in nginx
+    assert "proxy_set_header X-Real-IP $remote_addr;" in nginx
 
 
 def test_production_example_uses_one_same_origin_browser_auth_contract():
