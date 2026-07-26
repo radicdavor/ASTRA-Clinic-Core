@@ -26,6 +26,21 @@ async function login(page: Page, email: string, clinicId?: number) {
     await selectActiveClinic(page, clinicId);
   }
   await expect(page.getByRole("heading", { name: "Danas u poliklinici" })).toBeVisible();
+  await selectDashboardDate(page, seed.date);
+}
+
+async function selectDashboardDate(page: Page, isoDate: string) {
+  const [year, month, day] = isoDate.split("-");
+  const displayDate = `${day}. ${month}. ${year}.`;
+  const input = page.locator(".clinic-day-date input[type='text']");
+  if (await input.inputValue() === displayDate) return;
+  const response = page.waitForResponse((item) => (
+    item.url().includes(`/api/dashboard/day?selected_date=${isoDate}`)
+    && item.request().method() === "GET"
+  ));
+  await input.fill(displayDate);
+  await response;
+  await expect(input).toHaveValue(displayDate);
 }
 
 async function selectActiveClinic(page: Page, clinicId: number) {
@@ -123,6 +138,7 @@ test("DB-backed workflow uses real backend, PostgreSQL and persistent dashboard 
   expect([200, 201]).toContain(nonOverlap.status);
 
   await page.reload();
+  await selectDashboardDate(page, seed.date);
   await expect(page.getByText("13:00").first()).toBeVisible();
   await expect.poll(() => page.evaluate(() => sessionStorage.getItem("astra_token"))).toBeNull();
   await expect.poll(() => page.evaluate(() => localStorage.getItem("astra_token"))).toBeNull();
@@ -135,6 +151,7 @@ test("DB-backed workflow uses real backend, PostgreSQL and persistent dashboard 
   await expect(page.getByRole("dialog", { name: /Kratka prijemna provjera/ })).toBeHidden();
 
   await page.reload();
+  await selectDashboardDate(page, seed.date);
   await expect(
     page.getByLabel("10:00 E2E Zajednicki Pacijent").locator(".timeline-state-label", { hasText: /Čeka pregled\/pretragu|Ceka pregled\/pretragu/ }),
   ).toBeVisible();
@@ -196,10 +213,12 @@ test("DB-backed clinic switching clears stale clinic data and reloads authorized
   await expect(page.getByRole("button", { name: "E2E Zajednicki Pacijent" }).first()).toBeVisible();
 
   await selectActiveClinic(page, seed.clinics.b);
+  await selectDashboardDate(page, seed.date);
   await expect(page.getByText("E2E Samo B Pacijent")).toBeVisible();
   await expect(page.getByText("E2E Placeni Pacijent")).toHaveCount(0);
 
   await selectActiveClinic(page, seed.clinics.a);
+  await selectDashboardDate(page, seed.date);
   await expect(page.getByText("E2E Placeni Pacijent")).toBeVisible();
 });
 
