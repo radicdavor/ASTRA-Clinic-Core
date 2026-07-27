@@ -33,6 +33,7 @@ def production_settings(**overrides):
         "browser_public_origin": "https://clinic.example.com",
         "cors_origins": "https://clinic.example.com",
         "cors_origin_regex": None,
+        "trusted_proxy_networks": "172.30.0.0/24",
         "demo_mode": False,
         "demo_seed_enabled": False,
         "auto_create_default_admin": False,
@@ -148,6 +149,7 @@ def test_production_compose_example_uses_placeholders_not_demo_secrets():
     assert "astra:astra" not in compose
     assert "DEMO_MODE=false" in compose
     assert "TRUSTED_PROXY_NETWORKS=172.30.0.0/24" in compose
+    assert "FORWARDED_ALLOW_IPS=172.30.0.0/24" in compose
     assert "subnet: 172.30.0.0/24" in compose
     assert "proxy_set_header X-Forwarded-For $remote_addr;" in nginx
     assert "proxy_set_header X-Real-IP $remote_addr;" in nginx

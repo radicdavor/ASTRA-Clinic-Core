@@ -164,9 +164,13 @@ docker compose --env-file .env.production -f docker-compose.prod.example.yml exe
 ### Legacy clinic-membership transition
 
 Revision `0057_clinic_scope_foundation` carries forward only clinic memberships
-that can be derived from an exact provider e-mail match, an appointment creator
-or identity verifier, or the sole active clinic in a single-clinic installation.
-It never assigns an arbitrary clinic when more than one clinic is possible.
+that can be derived from an exact active provider e-mail match, the sole active
+clinic in a single-clinic installation, or an existing `system.admin` permission.
+The last rule preserves the legacy system-wide administrator boundary across all
+active clinics; it is not inferred for billing, reception or other personas.
+Appointment creation and identity verification are operational actions, not
+membership evidence, and are deliberately ignored. The migration never assigns
+an arbitrary clinic when more than one clinic is possible.
 
 After upgrading a populated pre-0057 database, inspect the durable operator
 queue:
@@ -188,7 +192,7 @@ python -m app.cli resolve-clinic-membership \
 ```
 
 The command cannot assign users without a pending migration issue. It records
-the chosen clinic, operator, time, and note. Downgrading below `0057` removes
+the chosen clinic, operator, time, note and an audit event. Downgrading below `0057` removes
 the membership and issue tables; a later re-upgrade deterministically derives
 the same evidence-backed memberships and recreates unresolved operator issues.
 
@@ -198,12 +202,18 @@ The production example uses one isolated `proxy_net` network between Nginx and
 the backend. Nginx replaces, rather than appends, inbound
 `X-Forwarded-For`/`X-Real-IP` values with the TCP peer address. The backend
 accepts those headers only when the direct peer belongs to
-`TRUSTED_PROXY_NETWORKS`.
+`TRUSTED_PROXY_NETWORKS`. Uvicorn receives the same bounded network through
+`FORWARDED_ALLOW_IPS`; the two values must remain identical so request scope
+and audit provenance use one trust decision.
 
 Keep `TRUSTED_PROXY_NETWORKS` restricted to the actual reverse-proxy network.
 Do not use `0.0.0.0/0` or expose the backend service directly. If an external
-load balancer is added, terminate its forwarding chain at the configured Nginx
-edge and update the allowlist as a reviewed deployment change.
+load balancer is added, its exact network and header-replacement policy require
+a separate reviewed deployment change. The repository example deliberately
+supports one trusted Nginx hop; it does not claim the original address through
+an unverified upstream TLS/load-balancer chain. TLS termination and the actual
+deployed network rules remain deployment-side evidence required before
+production approval.
 
 Schedule session cleanup with cron or the host task scheduler at an interval
 appropriate to the installation. It must not become a loop inside the API

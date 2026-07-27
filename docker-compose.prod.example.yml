@@ -37,6 +37,7 @@ services:
       - CORS_ORIGINS=${CORS_ORIGINS:?Set explicit production CORS_ORIGINS}
       - CORS_ORIGIN_REGEX=
       - TRUSTED_PROXY_NETWORKS=172.30.0.0/24
+      - FORWARDED_ALLOW_IPS=172.30.0.0/24
       - DEBUG=false
       - RELOAD=false
       - DEMO_MODE=false

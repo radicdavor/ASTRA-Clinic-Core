@@ -33,6 +33,17 @@ def test_trusted_proxy_preserves_valid_originating_client_ip(monkeypatch):
     assert resolved_client_ip(request) == "203.0.113.25"
 
 
+def test_trusted_proxy_uses_first_address_in_documented_forwarded_chain(monkeypatch):
+    settings = Settings(app_env="test", trusted_proxy_networks="172.30.0.0/24")
+    monkeypatch.setattr("app.audit.service.get_settings", lambda: settings)
+    request = request_with_client(
+        "172.30.0.12",
+        {"X-Forwarded-For": "203.0.113.25, 198.51.100.40"},
+    )
+
+    assert resolved_client_ip(request) == "203.0.113.25"
+
+
 def test_untrusted_peer_cannot_spoof_audit_client_ip(monkeypatch):
     settings = Settings(app_env="test", trusted_proxy_networks="172.30.0.0/24")
     monkeypatch.setattr("app.audit.service.get_settings", lambda: settings)
@@ -61,6 +72,15 @@ def test_audit_record_persists_resolved_trusted_proxy_client_ip(db, monkeypatch)
     db.flush()
 
     assert event.ip_address == "203.0.113.25"
+
+
+def test_production_proxy_configuration_rejects_global_trust():
+    settings = Settings(
+        app_env="production",
+        trusted_proxy_networks="0.0.0.0/0",
+    )
+
+    assert "Production TRUSTED_PROXY_NETWORKS must not trust every client address." in settings.production_safety_errors()
 
 
 def scoped_patient(db, auth_setup, first_name="Audit", last_name="Patient"):
