@@ -39,6 +39,8 @@ jobs:
         run: pip install -r requirements.txt
       - name: Check generated OpenAPI frontend types
         run: python scripts/generate_openapi_types.py --check
+      - name: Validate PR3 behavioural closure units
+        run: python scripts/validate_pr3_remediation_closure.py
       - name: Run database migrations
         working-directory: backend
         run: |

@@ -1,0 +1,97 @@
+{
+  "schema_version": 1,
+  "review_units": [
+    {
+      "id": "populated_legacy_upgrade",
+      "evidence": [
+        {
+          "path": "scripts/validate_0057_clinic_membership_transition.py",
+          "selector": "def check_multi"
+        },
+        {
+          "path": ".github/workflows/ci.yml",
+          "selector": "validate_0057_clinic_membership_transition.py check-multi"
+        }
+      ]
+    },
+    {
+      "id": "transitional_workflow_rediscovery",
+      "evidence": [
+        {
+          "path": "backend/tests/test_document_ingestion.py",
+          "selector": "test_unclassified_review_queue_is_minimal_institution_scoped_and_actionable"
+        },
+        {
+          "path": "frontend/e2e-db/module3-clinical-record.spec.ts",
+          "selector": "DB-backed source classification is one-way"
+        }
+      ]
+    },
+    {
+      "id": "cross_scope_dto_projection",
+      "evidence": [
+        {
+          "path": "backend/tests/test_pr3_second_security_rescan.py",
+          "selector": "test_episode_projection_includes_same_institution_clinics_but_excludes_foreign_institution"
+        },
+        {
+          "path": "frontend/e2e-db/module3-clinical-record.spec.ts",
+          "selector": "DB-backed episode appointment projection excludes internal free text"
+        }
+      ]
+    },
+    {
+      "id": "context_initialization",
+      "evidence": [
+        {
+          "path": "frontend/src/pages/DailyClinicDashboard.test.tsx",
+          "selector": "waits for the active clinic timezone before requesting the clinic-local day"
+        },
+        {
+          "path": "frontend/src/pages/DailyClinicDashboard.test.tsx",
+          "selector": "clinic switch recalculates auto-today"
+        }
+      ]
+    },
+    {
+      "id": "deployment_proxy_boundary",
+      "evidence": [
+        {
+          "path": "backend/tests/test_audit.py",
+          "selector": "test_untrusted_peer_cannot_spoof_audit_client_ip"
+        },
+        {
+          "path": "backend/tests/test_contract_hardening.py",
+          "selector": "test_production_compose_example_uses_placeholders_not_demo_secrets"
+        }
+      ]
+    }
+  ],
+  "coverage_dimensions": {
+    "source_file_coverage": [
+      "populated_legacy_upgrade",
+      "transitional_workflow_rediscovery",
+      "cross_scope_dto_projection",
+      "context_initialization",
+      "deployment_proxy_boundary"
+    ],
+    "security_boundary_coverage": [
+      "cross_scope_dto_projection",
+      "deployment_proxy_boundary"
+    ],
+    "workflow_transition_coverage": [
+      "transitional_workflow_rediscovery"
+    ],
+    "legacy_upgrade_coverage": [
+      "populated_legacy_upgrade"
+    ],
+    "negative_authorization_coverage": [
+      "transitional_workflow_rediscovery",
+      "cross_scope_dto_projection",
+      "deployment_proxy_boundary"
+    ],
+    "deployment_topology_coverage": [
+      "deployment_proxy_boundary"
+    ]
+  }
+}
