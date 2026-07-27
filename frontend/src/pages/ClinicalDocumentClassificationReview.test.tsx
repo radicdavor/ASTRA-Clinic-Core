@@ -88,4 +88,44 @@ describe("ClinicalDocumentClassificationReview", () => {
     );
     expect(reviewCall?.[1]?.body).toContain('"record_classification":"clinical"');
   });
+
+  test("surfaces a concurrent classification conflict without showing trusted state", async () => {
+    vi.mocked(fetch).mockImplementation((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url.includes("/api/document-classification-queue/7")) {
+        return json({
+          id: 7,
+          patient_id: 3,
+          clinic_id: 2,
+          institution_id: 1,
+          title: "Nalaz za klasifikaciju",
+          document_type: "laboratory",
+          source_type: "uploaded",
+          document_date: "2026-07-25",
+          received_at: "2026-07-25T08:00:00Z",
+          created_at: "2026-07-25T08:00:00Z",
+          review_status: "draft",
+          record_classification: "unclassified",
+          patient: { id: 3, first_name: "Sintetički", last_name: "Pacijent", date_of_birth: "1990-01-01" }
+        });
+      }
+      if (url.includes("/classification/review") && init?.method === "POST") {
+        return json({ detail: "Dokument je u međuvremenu već klasificiran" }, 409);
+      }
+      return json({}, 404);
+    });
+
+    render(
+      <MemoryRouter initialEntries={["/clinical-documents/7/classification"]}>
+        <Routes>
+          <Route path="/clinical-documents/:id/classification" element={<ClinicalDocumentClassificationReview />} />
+        </Routes>
+      </MemoryRouter>
+    );
+
+    await screen.findByRole("heading", { name: "Klasificiraj dokument" });
+    fireEvent.click(screen.getByRole("button", { name: "Potvrdi klasifikaciju" }));
+    expect((await screen.findByRole("alert")).textContent).toContain("drugi korisnik");
+    expect(screen.getByText("Čeka klasifikaciju")).toBeTruthy();
+  });
 });

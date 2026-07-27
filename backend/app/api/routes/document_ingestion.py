@@ -1,4 +1,4 @@
-from datetime import date, datetime, timezone
+from datetime import date
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Request, UploadFile
 from fastapi.responses import FileResponse
@@ -20,7 +20,11 @@ from app.services.document_ingestion import (
     source_path,
 )
 from app.services.clinical_document_access import actor_institution_ids, actor_is_medical_staff, get_institution_scoped_clinical_document_for_read
-from app.services.clinical_documents import validate_document_provenance_links
+from app.services.clinical_documents import (
+    DocumentClassificationConflict,
+    confirm_document_classification,
+    validate_document_provenance_links,
+)
 from app.services.patient_journeys import add_event
 
 
@@ -137,7 +141,7 @@ def get_unclassified_document(
         raise HTTPException(404, detail="Dokument nije pronađen")
     audit(
         db,
-        "document_classification_queue_item_viewed",
+        "document_classification_item_viewed",
         "ClinicalDocument",
         document.id,
         "Otvoren dokument radi ljudske klasifikacije",
@@ -328,19 +332,16 @@ def review_document_classification(
         clinic_id=document.clinic_id,
         appointment_id=document.appointment_id,
     )
-    now = datetime.now(timezone.utc)
-    document.record_classification = payload.record_classification
-    document.is_clinical_record = payload.record_classification == "clinical"
-    document.classification_reviewed_by = actor.user_id
-    document.classification_reviewed_at = now
-    provenance = dict(document.provenance_json or {})
-    provenance["classification_review"] = {
-        "record_classification": payload.record_classification,
-        "note": payload.note,
-        "reviewed_by": actor.user_id,
-        "reviewed_at": now.isoformat(),
-    }
-    document.provenance_json = provenance
+    try:
+        confirm_document_classification(
+            db,
+            document,
+            record_classification=payload.record_classification,
+            reviewer_user_id=actor.user_id,
+            note=payload.note,
+        )
+    except DocumentClassificationConflict:
+        raise HTTPException(409, detail="Dokument je u međuvremenu već klasificiran")
     audit(db, "document_classification_reviewed", "ClinicalDocument", document.id, "Ljudski potvrđena klasifikacija izvornog dokumenta", actor.user_id, actor.actor_type, actor.api_key_id, before, classification_audit_snapshot(document), request)
     db.commit()
     db.refresh(document)

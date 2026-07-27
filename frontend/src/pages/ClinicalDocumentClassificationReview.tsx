@@ -1,6 +1,6 @@
 import { FormEvent, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { api } from "../api/client";
+import { ApiError, api } from "../api/client";
 import { ActionButton } from "../components/ActionButton";
 import { useApi } from "../hooks/useApi";
 import type { ClinicalDocument, UnclassifiedDocumentReview } from "../types";
@@ -20,11 +20,13 @@ export function ClinicalDocumentClassificationReview() {
   const [classification, setClassification] = useState<Classification>("clinical");
   const [note, setNote] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState("");
 
   async function submit(event: FormEvent) {
     event.preventDefault();
     if (!document.data || submitting) return;
     setSubmitting(true);
+    setSubmitError("");
     try {
       const reviewed = await api<ClinicalDocument>(
         `/api/clinical-documents/${document.data.id}/classification/review`,
@@ -34,6 +36,12 @@ export function ClinicalDocumentClassificationReview() {
         }
       );
       navigate(reviewed.record_classification === "clinical" ? `/clinical-documents/${reviewed.id}` : "/clinical-documents");
+    } catch (reason) {
+      if (reason instanceof ApiError && reason.status === 409) {
+        setSubmitError("Dokument je u međuvremenu klasificirao drugi korisnik. Vratite se u red za pregled.");
+      } else {
+        setSubmitError(reason instanceof Error ? reason.message : "Klasifikacija nije spremljena.");
+      }
     } finally {
       setSubmitting(false);
     }
@@ -78,6 +86,7 @@ export function ClinicalDocumentClassificationReview() {
       </p>
 
       <form className="form-grid" onSubmit={submit}>
+        {submitError && <p className="form-error wide-field" role="alert">{submitError}</p>}
         <label>
           Potvrđena klasifikacija
           <select

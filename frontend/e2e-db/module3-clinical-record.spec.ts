@@ -13,6 +13,7 @@ type Seed = {
     unclassifiedSource: number;
     financialSource: number;
     clinicBInvoice: number;
+    localEpisode: number;
     foreignEpisode: number;
     foreignFinding: number;
     foreignQuestion: number;
@@ -181,17 +182,43 @@ test("DB-backed source classification is one-way and clinical read does not open
   expect(financialRead.status).toBe(403);
   expect(billingRead.status).toBe(403);
 
-  const classified = await api(page, `/api/clinical-documents/${seed.clinical.unclassifiedSource}/classification/review`, {
-    method: "POST",
-    body: JSON.stringify({ record_classification: "clinical", note: "E2E ljudski pregled" }),
-  });
-  expect(classified.status).toBe(200);
+  const standardListBeforeReview = await api(page, "/api/clinical-documents");
+  expect(JSON.stringify(standardListBeforeReview.body)).not.toContain(`"id":${seed.clinical.unclassifiedSource}`);
+
+  await page.goto("/clinical-documents");
+  const queueRow = page.getByRole("row", { name: /E2E neklasificirani izvor/ });
+  await expect(queueRow).toBeVisible();
+  await queueRow.getByRole("link", { name: "Pregledaj i klasificiraj" }).click();
+  await expect(page.getByRole("heading", { name: "Klasificiraj dokument" })).toBeVisible();
+  await page.reload();
+  await expect(page.getByRole("heading", { name: "Klasificiraj dokument" })).toBeVisible();
+  await page.getByLabel(/Potvr.*klasifikacija/).selectOption("clinical");
+  await page.getByPlaceholder(/Kratko obrazlo/).fill("E2E ljudski pregled");
+  await page.getByRole("button", { name: "Potvrdi klasifikaciju" }).click();
+  await expect(page.getByRole("heading", { name: "E2E neklasificirani izvor" })).toBeVisible();
+
   expect((await api(page, `/api/clinical-documents/${seed.clinical.unclassifiedSource}`)).status).toBe(200);
+  const standardListAfterReview = await api(page, "/api/clinical-documents");
+  expect(JSON.stringify(standardListAfterReview.body)).toContain(`"id":${seed.clinical.unclassifiedSource}`);
   const reclassified = await api(page, `/api/clinical-documents/${seed.clinical.unclassifiedSource}/classification/review`, {
     method: "POST",
     body: JSON.stringify({ record_classification: "financial" }),
   });
   expect(reclassified.status).toBe(409);
+});
+
+test("DB-backed episode appointment projection excludes internal free text", async ({ page }) => {
+  await login(page, seed.users.physicianA, seed.clinics.a);
+
+  const response = await api(page, `/api/episodes/${seed.clinical.localEpisode}/appointments`);
+  expect(response.status).toBe(200);
+  const serialized = JSON.stringify(response.body);
+  expect(serialized).not.toContain("SECRET_APPOINTMENT_NOTE_SENTINEL");
+  const appointments = response.body as Array<Record<string, unknown>>;
+  expect(appointments).toHaveLength(1);
+  expect(appointments[0]).not.toHaveProperty("notes");
+  expect(appointments[0]).not.toHaveProperty("patient");
+  expect(appointments[0]).not.toHaveProperty("patient_id");
 });
 
 test("DB-backed global patient identity does not expose foreign episodes or derived clinical data", async ({ page }) => {
