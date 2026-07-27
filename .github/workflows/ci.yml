@@ -4,6 +4,9 @@ on:
   push:
   pull_request:
 
+env:
+  REMEDIATION_SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+
 jobs:
   backend:
     runs-on: ubuntu-latest
@@ -39,37 +42,102 @@ jobs:
         run: pip install -r requirements.txt
       - name: Check generated OpenAPI frontend types
         run: python scripts/generate_openapi_types.py --check
-      - name: Validate PR3 behavioural closure units
-        run: python scripts/validate_pr3_remediation_closure.py
+      - name: Test remediation evidence validator
+        run: python -m pytest scripts/tests/test_validate_pr3_remediation_closure.py -q
       - name: Run database migrations
+        id: membership_migrations
         working-directory: backend
         run: |
-          test "$(alembic heads | wc -l)" -eq 1
-          alembic upgrade head
-          alembic downgrade 0056_reception_note_patient_concurrency
-          python ../scripts/validate_0057_clinic_membership_transition.py cleanup
-          python ../scripts/validate_0057_clinic_membership_transition.py seed-single
-          alembic upgrade head
-          python ../scripts/validate_0057_clinic_membership_transition.py check-single
-          alembic downgrade 0056_reception_note_patient_concurrency
-          python ../scripts/validate_0057_clinic_membership_transition.py cleanup
-          python ../scripts/validate_0057_clinic_membership_transition.py seed-multi
-          alembic upgrade 0069_legacy_document_trust
-          python ../scripts/validate_0057_clinic_membership_transition.py seed-unsafe-ambiguous-memberships
-          alembic upgrade head
-          python ../scripts/validate_0057_clinic_membership_transition.py check-multi
-          alembic downgrade 0056_reception_note_patient_concurrency
-          alembic upgrade head
-          python ../scripts/validate_0057_clinic_membership_transition.py check-multi
-          alembic downgrade 0062_signed_report_addendum_integrity
-          python ../scripts/validate_0063_document_provenance.py seed
-          alembic upgrade 0063_clinical_document_institution_provenance
-          python ../scripts/validate_0064_0066_scope_provenance.py seed
-          alembic upgrade head
-          python ../scripts/validate_0063_document_provenance.py check
-          python ../scripts/validate_0064_0066_scope_provenance.py check
-          alembic downgrade 0062_signed_report_addendum_integrity
-          alembic upgrade head
+          set -o pipefail
+          evidence_dir="../.remediation-evidence/backend"
+          mkdir -p "$evidence_dir"
+          started_at="$(date --iso-8601=seconds)"
+          {
+            test "$(alembic heads | wc -l)" -eq 1
+            alembic upgrade head
+            alembic downgrade 0056_reception_note_patient_concurrency
+            python ../scripts/validate_0057_clinic_membership_transition.py cleanup
+            python ../scripts/validate_0057_clinic_membership_transition.py seed-single
+            alembic upgrade head
+            python ../scripts/validate_0057_clinic_membership_transition.py check-single
+            alembic downgrade 0056_reception_note_patient_concurrency
+            python ../scripts/validate_0057_clinic_membership_transition.py cleanup
+            python ../scripts/validate_0057_clinic_membership_transition.py seed-multi
+            alembic upgrade 0069_legacy_document_trust
+            python ../scripts/validate_0057_clinic_membership_transition.py seed-unsafe-ambiguous-memberships
+            alembic upgrade head
+            python ../scripts/validate_0057_clinic_membership_transition.py check-multi
+            alembic downgrade 0069_legacy_document_trust
+            alembic upgrade head
+            python ../scripts/validate_0057_clinic_membership_transition.py check-multi
+            alembic downgrade 0062_signed_report_addendum_integrity
+            python ../scripts/validate_0063_document_provenance.py seed
+            alembic upgrade 0063_clinical_document_institution_provenance
+            python ../scripts/validate_0064_0066_scope_provenance.py seed
+            alembic upgrade head
+            python ../scripts/validate_0063_document_provenance.py check
+            python ../scripts/validate_0064_0066_scope_provenance.py check
+            alembic downgrade 0062_signed_report_addendum_integrity
+            alembic upgrade head
+          } 2>&1 | tee "$evidence_dir/populated_legacy_upgrade.log"
+          completed_at="$(date --iso-8601=seconds)"
+          python ../scripts/validate_pr3_remediation_closure.py produce \
+            --unit populated_legacy_upgrade \
+            --source-sha "$REMEDIATION_SOURCE_SHA" \
+            --workflow-run-id "$GITHUB_RUN_ID" \
+            --job-name "$GITHUB_JOB" \
+            --test-command "alembic populated legacy transition and downgrade/re-upgrade" \
+            --output-log "$evidence_dir/populated_legacy_upgrade.log" \
+            --evidence-file "$evidence_dir/populated_legacy_upgrade.json" \
+            --started-at "$started_at" \
+            --completed-at "$completed_at"
+      - name: Produce episode and proxy execution evidence
+        working-directory: backend
+        run: |
+          set -o pipefail
+          evidence_dir="../.remediation-evidence/backend"
+          mkdir -p "$evidence_dir"
+
+          episode_started="$(date --iso-8601=seconds)"
+          python -m pytest -vv \
+            tests/test_pr3_second_security_rescan.py::test_episode_projection_includes_same_institution_clinics_but_excludes_foreign_institution \
+            2>&1 | tee "$evidence_dir/cross_scope_dto_projection.log"
+          episode_completed="$(date --iso-8601=seconds)"
+          python ../scripts/validate_pr3_remediation_closure.py produce \
+            --unit cross_scope_dto_projection \
+            --source-sha "$REMEDIATION_SOURCE_SHA" \
+            --workflow-run-id "$GITHUB_RUN_ID" \
+            --job-name "$GITHUB_JOB" \
+            --test-command "pytest episode cross-scope projection sentinel" \
+            --output-log "$evidence_dir/cross_scope_dto_projection.log" \
+            --evidence-file "$evidence_dir/cross_scope_dto_projection.json" \
+            --started-at "$episode_started" \
+            --completed-at "$episode_completed"
+
+          proxy_started="$(date --iso-8601=seconds)"
+          python -m pytest -vv \
+            tests/test_audit.py::test_untrusted_peer_cannot_spoof_audit_client_ip \
+            tests/test_audit.py::test_audit_record_persists_resolved_trusted_proxy_client_ip \
+            tests/test_contract_hardening.py::test_production_compose_example_uses_placeholders_not_demo_secrets \
+            2>&1 | tee "$evidence_dir/deployment_proxy_boundary.log"
+          proxy_completed="$(date --iso-8601=seconds)"
+          python ../scripts/validate_pr3_remediation_closure.py produce \
+            --unit deployment_proxy_boundary \
+            --source-sha "$REMEDIATION_SOURCE_SHA" \
+            --workflow-run-id "$GITHUB_RUN_ID" \
+            --job-name "$GITHUB_JOB" \
+            --test-command "pytest proxy spoof, persisted audit IP, and production compose contract" \
+            --output-log "$evidence_dir/deployment_proxy_boundary.log" \
+            --evidence-file "$evidence_dir/deployment_proxy_boundary.json" \
+            --started-at "$proxy_started" \
+            --completed-at "$proxy_completed"
+      - name: Upload backend remediation evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: remediation-evidence-backend
+          path: .remediation-evidence/backend
+          if-no-files-found: error
+          retention-days: 14
       - name: Run PR3 security regression gate
         working-directory: backend
         run: |
@@ -101,6 +169,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
@@ -112,6 +183,33 @@ jobs:
       - name: Typecheck frontend
         working-directory: frontend
         run: npm run typecheck
+      - name: Produce clinic-context execution evidence
+        working-directory: frontend
+        run: |
+          set -o pipefail
+          evidence_dir="../.remediation-evidence/frontend"
+          mkdir -p "$evidence_dir"
+          started_at="$(date --iso-8601=seconds)"
+          npx vitest run src/pages/DailyClinicDashboard.test.tsx --reporter=verbose \
+            2>&1 | tee "$evidence_dir/context_initialization.log"
+          completed_at="$(date --iso-8601=seconds)"
+          python ../scripts/validate_pr3_remediation_closure.py produce \
+            --unit context_initialization \
+            --source-sha "$REMEDIATION_SOURCE_SHA" \
+            --workflow-run-id "$GITHUB_RUN_ID" \
+            --job-name "$GITHUB_JOB" \
+            --test-command "vitest DailyClinicDashboard context readiness, switch, and midnight" \
+            --output-log "$evidence_dir/context_initialization.log" \
+            --evidence-file "$evidence_dir/context_initialization.json" \
+            --started-at "$started_at" \
+            --completed-at "$completed_at"
+      - name: Upload frontend remediation evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: remediation-evidence-frontend
+          path: .remediation-evidence/frontend
+          if-no-files-found: error
+          retention-days: 14
       - name: Test frontend interactions
         working-directory: frontend
         run: npm test -- --run
@@ -169,4 +267,60 @@ jobs:
         run: npx playwright install --with-deps chromium
       - name: Run DB-backed full-stack E2E smoke
         working-directory: frontend
-        run: npm run e2e:db
+        run: |
+          set -o pipefail
+          evidence_dir="../.remediation-evidence/e2e-db"
+          mkdir -p "$evidence_dir"
+          started_at="$(date --iso-8601=seconds)"
+          npm run e2e:db 2>&1 | tee "$evidence_dir/transitional_workflow_rediscovery.log"
+          completed_at="$(date --iso-8601=seconds)"
+          python ../scripts/validate_pr3_remediation_closure.py produce \
+            --unit transitional_workflow_rediscovery \
+            --source-sha "$REMEDIATION_SOURCE_SHA" \
+            --workflow-run-id "$GITHUB_RUN_ID" \
+            --job-name "$GITHUB_JOB" \
+            --test-command "DB-backed Playwright source classification reload and one-way transition" \
+            --output-log "$evidence_dir/transitional_workflow_rediscovery.log" \
+            --evidence-file "$evidence_dir/transitional_workflow_rediscovery.json" \
+            --started-at "$started_at" \
+            --completed-at "$completed_at"
+      - name: Upload DB-backed remediation evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: remediation-evidence-e2e-db
+          path: .remediation-evidence/e2e-db
+          if-no-files-found: error
+          retention-days: 14
+
+  remediation-evidence:
+    if: always()
+    needs:
+      - backend
+      - frontend
+      - e2e-db
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Require every evidence producer job to succeed
+        run: |
+          if [ "${{ needs.backend.result }}" != "success" ] \
+            || [ "${{ needs.frontend.result }}" != "success" ] \
+            || [ "${{ needs.e2e-db.result }}" != "success" ]; then
+            echo "Evidence producer result: backend=${{ needs.backend.result }}, frontend=${{ needs.frontend.result }}, e2e-db=${{ needs.e2e-db.result }}"
+            exit 1
+          fi
+      - name: Download remediation execution evidence
+        uses: actions/download-artifact@v4
+        with:
+          pattern: remediation-evidence-*
+          path: .remediation-evidence/final
+          merge-multiple: true
+      - name: Validate exact-SHA remediation execution evidence
+        run: |
+          python scripts/validate_pr3_remediation_closure.py validate \
+            --evidence-dir .remediation-evidence/final \
+            --source-sha "$REMEDIATION_SOURCE_SHA" \
+            --workflow-run-id "$GITHUB_RUN_ID"

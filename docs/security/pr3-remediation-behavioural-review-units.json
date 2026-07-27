@@ -1,101 +1,103 @@
 {
-  "schema_version": 1,
-  "review_units": [
-    {
-      "id": "populated_legacy_upgrade",
-      "evidence": [
-        {
-          "path": "scripts/validate_0057_clinic_membership_transition.py",
-          "selector": "def check_multi"
-        },
-        {
-          "path": "scripts/validate_0057_clinic_membership_transition.py",
-          "selector": "def seed_unsafe_ambiguous_memberships"
-        },
-        {
-          "path": ".github/workflows/ci.yml",
-          "selector": "validate_0057_clinic_membership_transition.py check-multi"
-        }
+  "schema_version": 2,
+  "coverage_dimensions": [
+    "source_behaviour",
+    "security_boundary",
+    "workflow_transition",
+    "legacy_upgrade",
+    "negative_authorization",
+    "deployment_topology"
+  ],
+  "behaviour_units": {
+    "populated_legacy_upgrade": {
+      "expected_failure_path": "Ambiguous, inactive, invalid, or duplicate provider identity must never grant broad clinic membership; legitimate manual and unrelated memberships must survive correction.",
+      "test_ids": [
+        "evidence:test_case_insensitive_single_candidate",
+        "evidence:test_single_clinic_no_candidate_correction",
+        "evidence:test_inactive_provider_candidate",
+        "evidence:test_manual_membership_preservation",
+        "evidence:test_unrelated_membership_preservation",
+        "evidence:test_unsafe_assignment_correction_record",
+        "evidence:test_multiple_institutions_fail_closed",
+        "evidence:test_duplicate_provider_identity_fail_closed"
+      ],
+      "environment": [
+        "postgresql",
+        "migration"
+      ],
+      "coverage_dimensions": [
+        "source_behaviour",
+        "security_boundary",
+        "legacy_upgrade",
+        "negative_authorization"
       ]
     },
-    {
-      "id": "transitional_workflow_rediscovery",
-      "evidence": [
-        {
-          "path": "backend/tests/test_document_ingestion.py",
-          "selector": "test_unclassified_review_queue_is_minimal_institution_scoped_and_actionable"
-        },
-        {
-          "path": "frontend/e2e-db/module3-clinical-record.spec.ts",
-          "selector": "DB-backed source classification is one-way"
-        }
+    "transitional_workflow_rediscovery": {
+      "expected_failure_path": "An unclassified document must remain institution-scoped, rediscoverable after reload, atomically classifiable once, and absent from standard clinical reads until review.",
+      "test_ids": [
+        "DB-backed source classification is one-way and clinical read does not open billing"
+      ],
+      "environment": [
+        "postgresql",
+        "browser",
+        "e2e"
+      ],
+      "coverage_dimensions": [
+        "source_behaviour",
+        "security_boundary",
+        "workflow_transition",
+        "negative_authorization"
       ]
     },
-    {
-      "id": "cross_scope_dto_projection",
-      "evidence": [
-        {
-          "path": "backend/tests/test_pr3_second_security_rescan.py",
-          "selector": "test_episode_projection_includes_same_institution_clinics_but_excludes_foreign_institution"
-        },
-        {
-          "path": "frontend/e2e-db/module3-clinical-record.spec.ts",
-          "selector": "DB-backed episode appointment projection excludes internal free text"
-        }
+    "cross_scope_dto_projection": {
+      "expected_failure_path": "Episode appointments from the same institution may be operationally visible, but nested patient identity, contact data, and clinical free text must not cross clinic scope.",
+      "test_ids": [
+        "test_episode_projection_includes_same_institution_clinics_but_excludes_foreign_institution"
+      ],
+      "environment": [
+        "unit",
+        "api"
+      ],
+      "coverage_dimensions": [
+        "source_behaviour",
+        "security_boundary",
+        "negative_authorization"
       ]
     },
-    {
-      "id": "context_initialization",
-      "evidence": [
-        {
-          "path": "frontend/src/pages/DailyClinicDashboard.test.tsx",
-          "selector": "waits for the active clinic timezone before requesting the clinic-local day"
-        },
-        {
-          "path": "frontend/src/pages/DailyClinicDashboard.test.tsx",
-          "selector": "clinic switch recalculates auto-today"
-        }
+    "context_initialization": {
+      "expected_failure_path": "The dashboard must not query before clinic context is ready, must derive today from the active clinic timezone, and must reject stale clinic responses.",
+      "test_ids": [
+        "waits for the active clinic timezone before requesting the clinic-local day",
+        "clinic switch recalculates auto-today without querying the stale clinic day",
+        "midnight rollover issues one new auto-today request"
+      ],
+      "environment": [
+        "browser",
+        "vitest"
+      ],
+      "coverage_dimensions": [
+        "source_behaviour",
+        "security_boundary",
+        "workflow_transition"
       ]
     },
-    {
-      "id": "deployment_proxy_boundary",
-      "evidence": [
-        {
-          "path": "backend/tests/test_audit.py",
-          "selector": "test_untrusted_peer_cannot_spoof_audit_client_ip"
-        },
-        {
-          "path": "backend/tests/test_contract_hardening.py",
-          "selector": "test_production_compose_example_uses_placeholders_not_demo_secrets"
-        }
+    "deployment_proxy_boundary": {
+      "expected_failure_path": "An untrusted direct client must not turn spoofed forwarding headers into persisted audit provenance, while the bounded reverse-proxy hop remains supported.",
+      "test_ids": [
+        "test_untrusted_peer_cannot_spoof_audit_client_ip",
+        "test_audit_record_persists_resolved_trusted_proxy_client_ip",
+        "test_production_compose_example_uses_placeholders_not_demo_secrets"
+      ],
+      "environment": [
+        "unit",
+        "proxy_config"
+      ],
+      "coverage_dimensions": [
+        "source_behaviour",
+        "security_boundary",
+        "negative_authorization",
+        "deployment_topology"
       ]
     }
-  ],
-  "coverage_dimensions": {
-    "source_file_coverage": [
-      "populated_legacy_upgrade",
-      "transitional_workflow_rediscovery",
-      "cross_scope_dto_projection",
-      "context_initialization",
-      "deployment_proxy_boundary"
-    ],
-    "security_boundary_coverage": [
-      "cross_scope_dto_projection",
-      "deployment_proxy_boundary"
-    ],
-    "workflow_transition_coverage": [
-      "transitional_workflow_rediscovery"
-    ],
-    "legacy_upgrade_coverage": [
-      "populated_legacy_upgrade"
-    ],
-    "negative_authorization_coverage": [
-      "transitional_workflow_rediscovery",
-      "cross_scope_dto_projection",
-      "deployment_proxy_boundary"
-    ],
-    "deployment_topology_coverage": [
-      "deployment_proxy_boundary"
-    ]
   }
 }
