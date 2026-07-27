@@ -1,10 +1,16 @@
 import { createContext, useContext, type ReactNode } from "react";
-import { getActiveClinicId, getActiveClinicTimezone } from "../api/client";
+
+export type ClinicContextStatus =
+  | "clinic_context_loading"
+  | "clinic_context_ready"
+  | "clinic_context_error";
 
 export type ClinicContextValue = {
+  status: ClinicContextStatus;
   ready: boolean;
   clinicId: string | null;
   timezone: string | null;
+  error: string | null;
 };
 
 const ClinicContext = createContext<ClinicContextValue | null>(null);
@@ -17,8 +23,10 @@ export function useClinicContext(): ClinicContextValue {
   const value = useContext(ClinicContext);
   if (value) return value;
   return {
-    ready: true,
-    clinicId: getActiveClinicId(),
-    timezone: getActiveClinicTimezone(),
+    status: "clinic_context_error",
+    ready: false,
+    clinicId: null,
+    timezone: null,
+    error: "Clinic context provider is missing.",
   };
 }

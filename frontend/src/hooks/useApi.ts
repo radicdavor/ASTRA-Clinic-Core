@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { api } from "../api/client";
 
-export function useApi<T>(path: string | null, fallback: T) {
+export function useApi<T>(path: string | null, fallback: T, requestKey: string | number | null = null) {
   const [data, setData] = useState<T>(fallback);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -30,7 +30,7 @@ export function useApi<T>(path: string | null, fallback: T) {
     return () => {
       controller.abort();
     };
-  }, [path]);
+  }, [path, requestKey]);
 
   return { data, setData, loading, error };
 }

@@ -140,8 +140,9 @@ function PatientBlock({
 export function DailyClinicDashboard() {
   const navigate = useNavigate();
   const clinicContext = useClinicContext();
-  const [day, setDay] = useState("");
-  const [followsClinicToday, setFollowsClinicToday] = useState(true);
+  const [dayMode, setDayMode] = useState<"day_auto_today" | "day_user_selected">("day_auto_today");
+  const [selectedDay, setSelectedDay] = useState("");
+  const [clockInstant, setClockInstant] = useState(() => Date.now());
   const [clinician, setClinician] = useState("");
   const [clinic, setClinic] = useState("");
   const [room, setRoom] = useState("");
@@ -153,20 +154,21 @@ export function DailyClinicDashboard() {
   const [refresh, setRefresh] = useState(0);
   const [receptionJourneyId, setReceptionJourneyId] = useState<number | null>(null);
   const receptionActionRefs = useRef<Record<number, HTMLButtonElement | null>>({});
-  useEffect(() => {
-    if (!clinicContext.ready || !clinicContext.timezone) return;
-    const clinicToday = getClinicToday(clinicContext.timezone);
-    setDay((current) => (!current || followsClinicToday ? clinicToday : current));
-  }, [clinicContext.clinicId, clinicContext.ready, clinicContext.timezone, followsClinicToday]);
+  const clinicContextReady = clinicContext.status === "clinic_context_ready"
+    && clinicContext.clinicId !== null
+    && clinicContext.timezone !== null;
+  const automaticClinicDay = clinicContextReady
+    ? getClinicToday(clinicContext.timezone ?? undefined, new Date(clockInstant))
+    : "";
+  const day = dayMode === "day_auto_today" ? automaticClinicDay : selectedDay;
 
   useEffect(() => {
-    if (!clinicContext.ready || !clinicContext.timezone || !followsClinicToday) return;
+    if (!clinicContextReady || dayMode !== "day_auto_today") return;
     const updateAtClinicDateBoundary = window.setInterval(() => {
-      const clinicToday = getClinicToday(clinicContext.timezone ?? undefined);
-      setDay((current) => current === clinicToday ? current : clinicToday);
+      setClockInstant(Date.now());
     }, 60_000);
     return () => window.clearInterval(updateAtClinicDateBoundary);
-  }, [clinicContext.ready, clinicContext.timezone, followsClinicToday]);
+  }, [clinicContextReady, clinicContext.clinicId, clinicContext.timezone, dayMode]);
 
   const params = new URLSearchParams({ selected_date: day, refresh: String(refresh) });
   if (clinician) params.set("clinician_id", clinician);
@@ -177,7 +179,11 @@ export function DailyClinicDashboard() {
   if (blocker) params.set("blocker", blocker);
   if (query.trim()) params.set("q", query.trim());
 
-  const board = useApi<DashboardResponse>(day ? `/api/dashboard/day?${params}` : null, { date: day, refreshed_at: "", visible_sections: [], viewer_role: "", scope: "", scope_label: "", scoped_clinician_id: null, can_filter_clinician: false, available_clinics: [], rows: [] });
+  const board = useApi<DashboardResponse>(
+    clinicContextReady && day ? `/api/dashboard/day?${params}` : null,
+    { date: day, refreshed_at: "", visible_sections: [], viewer_role: "", scope: "", scope_label: "", scoped_clinician_id: null, can_filter_clinician: false, available_clinics: [], rows: [] },
+    clinicContext.clinicId,
+  );
   const providers = useApi<Provider[]>(board.data.can_filter_clinician ? "/api/providers" : null, []);
   const rooms = useApi<Room[]>("/api/rooms", []);
   const services = useApi<Service[]>("/api/services", []);
@@ -235,10 +241,14 @@ export function DailyClinicDashboard() {
     setQuery("");
   }
 
-  return <section className="page clinic-day-page">
+  if (clinicContext.status === "clinic_context_error") {
+    return <section className="page clinic-day-page"><p className="form-error" role="alert">Kontekst aktivne klinike nije moguće učitati.</p></section>;
+  }
+
+  return <section className="page clinic-day-page" aria-busy={!clinicContextReady || board.loading}>
     <header className="clinic-day-header">
       <div><span className="eyebrow">Dnevni operativni pregled</span><h1>Danas u poliklinici</h1><p>Tko je sljedeći, postoji li problem i što sada treba napraviti.</p><span className="clinic-day-scope">Prikaz: {board.data.scope_label || "učitavanje…"}</span></div>
-      <div className="clinic-day-date"><DateInput value={day} onChange={(value) => { setDay(value); setFollowsClinicToday(value === getClinicToday(clinicContext.timezone ?? undefined)); }} required/><button type="button" onClick={() => setRefresh(value => value + 1)} disabled={!day}><RefreshCw size={16}/>Osvježi</button></div>
+      <div className="clinic-day-date"><DateInput value={day} onChange={(value) => { setSelectedDay(value); setDayMode("day_user_selected"); }} required/><button type="button" onClick={() => setDayMode("day_auto_today")} disabled={!clinicContextReady || dayMode === "day_auto_today"}>Danas</button><button type="button" onClick={() => setRefresh(value => value + 1)} disabled={!day}><RefreshCw size={16}/>Osvježi</button></div>
     </header>
     <div className="clinic-day-summary"><span><b>{counts.total}</b> dolazaka</span><span><b>{counts.active}</b> u tijeku</span><span className={counts.problems ? "attention" : ""}><b>{counts.problems}</b> s problemom</span><small>Zadnje osvježenje: {formatUtcTimestampInClinic(board.data.refreshed_at, clinicContext.timezone ?? undefined)}</small></div>
     <div className="clinic-day-view-toggle" role="group" aria-label="Način prikaza"><button type="button" className={view === "patients" ? "active" : ""} onClick={() => setView("patients")}>Po pacijentima</button><button type="button" className={view === "rooms" ? "active" : ""} onClick={() => setView("rooms")}>Po prostorijama</button></div>

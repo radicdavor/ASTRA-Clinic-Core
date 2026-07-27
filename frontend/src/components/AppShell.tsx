@@ -59,9 +59,15 @@ export function AppShell() {
   const fallbackDemoMode = import.meta.env.VITE_APP_ENV !== "production";
   const activeClinicRecord = clinicAccess.data?.clinics.find((clinic) => String(clinic.id) === activeClinic) ?? null;
   const clinicContext = {
+    status: clinicAccess.loading
+      ? "clinic_context_loading" as const
+      : activeClinicRecord
+        ? "clinic_context_ready" as const
+        : "clinic_context_error" as const,
     ready: !clinicAccess.loading && activeClinicRecord !== null,
     clinicId: activeClinicRecord ? String(activeClinicRecord.id) : null,
     timezone: activeClinicRecord?.timezone ?? null,
+    error: clinicAccess.error,
   };
   const showDemoBanner = publicConfig.data ? publicConfig.data.demo_mode || !publicConfig.data.real_data_allowed : fallbackDemoMode;
   const warningText = publicConfig.data?.warnings?.join(" ") || "Demo/development okruzenje - ne unositi stvarne podatke pacijenata.";

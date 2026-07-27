@@ -40,6 +40,7 @@ async function login(page: Page, email: string, clinicId?: number) {
 async function selectDashboardDate(page: Page, isoDate: string) {
   const [year, month, day] = isoDate.split("-");
   const displayDate = `${day}. ${month}. ${year}.`;
+  await expect(page.locator("section.clinic-day-page")).toHaveAttribute("aria-busy", "false");
   const input = page.locator(".clinic-day-date input[type='text']");
   if (await input.inputValue() === displayDate) return;
   const response = page.waitForResponse((item) => (
@@ -47,6 +48,9 @@ async function selectDashboardDate(page: Page, isoDate: string) {
     && item.request().method() === "GET"
   ));
   await input.fill(displayDate);
+  // Clinic-time initialization can settle on the requested date between the
+  // value check and fill. Refresh guarantees a semantic request in that race.
+  await page.getByRole("button", { name: "Osvježi" }).click();
   await response;
   await expect(input).toHaveValue(displayDate);
 }
@@ -269,6 +273,21 @@ test("DB-backed clinic isolation blocks direct journey access outside active cli
   const forbiddenPatientClinical = await api(page, `/api/patients/${seed.patients.onlyB}/invoices`);
   expect([403, 404]).toContain(forbiddenPatientClinical.status);
   expect(JSON.stringify(forbiddenPatientClinical.body)).not.toContain("Samo B Pacijent");
+});
+
+test("DB-backed dashboard derives the day from clinic timezone at 23:30 UTC", async ({ page }) => {
+  await page.clock.install({ time: new Date("2026-01-15T23:30:00Z") });
+  const clinicDayRequest = page.waitForResponse((item) => (
+    item.url().includes("/api/dashboard/day?selected_date=2026-01-16")
+    && item.request().method() === "GET"
+  ));
+  await page.goto("/login");
+  await page.getByLabel(/E-po/).fill(seed.users.receptionA);
+  await page.getByLabel("Lozinka").fill(seed.password);
+  await page.getByRole("button", { name: "Prijava" }).click();
+  await expect(page.getByRole("heading", { name: "Danas u poliklinici" })).toBeVisible();
+  await clinicDayRequest;
+  await expect(page.locator(".clinic-day-date input[type='text']")).toHaveValue("16. 01. 2026.");
 });
 
 test("DB-backed CSRF protection blocks manual cookie-auth mutations without token", async ({ page }) => {
