@@ -73,6 +73,11 @@ def cleanup() -> None:
             text("DELETE FROM clinics WHERE name LIKE :prefix"),
             {"prefix": f"{PREFIX}%"},
         )
+        if connection.dialect.has_table(connection, "institutions"):
+            connection.execute(
+                text("DELETE FROM institutions WHERE code LIKE :prefix"),
+                {"prefix": f"{PREFIX}%"},
+            )
         connection.execute(
             text(
                 """
@@ -149,6 +154,7 @@ def seed_single() -> None:
             permission_name="system.admin",
         )
         create_role_and_user(connection, "single-medical")
+        create_role_and_user(connection, "single-no-candidate")
         connection.execute(
             text(
                 """
@@ -176,12 +182,26 @@ def seed_multi() -> None:
             text("INSERT INTO clinics (name, active) VALUES (:name, true) RETURNING id"),
             {"name": f"{PREFIX}clinic-b"},
         )
+        clinic_c = connection.scalar(
+            text("INSERT INTO clinics (name, active) VALUES (:name, true) RETURNING id"),
+            {"name": f"{PREFIX}clinic-c"},
+        )
+        inactive_clinic = connection.scalar(
+            text("INSERT INTO clinics (name, active) VALUES (:name, false) RETURNING id"),
+            {"name": f"{PREFIX}inactive-clinic"},
+        )
         provider_user = create_role_and_user(connection, "provider")
         creator_user = create_role_and_user(connection, "creator")
         verifier_user = create_role_and_user(connection, "verifier")
         create_role_and_user(connection, "ambiguous")
         create_role_and_user(connection, "system-admin", permission_name="system.admin")
-        create_role_and_user(connection, "billing")
+        create_role_and_user(connection, "no-candidate")
+        create_role_and_user(connection, "inactive-provider")
+        create_role_and_user(connection, "inactive-clinic")
+        create_role_and_user(connection, "invalid-provider")
+        create_role_and_user(connection, "duplicate-provider")
+        create_role_and_user(connection, "manual-preserved")
+        create_role_and_user(connection, "unrelated-preserved")
         inactive_user = create_role_and_user(connection, "inactive", active=False)
         orphan_user = create_role_and_user(connection, "orphan-provider")
         provider = connection.scalar(
@@ -195,21 +215,8 @@ def seed_multi() -> None:
             ),
             {
                 "name": f"{PREFIX}provider",
-                "email": f"{PREFIX}provider@example.invalid",
+                "email": f"{PREFIX}PROVIDER@EXAMPLE.INVALID",
                 "clinic_id": clinic_a,
-            },
-        )
-        connection.execute(
-            text(
-                """
-                INSERT INTO providers
-                    (full_name, email, active, staff_role, clinic_id, weekly_working_hours)
-                VALUES (:name, :email, true, 'physician', NULL, '{}'::json)
-                """
-            ),
-            {
-                "name": f"{PREFIX}orphan-provider",
-                "email": f"{PREFIX}orphan-provider@example.invalid",
             },
         )
         connection.execute(
@@ -219,7 +226,17 @@ def seed_multi() -> None:
                     (full_name, email, active, staff_role, clinic_id, weekly_working_hours)
                 VALUES
                     (:name_a, :email_a, true, 'physician', :clinic_a, '{}'::json),
-                    (:name_b, :email_b, true, 'physician', :clinic_b, '{}'::json)
+                    (:name_b, :email_b, true, 'physician', :clinic_b, '{}'::json),
+                    (:orphan_name, :orphan_email, true, 'physician', NULL, '{}'::json),
+                    (:inactive_provider_name, :inactive_provider_email, false, 'physician', :clinic_a, '{}'::json),
+                    (:inactive_clinic_name, :inactive_clinic_email, true, 'physician', :inactive_clinic, '{}'::json),
+                    (:invalid_name, :invalid_email, true, 'physician', NULL, '{}'::json),
+                    (:duplicate_name_a, :duplicate_email_a, true, 'physician', :clinic_a, '{}'::json),
+                    (:duplicate_name_b, :duplicate_email_b, true, 'physician', :clinic_a, '{}'::json),
+                    (:manual_name_a, :manual_email_a, true, 'physician', :clinic_a, '{}'::json),
+                    (:manual_name_b, :manual_email_b, true, 'physician', :clinic_b, '{}'::json),
+                    (:unrelated_name_a, :unrelated_email_a, true, 'physician', :clinic_a, '{}'::json),
+                    (:unrelated_name_b, :unrelated_email_b, true, 'physician', :clinic_b, '{}'::json)
                 """
             ),
             {
@@ -229,6 +246,27 @@ def seed_multi() -> None:
                 "name_b": f"{PREFIX}ambiguous-b",
                 "email_b": f"{PREFIX}Ambiguous@Example.Invalid",
                 "clinic_b": clinic_b,
+                "orphan_name": f"{PREFIX}orphan-provider",
+                "orphan_email": f"{PREFIX}orphan-provider@example.invalid",
+                "inactive_provider_name": f"{PREFIX}inactive-provider",
+                "inactive_provider_email": f"{PREFIX}INACTIVE-PROVIDER@example.invalid",
+                "inactive_clinic_name": f"{PREFIX}inactive-clinic",
+                "inactive_clinic_email": f"{PREFIX}inactive-clinic@example.invalid",
+                "inactive_clinic": inactive_clinic,
+                "invalid_name": f"{PREFIX}invalid-provider",
+                "invalid_email": f"{PREFIX}invalid-provider@example.invalid",
+                "duplicate_name_a": f"{PREFIX}duplicate-provider-a",
+                "duplicate_email_a": f"{PREFIX}DUPLICATE-PROVIDER@example.invalid",
+                "duplicate_name_b": f"{PREFIX}duplicate-provider-b",
+                "duplicate_email_b": f"{PREFIX}Duplicate-Provider@Example.Invalid",
+                "manual_name_a": f"{PREFIX}manual-preserved-a",
+                "manual_email_a": f"{PREFIX}MANUAL-PRESERVED@example.invalid",
+                "manual_name_b": f"{PREFIX}manual-preserved-b",
+                "manual_email_b": f"{PREFIX}Manual-Preserved@Example.Invalid",
+                "unrelated_name_a": f"{PREFIX}unrelated-preserved-a",
+                "unrelated_email_a": f"{PREFIX}UNRELATED-PRESERVED@example.invalid",
+                "unrelated_name_b": f"{PREFIX}unrelated-preserved-b",
+                "unrelated_email_b": f"{PREFIX}Unrelated-Preserved@Example.Invalid",
             },
         )
         room = connection.scalar(
@@ -274,7 +312,14 @@ def seed_multi() -> None:
                 "verified_by": verifier_user,
             },
         )
-        assert provider_user and creator_user and verifier_user and inactive_user and orphan_user
+        assert (
+            provider_user
+            and creator_user
+            and verifier_user
+            and inactive_user
+            and orphan_user
+            and clinic_c
+        )
 
 
 def user_id(connection, suffix: str) -> int:
@@ -311,6 +356,35 @@ def seed_unsafe_ambiguous_memberships() -> None:
     """Reproduce the access granted by the pre-correction draft of 0057."""
     engine = create_engine(database_url())
     with engine.begin() as connection:
+        secondary_institution = connection.scalar(
+            text(
+                """
+                INSERT INTO institutions (code, name, active)
+                VALUES (:code, :name, true)
+                ON CONFLICT (code) DO UPDATE SET name = EXCLUDED.name
+                RETURNING id
+                """
+            ),
+            {
+                "code": f"{PREFIX}secondary-institution",
+                "name": f"{PREFIX}secondary-institution",
+            },
+        )
+        connection.execute(
+            text(
+                """
+                UPDATE clinics
+                SET institution_id = :institution_id,
+                    institution_key = :institution_key
+                WHERE id = :clinic_id
+                """
+            ),
+            {
+                "institution_id": secondary_institution,
+                "institution_key": f"{PREFIX}secondary-institution",
+                "clinic_id": clinic_id(connection, "clinic-b"),
+            },
+        )
         target_user_id = user_id(connection, "ambiguous")
         for suffix in ("clinic-a", "clinic-b"):
             connection.execute(
@@ -327,6 +401,40 @@ def seed_unsafe_ambiguous_memberships() -> None:
                     "clinic_id": clinic_id(connection, suffix),
                 },
             )
+        # Explicit operator provenance must survive the ambiguous identity
+        # correction even though this user has two provider candidates.
+        connection.execute(
+            text(
+                """
+                INSERT INTO clinic_memberships
+                    (user_id, clinic_id, active, created_by_user_id)
+                VALUES (:user_id, :clinic_id, true, :operator_id)
+                ON CONFLICT (user_id, clinic_id) DO UPDATE
+                SET active = true, created_by_user_id = EXCLUDED.created_by_user_id
+                """
+            ),
+            {
+                "user_id": user_id(connection, "manual-preserved"),
+                "clinic_id": clinic_id(connection, "clinic-a"),
+                "operator_id": user_id(connection, "system-admin"),
+            },
+        )
+        # A null-origin legacy membership outside the ambiguous provider
+        # candidate set is unrelated evidence and must not be deleted.
+        connection.execute(
+            text(
+                """
+                INSERT INTO clinic_memberships (user_id, clinic_id, active)
+                VALUES (:user_id, :clinic_id, true)
+                ON CONFLICT (user_id, clinic_id) DO UPDATE
+                SET active = true, created_by_user_id = NULL
+                """
+            ),
+            {
+                "user_id": user_id(connection, "unrelated-preserved"),
+                "clinic_id": clinic_id(connection, "clinic-c"),
+            },
+        )
 
 
 def check_single() -> None:
@@ -335,6 +443,7 @@ def check_single() -> None:
         expected = clinic_id(connection, "single-clinic")
         assert memberships(connection, "single-admin") == [expected]
         assert memberships(connection, "single-medical") == [expected]
+        assert memberships(connection, "single-no-candidate") == []
         assert connection.scalar(
             text(
                 """
@@ -348,8 +457,15 @@ def check_single() -> None:
                 "second": user_id(connection, "single-medical"),
             },
         ) == 0
+        unsupported = migration_issue(connection, "single-no-candidate")
+        assert unsupported.reason == "no_clinic_candidate"
+        assert unsupported.candidate_clinic_ids == []
+        assert unsupported.correction_reason == "corrected_unsafe_automatic_membership"
+        assert unsupported.corrected_clinic_ids == [expected]
     assert_route_scope("single-admin", {expected})
     assert_route_scope("single-medical", {expected})
+    assert_route_scope("single-no-candidate", set())
+    print("evidence:test_single_clinic_no_candidate_correction")
 
 
 def assert_route_scope(suffix: str, expected_clinic_ids: set[int]) -> None:
@@ -369,48 +485,111 @@ def assert_route_scope(suffix: str, expected_clinic_ids: set[int]) -> None:
         assert {clinic["id"] for clinic in response.json()["clinics"]} == expected_clinic_ids
 
 
+def migration_issue(connection, suffix: str):
+    return connection.execute(
+        text(
+            """
+            SELECT
+                reason,
+                candidate_clinic_ids,
+                correction_reason,
+                corrected_clinic_ids,
+                status
+            FROM clinic_membership_migration_issues
+            WHERE user_id = :user_id
+            """
+        ),
+        {"user_id": user_id(connection, suffix)},
+    ).one()
+
+
 def check_multi() -> None:
     engine = create_engine(database_url())
     with engine.connect() as connection:
         clinic_a = clinic_id(connection, "clinic-a")
         clinic_b = clinic_id(connection, "clinic-b")
+        clinic_c = clinic_id(connection, "clinic-c")
+        inactive_clinic = clinic_id(connection, "inactive-clinic")
         assert memberships(connection, "provider") == [clinic_a]
         # Creating or identity-verifying a record is not authoritative evidence
         # that the operator belongs to that clinic.
         assert memberships(connection, "creator") == []
         assert memberships(connection, "verifier") == []
         assert memberships(connection, "ambiguous") == []
-        assert memberships(connection, "system-admin") == [clinic_a, clinic_b]
-        assert memberships(connection, "billing") == []
+        assert memberships(connection, "system-admin") == [clinic_a, clinic_b, clinic_c]
+        assert memberships(connection, "no-candidate") == []
+        assert memberships(connection, "inactive-provider") == []
+        assert memberships(connection, "inactive-clinic") == []
+        assert memberships(connection, "invalid-provider") == []
+        assert memberships(connection, "duplicate-provider") == []
+        assert memberships(connection, "manual-preserved") == [clinic_a]
+        assert memberships(connection, "unrelated-preserved") == [clinic_c]
         assert memberships(connection, "inactive") == []
         assert memberships(connection, "orphan-provider") == []
-        issue = connection.execute(
+
+        issue = migration_issue(connection, "ambiguous")
+        assert issue.reason == "ambiguous_active_clinic_candidates"
+        assert issue.candidate_clinic_ids == [clinic_a, clinic_b]
+        assert issue.correction_reason == "corrected_unsafe_automatic_membership"
+        assert issue.corrected_clinic_ids == [clinic_a, clinic_b]
+        assert issue.status == "pending"
+
+        for suffix in ("creator", "verifier", "no-candidate"):
+            pending = migration_issue(connection, suffix)
+            assert pending.reason == "no_clinic_candidate"
+            assert pending.candidate_clinic_ids == []
+            assert pending.correction_reason is None
+            assert pending.corrected_clinic_ids is None
+            assert pending.status == "pending"
+
+        for suffix in ("orphan-provider", "invalid-provider"):
+            pending = migration_issue(connection, suffix)
+            assert pending.reason == "invalid_provider_identity"
+            assert pending.candidate_clinic_ids == []
+            assert pending.correction_reason is None
+            assert pending.corrected_clinic_ids is None
+
+        inactive_provider_issue = migration_issue(connection, "inactive-provider")
+        assert inactive_provider_issue.reason == "inactive_clinic_candidate"
+        assert inactive_provider_issue.candidate_clinic_ids == [clinic_a]
+        assert inactive_provider_issue.correction_reason is None
+
+        inactive_clinic_issue = migration_issue(connection, "inactive-clinic")
+        assert inactive_clinic_issue.reason == "inactive_clinic_candidate"
+        assert inactive_clinic_issue.candidate_clinic_ids == [inactive_clinic]
+        assert inactive_clinic_issue.correction_reason is None
+
+        duplicate_issue = migration_issue(connection, "duplicate-provider")
+        assert duplicate_issue.reason == "invalid_provider_identity"
+        assert duplicate_issue.candidate_clinic_ids == [clinic_a]
+        assert duplicate_issue.correction_reason == "corrected_unsafe_automatic_membership"
+        assert duplicate_issue.corrected_clinic_ids == [clinic_a]
+
+        manual_issue = migration_issue(connection, "manual-preserved")
+        assert manual_issue.reason == "ambiguous_active_clinic_candidates"
+        assert manual_issue.candidate_clinic_ids == [clinic_a, clinic_b]
+        assert manual_issue.correction_reason is None
+        assert manual_issue.corrected_clinic_ids is None
+
+        unrelated_issue = migration_issue(connection, "unrelated-preserved")
+        assert unrelated_issue.reason == "ambiguous_active_clinic_candidates"
+        assert unrelated_issue.candidate_clinic_ids == [clinic_a, clinic_b]
+        assert unrelated_issue.correction_reason is None
+        assert unrelated_issue.corrected_clinic_ids is None
+
+        institution_ids = connection.execute(
             text(
                 """
-                SELECT reason, candidate_clinic_ids, status
-                FROM clinic_membership_migration_issues
-                WHERE user_id = :user_id
+                SELECT institution_id
+                FROM clinics
+                WHERE id IN (:clinic_a, :clinic_b)
+                ORDER BY id
                 """
             ),
-            {"user_id": user_id(connection, "ambiguous")},
-        ).one()
-        assert issue.reason == "ambiguous_clinic_membership"
-        assert issue.candidate_clinic_ids == [clinic_a, clinic_b]
-        assert issue.status == "pending"
-        for suffix in ("creator", "verifier", "billing", "orphan-provider"):
-            pending = connection.execute(
-                text(
-                    """
-                    SELECT reason, candidate_clinic_ids, status
-                    FROM clinic_membership_migration_issues
-                    WHERE user_id = :user_id
-                    """
-                ),
-                {"user_id": user_id(connection, suffix)},
-            ).one()
-            assert pending.reason == "ambiguous_clinic_membership"
-            assert pending.candidate_clinic_ids == []
-            assert pending.status == "pending"
+            {"clinic_a": clinic_a, "clinic_b": clinic_b},
+        ).scalars().all()
+        assert len(set(institution_ids)) == 2
+
         assert connection.scalar(
             text(
                 """
@@ -441,9 +620,30 @@ def check_multi() -> None:
     assert_route_scope("creator", set())
     assert_route_scope("verifier", set())
     assert_route_scope("ambiguous", set())
-    assert_route_scope("system-admin", {clinic_a, clinic_b})
-    assert_route_scope("billing", set())
+    assert_route_scope("system-admin", {clinic_a, clinic_b, clinic_c})
+    assert_route_scope("no-candidate", set())
+    assert_route_scope("inactive-provider", set())
+    assert_route_scope("inactive-clinic", set())
+    assert_route_scope("invalid-provider", set())
+    assert_route_scope("duplicate-provider", set())
+    assert_route_scope("manual-preserved", {clinic_a})
+    assert_route_scope("unrelated-preserved", {clinic_c})
     assert_route_scope("orphan-provider", set())
+    print("evidence:test_single_active_candidate")
+    print("evidence:test_case_insensitive_single_candidate")
+    print("evidence:test_multiple_case_insensitive_active_candidates")
+    print("evidence:test_no_candidate")
+    print("evidence:test_inactive_provider_candidate")
+    print("evidence:test_inactive_clinic_candidate")
+    print("evidence:test_invalid_provider_identity")
+    print("evidence:test_manual_membership_preservation")
+    print("evidence:test_unrelated_membership_preservation")
+    print("evidence:test_unsafe_assignment_correction_record")
+    print("evidence:test_legitimate_automatic_membership_preservation")
+    print("evidence:test_system_admin_preservation")
+    print("evidence:test_inactive_user_no_issue")
+    print("evidence:test_multiple_institutions_fail_closed")
+    print("evidence:test_duplicate_provider_identity_fail_closed")
 
 
 if __name__ == "__main__":

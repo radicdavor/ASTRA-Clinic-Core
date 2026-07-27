@@ -210,6 +210,8 @@ class ClinicMembershipMigrationIssue(Base):
     )
     reason: Mapped[str] = mapped_column(String(80))
     candidate_clinic_ids: Mapped[list] = mapped_column(JSON, default=list)
+    correction_reason: Mapped[str | None] = mapped_column(String(80))
+    corrected_clinic_ids: Mapped[list | None] = mapped_column(JSON)
     status: Mapped[str] = mapped_column(String(40), default="pending", index=True)
     resolution_clinic_id: Mapped[int | None] = mapped_column(
         ForeignKey("clinics.id", ondelete="RESTRICT"),

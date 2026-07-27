@@ -26,8 +26,10 @@ def test_operator_resolves_only_an_explicit_pending_membership_issue(db, auth_se
     db.flush()
     issue = ClinicMembershipMigrationIssue(
         user_id=target.id,
-        reason="ambiguous_clinic_membership",
+        reason="ambiguous_active_clinic_candidates",
         candidate_clinic_ids=[auth_setup["clinic"].id],
+        correction_reason="corrected_unsafe_automatic_membership",
+        corrected_clinic_ids=[auth_setup["clinic"].id],
     )
     db.add(issue)
     db.commit()
@@ -55,6 +57,10 @@ def test_operator_resolves_only_an_explicit_pending_membership_issue(db, auth_se
     assert resolved.resolution_note == "Owner verified the legacy clinic assignment."
     assert membership_migration_status(db)["pending"] == 0
     assert membership_migration_status(db)["resolved"] == 1
+    status_issue = membership_migration_status(db)["issues"][0]
+    assert status_issue["reason"] == "ambiguous_active_clinic_candidates"
+    assert status_issue["correction_reason"] == "corrected_unsafe_automatic_membership"
+    assert status_issue["corrected_clinic_ids"] == [auth_setup["clinic"].id]
     event = db.scalar(
         select(AuditLog).where(
             AuditLog.action == "clinic_membership_migration_resolved",
@@ -107,7 +113,7 @@ def test_non_admin_operator_cannot_resolve_membership_issue(db, auth_setup):
     db.add(
         ClinicMembershipMigrationIssue(
             user_id=target.id,
-            reason="ambiguous_clinic_membership",
+            reason="ambiguous_active_clinic_candidates",
             candidate_clinic_ids=[auth_setup["clinic"].id],
         )
     )
@@ -139,7 +145,7 @@ def test_operator_resolution_requires_a_nonempty_audit_note(db, auth_setup):
     db.add(
         ClinicMembershipMigrationIssue(
             user_id=target.id,
-            reason="ambiguous_clinic_membership",
+            reason="ambiguous_active_clinic_candidates",
             candidate_clinic_ids=[auth_setup["clinic"].id],
         )
     )

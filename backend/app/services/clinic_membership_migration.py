@@ -37,6 +37,8 @@ def membership_migration_status(db: Session) -> dict:
                 "user_name": issue.user.full_name,
                 "reason": issue.reason,
                 "candidate_clinic_ids": issue.candidate_clinic_ids,
+                "correction_reason": issue.correction_reason,
+                "corrected_clinic_ids": issue.corrected_clinic_ids,
                 "status": issue.status,
                 "resolution_clinic_id": issue.resolution_clinic_id,
             }
