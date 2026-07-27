@@ -12,7 +12,7 @@ import { WorkspaceLayout } from "../components/workspace/WorkspaceLayout";
 import { WorkspaceSection } from "../components/workspace/WorkspaceSection";
 import { WorkflowTaskPanel } from "../components/WorkflowTaskPanel";
 import { useApi } from "../hooks/useApi";
-import { Appointment, AuditLog, ClinicalDecisionTimelineItem, ClinicalEpisode, ClinicalPlan, Therapy } from "../types";
+import { AuditLog, ClinicalDecisionTimelineItem, ClinicalEpisode, ClinicalPlan, EpisodeAppointmentOperational, Therapy } from "../types";
 import { formatDate, formatDateTime } from "../utils/date";
 import { formatPatientIdentity, formatPatientName } from "../utils/patientIdentity";
 import { episodeTypeLabel } from "./Episodes";
@@ -20,7 +20,7 @@ import { episodeTypeLabel } from "./Episodes";
 export function EpisodeDetail() {
   const { id } = useParams();
   const episode = useApi<ClinicalEpisode | null>(`/api/episodes/${id}`, null);
-  const appointments = useApi<Appointment[]>(`/api/episodes/${id}/appointments`, []);
+  const appointments = useApi<EpisodeAppointmentOperational[]>(`/api/episodes/${id}/appointments`, []);
   const plans = useApi<ClinicalPlan[]>(`/api/episodes/${id}/clinical-plans`, []);
   const decisionTimeline = useApi<ClinicalDecisionTimelineItem[]>(`/api/episodes/${id}/clinical-timeline`, []);
   const audit = useApi<AuditLog[]>(`/api/audit-log?entity_type=ClinicalEpisode&entity_id=${id}`, []);

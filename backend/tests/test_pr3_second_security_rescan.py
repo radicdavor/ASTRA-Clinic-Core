@@ -5,11 +5,11 @@ from datetime import datetime, UTC
 import pytest
 
 from app.auth.dependencies import hash_api_key
-from app.models.domain import ApiKey, AuditLog, PatientJourney, UserSession
+from app.models.domain import ApiKey, AuditLog, Clinic, Institution, PatientClinicAssociation, PatientJourney, UserSession
 from app.services.request_ids import REQUEST_ID_PATTERN, normalize_request_id
 from app.services.sessions import SECURITY_AUDIT_EVENT_POLICIES
 from tests.conftest import login_token
-from tests.factories import default_clinic, episode, patient, provider, room, service
+from tests.factories import appointment, default_clinic, episode, patient, provider, room, service
 
 
 def _payload(db, *, start: str, end: str):
@@ -126,13 +126,22 @@ def test_episode_mismatch_and_foreign_reference_share_generic_not_found(client, 
 def test_openapi_scheduling_contract_does_not_embed_clinical_episode(client):
     schema = client.get("/openapi.json").json()
     operational = schema["components"]["schemas"]["AppointmentOperationalOut"]
+    episode_operational = schema["components"]["schemas"]["EpisodeAppointmentOperationalOut"]
 
     assert "episode" not in operational.get("properties", {})
     assert "episode_id" in operational["properties"]
     assert "notes" not in operational["properties"]
     assert "AppointmentOut" not in schema["components"]["schemas"]
     episode_response = schema["paths"]["/api/episodes/{episode_id}/appointments"]["get"]["responses"]["200"]["content"]["application/json"]["schema"]
-    assert episode_response["items"]["$ref"].endswith("/AppointmentOperationalOut")
+    assert episode_response["items"]["$ref"].endswith("/EpisodeAppointmentOperationalOut")
+    assert {
+        "patient",
+        "patient_id",
+        "notes",
+        "source",
+        "identity_verified_by",
+        "identity_verified_at",
+    }.isdisjoint(episode_operational["properties"])
 
 
 def test_every_browser_security_event_has_an_explicit_persistence_class():
@@ -191,24 +200,15 @@ def test_scheduling_read_update_and_episode_siblings_use_operational_projection(
     assert clinical_episode_response.json()
     assert set(clinical_episode_response.json()[0]) == {
         "id",
-        "patient_id",
         "service_id",
         "provider_id",
         "room_id",
         "clinic_id",
-        "episode_id",
         "date",
         "start_time",
         "end_time",
         "duration_minutes",
         "status",
-        "source",
-        "arrived_at",
-        "identity_verified_at",
-        "identity_verified_by",
-        "created_at",
-        "updated_at",
-        "patient",
         "service",
         "provider",
         "room",
@@ -220,12 +220,89 @@ def test_scheduling_read_update_and_episode_siblings_use_operational_projection(
     assert "secret-0900@example.test" not in clinical_episode_response.text
     assert "0910900999" not in clinical_episode_response.text
     assert "99999990900" not in clinical_episode_response.text
-    assert set(clinical_episode_response.json()[0]["patient"]) == {
-        "id",
-        "first_name",
-        "last_name",
-        "date_of_birth",
+    assert "patient" not in clinical_episode_response.json()[0]
+
+
+def test_episode_projection_includes_same_institution_clinics_but_excludes_foreign_institution(
+    client, db, auth_setup
+):
+    clinic_a = auth_setup["clinic"]
+    clinic_b = Clinic(
+        name="Episode projection clinic B",
+        institution_key=clinic_a.institution_key,
+        institution_id=clinic_a.institution_id,
+    )
+    foreign_institution = Institution(
+        code="episode-projection-foreign",
+        name="Episode projection foreign institution",
+    )
+    clinic_c = Clinic(
+        name="Episode projection clinic C",
+        institution_key="episode-projection-foreign",
+        institution=foreign_institution,
+    )
+    db.add_all([clinic_b, clinic_c])
+    db.flush()
+
+    patient_obj = patient(db, "EpisodeProjection")
+    patient_obj.notes = "EPISODE_PATIENT_NOTE_SENTINEL"
+    patient_obj.oib = "12345678901"
+    patient_obj.email = "episode-projection@example.invalid"
+    patient_obj.phone = "0911234567"
+    db.add_all(
+        [
+            PatientClinicAssociation(patient_id=patient_obj.id, clinic_id=clinic_b.id),
+            PatientClinicAssociation(patient_id=patient_obj.id, clinic_id=clinic_c.id),
+        ]
+    )
+    episode_obj = episode(db, patient_obj=patient_obj)
+
+    appointments = []
+    for index, clinic in enumerate((clinic_a, clinic_b, clinic_c), start=1):
+        provider_obj = provider(db, f"dr. Episode projection {index}")
+        provider_obj.clinic_id = clinic.id
+        room_obj = room(db, f"Episode projection room {index}")
+        room_obj.clinic_id = clinic.id
+        service_obj = service(db, f"Episode projection service {index}")
+        item = appointment(
+            db,
+            patient_obj=patient_obj,
+            provider_obj=provider_obj,
+            room_obj=room_obj,
+            service_obj=service_obj,
+        )
+        item.episode_id = episode_obj.id
+        item.notes = f"EPISODE_APPOINTMENT_NOTE_SENTINEL_{index}"
+        appointments.append(item)
+    db.flush()
+
+    token = login_token(client, "admin@test.local")
+    response = client.get(
+        f"/api/episodes/{episode_obj.id}/appointments",
+        headers={
+            "Authorization": f"Bearer {token}",
+            "X-Clinic-Id": str(clinic_a.id),
+        },
+    )
+
+    assert response.status_code == 200
+    assert {item["id"] for item in response.json()} == {
+        appointments[0].id,
+        appointments[1].id,
     }
+    assert appointments[2].id not in {item["id"] for item in response.json()}
+    for sentinel in (
+        "EPISODE_PATIENT_NOTE_SENTINEL",
+        "12345678901",
+        "episode-projection@example.invalid",
+        "0911234567",
+        "EPISODE_APPOINTMENT_NOTE_SENTINEL",
+    ):
+        assert sentinel not in response.text
+    for item in response.json():
+        assert "patient" not in item
+        assert "patient_id" not in item
+        assert "notes" not in item
 
 
 @pytest.mark.parametrize(

@@ -1085,6 +1085,22 @@ export type EncounterUpdate = {
   treatment?: string | null;
 };
 
+export type EpisodeAppointmentOperationalOut = {
+  clinic_id: number;
+  date: string;
+  duration_minutes: number;
+  end_time: string;
+  id: number;
+  provider?: ProviderOperationalOut | null;
+  provider_id: number;
+  room?: RoomOperationalOut | null;
+  room_id: number;
+  service?: ServiceOperationalOut | null;
+  service_id: number;
+  start_time: string;
+  status: string;
+};
+
 export type ErrorResponse = {
   detail: string;
 };

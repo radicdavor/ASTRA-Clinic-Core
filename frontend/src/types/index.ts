@@ -243,6 +243,22 @@ export type Appointment = {
   room?: Pick<Room, "id" | "name" | "type" | "clinic_id">;
 };
 
+export type EpisodeAppointmentOperational = {
+  id: number;
+  clinic_id: number;
+  service_id: number;
+  provider_id: number;
+  room_id: number;
+  date: string;
+  start_time: string;
+  end_time: string;
+  duration_minutes: number;
+  status: string;
+  service?: Pick<Service, "id" | "name" | "code" | "duration_minutes"> | null;
+  provider?: Pick<Provider, "id" | "full_name" | "specialty" | "staff_role" | "clinic_id"> | null;
+  room?: Pick<Room, "id" | "name" | "type" | "clinic_id"> | null;
+};
+
 export type PatientAppointmentAvailability = {
   appointment_id: number;
   patient_id: number;
