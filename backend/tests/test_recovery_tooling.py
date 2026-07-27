@@ -1,0 +1,325 @@
+from __future__ import annotations
+
+import argparse
+import json
+from pathlib import Path
+import sys
+
+import pytest
+
+
+SCRIPTS = Path(__file__).resolve().parents[2] / "scripts"
+sys.path.insert(0, str(SCRIPTS))
+
+from recovery_common import (  # noqa: E402
+    FINAL_ALEMBIC_REVISION,
+    MANIFEST_NAME,
+    RECOVERY_SCHEMA_VERSION,
+    SYNTHETIC_ENVIRONMENT,
+    SYNTHETIC_MARKER,
+    RecoveryError,
+    database_identity,
+    operation_log,
+    read_alembic_revision,
+    require_recovery_environment,
+    safe_relative_path,
+    sha256_file,
+    write_json,
+)
+from restore_postgres import (  # noqa: E402
+    DESTRUCTIVE_CONFIRMATION,
+    restore,
+    validate_artifact,
+    validate_file_manifest,
+)
+
+
+def semantic_snapshot() -> dict[str, object]:
+    return {
+        "revision": FINAL_ALEMBIC_REVISION,
+        "table_inventory": ["alembic_version"],
+        "critical_tables": {
+            "alembic_version": {"row_count": 1, "sha256": "a" * 64}
+        },
+        "missing_critical_tables": [],
+        "invariants": {
+            "alembic_revision_rows": 1,
+            "unvalidated_foreign_keys": 0,
+        },
+    }
+
+
+def valid_manifest(dump: Path, file_manifest: Path) -> dict[str, object]:
+    return {
+        "schema_version": RECOVERY_SCHEMA_VERSION,
+        "source_git_sha": "a" * 40,
+        "source_environment": SYNTHETIC_ENVIRONMENT,
+        "source_alembic_revision": FINAL_ALEMBIC_REVISION,
+        "postgresql_version": "160014",
+        "created_at": "2026-07-27T00:00:00+00:00",
+        "backup_filename": "database.dump",
+        "backup_size": dump.stat().st_size,
+        "backup_sha256": sha256_file(dump),
+        "file_manifest_sha256": sha256_file(file_manifest),
+        "semantic_snapshot": semantic_snapshot(),
+        "synthetic_marker": SYNTHETIC_MARKER,
+        "forbidden_production": False,
+        "tool_versions": {
+            "pg_dump": "pg_dump (PostgreSQL) 16",
+            "python": "3.12",
+            "recovery_contract": RECOVERY_SCHEMA_VERSION,
+        },
+    }
+
+
+def artifact(tmp_path: Path) -> Path:
+    root = tmp_path / "synthetic-backup"
+    storage = root / "storage"
+    storage.mkdir(parents=True)
+    dump = root / "database.dump"
+    dump.write_bytes(b"synthetic-pg-dump")
+    file_manifest = root / "files.manifest.json"
+    write_json(file_manifest, {"schema_version": 1, "objects": []})
+    write_json(root / "manifest.json", valid_manifest(dump, file_manifest))
+    return root
+
+
+@pytest.mark.parametrize(
+    "value",
+    (
+        "../escape.dump",
+        "/absolute.dump",
+        "folder/../../escape",
+        "folder/name with space.dump",
+        ".",
+    ),
+)
+def test_recovery_path_rejects_traversal_and_unsafe_names(value: str):
+    with pytest.raises(RecoveryError, match="unsafe_artifact_path"):
+        safe_relative_path(value)
+
+
+def test_recovery_environment_is_synthetic_only(monkeypatch):
+    monkeypatch.setenv("ASTRA_RECOVERY_ENVIRONMENT", "production")
+    with pytest.raises(RecoveryError, match="recovery_environment_not_allowed"):
+        require_recovery_environment()
+    monkeypatch.setenv("ASTRA_RECOVERY_ENVIRONMENT", SYNTHETIC_ENVIRONMENT)
+    assert require_recovery_environment() == SYNTHETIC_ENVIRONMENT
+
+
+@pytest.mark.parametrize(
+    "url,error",
+    (
+        (
+            "postgresql://user:secret@production-db/astra",
+            "recovery_database_host_not_allowed",
+        ),
+        (
+            "postgresql://user:secret@localhost/astra",
+            "recovery_database_name_not_allowed",
+        ),
+    ),
+)
+def test_recovery_target_allowlist_rejects_production_like_urls(url: str, error: str):
+    with pytest.raises(RecoveryError, match=error):
+        database_identity(url)
+
+
+def test_artifact_rejects_missing_manifest(tmp_path):
+    root = artifact(tmp_path)
+    (root / "manifest.json").unlink()
+    with pytest.raises(RecoveryError, match="artifact_read_failed"):
+        validate_artifact(root)
+
+
+def test_artifact_rejects_corrupt_dump(tmp_path):
+    root = artifact(tmp_path)
+    (root / "database.dump").write_bytes(b"truncated")
+    with pytest.raises(RecoveryError, match="backup_size_mismatch|backup_checksum_mismatch"):
+        validate_artifact(root)
+
+
+def test_artifact_rejects_same_size_dump_checksum_mismatch(tmp_path):
+    root = artifact(tmp_path)
+    dump = root / "database.dump"
+    content = bytearray(dump.read_bytes())
+    content[0] ^= 0x01
+    dump.write_bytes(content)
+    with pytest.raises(RecoveryError, match="backup_checksum_mismatch"):
+        validate_artifact(root)
+
+
+def test_artifact_rejects_manifest_hash_change(tmp_path):
+    root = artifact(tmp_path)
+    payload = json.loads((root / "manifest.json").read_text(encoding="utf-8"))
+    payload["source_git_sha"] = "b" * 40
+    (root / "manifest.json").write_text(json.dumps(payload), encoding="utf-8")
+    # The main manifest is not self-signed, but its canonical hash is returned
+    # and bound into recovery evidence. The dump/file hashes remain mandatory.
+    manifest, entries, manifest_hash = validate_artifact(root)
+    assert manifest["source_git_sha"] == "b" * 40
+    assert entries == []
+    assert len(manifest_hash) == 64
+
+
+def test_file_manifest_rejects_path_traversal():
+    entry = {
+        "document_id": 1,
+        "relative_path": "../escape.bin",
+        "size": 1,
+        "sha256": "a" * 64,
+        "classification": "unclassified",
+        "content_type": "application/octet-stream",
+    }
+    with pytest.raises(RecoveryError, match="unsafe_artifact_path"):
+        validate_file_manifest({"schema_version": 1, "objects": [entry]})
+
+
+def test_file_manifest_rejects_duplicate_document_or_path():
+    entry = {
+        "document_id": 1,
+        "relative_path": "opaque/one.bin",
+        "size": 1,
+        "sha256": "a" * 64,
+        "classification": "unclassified",
+        "content_type": "application/octet-stream",
+    }
+    with pytest.raises(RecoveryError, match="duplicate_file_manifest_entry"):
+        validate_file_manifest(
+            {"schema_version": 1, "objects": [entry, dict(entry)]}
+        )
+
+
+def test_restore_requires_explicit_destructive_confirmation(tmp_path, monkeypatch):
+    root = artifact(tmp_path)
+    monkeypatch.setenv("ASTRA_RECOVERY_ENVIRONMENT", SYNTHETIC_ENVIRONMENT)
+    monkeypatch.setenv(
+        "RECOVERY_TARGET_DATABASE_URL",
+        "postgresql://astra:astra@localhost/astra_recovery_test",
+    )
+    args = argparse.Namespace(
+        artifact=root,
+        target_storage=tmp_path / "restore-storage",
+        expected_source_revision=FINAL_ALEMBIC_REVISION,
+        expected_manifest_sha256=sha256_file(root / MANIFEST_NAME),
+        database_url_env="RECOVERY_TARGET_DATABASE_URL",
+        environment_env="ASTRA_RECOVERY_ENVIRONMENT",
+        pg_restore="pg_restore",
+        operation_id="test-operation",
+        upgrade_head=False,
+        dry_run=False,
+        confirm_destructive=None,
+    )
+    with pytest.raises(RecoveryError, match="destructive_confirmation_required"):
+        restore(args)
+    args.confirm_destructive = DESTRUCTIVE_CONFIRMATION
+
+
+def test_restore_dry_run_performs_no_database_connection(tmp_path, monkeypatch):
+    root = artifact(tmp_path)
+    monkeypatch.setenv("ASTRA_RECOVERY_ENVIRONMENT", SYNTHETIC_ENVIRONMENT)
+    monkeypatch.setenv(
+        "RECOVERY_TARGET_DATABASE_URL",
+        "postgresql://astra:astra@localhost/astra_recovery_test",
+    )
+    args = argparse.Namespace(
+        artifact=root,
+        target_storage=tmp_path / "restore-storage",
+        expected_source_revision=FINAL_ALEMBIC_REVISION,
+        expected_manifest_sha256=sha256_file(root / MANIFEST_NAME),
+        database_url_env="RECOVERY_TARGET_DATABASE_URL",
+        environment_env="ASTRA_RECOVERY_ENVIRONMENT",
+        pg_restore="pg_restore",
+        operation_id="test-operation",
+        upgrade_head=False,
+        dry_run=True,
+        confirm_destructive=None,
+    )
+    result = restore(args)
+    assert result["dry_run"] is True
+    assert not args.target_storage.exists()
+
+
+def test_restore_rejects_manifest_without_expected_out_of_band_hash(
+    tmp_path, monkeypatch
+):
+    root = artifact(tmp_path)
+    monkeypatch.setenv("ASTRA_RECOVERY_ENVIRONMENT", SYNTHETIC_ENVIRONMENT)
+    monkeypatch.setenv(
+        "RECOVERY_TARGET_DATABASE_URL",
+        "postgresql://astra:astra@localhost/astra_recovery_test",
+    )
+    args = argparse.Namespace(
+        artifact=root,
+        target_storage=tmp_path / "restore-storage",
+        expected_source_revision=FINAL_ALEMBIC_REVISION,
+        expected_manifest_sha256="0" * 64,
+        database_url_env="RECOVERY_TARGET_DATABASE_URL",
+        environment_env="ASTRA_RECOVERY_ENVIRONMENT",
+        pg_restore="pg_restore",
+        operation_id="test-operation",
+        upgrade_head=False,
+        dry_run=True,
+        confirm_destructive=None,
+    )
+    with pytest.raises(RecoveryError, match="expected_manifest_checksum_mismatch"):
+        restore(args)
+
+
+def test_structured_logs_redact_credentials_and_patient_data(capsys):
+    operation_log(
+        "operation",
+        "restore_failed",
+        database_url="postgresql://user:secret@db/test",
+        patient_name="Synthetic Person",
+        error_code="checksum_mismatch",
+    )
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["database_url"] == "[REDACTED]"
+    assert payload["patient_name"] == "[REDACTED]"
+    assert payload["error_code"] == "checksum_mismatch"
+    assert "secret" not in json.dumps(payload)
+
+
+def test_symlink_artifact_is_rejected(tmp_path):
+    root = artifact(tmp_path)
+    link = tmp_path / "linked-backup"
+    try:
+        link.symlink_to(root, target_is_directory=True)
+    except OSError:
+        pytest.skip("symlinks are unavailable on this platform")
+    with pytest.raises(RecoveryError, match="symlink_artifact_rejected"):
+        validate_artifact(link)
+
+
+class _FakeResult:
+    def __init__(self, rows):
+        self._rows = rows
+
+    def fetchone(self):
+        return self._rows[0] if self._rows else None
+
+    def fetchall(self):
+        return self._rows
+
+
+class _FakeConnection:
+    def __init__(self, rows):
+        self.rows = rows
+
+    def execute(self, statement):
+        if "to_regclass" in statement:
+            return _FakeResult([("alembic_version",)])
+        return _FakeResult(self.rows)
+
+
+def test_revision_check_rejects_multiple_rows():
+    with pytest.raises(RecoveryError, match="alembic_revision_row_count_invalid"):
+        read_alembic_revision(
+            _FakeConnection(
+                [
+                    ("0070_membership_correction",),
+                    (FINAL_ALEMBIC_REVISION,),
+                ]
+            )
+        )
