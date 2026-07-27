@@ -9,6 +9,10 @@
           "selector": "def check_multi"
         },
         {
+          "path": "scripts/validate_0057_clinic_membership_transition.py",
+          "selector": "def seed_unsafe_ambiguous_memberships"
+        },
+        {
           "path": ".github/workflows/ci.yml",
           "selector": "validate_0057_clinic_membership_transition.py check-multi"
         }

@@ -45,7 +45,7 @@ def cleanup() -> None:
             {"prefix": f"{PREFIX}%"},
         )
         connection.execute(
-            text("DELETE FROM providers WHERE email LIKE :prefix"),
+            text("DELETE FROM providers WHERE lower(email) LIKE lower(:prefix)"),
             {"prefix": f"{PREFIX}%"},
         )
         connection.execute(
@@ -212,6 +212,25 @@ def seed_multi() -> None:
                 "email": f"{PREFIX}orphan-provider@example.invalid",
             },
         )
+        connection.execute(
+            text(
+                """
+                INSERT INTO providers
+                    (full_name, email, active, staff_role, clinic_id, weekly_working_hours)
+                VALUES
+                    (:name_a, :email_a, true, 'physician', :clinic_a, '{}'::json),
+                    (:name_b, :email_b, true, 'physician', :clinic_b, '{}'::json)
+                """
+            ),
+            {
+                "name_a": f"{PREFIX}ambiguous-a",
+                "email_a": f"{PREFIX}AMBIGUOUS@example.invalid",
+                "clinic_a": clinic_a,
+                "name_b": f"{PREFIX}ambiguous-b",
+                "email_b": f"{PREFIX}Ambiguous@Example.Invalid",
+                "clinic_b": clinic_b,
+            },
+        )
         room = connection.scalar(
             text(
                 "INSERT INTO rooms (name, active, clinic_id) VALUES (:name, true, :clinic_id) RETURNING id"
@@ -286,6 +305,28 @@ def memberships(connection, suffix: str) -> list[int]:
             {"user_id": user_id(connection, suffix)},
         )
     )
+
+
+def seed_unsafe_ambiguous_memberships() -> None:
+    """Reproduce the access granted by the pre-correction draft of 0057."""
+    engine = create_engine(database_url())
+    with engine.begin() as connection:
+        target_user_id = user_id(connection, "ambiguous")
+        for suffix in ("clinic-a", "clinic-b"):
+            connection.execute(
+                text(
+                    """
+                    INSERT INTO clinic_memberships (user_id, clinic_id, active)
+                    VALUES (:user_id, :clinic_id, true)
+                    ON CONFLICT (user_id, clinic_id) DO UPDATE
+                    SET active = true, created_by_user_id = NULL
+                    """
+                ),
+                {
+                    "user_id": target_user_id,
+                    "clinic_id": clinic_id(connection, suffix),
+                },
+            )
 
 
 def check_single() -> None:
@@ -368,7 +409,7 @@ def check_multi() -> None:
                 {"user_id": user_id(connection, suffix)},
             ).one()
             assert pending.reason == "ambiguous_clinic_membership"
-            assert pending.candidate_clinic_ids == [clinic_a, clinic_b]
+            assert pending.candidate_clinic_ids == []
             assert pending.status == "pending"
         assert connection.scalar(
             text(
@@ -409,7 +450,14 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "action",
-        choices=("cleanup", "seed-single", "check-single", "seed-multi", "check-multi"),
+        choices=(
+            "cleanup",
+            "seed-single",
+            "check-single",
+            "seed-multi",
+            "seed-unsafe-ambiguous-memberships",
+            "check-multi",
+        ),
     )
     args = parser.parse_args()
     {
@@ -417,5 +465,6 @@ if __name__ == "__main__":
         "seed-single": seed_single,
         "check-single": check_single,
         "seed-multi": seed_multi,
+        "seed-unsafe-ambiguous-memberships": seed_unsafe_ambiguous_memberships,
         "check-multi": check_multi,
     }[args.action]()

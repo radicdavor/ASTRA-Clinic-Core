@@ -218,14 +218,24 @@ def upgrade():
     )
     op.execute(
         """
+        WITH provider_candidates AS (
+            SELECT DISTINCT users.id AS user_id, providers.clinic_id
+            FROM users
+            JOIN providers ON lower(providers.email) = lower(users.email)
+            JOIN clinics ON clinics.id = providers.clinic_id AND clinics.active = true
+            WHERE users.active = true
+              AND providers.active = true
+              AND providers.clinic_id IS NOT NULL
+        ),
+        resolved_provider_scope AS (
+            SELECT user_id, min(clinic_id) AS clinic_id
+            FROM provider_candidates
+            GROUP BY user_id
+            HAVING count(*) = 1
+        )
         INSERT INTO clinic_memberships (user_id, clinic_id, active)
-        SELECT DISTINCT users.id, providers.clinic_id, true
-        FROM users
-        JOIN providers ON lower(providers.email) = lower(users.email)
-        JOIN clinics ON clinics.id = providers.clinic_id AND clinics.active = true
-        WHERE users.active = true
-          AND providers.active = true
-          AND providers.clinic_id IS NOT NULL
+        SELECT user_id, clinic_id, true
+        FROM resolved_provider_scope
         ON CONFLICT (user_id, clinic_id) DO NOTHING
         """
     )
@@ -275,7 +285,17 @@ def upgrade():
                 ELSE 'no_active_clinic'
             END,
             COALESCE(
-                (SELECT json_agg(clinics.id ORDER BY clinics.id) FROM clinics WHERE clinics.active = true),
+                (
+                    SELECT json_agg(provider_candidates.clinic_id ORDER BY provider_candidates.clinic_id)
+                    FROM (
+                        SELECT DISTINCT providers.clinic_id
+                        FROM providers
+                        JOIN clinics ON clinics.id = providers.clinic_id AND clinics.active = true
+                        WHERE providers.active = true
+                          AND providers.clinic_id IS NOT NULL
+                          AND lower(providers.email) = lower(users.email)
+                    ) AS provider_candidates
+                ),
                 CAST('[]' AS JSON)
             ),
             'pending'

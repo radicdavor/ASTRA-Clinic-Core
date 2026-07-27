@@ -54,6 +54,8 @@ jobs:
           alembic downgrade 0056_reception_note_patient_concurrency
           python ../scripts/validate_0057_clinic_membership_transition.py cleanup
           python ../scripts/validate_0057_clinic_membership_transition.py seed-multi
+          alembic upgrade 0069_legacy_document_trust
+          python ../scripts/validate_0057_clinic_membership_transition.py seed-unsafe-ambiguous-memberships
           alembic upgrade head
           python ../scripts/validate_0057_clinic_membership_transition.py check-multi
           alembic downgrade 0056_reception_note_patient_concurrency
