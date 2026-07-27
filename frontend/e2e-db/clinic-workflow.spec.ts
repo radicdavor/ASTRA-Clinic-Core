@@ -1,0 +1,342 @@
+import { expect, test, type Page, type APIResponse } from "@playwright/test";
+import { readFileSync } from "node:fs";
+
+type Seed = {
+  date: string;
+  password: string;
+  users: {
+    adminA: string;
+    receptionA: string;
+    dual: string;
+    systemAdmin: string;
+    physicianA: string;
+    nurseA: string;
+  };
+  clinics: { a: number; b: number };
+  patients: { shared: number; onlyB: number; paid: number };
+  journeys: { a: number; b: number; onlyB: number; paid: number };
+  services: { consult: number; gastro: number; colon: number };
+  providers: { a: number; b: number };
+  rooms: { a1: number; a2: number; b1: number };
+  appointments: { clinicBConflict: number; clinicAVisit: number };
+};
+
+const seedPath = process.env.ASTRA_E2E_SEED_FILE;
+if (!seedPath) throw new Error("ASTRA_E2E_SEED_FILE is required for DB-backed E2E tests.");
+const seed = JSON.parse(readFileSync(seedPath, "utf-8")) as Seed;
+
+async function login(page: Page, email: string, clinicId?: number) {
+  await page.goto("/login");
+  await page.getByLabel(/E-po/).fill(email);
+  await page.getByLabel("Lozinka").fill(seed.password);
+  await page.getByRole("button", { name: "Prijava" }).click();
+  if (clinicId) {
+    await selectActiveClinic(page, clinicId);
+  }
+  await expect(page.getByRole("heading", { name: "Danas u poliklinici" })).toBeVisible();
+  await selectDashboardDate(page, seed.date);
+}
+
+async function selectDashboardDate(page: Page, isoDate: string) {
+  const [year, month, day] = isoDate.split("-");
+  const displayDate = `${day}. ${month}. ${year}.`;
+  await expect(page.locator("section.clinic-day-page")).toHaveAttribute("aria-busy", "false");
+  const input = page.locator(".clinic-day-date input[type='text']");
+  if (await input.inputValue() === displayDate) return;
+  const response = page.waitForResponse((item) => (
+    item.url().includes(`/api/dashboard/day?selected_date=${isoDate}`)
+    && item.request().method() === "GET"
+  ));
+  await input.fill(displayDate);
+  // Clinic-time initialization can settle on the requested date between the
+  // value check and fill. Refresh guarantees a semantic request in that race.
+  await page.getByRole("button", { name: "Osvježi" }).click();
+  await response;
+  await expect(input).toHaveValue(displayDate);
+}
+
+async function selectActiveClinic(page: Page, clinicId: number) {
+  const picker = page.getByLabel("Aktivna klinika");
+  await picker.selectOption(String(clinicId));
+  const confirmation = page.getByRole("dialog", { name: "Promijeniti aktivnu kliniku?" });
+  if (await confirmation.isVisible()) {
+    await confirmation.getByRole("button", { name: "Promijeni kliniku" }).click();
+  }
+  await page.waitForFunction(
+    (expectedClinicId) => localStorage.getItem("astra_active_clinic_id") === expectedClinicId,
+    String(clinicId),
+  );
+  await page.waitForLoadState("domcontentloaded");
+}
+
+async function api(page: Page, path: string, options: RequestInit = {}) {
+  return page.evaluate(
+    async ({ path, options, backendUrl }) => {
+      const activeClinicId = localStorage.getItem("astra_active_clinic_id");
+      const csrf = document.cookie.split("; ").find((entry) => entry.startsWith("astra_csrf="))?.split("=")[1];
+      const method = options.method ?? "GET";
+      const response = await fetch(`${backendUrl}${path}`, {
+        ...options,
+        method,
+        credentials: "include",
+        headers: {
+          "Content-Type": "application/json",
+          ...(activeClinicId ? { "X-Clinic-Id": activeClinicId } : {}),
+          ...(csrf && method !== "GET" ? { "X-CSRF-Token": decodeURIComponent(csrf) } : {}),
+          ...(options.headers ?? {}),
+        },
+      });
+      return {
+        status: response.status,
+        body: await response.json().catch(() => null),
+      };
+    },
+    { path, options, backendUrl: process.env.ASTRA_E2E_BACKEND_URL ?? "http://127.0.0.1:8011" },
+  ) as Promise<{ status: number; body: unknown }>;
+}
+
+async function expectApiOk(response: APIResponse) {
+  expect(response.ok(), `${response.status()} ${await response.text()}`).toBeTruthy();
+}
+
+test("DB-backed workflow uses real backend, PostgreSQL and persistent dashboard state", async ({ page, request }) => {
+  const health = await request.get(`${process.env.ASTRA_E2E_BACKEND_URL}/health`);
+  await expectApiOk(health);
+  const ready = await request.get(`${process.env.ASTRA_E2E_BACKEND_URL}/ready`);
+  await expectApiOk(ready);
+
+  await login(page, seed.users.receptionA);
+  await expect(page.getByText("E2E Zajednicki Pacijent")).toBeVisible();
+  await expect(page.getByText("E2E Placeni Pacijent")).toBeVisible();
+  await expect(page.getByLabel(/Završeno|Zavrseno/).first()).toBeVisible();
+  const activities = page.getByLabel(/aktivnosti za E2E Zajednicki Pacijent/i);
+  await expect(activities.getByText("E2E prvi gastro pregled")).toBeVisible();
+  await expect(activities.getByText("E2E gastroskopija")).toBeVisible();
+
+  const availability = await api(page, `/api/patients/${seed.patients.shared}/appointments`);
+  expect(availability.status).toBe(200);
+  expect(JSON.stringify(availability.body)).toContain("E2E Klinika B");
+
+  const overlap = await api(page, "/api/appointments", {
+    method: "POST",
+    body: JSON.stringify({
+      patient_id: seed.patients.shared,
+      service_id: seed.services.consult,
+      provider_id: seed.providers.a,
+      room_id: seed.rooms.a1,
+      date: seed.date,
+      start_time: "09:10",
+      end_time: "09:40",
+      duration_minutes: 30,
+      status: "scheduled",
+      source: "manual",
+    }),
+  });
+  expect(overlap.status).toBe(409);
+  expect(JSON.stringify(overlap.body)).toContain("patient_appointment_overlap");
+
+  const nonOverlap = await api(page, "/api/appointments", {
+    method: "POST",
+    body: JSON.stringify({
+      patient_id: seed.patients.shared,
+      service_id: seed.services.consult,
+      provider_id: seed.providers.a,
+      room_id: seed.rooms.a1,
+      date: seed.date,
+      start_time: "13:00",
+      end_time: "13:30",
+      duration_minutes: 30,
+      status: "scheduled",
+      source: "manual",
+      notes: "Synthetic DB-backed E2E non-overlap appointment",
+    }),
+  });
+  expect([200, 201]).toContain(nonOverlap.status);
+  expect(JSON.stringify(nonOverlap.body)).not.toContain("Synthetic DB-backed E2E non-overlap appointment");
+
+  await page.reload();
+  await selectDashboardDate(page, seed.date);
+  await expect(page.getByText("13:00").first()).toBeVisible();
+  await expect.poll(() => page.evaluate(() => sessionStorage.getItem("astra_token"))).toBeNull();
+  await expect.poll(() => page.evaluate(() => localStorage.getItem("astra_token"))).toBeNull();
+
+  await page.getByRole("button", { name: "Otvori prijem" }).first().click();
+  await expect(page.getByRole("dialog", { name: /Opći podaci pacijenta|Op.*podaci pacijenta/ })).toBeVisible();
+  await page.getByRole("button", { name: /Podaci su/ }).click();
+  await expect(page.getByRole("dialog", { name: /Kratka prijemna provjera/ })).toBeVisible();
+  await page.getByRole("button", { name: "Provjereno" }).click();
+  await expect(page.getByRole("dialog", { name: /Kratka prijemna provjera/ })).toBeHidden();
+
+  await page.reload();
+  await selectDashboardDate(page, seed.date);
+  await expect(
+    page.getByLabel("10:00 E2E Zajednicki Pacijent").locator(".timeline-state-label", { hasText: /Čeka pregled\/pretragu|Ceka pregled\/pretragu/ }),
+  ).toBeVisible();
+
+  await page.getByRole("button", { name: "Otvori pregled" }).first().click();
+  await expect(page).toHaveURL(/\/journeys\/\d+\?focus=encounter/);
+  await expect(page.getByRole("heading", { name: /E2E Zajednicki Pacijent/ })).toBeVisible();
+});
+
+test("DB-backed operational appointment surfaces never expose free-text notes", async ({ page }) => {
+  await login(page, seed.users.receptionA, seed.clinics.a);
+
+  const appointments = await api(
+    page,
+    `/api/appointments?date_from=${seed.date}&date_to=${seed.date}`,
+  );
+  const reception = await api(page, `/api/reception/day?date=${seed.date}`);
+  const search = await api(page, "/api/search?q=E2E%20Zajednicki");
+  const journey = await api(page, `/api/patient-journeys/${seed.journeys.a}`);
+  const serialized = JSON.stringify([
+    appointments.body,
+    reception.body,
+    search.body,
+    journey.body,
+  ]);
+
+  expect(appointments.status).toBe(200);
+  expect(reception.status).toBe(200);
+  expect(search.status).toBe(200);
+  expect(journey.status).toBe(200);
+  expect(serialized).not.toContain("SECRET_PATIENT_NOTE_SENTINEL");
+  expect(serialized).not.toContain("SECRET_APPOINTMENT_NOTE_SENTINEL");
+  expect(await page.locator("body").innerText()).not.toContain("SECRET_PATIENT_NOTE_SENTINEL");
+  expect(await page.locator("body").innerText()).not.toContain("SECRET_APPOINTMENT_NOTE_SENTINEL");
+});
+
+test("DB-backed non-medical administrator cannot resolve clinical readiness", async ({ page }) => {
+  await login(page, seed.users.adminA, seed.clinics.a);
+
+  const response = await api(
+    page,
+    `/api/appointments/${seed.appointments.clinicAVisit}/clinical-readiness-preview`,
+  );
+
+  expect(response.status).toBe(403);
+});
+
+test("DB-backed medical staff can read scoped clinical readiness", async ({ page }) => {
+  for (const email of [seed.users.nurseA, seed.users.physicianA]) {
+    await page.context().clearCookies();
+    await page.goto("/login");
+    await login(page, email, seed.clinics.a);
+    const response = await api(
+      page,
+      `/api/appointments/${seed.appointments.clinicAVisit}/clinical-readiness-preview`,
+    );
+    expect(response.status).toBe(200);
+    expect(JSON.stringify(response.body)).toContain('"is_preview":true');
+  }
+});
+
+test("DB-backed browser session survives failed logout and successful retry revokes protected access", async ({ page }) => {
+  await login(page, seed.users.receptionA);
+  await expect(page.getByText("Danas u poliklinici")).toBeVisible();
+  await page.reload();
+  await expect(page.getByText("Danas u poliklinici")).toBeVisible();
+  await expect.poll(() => page.evaluate(() => sessionStorage.getItem("astra_token"))).toBeNull();
+  await expect.poll(() => page.evaluate(() => localStorage.getItem("astra_token"))).toBeNull();
+
+  let failFirstLogout = true;
+  await page.route("**/auth/browser/logout", async (route) => {
+    if (failFirstLogout) {
+      failFirstLogout = false;
+      await route.fulfill({
+        status: 403,
+        contentType: "application/json",
+        body: JSON.stringify({ detail: "CSRF provjera nije uspjela" }),
+      });
+      return;
+    }
+    await route.continue();
+  });
+
+  await page.getByTitle("Odjava").click();
+  await expect(page.getByText("Odjava nije uspjela. Pokušajte ponovno.")).toBeVisible();
+  await expect(page).not.toHaveURL(/\/login$/);
+  await expect(page.getByText("Danas u poliklinici")).toBeVisible();
+
+  await page.getByTitle("Odjava").click();
+  await expect(page).toHaveURL(/\/login$/);
+  await page.goto("/");
+  await expect(page).toHaveURL(/\/login$/);
+});
+
+test("DB-backed clinic isolation blocks direct journey access outside active clinic", async ({ page }) => {
+  await login(page, seed.users.receptionA);
+
+  const forbiddenJourney = await api(page, `/api/patient-journeys/${seed.journeys.onlyB}`);
+  expect([403, 404]).toContain(forbiddenJourney.status);
+  expect(JSON.stringify(forbiddenJourney.body)).not.toContain("Samo B Pacijent");
+
+  const forbiddenPatientClinical = await api(page, `/api/patients/${seed.patients.onlyB}/invoices`);
+  expect([403, 404]).toContain(forbiddenPatientClinical.status);
+  expect(JSON.stringify(forbiddenPatientClinical.body)).not.toContain("Samo B Pacijent");
+});
+
+test("DB-backed dashboard derives the day from clinic timezone at 23:30 UTC", async ({ page }) => {
+  await page.clock.install({ time: new Date("2026-01-15T23:30:00Z") });
+  const clinicDayRequest = page.waitForResponse((item) => (
+    item.url().includes("/api/dashboard/day?selected_date=2026-01-16")
+    && item.request().method() === "GET"
+  ));
+  await page.goto("/login");
+  await page.getByLabel(/E-po/).fill(seed.users.receptionA);
+  await page.getByLabel("Lozinka").fill(seed.password);
+  await page.getByRole("button", { name: "Prijava" }).click();
+  await expect(page.getByRole("heading", { name: "Danas u poliklinici" })).toBeVisible();
+  await clinicDayRequest;
+  await expect(page.locator(".clinic-day-date input[type='text']")).toHaveValue("16. 01. 2026.");
+});
+
+test("DB-backed CSRF protection blocks manual cookie-auth mutations without token", async ({ page }) => {
+  await login(page, seed.users.receptionA);
+  const result = await page.evaluate(
+    async ({ backendUrl, journeyId }) => {
+      const response = await fetch(`${backendUrl}/api/patient-journeys/${journeyId}/check-in`, {
+        method: "POST",
+        credentials: "include",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Clinic-Id": String(localStorage.getItem("astra_active_clinic_id") ?? ""),
+        },
+      });
+      return { status: response.status, body: await response.text() };
+    },
+    { backendUrl: process.env.ASTRA_E2E_BACKEND_URL ?? "http://127.0.0.1:8011", journeyId: seed.journeys.a },
+  );
+  expect(result.status).toBe(403);
+  expect(result.body).toContain("CSRF");
+});
+
+test("DB-backed clinic switching clears stale clinic data and reloads authorized dataset", async ({ page }) => {
+  await login(page, seed.users.dual, seed.clinics.a);
+
+  await expect(page.getByRole("button", { name: "E2E Zajednicki Pacijent" }).first()).toBeVisible();
+
+  await selectActiveClinic(page, seed.clinics.b);
+  await selectDashboardDate(page, seed.date);
+  await expect(page.getByText("E2E Samo B Pacijent")).toBeVisible();
+  await expect(page.getByText("E2E Placeni Pacijent")).toHaveCount(0);
+
+  await selectActiveClinic(page, seed.clinics.a);
+  await selectDashboardDate(page, seed.date);
+  await expect(page.getByText("E2E Placeni Pacijent")).toBeVisible();
+});
+
+test("DB-backed accessibility smoke covers status, red flag popover and action menu keyboard use", async ({ page }) => {
+  await login(page, seed.users.receptionA);
+  await page.keyboard.press("Tab");
+  await expect(page.getByLabel(/Čeka dolazak|Ceka dolazak/).first()).toBeVisible();
+
+  const actionMenu = page.getByLabel(/Dodatne radnje za E2E Zajednicki Pacijent/).first();
+  await actionMenu.focus();
+  await page.keyboard.press("Enter");
+  await expect(page.getByRole("button", { name: "Otvori tijek" }).first()).toBeVisible();
+  await page.keyboard.press("Escape");
+
+  await page.getByRole("button", { name: "Otvori prijem" }).first().focus();
+  await page.keyboard.press("Enter");
+  await expect(page.getByRole("dialog", { name: /Opći podaci pacijenta|Op.*podaci pacijenta/ })).toBeVisible();
+});

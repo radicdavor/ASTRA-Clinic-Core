@@ -121,7 +121,7 @@ def list_clinics(include_hidden: bool = False, db: Session = Depends(get_db), ac
 
 @router.post("/clinics", response_model=ClinicOut)
 def create_clinic(payload: ClinicCreate, request: Request, db: Session = Depends(get_db), actor: Actor = Depends(require_permission("appointments.write"))):
-    clinic = Clinic(name=payload.name.strip())
+    clinic = Clinic(name=payload.name.strip(), timezone=payload.timezone)
     db.add(clinic)
     try:
         db.flush()

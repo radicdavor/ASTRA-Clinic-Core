@@ -1,3 +1,4 @@
+from datetime import datetime
 from decimal import Decimal
 
 import pytest
@@ -48,6 +49,26 @@ def test_partial_and_full_payment_status(db):
     db.flush()
     assert invoice.payment_status == "paid"
     assert invoice.status == "paid"
+
+
+def test_payment_timestamp_defaults_to_utc_aware(db):
+    invoice = make_invoice(db)
+    issue_invoice(db, invoice)
+
+    payment = record_payment(invoice, PaymentTransactionCreate(amount=Decimal("10"), method="cash"), created_by=1)
+
+    assert payment.paid_at.tzinfo is not None
+    assert payment.paid_at.utcoffset().total_seconds() == 0
+
+
+def test_payment_rejects_naive_timestamp(db):
+    invoice = make_invoice(db)
+    issue_invoice(db, invoice)
+
+    with pytest.raises(HTTPException) as exc:
+        record_payment(invoice, PaymentTransactionCreate(amount=Decimal("10"), method="cash", paid_at=datetime(2026, 7, 21, 10, 0)), created_by=1)
+
+    assert exc.value.status_code == 422
 
 
 def test_overpayment_is_rejected(db):

@@ -11,7 +11,8 @@ pytestmark = pytest.mark.integration
 
 
 def test_full_pilot_demo_flow(pg_client, pg_db):
-    demo_day = date.today().isoformat()
+    # Keep the synthetic workflow independent of the calendar day on which CI runs.
+    demo_day = date(2026, 7, 27).isoformat()
     user = create_user_with_permissions(
         pg_db,
         "pilot-pg@test.local",
@@ -29,13 +30,13 @@ def test_full_pilot_demo_flow(pg_client, pg_db):
             "audit.read",
         ],
     )
-    patient, provider, room, service = seed_clinic_objects(pg_db)
+    patient, provider, room, service = seed_clinic_objects(pg_db, user)
     item = InventoryItem(sku="PILOT-MAT", name="Pilot material", current_stock=Decimal("5"), reorder_point=Decimal("2"), minimum_stock=Decimal("2"), purchase_price=Decimal("5"))
     pg_db.add(item)
     pg_db.flush()
     location_response_seed = pg_client.get("/api/inventory/stock-locations", headers={"Authorization": f"Bearer {login(pg_client, user.email)}"})
     token = login(pg_client, user.email)
-    headers = {"Authorization": f"Bearer {token}", "X-Request-ID": "pilot-demo-flow"}
+    headers = {"Authorization": f"Bearer {token}", "X-Request-ID": "pilot-demo-flow", "X-Clinic-Id": str(room.clinic_id)}
     location = None
     if location_response_seed.json():
         location = location_response_seed.json()[0]
@@ -55,7 +56,7 @@ def test_full_pilot_demo_flow(pg_client, pg_db):
         headers=headers,
         json={"patient_id": patient.id, "provider_id": provider.id, "room_id": room.id, "service_id": service.id, "date": demo_day, "start_time": "11:00", "end_time": "11:30", "duration_minutes": 30, "status": "scheduled", "source": "manual"},
     )
-    assert appointment.status_code == 200
+    assert appointment.status_code == 200, appointment.text
     appointment_id = appointment.json()["id"]
 
     completed = pg_client.post(f"/api/appointments/{appointment_id}/complete-with-consumption", headers=headers, json={})

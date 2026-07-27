@@ -110,9 +110,11 @@ def preview_package_schedule(db: Session, version: ServicePackageVersion, patien
     }
 
 
-def book_package(db: Session, version: ServicePackageVersion, patient_id: int, episode_id: int | None, assignments: list[dict], idempotency_key: str, actor: Actor, request: Request) -> PatientJourney:
+def book_package(db: Session, version: ServicePackageVersion, patient_id: int, episode_id: int | None, assignments: list[dict], idempotency_key: str, clinic_id: int, actor: Actor, request: Request) -> PatientJourney:
     existing = db.scalar(select(PatientJourney).where(PatientJourney.package_booking_key == idempotency_key))
     if existing:
+        if existing.clinic_id != clinic_id:
+            raise HTTPException(404, detail="Rezervacija paketa nije pronađena")
         if existing.patient_id != patient_id or existing.package_version_id != version.id:
             raise HTTPException(409, detail="Idempotency oznaka već pripada drugom pacijentu ili paketu")
         return existing
@@ -124,7 +126,7 @@ def book_package(db: Session, version: ServicePackageVersion, patient_id: int, e
     first_assignment = assignment_by_item[first_item.id]
     appointment = create_appointment_with_journey(db, {
         "patient_id": patient_id, "episode_id": episode_id, "service_id": first_item.service_id,
-        "provider_id": first_assignment["provider_id"], "room_id": first_assignment["room_id"],
+        "provider_id": first_assignment["provider_id"], "room_id": first_assignment["room_id"], "clinic_id": clinic_id,
         "date": first_assignment["date"], "start_time": first_assignment["start_time"], "end_time": first_assignment["end_time"],
         "duration_minutes": first_item.default_duration_minutes, "status": "scheduled", "source": "manual",
         "notes": f"Paket {version.package.name} v{version.version}",

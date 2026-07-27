@@ -68,6 +68,7 @@ class Role(Base):
     __tablename__ = "roles"
     id: Mapped[int] = mapped_column(primary_key=True)
     name: Mapped[str] = mapped_column(String(80), unique=True)
+    professional_category: Mapped[str] = mapped_column(String(60), default="administrative", index=True)
     description: Mapped[str | None] = mapped_column(Text)
     permissions: Mapped[list["Permission"]] = relationship(secondary=role_permissions, back_populates="roles")
 
@@ -89,6 +90,33 @@ class User(TimestampMixin, Base):
     active: Mapped[bool] = mapped_column(Boolean, default=True)
     role_id: Mapped[int] = mapped_column(ForeignKey("roles.id"))
     role: Mapped[Role] = relationship()
+    clinic_memberships: Mapped[list["ClinicMembership"]] = relationship(
+        back_populates="user",
+        cascade="all, delete-orphan",
+        foreign_keys="ClinicMembership.user_id",
+    )
+
+
+class UserSession(Base):
+    __tablename__ = "user_sessions"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    token_hash: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    csrf_token_hash: Mapped[str] = mapped_column(String(64), index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), index=True)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), index=True)
+    last_seen_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    user: Mapped[User] = relationship()
+
+
+class Institution(TimestampMixin, Base):
+    __tablename__ = "institutions"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    code: Mapped[str | None] = mapped_column(String(80), unique=True, index=True)
+    name: Mapped[str] = mapped_column(String(180), index=True)
+    active: Mapped[bool] = mapped_column(Boolean, default=True, index=True)
+    clinics: Mapped[list["Clinic"]] = relationship(back_populates="institution")
 
 
 class Patient(TimestampMixin, Base):
@@ -102,6 +130,7 @@ class Patient(TimestampMixin, Base):
     email_verified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     phone: Mapped[str | None] = mapped_column(String(80))
     notes: Mapped[str | None] = mapped_column(Text)
+    clinic_associations: Mapped[list["PatientClinicAssociation"]] = relationship(back_populates="patient", cascade="all, delete-orphan")
 
 
 class Provider(TimestampMixin, Base):
@@ -136,8 +165,89 @@ class Clinic(TimestampMixin, Base):
     __tablename__ = "clinics"
     id: Mapped[int] = mapped_column(primary_key=True)
     name: Mapped[str] = mapped_column(String(120), unique=True, index=True)
+    institution_key: Mapped[str] = mapped_column(String(120), default="default", index=True)
+    institution_id: Mapped[int | None] = mapped_column(ForeignKey("institutions.id"), index=True)
+    timezone: Mapped[str] = mapped_column(String(80), default="Europe/Zagreb")
     active: Mapped[bool] = mapped_column(Boolean, default=True, index=True)
     visible_in_catalog: Mapped[bool] = mapped_column(Boolean, default=True, index=True)
+    institution: Mapped[Institution | None] = relationship(back_populates="clinics")
+    user_memberships: Mapped[list["ClinicMembership"]] = relationship(back_populates="clinic", cascade="all, delete-orphan")
+    patient_associations: Mapped[list["PatientClinicAssociation"]] = relationship(back_populates="clinic", cascade="all, delete-orphan")
+
+
+class ClinicMembership(Base):
+    __tablename__ = "clinic_memberships"
+    __table_args__ = (UniqueConstraint("user_id", "clinic_id", name="uq_clinic_membership_user_clinic"),)
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    clinic_id: Mapped[int] = mapped_column(ForeignKey("clinics.id", ondelete="CASCADE"), index=True)
+    active: Mapped[bool] = mapped_column(Boolean, default=True, index=True)
+    valid_from: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    valid_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), index=True)
+    created_by_user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"))
+    user: Mapped[User] = relationship(foreign_keys=[user_id], back_populates="clinic_memberships")
+    clinic: Mapped[Clinic] = relationship(back_populates="user_memberships")
+    created_by: Mapped[User | None] = relationship(foreign_keys=[created_by_user_id])
+
+
+class ClinicMembershipMigrationIssue(Base):
+    __tablename__ = "clinic_membership_migration_issues"
+    __table_args__ = (
+        CheckConstraint(
+            "status in ('pending', 'resolved')",
+            name="ck_clinic_membership_migration_issue_status",
+        ),
+        UniqueConstraint(
+            "user_id",
+            name="uq_clinic_membership_migration_issue_user",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"),
+    )
+    reason: Mapped[str] = mapped_column(String(80))
+    candidate_clinic_ids: Mapped[list] = mapped_column(JSON, default=list)
+    correction_reason: Mapped[str | None] = mapped_column(String(80))
+    corrected_clinic_ids: Mapped[list | None] = mapped_column(JSON)
+    status: Mapped[str] = mapped_column(String(40), default="pending", index=True)
+    resolution_clinic_id: Mapped[int | None] = mapped_column(
+        ForeignKey("clinics.id", ondelete="RESTRICT"),
+    )
+    resolution_note: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+    )
+    resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    resolved_by_user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="RESTRICT"),
+    )
+    user: Mapped[User] = relationship(foreign_keys=[user_id])
+    resolution_clinic: Mapped[Clinic | None] = relationship(
+        foreign_keys=[resolution_clinic_id],
+    )
+    resolved_by: Mapped[User | None] = relationship(
+        foreign_keys=[resolved_by_user_id],
+    )
+
+
+class PatientClinicAssociation(Base):
+    __tablename__ = "patient_clinic_associations"
+    __table_args__ = (UniqueConstraint("patient_id", "clinic_id", name="uq_patient_clinic_association_patient_clinic"),)
+    id: Mapped[int] = mapped_column(primary_key=True)
+    patient_id: Mapped[int] = mapped_column(ForeignKey("patients.id", ondelete="CASCADE"), index=True)
+    clinic_id: Mapped[int] = mapped_column(ForeignKey("clinics.id", ondelete="CASCADE"), index=True)
+    active: Mapped[bool] = mapped_column(Boolean, default=True, index=True)
+    first_seen_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    last_seen_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), index=True)
+    created_by_user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"))
+    patient: Mapped[Patient] = relationship(back_populates="clinic_associations")
+    clinic: Mapped[Clinic] = relationship(back_populates="patient_associations")
+    created_by: Mapped[User | None] = relationship()
 
 
 class Module(TimestampMixin, Base):
@@ -153,6 +263,7 @@ class ClinicalEpisode(TimestampMixin, Base):
     __tablename__ = "clinical_episodes"
     id: Mapped[int] = mapped_column(primary_key=True)
     patient_id: Mapped[int] = mapped_column(ForeignKey("patients.id"), index=True)
+    institution_id: Mapped[int | None] = mapped_column(ForeignKey("institutions.id", ondelete="RESTRICT"), index=True)
     title: Mapped[str] = mapped_column(String(180), index=True)
     episode_type: Mapped[str] = mapped_column(String(80), default="general", index=True)
     status: Mapped[str] = mapped_column(String(40), default="open", index=True)
@@ -164,6 +275,7 @@ class ClinicalEpisode(TimestampMixin, Base):
     owner_provider_id: Mapped[int | None] = mapped_column(ForeignKey("providers.id"))
     created_by: Mapped[int | None] = mapped_column(ForeignKey("users.id"))
     patient: Mapped[Patient] = relationship()
+    institution: Mapped[Institution | None] = relationship()
     owner_provider: Mapped[Provider | None] = relationship()
 
 
@@ -202,6 +314,7 @@ class WorkflowTemplate(TimestampMixin, Base):
 class WorkflowTask(TimestampMixin, Base):
     __tablename__ = "workflow_tasks"
     id: Mapped[int] = mapped_column(primary_key=True)
+    institution_id: Mapped[int | None] = mapped_column(ForeignKey("institutions.id", ondelete="RESTRICT"), index=True)
     title: Mapped[str] = mapped_column(String(180), index=True)
     description: Mapped[str | None] = mapped_column(Text)
     status: Mapped[str] = mapped_column(String(40), default="open", index=True)
@@ -268,12 +381,20 @@ class ClinicalDocument(TimestampMixin, Base):
     __tablename__ = "clinical_documents"
     id: Mapped[int] = mapped_column(primary_key=True)
     patient_id: Mapped[int] = mapped_column(ForeignKey("patients.id"), index=True)
+    clinic_id: Mapped[int | None] = mapped_column(ForeignKey("clinics.id"), index=True)
+    institution_id: Mapped[int | None] = mapped_column(ForeignKey("institutions.id", ondelete="RESTRICT"), index=True)
     source_type: Mapped[str] = mapped_column(String(40), index=True)
     document_type: Mapped[str] = mapped_column(String(60), index=True)
     origin: Mapped[str | None] = mapped_column(String(180))
     document_date: Mapped[date | None] = mapped_column(Date, index=True)
     title: Mapped[str] = mapped_column(String(220), index=True)
     author: Mapped[str | None] = mapped_column(String(160))
+    author_user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), index=True)
+    author_professional_role: Mapped[str | None] = mapped_column(String(80))
+    is_clinical_record: Mapped[bool] = mapped_column(Boolean, default=True, index=True)
+    record_classification: Mapped[str] = mapped_column(String(40), default="unclassified", index=True)
+    classification_reviewed_by: Mapped[int | None] = mapped_column(ForeignKey("users.id"), index=True)
+    classification_reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     institution: Mapped[str | None] = mapped_column(String(180))
     raw_text: Mapped[str | None] = mapped_column(Text)
     ai_summary: Mapped[str | None] = mapped_column(Text)
@@ -302,8 +423,36 @@ class ClinicalDocument(TimestampMixin, Base):
     provenance_json: Mapped[dict | None] = mapped_column(JSON)
     received_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), index=True)
     patient: Mapped[Patient] = relationship()
+    clinic: Mapped[Clinic | None] = relationship()
+    institution_scope: Mapped[Institution | None] = relationship()
     appointment: Mapped[Appointment | None] = relationship()
-    reviewer: Mapped[User | None] = relationship()
+    author_user: Mapped[User | None] = relationship(foreign_keys=[author_user_id])
+    reviewer: Mapped[User | None] = relationship(foreign_keys=[reviewed_by])
+    classification_reviewer: Mapped[User | None] = relationship(foreign_keys=[classification_reviewed_by])
+
+
+class ClinicalDocumentAddendum(TimestampMixin, Base):
+    __tablename__ = "clinical_document_addenda"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    original_document_id: Mapped[int] = mapped_column(ForeignKey("clinical_documents.id", ondelete="CASCADE"), index=True)
+    signed_report_id: Mapped[int | None] = mapped_column(ForeignKey("signed_clinical_reports.id", ondelete="RESTRICT"), index=True)
+    original_document_type: Mapped[str] = mapped_column(String(80), default="clinical_document", index=True)
+    patient_id: Mapped[int | None] = mapped_column(ForeignKey("patients.id"), index=True)
+    institution_id: Mapped[int | None] = mapped_column(ForeignKey("institutions.id"), index=True)
+    clinic_id: Mapped[int | None] = mapped_column(ForeignKey("clinics.id"), index=True)
+    author_user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    reason: Mapped[str] = mapped_column(Text)
+    content: Mapped[str] = mapped_column(Text)
+    status: Mapped[str] = mapped_column(String(40), default="draft", index=True)
+    signed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), index=True)
+    signed_by_user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), index=True)
+    original_document: Mapped[ClinicalDocument] = relationship()
+    signed_report: Mapped["SignedClinicalReport | None"] = relationship()
+    patient: Mapped[Patient | None] = relationship()
+    institution: Mapped[Institution | None] = relationship()
+    clinic: Mapped[Clinic | None] = relationship()
+    author_user: Mapped[User] = relationship(foreign_keys=[author_user_id])
+    signed_by_user: Mapped[User | None] = relationship(foreign_keys=[signed_by_user_id])
 
 
 class PatientClinicalSummaryRecord(TimestampMixin, Base):
@@ -412,6 +561,7 @@ class JourneyEncounter(TimestampMixin, Base):
     __tablename__ = "journey_encounters"
     id: Mapped[int] = mapped_column(primary_key=True)
     journey_id: Mapped[int] = mapped_column(ForeignKey("patient_journeys.id", ondelete="CASCADE"), unique=True, index=True)
+    clinic_id: Mapped[int | None] = mapped_column(ForeignKey("clinics.id"), index=True)
     clinical_episode_id: Mapped[int | None] = mapped_column(ForeignKey("clinical_episodes.id", ondelete="SET NULL"), index=True)
     status: Mapped[str] = mapped_column(String(40), default="in_progress", index=True)
     anamnesis: Mapped[str | None] = mapped_column(Text)
@@ -428,6 +578,7 @@ class JourneyEncounter(TimestampMixin, Base):
     completed_by: Mapped[int | None] = mapped_column(ForeignKey("users.id"))
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     journey: Mapped[PatientJourney] = relationship()
+    clinic: Mapped[Clinic | None] = relationship()
 
 
 class ClinicalFinding(TimestampMixin, Base):
@@ -447,6 +598,7 @@ class ClinicalFinding(TimestampMixin, Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     patient_id: Mapped[int] = mapped_column(ForeignKey("patients.id"), index=True)
+    institution_id: Mapped[int | None] = mapped_column(ForeignKey("institutions.id", ondelete="RESTRICT"), index=True)
     source_document_id: Mapped[int | None] = mapped_column(ForeignKey("clinical_documents.id"), index=True)
     source_type: Mapped[str] = mapped_column(String(80), index=True)
     source_label: Mapped[str] = mapped_column(String(220))
@@ -462,6 +614,7 @@ class ClinicalFinding(TimestampMixin, Base):
     schema_version: Mapped[str] = mapped_column(String(80), default="clinical_finding.v1")
 
     patient: Mapped[Patient] = relationship()
+    institution: Mapped[Institution | None] = relationship()
     source_document: Mapped[ClinicalDocument | None] = relationship()
     reviewer: Mapped[User | None] = relationship()
 
@@ -483,6 +636,7 @@ class ClinicalOpenQuestion(TimestampMixin, Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     patient_id: Mapped[int] = mapped_column(ForeignKey("patients.id"), index=True)
+    institution_id: Mapped[int | None] = mapped_column(ForeignKey("institutions.id", ondelete="RESTRICT"), index=True)
     finding_id: Mapped[int | None] = mapped_column(ForeignKey("clinical_findings.id"), index=True)
     source_document_id: Mapped[int | None] = mapped_column(ForeignKey("clinical_documents.id"), index=True)
     source_type: Mapped[str] = mapped_column(String(80), index=True)
@@ -498,6 +652,7 @@ class ClinicalOpenQuestion(TimestampMixin, Base):
     schema_version: Mapped[str] = mapped_column(String(80), default="clinical_open_question.v1")
 
     patient: Mapped[Patient] = relationship()
+    institution: Mapped[Institution | None] = relationship()
     finding: Mapped[ClinicalFinding | None] = relationship()
     source_document: Mapped[ClinicalDocument | None] = relationship()
     reviewer: Mapped[User | None] = relationship()
@@ -524,6 +679,7 @@ class Appointment(TimestampMixin, Base):
     service_id: Mapped[int] = mapped_column(ForeignKey("services.id"))
     provider_id: Mapped[int] = mapped_column(ForeignKey("providers.id"))
     room_id: Mapped[int] = mapped_column(ForeignKey("rooms.id"))
+    clinic_id: Mapped[int | None] = mapped_column(ForeignKey("clinics.id"), index=True)
     episode_id: Mapped[int | None] = mapped_column(ForeignKey("clinical_episodes.id"))
     date: Mapped[date] = mapped_column(Date, index=True)
     start_time: Mapped[time] = mapped_column(Time)
@@ -540,6 +696,7 @@ class Appointment(TimestampMixin, Base):
     service: Mapped[Service] = relationship()
     provider: Mapped[Provider] = relationship()
     room: Mapped[Room] = relationship()
+    clinic: Mapped[Clinic | None] = relationship()
     episode: Mapped[ClinicalEpisode | None] = relationship()
 
 
@@ -549,6 +706,7 @@ class PatientJourney(TimestampMixin, Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     patient_id: Mapped[int] = mapped_column(ForeignKey("patients.id"), index=True)
     appointment_id: Mapped[int] = mapped_column(ForeignKey("appointments.id"), unique=True, index=True)
+    clinic_id: Mapped[int | None] = mapped_column(ForeignKey("clinics.id"), index=True)
     package_version_id: Mapped[int | None] = mapped_column(ForeignKey("service_package_versions.id"), index=True)
     package_booking_key: Mapped[str | None] = mapped_column(String(160), unique=True, index=True)
     intake_channel: Mapped[str] = mapped_column(String(30), index=True)
@@ -565,6 +723,7 @@ class PatientJourney(TimestampMixin, Base):
     updated_by: Mapped[int | None] = mapped_column(ForeignKey("users.id"))
     patient: Mapped[Patient] = relationship()
     appointment: Mapped[Appointment] = relationship()
+    clinic: Mapped[Clinic | None] = relationship()
     activities: Mapped[list["JourneyActivity"]] = relationship(back_populates="journey", cascade="all, delete-orphan", order_by="JourneyActivity.sequence")
     events: Mapped[list["JourneyEvent"]] = relationship(back_populates="journey", cascade="all, delete-orphan", order_by="JourneyEvent.created_at")
     blockers: Mapped[list["JourneyBlocker"]] = relationship(back_populates="journey", cascade="all, delete-orphan", order_by="JourneyBlocker.created_at")
@@ -1200,6 +1359,7 @@ class LabTemplate(TimestampMixin, Base):
 class LabOrder(TimestampMixin, Base):
     __tablename__ = "lab_orders"
     id: Mapped[int] = mapped_column(primary_key=True)
+    institution_id: Mapped[int | None] = mapped_column(ForeignKey("institutions.id", ondelete="RESTRICT"), index=True)
     patient_id: Mapped[int] = mapped_column(ForeignKey("patients.id"), index=True)
     episode_id: Mapped[int | None] = mapped_column(ForeignKey("clinical_episodes.id"), index=True)
     appointment_id: Mapped[int | None] = mapped_column(ForeignKey("appointments.id"), index=True)
@@ -1246,6 +1406,7 @@ class LabResult(TimestampMixin, Base):
 class Therapy(TimestampMixin, Base):
     __tablename__ = "therapies"
     id: Mapped[int] = mapped_column(primary_key=True)
+    institution_id: Mapped[int | None] = mapped_column(ForeignKey("institutions.id", ondelete="RESTRICT"), index=True)
     patient_id: Mapped[int] = mapped_column(ForeignKey("patients.id"), index=True)
     episode_id: Mapped[int | None] = mapped_column(ForeignKey("clinical_episodes.id"), index=True)
     parent_therapy_id: Mapped[int | None] = mapped_column(ForeignKey("therapies.id"), index=True)
@@ -1273,6 +1434,8 @@ class ApiKey(TimestampMixin, Base):
     name: Mapped[str] = mapped_column(String(120))
     key_hash: Mapped[str] = mapped_column(String(255), unique=True)
     scopes: Mapped[list[str]] = mapped_column(JSON, default=list)
+    clinic_id: Mapped[int | None] = mapped_column(ForeignKey("clinics.id", ondelete="RESTRICT"), index=True)
+    institution_id: Mapped[int | None] = mapped_column(ForeignKey("institutions.id", ondelete="RESTRICT"), index=True)
     active: Mapped[bool] = mapped_column(Boolean, default=True)
     expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     last_used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
@@ -1281,6 +1444,9 @@ class ApiKey(TimestampMixin, Base):
 class AuditLog(Base):
     __tablename__ = "audit_logs"
     id: Mapped[int] = mapped_column(primary_key=True)
+    scope_type: Mapped[str | None] = mapped_column(String(40), index=True)
+    clinic_id: Mapped[int | None] = mapped_column(ForeignKey("clinics.id", ondelete="RESTRICT"), index=True)
+    institution_id: Mapped[int | None] = mapped_column(ForeignKey("institutions.id", ondelete="RESTRICT"), index=True)
     actor_type: Mapped[str] = mapped_column(String(40), default="system", index=True)
     actor_user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"))
     actor_api_key_id: Mapped[int | None] = mapped_column(ForeignKey("api_keys.id"))
@@ -1293,6 +1459,10 @@ class AuditLog(Base):
     request_id: Mapped[str | None] = mapped_column(String(80), index=True)
     ip_address: Mapped[str | None] = mapped_column(String(80))
     user_agent: Mapped[str | None] = mapped_column(Text)
+    occurrence_count: Mapped[int] = mapped_column(Integer, default=1, server_default="1")
+    first_seen_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    last_seen_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), index=True)
+    aggregation_key: Mapped[str | None] = mapped_column(String(64), unique=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), index=True)
 
 
@@ -1410,6 +1580,7 @@ class Invoice(TimestampMixin, Base):
     __tablename__ = "invoices"
     id: Mapped[int] = mapped_column(primary_key=True)
     patient_id: Mapped[int] = mapped_column(ForeignKey("patients.id"))
+    clinic_id: Mapped[int | None] = mapped_column(ForeignKey("clinics.id"), index=True)
     appointment_id: Mapped[int | None] = mapped_column(ForeignKey("appointments.id"))
     journey_id: Mapped[int | None] = mapped_column(ForeignKey("patient_journeys.id"), unique=True, index=True)
     invoice_number: Mapped[str] = mapped_column(String(80), unique=True, index=True)
@@ -1429,6 +1600,7 @@ class Invoice(TimestampMixin, Base):
     fiscalized_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     notes: Mapped[str | None] = mapped_column(Text)
     patient: Mapped[Patient] = relationship()
+    clinic: Mapped[Clinic | None] = relationship()
     appointment: Mapped[Appointment | None] = relationship()
     lines: Mapped[list["InvoiceLine"]] = relationship(cascade="all, delete-orphan", back_populates="invoice")
     payments: Mapped[list["PaymentTransaction"]] = relationship(cascade="all, delete-orphan", back_populates="invoice")

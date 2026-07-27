@@ -3,7 +3,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session, joinedload, selectinload
 
 from app.audit.service import audit, snapshot
-from app.auth.dependencies import Actor, require_permission
+from app.auth.dependencies import CurrentUserContext, require_active_clinic
 from app.core.database import get_db
 from app.models.domain import JourneyCheckIn, JourneyCheckInItem, PatientJourney
 from app.schemas.journey_check_in import CheckInItemUpdate, CheckInMedicalDisposition, CheckInOut, ReceptionCheckInComplete
@@ -20,16 +20,17 @@ def checkin_query():
     return select(JourneyCheckIn).options(selectinload(JourneyCheckIn.items))
 
 
-def get_journey(db, id):
-    item = db.scalar(journey_query().where(PatientJourney.id == id))
+def get_journey(db, id, clinic_id):
+    item = db.scalar(journey_query().where(PatientJourney.id == id, PatientJourney.clinic_id == clinic_id))
     if not item:
         raise HTTPException(404, detail="Tijek pacijenta nije pronađen")
     return item
 
 
 @router.post("/{journey_id}/check-in", response_model=CheckInOut)
-def begin(journey_id: int, request: Request, db: Session = Depends(get_db), actor: Actor = Depends(require_permission("checkin.update"))):
-    journey = get_journey(db, journey_id)
+def begin(journey_id: int, request: Request, db: Session = Depends(get_db), context: CurrentUserContext = Depends(require_active_clinic("checkin.update"))):
+    actor = context.actor
+    journey = get_journey(db, journey_id, context.active_clinic_id)
     before = snapshot(journey)
     item = start_check_in(db, journey, actor, request)
     audit(db, "checkin_started", "PatientJourney", journey.id, "Započeta prijemna provjera", actor.user_id, actor.actor_type, actor.api_key_id, before, snapshot(journey), request)
@@ -38,7 +39,8 @@ def begin(journey_id: int, request: Request, db: Session = Depends(get_db), acto
 
 
 @router.get("/{journey_id}/check-in", response_model=CheckInOut)
-def detail(journey_id: int, db: Session = Depends(get_db), actor: Actor = Depends(require_permission("journey.read"))):
+def detail(journey_id: int, db: Session = Depends(get_db), context: CurrentUserContext = Depends(require_active_clinic("journey.read"))):
+    get_journey(db, journey_id, context.active_clinic_id)
     item = db.scalar(checkin_query().where(JourneyCheckIn.journey_id == journey_id))
     if not item:
         raise HTTPException(404, detail="Prijemna provjera nije započeta")
@@ -46,8 +48,9 @@ def detail(journey_id: int, db: Session = Depends(get_db), actor: Actor = Depend
 
 
 @router.patch("/{journey_id}/check-in/items/{item_id}", response_model=CheckInOut)
-def change_item(journey_id: int, item_id: int, payload: CheckInItemUpdate, request: Request, db: Session = Depends(get_db), actor: Actor = Depends(require_permission("checkin.update"))):
-    journey = get_journey(db, journey_id)
+def change_item(journey_id: int, item_id: int, payload: CheckInItemUpdate, request: Request, db: Session = Depends(get_db), context: CurrentUserContext = Depends(require_active_clinic("checkin.update"))):
+    actor = context.actor
+    journey = get_journey(db, journey_id, context.active_clinic_id)
     check_in = db.scalar(checkin_query().where(JourneyCheckIn.journey_id == journey_id))
     item = db.get(JourneyCheckInItem, item_id)
     if not check_in or not item or item.check_in_id != check_in.id:
@@ -60,8 +63,9 @@ def change_item(journey_id: int, item_id: int, payload: CheckInItemUpdate, reque
 
 
 @router.post("/{journey_id}/check-in/confirm-administrative", response_model=CheckInOut)
-def confirm_administrative(journey_id: int, request: Request, db: Session = Depends(get_db), actor: Actor = Depends(require_permission("checkin.update"))):
-    journey = get_journey(db, journey_id)
+def confirm_administrative(journey_id: int, request: Request, db: Session = Depends(get_db), context: CurrentUserContext = Depends(require_active_clinic("checkin.update"))):
+    actor = context.actor
+    journey = get_journey(db, journey_id, context.active_clinic_id)
     check_in = db.scalar(checkin_query().where(JourneyCheckIn.journey_id == journey_id))
     if not check_in:
         raise HTTPException(404, detail="Prijemna provjera nije započeta")
@@ -79,8 +83,9 @@ def confirm_administrative(journey_id: int, request: Request, db: Session = Depe
 
 
 @router.post("/{journey_id}/check-in/complete-reception", response_model=CheckInOut)
-def complete_reception(journey_id: int, payload: ReceptionCheckInComplete, request: Request, db: Session = Depends(get_db), actor: Actor = Depends(require_permission("checkin.update"))):
-    journey = get_journey(db, journey_id)
+def complete_reception(journey_id: int, payload: ReceptionCheckInComplete, request: Request, db: Session = Depends(get_db), context: CurrentUserContext = Depends(require_active_clinic("checkin.update"))):
+    actor = context.actor
+    journey = get_journey(db, journey_id, context.active_clinic_id)
     before = snapshot(journey)
     check_in = db.scalar(checkin_query().where(JourneyCheckIn.journey_id == journey_id))
     if not check_in:
@@ -118,8 +123,9 @@ def complete_reception(journey_id: int, payload: ReceptionCheckInComplete, reque
 
 
 @router.post("/{journey_id}/check-in/items/{item_id}/medical-disposition", response_model=CheckInOut)
-def medical_disposition(journey_id: int, item_id: int, payload: CheckInMedicalDisposition, request: Request, db: Session = Depends(get_db), actor: Actor = Depends(require_permission("checkin.clinical_review"))):
-    journey = get_journey(db, journey_id)
+def medical_disposition(journey_id: int, item_id: int, payload: CheckInMedicalDisposition, request: Request, db: Session = Depends(get_db), context: CurrentUserContext = Depends(require_active_clinic("checkin.clinical_review"))):
+    actor = context.actor
+    journey = get_journey(db, journey_id, context.active_clinic_id)
     check_in = db.scalar(checkin_query().where(JourneyCheckIn.journey_id == journey_id))
     item = db.get(JourneyCheckInItem, item_id)
     if not check_in or not item or item.check_in_id != check_in.id:

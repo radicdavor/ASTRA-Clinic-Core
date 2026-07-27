@@ -87,7 +87,7 @@ def test_gate_summary_is_not_source_of_truth(client, db, auth_setup):
     summary = client.get(f"/api/patients/{p.id}/clinical-summary", headers=headers)
     assert summary.status_code == 200
     body = summary.json()
-    assert body["reviewed_summary"]["id"] == record.id
+    assert body["reviewed_summary"] is None
     assert_no_official_knowledge(body)
 
 
@@ -150,8 +150,9 @@ def test_gate_evidence_timeline_read_only(client, db, auth_setup):
 
     timeline = client.get(f"/api/clinical-documents/{doc.id}/evidence-timeline", headers=headers)
     assert timeline.status_code == 200
-    after_document = client.get(f"/api/clinical-documents/{doc.id}", headers=headers).json()
     assert db.query(AuditLog).count() == before_audit_count
+    after_document = client.get(f"/api/clinical-documents/{doc.id}", headers=headers).json()
+    assert db.query(AuditLog).count() == before_audit_count + 1
     assert after_document["review_status"] == before_document["review_status"]
     assert after_document["ai_extraction_status"] == before_document["ai_extraction_status"]
     assert timeline.json()[0]["knowledge_impact"] == "may_enable_official_knowledge"

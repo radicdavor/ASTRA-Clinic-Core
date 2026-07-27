@@ -83,6 +83,13 @@ export type ClinicalDecisionTimelineItem = {
   created_at: string;
 };
 
+export type ClinicalDocumentPatientIdentity = {
+  id: number;
+  first_name: string;
+  last_name: string;
+  date_of_birth?: string | null;
+};
+
 export type ClinicalDocument = {
   id: number;
   patient_id: number;
@@ -101,14 +108,35 @@ export type ClinicalDocument = {
   ai_extraction_generated_at?: string | null;
   ai_extraction_updated_at?: string | null;
   physician_reviewed: boolean;
-  review_status: "draft" | "extracted" | "needs_physician_review" | "reviewed" | "rejected" | "superseded";
+  review_status: "draft" | "extracted" | "needs_physician_review" | "reviewed" | "rejected" | "superseded" | "signed";
+  is_clinical_record?: boolean;
+  record_classification?: "clinical" | "administrative" | "financial" | "unclassified" | string;
   reviewed_by?: number | null;
   reviewed_at?: string | null;
   attachment_path?: string | null;
   appointment_id?: number | null;
-  patient?: Patient;
+  patient?: ClinicalDocumentPatientIdentity;
   created_at: string;
   updated_at: string;
+  can_edit?: boolean;
+  can_review?: boolean;
+  can_add_addendum?: boolean;
+};
+
+export type UnclassifiedDocumentReview = {
+  id: number;
+  patient_id: number;
+  clinic_id: number;
+  institution_id: number;
+  title: string;
+  document_type: string;
+  source_type: string;
+  document_date?: string | null;
+  received_at?: string | null;
+  created_at: string;
+  review_status: string;
+  record_classification: "unclassified";
+  patient: ClinicalDocumentPatientIdentity;
 };
 
 export type PatientKnowledgeSource = {
@@ -144,9 +172,9 @@ export type WorkflowTask = {
   responsible_role?: string | null;
   template_id?: number | null;
   completed_at?: string | null;
-  patient?: Patient;
-  episode?: ClinicalEpisode | null;
-  provider?: Provider | null;
+  patient?: Pick<Patient, "id" | "first_name" | "last_name" | "date_of_birth">;
+  episode?: Pick<ClinicalEpisode, "id" | "title" | "episode_type" | "status"> | null;
+  provider?: Pick<Provider, "id" | "full_name" | "specialty" | "staff_role" | "clinic_id"> | null;
   checklist: WorkflowChecklistItem[];
   created_at: string;
   updated_at: string;
@@ -206,15 +234,44 @@ export type Appointment = {
   duration_minutes: number;
   status: string;
   source: string;
-  notes?: string;
   arrived_at?: string | null;
   identity_verified_at?: string | null;
   identity_verified_by?: number | null;
-  patient?: Patient;
-  service?: Service;
-  provider?: Provider;
-  room?: Room;
-  episode?: ClinicalEpisode | null;
+  patient?: Omit<Patient, "notes">;
+  service?: Pick<Service, "id" | "name" | "code" | "duration_minutes">;
+  provider?: Pick<Provider, "id" | "full_name" | "specialty" | "staff_role" | "clinic_id">;
+  room?: Pick<Room, "id" | "name" | "type" | "clinic_id">;
+};
+
+export type EpisodeAppointmentOperational = {
+  id: number;
+  clinic_id: number;
+  service_id: number;
+  provider_id: number;
+  room_id: number;
+  date: string;
+  start_time: string;
+  end_time: string;
+  duration_minutes: number;
+  status: string;
+  service?: Pick<Service, "id" | "name" | "code" | "duration_minutes"> | null;
+  provider?: Pick<Provider, "id" | "full_name" | "specialty" | "staff_role" | "clinic_id"> | null;
+  room?: Pick<Room, "id" | "name" | "type" | "clinic_id"> | null;
+};
+
+export type PatientAppointmentAvailability = {
+  appointment_id: number;
+  patient_id: number;
+  date: string;
+  start_time: string;
+  end_time: string;
+  status: string;
+  clinic: {
+    id?: number | null;
+    name?: string | null;
+  };
+  service_name?: string | null;
+  provider_name?: string | null;
 };
 
 export type ClinicalReadinessPreviewItem = {

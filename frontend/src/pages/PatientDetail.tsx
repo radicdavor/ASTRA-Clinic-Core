@@ -12,7 +12,7 @@ import { WorkspaceSection } from "../components/workspace/WorkspaceSection";
 import { WorkspaceTabs } from "../components/workspace/WorkspaceTabs";
 import { WorkflowTaskPanel } from "../components/WorkflowTaskPanel";
 import { useApi } from "../hooks/useApi";
-import { Appointment, AuditLog, ClinicalDocument, ClinicalEvidenceTimelineEventPreview, ClinicalEvidenceTimelineListResponse, ClinicalFindingListResponse, ClinicalFindingReadItem, Invoice, LabOrder, Patient, PatientClinicalSummary, PatientClinicalSummaryRecord, PatientKnowledgeItem, Therapy } from "../types";
+import { AuditLog, ClinicalDocument, ClinicalEvidenceTimelineEventPreview, ClinicalEvidenceTimelineListResponse, ClinicalFindingListResponse, ClinicalFindingReadItem, Invoice, LabOrder, Patient, PatientAppointmentAvailability, PatientClinicalSummary, PatientClinicalSummaryRecord, PatientKnowledgeItem, Therapy } from "../types";
 import { formatDate, formatDateTime } from "../utils/date";
 import { formatPatientIdentity, formatPatientName } from "../utils/patientIdentity";
 import { aiExtractionStatusLabel, documentTypeLabel, reviewStatusLabel, sourceTypeLabel } from "./ClinicalDocuments";
@@ -206,7 +206,7 @@ export function PatientDetail() {
   const clinicalSummary = useApi<PatientClinicalSummary | null>(`/api/patients/${id}/clinical-summary`, null);
   const clinicalFindings = useApi<ClinicalFindingListResponse>(`/api/patients/${id}/clinical-findings`, { patient_id: Number(id), findings: [], count: 0, is_read_only: true, warning: "" });
   const clinicalTimeline = useApi<ClinicalEvidenceTimelineListResponse>(`/api/patients/${id}/clinical-evidence-timeline`, { patient_id: Number(id), events: [], count: 0, is_read_only: true, warning: "" });
-  const appointments = useApi<Appointment[]>(`/api/patients/${id}/appointments`, []);
+  const appointments = useApi<PatientAppointmentAvailability[]>(`/api/patients/${id}/appointments`, []);
   const invoices = useApi<Invoice[]>(`/api/patients/${id}/invoices`, []);
   const labOrders = useApi<LabOrder[]>(`/api/laboratory/orders?patient_id=${id}`, []);
   const therapies = useApi<Therapy[]>(`/api/therapies?patient_id=${id}`, []);
@@ -217,6 +217,7 @@ export function PatientDetail() {
   const duplicates = useApi<Patient[]>(duplicatePath, []);
   const duplicateCandidates = duplicates.data.filter((candidate) => candidate.id !== patient.data?.id);
   const sortedAppointments = [...appointments.data].sort((a, b) => `${a.date}T${a.start_time}`.localeCompare(`${b.date}T${b.start_time}`));
+  const appointmentRows = appointments.data.map((appointment) => ({ ...appointment, id: appointment.appointment_id }));
   const today = new Date().toISOString().slice(0, 10);
   const lastAppointment = [...sortedAppointments].reverse().find((appointment) => appointment.date <= today);
   const nextAppointment = sortedAppointments.find((appointment) => appointment.date >= today && !["completed", "cancelled", "no_show"].includes(appointment.status));
@@ -458,12 +459,12 @@ export function PatientDetail() {
                 id: "appointments",
                 label: "Termini",
                 content: (
-                  <DataTable rows={appointments.data} columns={[
+                  <DataTable rows={appointmentRows} columns={[
                     { header: "Datum", render: (row) => formatDate(row.date) },
                     { header: "Vrijeme", render: (row) => `${row.start_time.slice(0, 5)} - ${row.end_time.slice(0, 5)}` },
-                    { header: "Usluga", render: (row) => row.service?.name ?? row.service_id },
+                    { header: "Usluga", render: (row) => row.service_name ?? "-" },
+                    { header: "Klinika", render: (row) => row.clinic.name ?? "-" },
                     { header: "Status", render: (row) => <StatusBadge status={row.status} /> },
-                    { header: "Detalj", render: (row) => <Link to={`/appointments/${row.id}`}>Otvori</Link> }
                   ]} />
                 )
               },

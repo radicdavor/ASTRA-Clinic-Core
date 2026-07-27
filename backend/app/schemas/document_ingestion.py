@@ -1,7 +1,9 @@
-from datetime import datetime
+from datetime import date, datetime
 from decimal import Decimal
 
 from pydantic import BaseModel, ConfigDict
+
+from app.schemas.common import ClinicalDocumentPatientIdentityOut
 
 
 class DocumentIngestionOut(BaseModel):
@@ -24,6 +26,8 @@ class DocumentIngestionOut(BaseModel):
     classification_confidence: Decimal | None
     received_at: datetime | None
     review_status: str
+    is_clinical_record: bool
+    record_classification: str
 
 
 class DocumentJobOut(BaseModel):
@@ -40,3 +44,23 @@ class DocumentJobOut(BaseModel):
     queued_at: datetime
     started_at: datetime | None
     completed_at: datetime | None
+
+
+class UnclassifiedDocumentReviewOut(BaseModel):
+    """Minimum metadata needed to classify an untrusted source document."""
+
+    model_config = ConfigDict(from_attributes=True, extra="forbid")
+
+    id: int
+    patient_id: int
+    clinic_id: int
+    institution_id: int
+    title: str
+    document_type: str
+    source_type: str
+    document_date: date | None
+    received_at: datetime | None
+    created_at: datetime
+    review_status: str
+    record_classification: str
+    patient: ClinicalDocumentPatientIdentityOut

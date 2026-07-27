@@ -5,6 +5,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.audit.service import audit
+from app.auth.dependencies import Actor
 from app.models.domain import (
     Appointment,
     ClinicalReadinessReviewAcknowledgment,
@@ -131,7 +132,11 @@ def create_clinical_readiness_review_acknowledgment(
     if not actor:
         raise LookupError("Actor user nije pronaden")
 
-    preview = build_clinical_readiness_preview(db, appointment)
+    preview = build_clinical_readiness_preview(
+        db,
+        appointment,
+        actor=Actor(actor_type="user", user=actor),
+    )
     preview_signal_keys = {item.key for item in preview.items}
     if cleaned_signal_key not in preview_signal_keys:
         raise ValueError("Advisory signal nije prepoznat u ovom kontekstu")

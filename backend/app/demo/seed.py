@@ -8,6 +8,7 @@ from app.core.security import hash_password
 from app.models.domain import (
     Appointment,
     Clinic,
+    ClinicMembership,
     ClinicalDocument,
     ClinicalEpisode,
     ClinicalPlan,
@@ -15,6 +16,7 @@ from app.models.domain import (
     InventoryItem,
     JourneyActivity,
     Patient,
+    PatientClinicAssociation,
     PatientJourney,
     PatientClinicalSummaryRecord,
     Permission,
@@ -59,6 +61,7 @@ def ensure_demo_user(db, role_name: str, email: str, permissions_by_name):
     if role is None:
         role = Role(name=f"demo_{role_name}", description=f"Demo {role_name}")
         db.add(role)
+    role.professional_category = "medical_staff" if role_name in {"physician", "nurse"} else "administrative"
     role.permissions = [permissions_by_name[name] for name in ROLE_PERMISSIONS[role_name] if name in permissions_by_name]
     user = db.scalar(select(User).where(User.email == email))
     if user is None:
@@ -72,13 +75,33 @@ def ensure_demo_user(db, role_name: str, email: str, permissions_by_name):
 def main() -> None:
     with SessionLocal() as db:
         permissions = ensure_permissions(db)
+        demo_users = {}
         for role_name, email in DEMO_EMAILS.items():
-            ensure_demo_user(db, role_name, email, permissions)
+            demo_users[role_name] = ensure_demo_user(db, role_name, email, permissions)
 
         gastro_clinic = db.scalar(select(Clinic).where(Clinic.name == "Gastroenterologija")) or Clinic(name="Gastroenterologija")
         aesthetic_clinic = db.scalar(select(Clinic).where(Clinic.name == "Estetika")) or Clinic(name="Estetika")
         db.add_all([gastro_clinic, aesthetic_clinic])
         db.flush()
+        for user in demo_users.values():
+            for clinic in (gastro_clinic, aesthetic_clinic):
+                membership = db.scalar(
+                    select(ClinicMembership).where(
+                        ClinicMembership.user_id == user.id,
+                        ClinicMembership.clinic_id == clinic.id,
+                    )
+                )
+                if membership is None:
+                    db.add(
+                        ClinicMembership(
+                            user_id=user.id,
+                            clinic_id=clinic.id,
+                            active=True,
+                            created_by_user_id=demo_users["admin"].id,
+                        )
+                    )
+                else:
+                    membership.active = True
         patient = db.scalar(select(Patient).where(Patient.email.in_([DEMO_PATIENT_EMAIL, LEGACY_DEMO_PATIENT_EMAIL]))) or Patient(first_name="Demo", last_name="Pacijent", email=DEMO_PATIENT_EMAIL)
         patient.email = DEMO_PATIENT_EMAIL
         patient.email_verified_at = patient.email_verified_at or datetime.now(timezone.utc)
@@ -94,6 +117,23 @@ def main() -> None:
         supplier = db.scalar(select(Supplier).where(Supplier.name == "Demo dobavljac")) or Supplier(name="Demo dobavljac")
         db.add_all([patient, provider, room, service, location, item, supplier])
         db.flush()
+        patient_association = db.scalar(
+            select(PatientClinicAssociation).where(
+                PatientClinicAssociation.patient_id == patient.id,
+                PatientClinicAssociation.clinic_id == gastro_clinic.id,
+            )
+        )
+        if patient_association is None:
+            db.add(
+                PatientClinicAssociation(
+                    patient_id=patient.id,
+                    clinic_id=gastro_clinic.id,
+                    active=True,
+                    created_by_user_id=demo_users["admin"].id,
+                )
+            )
+        else:
+            patient_association.active = True
         if service not in room.allowed_services:
             room.allowed_services.append(service)
 
@@ -369,13 +409,18 @@ def main() -> None:
             if document is None:
                 document = ClinicalDocument(
                     patient_id=patient.id,
+                    clinic_id=gastro_clinic.id,
+                    institution_id=gastro_clinic.institution_id,
                     review_status=review_status,
                     ai_extraction_status=extraction_status,
                     ai_extraction_generated_at=extraction_timestamp,
                     ai_extraction_updated_at=extraction_timestamp,
                     physician_reviewed=reviewed,
-                    reviewed_by=None,
+                    reviewed_by=demo_users["physician"].id if reviewed else None,
                     reviewed_at=extraction_timestamp if reviewed else None,
+                    record_classification="clinical",
+                    classification_reviewed_by=demo_users["physician"].id,
+                    classification_reviewed_at=extraction_timestamp,
                     **values,
                 )
                 db.add(document)
@@ -387,7 +432,11 @@ def main() -> None:
                 document.ai_extraction_generated_at = document.ai_extraction_generated_at or extraction_timestamp
                 document.ai_extraction_updated_at = extraction_timestamp
                 document.physician_reviewed = reviewed
+                document.reviewed_by = demo_users["physician"].id if reviewed else None
                 document.reviewed_at = extraction_timestamp if reviewed else None
+                document.record_classification = "clinical"
+                document.classification_reviewed_by = demo_users["physician"].id
+                document.classification_reviewed_at = extraction_timestamp
 
         reviewed_document_ids = [
             document.id

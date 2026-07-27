@@ -1,17 +1,85 @@
 from typing import Any
+from ipaddress import ip_address, ip_network
 
 from fastapi import Request
 from sqlalchemy.inspection import inspect
 from sqlalchemy.orm import Session
 
 from app.models.domain import AuditLog
+from app.core.config import get_settings
+
+
+SAFE_SNAPSHOT_FIELDS = frozenset(
+    {
+        "id",
+        "patient_id",
+        "clinic_id",
+        "institution_id",
+        "appointment_id",
+        "journey_id",
+        "episode_id",
+        "activity_id",
+        "service_id",
+        "provider_id",
+        "room_id",
+        "invoice_id",
+        "source_document_id",
+        "status",
+        "payment_status",
+        "billing_status",
+        "review_status",
+        "lifecycle_status",
+        "record_classification",
+        "active",
+        "physician_reviewed",
+        "date",
+        "start_time",
+        "end_time",
+        "duration_minutes",
+        "quantity",
+        "unit_price",
+        "total",
+        "total_amount",
+        "amount",
+        "method",
+        "paid_at",
+        "created_at",
+        "updated_at",
+        "closed_at",
+    }
+)
+
+def resolved_client_ip(request: Request | None) -> str | None:
+    if request is None or request.client is None:
+        return None
+    peer = request.client.host
+    try:
+        peer_address = ip_address(peer)
+        trusted = any(
+            peer_address in ip_network(network, strict=False)
+            for network in get_settings().trusted_proxy_network_list
+        )
+    except ValueError:
+        trusted = False
+    if not trusted:
+        return peer
+    forwarded = request.headers.get("x-real-ip") or request.headers.get("x-forwarded-for", "").split(",")[0].strip()
+    if not forwarded:
+        return peer
+    try:
+        return str(ip_address(forwarded))
+    except ValueError:
+        return peer
 
 
 def snapshot(obj: Any) -> dict[str, Any] | None:
+    """Return an audit-safe operational projection, never a full ORM serialization."""
     if obj is None:
         return None
     result: dict[str, Any] = {}
     for column in inspect(obj).mapper.column_attrs:
+        if column.key not in SAFE_SNAPSHOT_FIELDS:
+            continue
         value = getattr(obj, column.key)
         if hasattr(value, "isoformat"):
             value = value.isoformat()
@@ -33,9 +101,21 @@ def audit(
     before_json: dict[str, Any] | None = None,
     after_json: dict[str, Any] | None = None,
     request: Request | None = None,
-) -> None:
-    db.add(
-        AuditLog(
+    *,
+    scope_type: str = "unscoped",
+    clinic_id: int | None = None,
+    institution_id: int | None = None,
+) -> AuditLog:
+    if request is not None and scope_type == "unscoped":
+        request_clinic_id = getattr(request.state, "audit_clinic_id", None)
+        if request_clinic_id is not None:
+            scope_type = "clinic"
+            clinic_id = request_clinic_id
+            institution_id = getattr(request.state, "audit_institution_id", None)
+    event = AuditLog(
+            scope_type=scope_type,
+            clinic_id=clinic_id,
+            institution_id=institution_id,
             actor_type=actor_type,
             actor_user_id=actor_user_id,
             actor_api_key_id=actor_api_key_id,
@@ -46,7 +126,8 @@ def audit(
             after_json=after_json,
             summary=summary,
             request_id=getattr(request.state, "request_id", None) if request else None,
-            ip_address=request.client.host if request and request.client else None,
+            ip_address=resolved_client_ip(request),
             user_agent=request.headers.get("user-agent") if request else None,
         )
-    )
+    db.add(event)
+    return event

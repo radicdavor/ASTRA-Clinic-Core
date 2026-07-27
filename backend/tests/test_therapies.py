@@ -1,9 +1,9 @@
 from datetime import date
-from app.models.domain import AuditLog, Patient
+from app.models.domain import AuditLog, Patient, PatientClinicAssociation
 from tests.conftest import login_token
 
 def test_therapy_lifecycle_is_patient_scoped_and_audited(client,db,auth_setup):
-    patient=Patient(first_name="Demo",last_name="Terapija",date_of_birth=date(1985,2,3));db.add(patient);db.commit()
+    patient=Patient(first_name="Demo",last_name="Terapija",date_of_birth=date(1985,2,3));db.add(patient);db.flush();db.add(PatientClinicAssociation(patient_id=patient.id,clinic_id=auth_setup["clinic"].id));db.commit()
     headers={"Authorization":f"Bearer {login_token(client,'admin@test.local')}"}
     created=client.post("/api/therapies",headers=headers,json={"patient_id":patient.id,"name":"Demo terapija","instructions":"Jednom dnevno prema odluci liječnika","start_date":"2026-07-12","prescriber":"dr. Demo"})
     assert created.status_code==200 and created.json()["status"]=="active"
@@ -19,7 +19,7 @@ def test_therapy_lifecycle_is_patient_scoped_and_audited(client,db,auth_setup):
     assert {"create","update","stop"}.issubset(actions)
 
 def test_therapy_can_be_completed_and_renewed_as_new_record(client,db,auth_setup):
-    patient=Patient(first_name="Ana",last_name="Obnova",date_of_birth=date(1990,4,5));db.add(patient);db.commit()
+    patient=Patient(first_name="Ana",last_name="Obnova",date_of_birth=date(1990,4,5));db.add(patient);db.flush();db.add(PatientClinicAssociation(patient_id=patient.id,clinic_id=auth_setup["clinic"].id));db.commit()
     headers={"Authorization":f"Bearer {login_token(client,'admin@test.local')}"}
     source=client.post("/api/therapies",headers=headers,json={"patient_id":patient.id,"name":"Kontrolirana terapija","instructions":"Prema odluci liječnika","start_date":"2026-07-01"}).json()
     completed=client.post(f"/api/therapies/{source['id']}/complete",headers=headers,json={"note":"Provedeno prema planu"})

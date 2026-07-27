@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
-import { setSessionUser, setToken } from "../api/client";
+import { setSessionUser } from "../api/client";
 import { PatientJourneyWorkspace } from "./PatientJourneyWorkspace";
 
 const journey = {
@@ -30,8 +30,8 @@ function installFetch() {
   });
 }
 
-beforeEach(() => { localStorage.clear(); setToken("test-token"); setSessionUser({ id: 1, name: "Liječnik", email: "doctor@example.invalid", role: "demo_physician" }); installFetch(); });
-afterEach(() => { cleanup(); vi.restoreAllMocks(); localStorage.clear(); });
+beforeEach(() => { localStorage.clear(); sessionStorage.clear(); setSessionUser({ id: 1, name: "Liječnik", email: "doctor@example.invalid", role: "demo_physician" }); installFetch(); });
+afterEach(() => { cleanup(); vi.restoreAllMocks(); localStorage.clear(); sessionStorage.clear(); });
 
 describe("fokusirani radni prostor tijeka pacijenta", () => {
   test("prikazuje sljedeću radnju i samo trenutačnu fazu", async () => {
@@ -57,6 +57,22 @@ describe("fokusirani radni prostor tijeka pacijenta", () => {
     await screen.findByText("Pacijent čeka liječnika");
     await user.click(screen.getByText("Klinički kontekst"));
     expect(screen.getByRole("tab", { name: "Dokumenti" })).toBeTruthy();
+  });
+
+  test("izravni ulazak u pregled ne dohvaća podatke skrivenih faza", async () => {
+    render(<MemoryRouter initialEntries={["/journeys/32?focus=encounter"]}><Routes><Route path="/journeys/:id" element={<PatientJourneyWorkspace/>}/></Routes></MemoryRouter>);
+    await screen.findByText("Pregled pacijenta");
+    await waitFor(() => expect(globalThis.fetch).toHaveBeenCalledWith(expect.stringContaining("/encounter"), expect.anything()));
+
+    const urls = vi.mocked(globalThis.fetch).mock.calls.map(([input]) => String(input));
+    expect(urls.some(url => url.endsWith("/check-in"))).toBe(true);
+    expect(urls.some(url => url.endsWith("/public-config"))).toBe(true);
+    expect(urls.some(url => url.endsWith("/activity-preparation"))).toBe(false);
+    expect(urls.some(url => url.endsWith("/preparation"))).toBe(false);
+    expect(urls.some(url => url.endsWith("/closure"))).toBe(false);
+    expect(urls.some(url => url.endsWith("/inventory/items"))).toBe(false);
+    expect(urls.some(url => url.endsWith("/visit-documents"))).toBe(false);
+    expect(urls.some(url => url.endsWith("/pathology-cases"))).toBe(false);
   });
 
   test("promjena aktivnosti ne odbacuje nespremljeni klinički unos", async () => {

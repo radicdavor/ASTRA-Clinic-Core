@@ -6,7 +6,7 @@ from datetime import datetime
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.models.domain import AuditLog, ClinicalFinding, ClinicalOpenQuestion, ClinicalReadinessReviewAcknowledgment, ClinicalReadinessSnapshot
+from app.models.domain import Appointment, AuditLog, Clinic, ClinicalFinding, ClinicalOpenQuestion, ClinicalReadinessReviewAcknowledgment, ClinicalReadinessSnapshot
 from app.schemas.common import ClinicalEvidenceTimelineEventPreview, ClinicalEvidenceTimelineSourceReference
 
 
@@ -199,6 +199,7 @@ def list_patient_clinical_evidence_timeline(
     db: Session,
     *,
     patient_id: int,
+    institution_id: int,
     event_type: str | None = None,
     source_type: str | None = None,
     requires_review: bool | None = None,
@@ -208,17 +209,43 @@ def list_patient_clinical_evidence_timeline(
     events: list[ClinicalEvidenceTimelineEventPreview] = []
     events.extend(
         _finding_event(finding)
-        for finding in db.scalars(select(ClinicalFinding).where(ClinicalFinding.patient_id == patient_id)).all()
+        for finding in db.scalars(
+            select(ClinicalFinding).where(
+                ClinicalFinding.patient_id == patient_id,
+                ClinicalFinding.institution_id == institution_id,
+            )
+        ).all()
     )
     events.extend(
         _open_question_event(question)
-        for question in db.scalars(select(ClinicalOpenQuestion).where(ClinicalOpenQuestion.patient_id == patient_id)).all()
+        for question in db.scalars(
+            select(ClinicalOpenQuestion).where(
+                ClinicalOpenQuestion.patient_id == patient_id,
+                ClinicalOpenQuestion.institution_id == institution_id,
+            )
+        ).all()
     )
-    for snapshot in db.scalars(select(ClinicalReadinessSnapshot).where(ClinicalReadinessSnapshot.patient_id == patient_id)).all():
+    for snapshot in db.scalars(
+        select(ClinicalReadinessSnapshot)
+        .join(Appointment, Appointment.id == ClinicalReadinessSnapshot.appointment_id)
+        .join(Clinic, Clinic.id == Appointment.clinic_id)
+        .where(
+            ClinicalReadinessSnapshot.patient_id == patient_id,
+            Clinic.institution_id == institution_id,
+        )
+    ).all():
         events.extend(_snapshot_events(snapshot))
     events.extend(
         _acknowledgment_event(acknowledgment)
-        for acknowledgment in db.scalars(select(ClinicalReadinessReviewAcknowledgment).where(ClinicalReadinessReviewAcknowledgment.patient_id == patient_id)).all()
+        for acknowledgment in db.scalars(
+            select(ClinicalReadinessReviewAcknowledgment)
+            .join(Appointment, Appointment.id == ClinicalReadinessReviewAcknowledgment.appointment_id)
+            .join(Clinic, Clinic.id == Appointment.clinic_id)
+            .where(
+                ClinicalReadinessReviewAcknowledgment.patient_id == patient_id,
+                Clinic.institution_id == institution_id,
+            )
+        ).all()
     )
 
     if event_type is not None:

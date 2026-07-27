@@ -1,12 +1,55 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timezone
 
 from fastapi import HTTPException
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.orm import Session, joinedload
 
-from app.models.domain import Appointment, ClinicalDocument, Patient
+from app.models.domain import Appointment, ClinicalDocument, Patient, PatientClinicAssociation
+
+
+class DocumentClassificationConflict(RuntimeError):
+    pass
+
+
+def confirm_document_classification(
+    db: Session,
+    document: ClinicalDocument,
+    *,
+    record_classification: str,
+    reviewer_user_id: int,
+    note: str | None,
+    reviewed_at: datetime | None = None,
+) -> ClinicalDocument:
+    """Atomically transition one unclassified source exactly once."""
+    now = reviewed_at or datetime.now(timezone.utc)
+    provenance = dict(document.provenance_json or {})
+    provenance["classification_review"] = {
+        "record_classification": record_classification,
+        "note": note,
+        "reviewed_by": reviewer_user_id,
+        "reviewed_at": now.isoformat(),
+    }
+    transition = db.execute(
+        update(ClinicalDocument)
+        .where(
+            ClinicalDocument.id == document.id,
+            ClinicalDocument.record_classification == "unclassified",
+        )
+        .values(
+            record_classification=record_classification,
+            is_clinical_record=record_classification == "clinical",
+            classification_reviewed_by=reviewer_user_id,
+            classification_reviewed_at=now,
+            provenance_json=provenance,
+        )
+        .execution_options(synchronize_session=False)
+    )
+    if transition.rowcount != 1:
+        raise DocumentClassificationConflict
+    db.refresh(document)
+    return document
 
 
 def get_document_or_404(db: Session, document_id: int) -> ClinicalDocument:
@@ -20,16 +63,37 @@ def get_document_or_404(db: Session, document_id: int) -> ClinicalDocument:
     return document
 
 
-def validate_document_links(db: Session, patient_id: int, appointment_id: int | None) -> None:
-    if not db.get(Patient, patient_id):
-        raise HTTPException(404, detail="Pacijent nije pronaden")
+def validate_document_provenance_links(
+    db: Session,
+    *,
+    patient_id: int,
+    clinic_id: int,
+    appointment_id: int | None,
+) -> Appointment | None:
+    """Validate document ownership without disclosing a global patient match."""
+    patient = db.scalar(
+        select(Patient)
+        .join(PatientClinicAssociation, PatientClinicAssociation.patient_id == Patient.id)
+        .where(
+            Patient.id == patient_id,
+            PatientClinicAssociation.clinic_id == clinic_id,
+            PatientClinicAssociation.active.is_(True),
+        )
+    )
+    if patient is None:
+        raise HTTPException(404, detail="Pacijent nije pronađen")
     if appointment_id is None:
-        return
-    appointment = db.get(Appointment, appointment_id)
-    if not appointment:
+        return None
+    appointment = db.scalar(
+        select(Appointment).where(
+            Appointment.id == appointment_id,
+            Appointment.patient_id == patient_id,
+            Appointment.clinic_id == clinic_id,
+        )
+    )
+    if appointment is None:
         raise HTTPException(404, detail="Termin nije pronaden")
-    if appointment.patient_id != patient_id:
-        raise HTTPException(422, detail="Dokument i termin moraju pripadati istom pacijentu")
+    return appointment
 
 
 def extract_document_knowledge(document: ClinicalDocument) -> dict:

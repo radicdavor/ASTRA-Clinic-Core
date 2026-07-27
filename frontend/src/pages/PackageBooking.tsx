@@ -4,6 +4,7 @@ import { api } from "../api/client";
 import { DateInput } from "../components/DateInput";
 import { useApi } from "../hooks/useApi";
 import type { Patient, Provider, Room, Service } from "../types";
+import { getClinicToday } from "../utils/clinicTime";
 
 type PackageItem = { id: number; service_id: number; activity_key: string; activity_kind: string; sequence: number; duration_minutes: number; required: boolean; preparation_requirements: Array<{ label: string }> };
 type PackageVersion = { id: number; version: number; status: string; items: PackageItem[] };
@@ -14,7 +15,7 @@ function addMinutes(time: string, minutes: number) { const [h, m] = time.split("
 export function PackageBooking() {
   const navigate = useNavigate(); const packages = useApi<Package[]>("/api/service-packages", []); const services = useApi<Service[]>("/api/services", []); const providers = useApi<Provider[]>("/api/providers", []); const rooms = useApi<Room[]>("/api/rooms", []);
   const [query, setQuery] = useState(""); const patients = useApi<Patient[]>(query.length >= 2 ? `/api/patients?q=${encodeURIComponent(query)}` : "/api/patients?q=__none__", []); const [patient, setPatient] = useState<Patient | null>(null);
-  const [versionId, setVersionId] = useState(""); const [date, setDate] = useState(new Date().toISOString().slice(0, 10)); const [start, setStart] = useState("08:00"); const [assignments, setAssignments] = useState<Assignment[]>([]); const [preview, setPreview] = useState<any>(null); const [confirm, setConfirm] = useState(false); const [error, setError] = useState(""); const [idempotencyKey, setIdempotencyKey] = useState(() => crypto.randomUUID());
+  const [versionId, setVersionId] = useState(""); const [date, setDate] = useState(getClinicToday()); const [start, setStart] = useState("08:00"); const [assignments, setAssignments] = useState<Assignment[]>([]); const [preview, setPreview] = useState<any>(null); const [confirm, setConfirm] = useState(false); const [error, setError] = useState(""); const [idempotencyKey, setIdempotencyKey] = useState(() => crypto.randomUUID());
   const version = useMemo(() => packages.data.flatMap(item => item.versions).find(item => String(item.id) === versionId), [packages.data, versionId]);
   const selectedPackage = useMemo(() => packages.data.find(item => item.versions.some(version => String(version.id) === versionId)), [packages.data, versionId]);
   const estimatedPrice = useMemo(() => version?.items.reduce((sum, item) => sum + Number(services.data.find(service => service.id === item.service_id)?.price ?? 0), 0) ?? 0, [version, services.data]);

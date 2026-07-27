@@ -147,7 +147,8 @@ assertIncludes("src/utils/date.ts", "`${match[3]}. ${match[2]}. ${match[1]}.`");
   "src/pages/PurchaseOrders.tsx",
 ].forEach((file) => assertNotIncludes(file, "type=\"date\""));
 assertIncludes("src/api/client.ts", "Pacijent je spremljen.");
-assertIncludes("src/api/client.ts", "import.meta.env.DEV");
+assertIncludes("src/api/client.ts", "return window.location.origin");
+assertNotIncludes("src/api/client.ts", "window.location.hostname}:8000");
 assertIncludes("vite.config.ts", '"/api": "http://127.0.0.1:8000"');
 assertIncludes("vite.config.ts", '"/auth": "http://127.0.0.1:8000"');
 assertIncludes("src/pages/Clinics.tsx", "Organizacija klinika, prostorija i osoblja");
@@ -243,7 +244,7 @@ assertIncludes("src/pages/PatientDetail.tsx", "Zadnji termin");
 assertIncludes("src/pages/PatientDetail.tsx", "Otvoreni racuni");
 assertIncludes("src/pages/Patients.tsx", "/patients/${row.id}");
 assertIncludes("src/pages/AppointmentDetail.tsx", "/patients/${appointment.data.patient.id}");
-assertIncludes("src/pages/AppointmentDetail.tsx", "/episodes/${appointment.data.episode.id}");
+assertIncludes("src/pages/AppointmentDetail.tsx", "/episodes/${appointment.data.episode_id}");
 assertIncludes("src/pages/AppointmentDetail.tsx", "Termin nije povezan s klinickom epizodom.");
 assertIncludes("src/pages/AppointmentDetail.tsx", "Klinicka spremnost - preview");
 assertIncludes("src/pages/AppointmentDetail.tsx", "Read-only prikaz mogucih uvjeta za ovaj planirani klinicki cin. Ne donosi odluke i ne blokira postupak.");

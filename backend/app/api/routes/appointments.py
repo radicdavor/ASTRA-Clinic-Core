@@ -5,14 +5,15 @@ from sqlalchemy import or_, select
 from sqlalchemy.orm import Session, joinedload
 
 from app.audit.service import audit, snapshot
-from app.auth.dependencies import Actor, get_current_actor, require_permission
+from app.auth.dependencies import Actor, CurrentUserContext, actor_has_medical_staff_category, get_current_actor, require_active_clinic, require_medical_staff, require_permission
 from app.core.database import get_db
-from app.models.domain import Appointment, ClinicalEpisode, ClinicalReadinessReviewAcknowledgment, ClinicalReadinessSnapshot, Patient, Service
-from app.schemas.common import AppointmentCreate, AppointmentOut, AppointmentUpdate, ClinicalReadinessAcknowledgmentDetailResponse, ClinicalReadinessAcknowledgmentListResponse, ClinicalReadinessAcknowledgmentReadItem, ClinicalReadinessPreviewResponse, ClinicalReadinessSnapshotCaptureRequest, ClinicalReadinessSnapshotDetailResponse, ClinicalReadinessSnapshotHistoryItem, ClinicalReadinessSnapshotHistoryResponse, ClinicalReadinessSnapshotResponse, ClinicalReadinessSnapshotSupersedeRequest, ClinicalReadinessSnapshotSupersedeResponse, ErrorResponse
-from app.services.appointments import create_appointment_with_journey, validate_appointment_payload
+from app.models.domain import Appointment, ClinicalEpisode, ClinicalReadinessReviewAcknowledgment, ClinicalReadinessSnapshot, Patient, Provider, Room, Service
+from app.schemas.common import AppointmentCreate, AppointmentOperationalOut, AppointmentUpdate, ClinicalReadinessAcknowledgmentDetailResponse, ClinicalReadinessAcknowledgmentListResponse, ClinicalReadinessAcknowledgmentReadItem, ClinicalReadinessPreviewResponse, ClinicalReadinessSnapshotCaptureRequest, ClinicalReadinessSnapshotDetailResponse, ClinicalReadinessSnapshotHistoryItem, ClinicalReadinessSnapshotHistoryResponse, ClinicalReadinessSnapshotResponse, ClinicalReadinessSnapshotSupersedeRequest, ClinicalReadinessSnapshotSupersedeResponse, ErrorResponse
+from app.services.appointments import create_appointment_with_journey, resolve_appointment_episode_reference, validate_appointment_payload
 from app.services.clinical_readiness_preview import build_clinical_readiness_preview
 from app.services.clinical_readiness_acknowledgments import get_clinical_readiness_review_acknowledgment, list_clinical_readiness_review_acknowledgments, record_acknowledgment_read_denied_audit
 from app.services.clinical_readiness_snapshots import SnapshotIdempotencyConflict, capture_clinical_readiness_snapshot, supersede_clinical_readiness_snapshot
+from app.services.clinical_document_access import actor_institution_scope, institution_id_for_clinic
 
 ERROR_RESPONSES = {
     400: {"model": ErrorResponse},
@@ -41,8 +42,6 @@ def appointment_load_options():
         joinedload(Appointment.service),
         joinedload(Appointment.provider),
         joinedload(Appointment.room),
-        joinedload(Appointment.episode).joinedload(ClinicalEpisode.patient),
-        joinedload(Appointment.episode).joinedload(ClinicalEpisode.owner_provider),
     )
 
 
@@ -238,6 +237,18 @@ def _require_acknowledgment_read_actor(
             request=request,
         )
         raise HTTPException(403, detail="Nedostaje dozvola: clinical_readiness.acknowledgments.read")
+    if not actor_has_medical_staff_category(actor):
+        _record_acknowledgment_denied_read(
+            db,
+            actor=actor,
+            access_type=access_type,
+            denial_category="non_medical_staff",
+            route=route,
+            appointment_id=appointment_id,
+            acknowledgment_id=acknowledgment_id,
+            request=request,
+        )
+        raise HTTPException(403, detail="Kliničku spremnost smije koristiti samo ovlašteno medicinsko osoblje")
     return actor
 
 
@@ -252,12 +263,14 @@ def _get_acknowledgment_read_appointment_or_404(
     request: Request | None = None,
 ) -> Appointment:
     appointment = db.get(Appointment, appointment_id)
-    if not appointment:
+    institution_ids = actor_institution_scope(db, actor).institution_ids
+    appointment_institution_id = institution_id_for_clinic(db, appointment.clinic_id) if appointment else None
+    if not appointment or appointment_institution_id not in institution_ids:
         _record_acknowledgment_denied_read(
             db,
             actor=actor,
             access_type=access_type,
-            denial_category="appointment_not_found",
+            denial_category="appointment_not_found_or_out_of_scope",
             route=route,
             appointment_id=appointment_id,
             acknowledgment_id=acknowledgment_id,
@@ -267,30 +280,35 @@ def _get_acknowledgment_read_appointment_or_404(
     return appointment
 
 
-def validate_episode_for_patient(db: Session, episode_id: int | None, patient_id: int) -> ClinicalEpisode | None:
-    if episode_id is None:
-        return None
-    episode = db.get(ClinicalEpisode, episode_id)
-    if not episode:
-        raise HTTPException(404, detail="Klinicka epizoda nije pronadena")
-    if episode.patient_id != patient_id:
-        raise HTTPException(422, detail="Klinicka epizoda mora pripadati istom pacijentu kao termin")
-    return episode
+def validate_episode_for_patient(db: Session, episode_id: int | None, patient_id: int, context: CurrentUserContext) -> ClinicalEpisode | None:
+    return resolve_appointment_episode_reference(
+        db,
+        episode_id=episode_id,
+        patient_id=patient_id,
+        institution_id=context.active_clinic.institution_id if context.active_clinic else None,
+    )
 
 
-@router.post("/appointments", response_model=AppointmentOut)
+@router.post("/appointments", response_model=AppointmentOperationalOut)
 def create_appointment(
     payload: AppointmentCreate,
     request: Request,
     db: Session = Depends(get_db),
-    actor: Actor = Depends(require_permission("appointments.write")),
+    context: CurrentUserContext = Depends(require_active_clinic("appointments.write")),
 ):
-    appointment = create_appointment_with_journey(db, payload.model_dump(), actor, request)
+    data = payload.model_dump()
+    room = db.get(Room, data["room_id"])
+    if room is None:
+        raise HTTPException(404, detail="Soba nije pronadena")
+    if room.clinic_id is None or room.clinic_id != context.active_clinic_id:
+        raise HTTPException(403, detail="Termin se moze kreirati samo u aktivnoj klinici")
+    data["clinic_id"] = context.active_clinic_id
+    appointment = create_appointment_with_journey(db, data, context.actor, request)
     db.commit()
     return get_appointment_or_404(db, appointment.id)
 
 
-@router.get("/appointments", response_model=list[AppointmentOut])
+@router.get("/appointments", response_model=list[AppointmentOperationalOut])
 def list_appointments(
     date_from: date | None = None,
     date_to: date | None = None,
@@ -299,10 +317,16 @@ def list_appointments(
     provider_id: int | None = None,
     room_id: int | None = None,
     status: str | None = None,
+    limit: int = Query(default=200, ge=1, le=200),
     db: Session = Depends(get_db),
-    actor: Actor = Depends(require_permission("appointments.read")),
+    context: CurrentUserContext = Depends(require_active_clinic("appointments.read")),
 ):
-    stmt = select(Appointment).options(*appointment_load_options()).order_by(Appointment.date, Appointment.start_time)
+    stmt = (
+        select(Appointment)
+        .options(*appointment_load_options())
+        .where(Appointment.clinic_id == context.active_clinic_id)
+        .order_by(Appointment.date, Appointment.start_time, Appointment.id)
+    )
     if date_from:
         stmt = stmt.where(Appointment.date >= date_from)
     if date_to:
@@ -317,39 +341,54 @@ def list_appointments(
         stmt = stmt.join(Appointment.patient).where(or_(Patient.first_name.ilike(f"%{patient}%"), Patient.last_name.ilike(f"%{patient}%")))
     if service:
         stmt = stmt.join(Appointment.service).where(Service.name.ilike(f"%{service}%"))
-    return db.scalars(stmt).all()
+    return db.scalars(stmt.limit(limit)).all()
 
 
-@router.get("/appointments/{appointment_id}", response_model=AppointmentOut)
+@router.get("/appointments/{appointment_id}", response_model=AppointmentOperationalOut)
 def get_appointment(
     appointment_id: int,
     db: Session = Depends(get_db),
-    actor: Actor = Depends(require_permission("appointments.read")),
+    context: CurrentUserContext = Depends(require_active_clinic("appointments.read")),
 ):
-    return get_appointment_or_404(db, appointment_id)
+    appointment = get_appointment_or_404(db, appointment_id)
+    if appointment.clinic_id != context.active_clinic_id:
+        raise HTTPException(404, detail="Termin nije pronaden")
+    return appointment
 
 
-@router.get("/appointments/{appointment_id}/clinical-readiness-preview", response_model=ClinicalReadinessPreviewResponse)
+@router.get(
+    "/appointments/{appointment_id}/clinical-readiness-preview",
+    response_model=ClinicalReadinessPreviewResponse,
+    dependencies=[Depends(require_medical_staff)],
+)
 def get_appointment_clinical_readiness_preview(
     appointment_id: int,
     db: Session = Depends(get_db),
-    actor: Actor = Depends(require_permission("appointments.read")),
+    context: CurrentUserContext = Depends(require_active_clinic("appointments.read")),
 ):
     """Demo/pilot read-only preview; not enforcement, production decision, medical-device decision or AI clearance."""
     appointment = get_appointment_or_404(db, appointment_id)
-    return build_clinical_readiness_preview(db, appointment)
+    if appointment.clinic_id != context.active_clinic_id:
+        raise HTTPException(404, detail="Termin nije pronaden")
+    return build_clinical_readiness_preview(db, appointment, actor=context.actor)
 
 
-@router.post("/appointments/{appointment_id}/clinical-readiness-snapshots", response_model=ClinicalReadinessSnapshotResponse)
+@router.post(
+    "/appointments/{appointment_id}/clinical-readiness-snapshots",
+    response_model=ClinicalReadinessSnapshotResponse,
+    dependencies=[Depends(require_medical_staff)],
+)
 def capture_appointment_clinical_readiness_snapshot(
     appointment_id: int,
     payload: ClinicalReadinessSnapshotCaptureRequest,
     db: Session = Depends(get_db),
-    actor: Actor = Depends(require_permission("clinical_readiness.snapshots.write")),
+    context: CurrentUserContext = Depends(require_active_clinic("clinical_readiness.snapshots.write")),
 ):
     """Explicit preview snapshot capture; not clinical approval, override, task or outcome evidence."""
-    if actor.actor_type != "user" or actor.user_id is None:
-        raise HTTPException(403, detail="Snapshot capture zahtijeva prijavljenog korisnika")
+    actor = context.actor
+    appointment = get_appointment_or_404(db, appointment_id)
+    if appointment.clinic_id != context.active_clinic_id:
+        raise HTTPException(404, detail="Termin nije pronaden")
     try:
         snapshot_obj = capture_clinical_readiness_snapshot(
             db,
@@ -367,14 +406,20 @@ def capture_appointment_clinical_readiness_snapshot(
     return snapshot_response(snapshot_obj)
 
 
-@router.get("/appointments/{appointment_id}/clinical-readiness-snapshots", response_model=ClinicalReadinessSnapshotHistoryResponse)
+@router.get(
+    "/appointments/{appointment_id}/clinical-readiness-snapshots",
+    response_model=ClinicalReadinessSnapshotHistoryResponse,
+    dependencies=[Depends(require_medical_staff)],
+)
 def appointment_clinical_readiness_snapshot_history(
     appointment_id: int,
     db: Session = Depends(get_db),
-    actor: Actor = Depends(require_permission("clinical_readiness.snapshots.read")),
+    context: CurrentUserContext = Depends(require_active_clinic("clinical_readiness.snapshots.read")),
 ):
     """Read-only preview snapshot history; not clinical approval, override, task or outcome evidence."""
-    get_appointment_or_404(db, appointment_id)
+    appointment = get_appointment_or_404(db, appointment_id)
+    if appointment.clinic_id != context.active_clinic_id:
+        raise HTTPException(404, detail="Termin nije pronaden")
     snapshots = db.scalars(
         select(ClinicalReadinessSnapshot)
         .where(ClinicalReadinessSnapshot.appointment_id == appointment_id)
@@ -390,15 +435,21 @@ def appointment_clinical_readiness_snapshot_history(
     )
 
 
-@router.get("/appointments/{appointment_id}/clinical-readiness-snapshots/{snapshot_id}", response_model=ClinicalReadinessSnapshotDetailResponse)
+@router.get(
+    "/appointments/{appointment_id}/clinical-readiness-snapshots/{snapshot_id}",
+    response_model=ClinicalReadinessSnapshotDetailResponse,
+    dependencies=[Depends(require_medical_staff)],
+)
 def appointment_clinical_readiness_snapshot_detail(
     appointment_id: int,
     snapshot_id: int,
     db: Session = Depends(get_db),
-    actor: Actor = Depends(require_permission("clinical_readiness.snapshots.read")),
+    context: CurrentUserContext = Depends(require_active_clinic("clinical_readiness.snapshots.read")),
 ):
     """Read-only copied preview snapshot payload; not clinical approval, override, task or outcome evidence."""
-    get_appointment_or_404(db, appointment_id)
+    appointment = get_appointment_or_404(db, appointment_id)
+    if appointment.clinic_id != context.active_clinic_id:
+        raise HTTPException(404, detail="Termin nije pronaden")
     snapshot_obj = db.scalar(
         select(ClinicalReadinessSnapshot)
         .where(
@@ -411,7 +462,10 @@ def appointment_clinical_readiness_snapshot_detail(
     return snapshot_detail_response(snapshot_obj)
 
 
-@router.get("/appointments/{appointment_id}/clinical-readiness/acknowledgments", response_model=ClinicalReadinessAcknowledgmentListResponse)
+@router.get(
+    "/appointments/{appointment_id}/clinical-readiness/acknowledgments",
+    response_model=ClinicalReadinessAcknowledgmentListResponse,
+)
 def appointment_clinical_readiness_acknowledgments(
     appointment_id: int,
     request: Request,
@@ -446,7 +500,10 @@ def appointment_clinical_readiness_acknowledgments(
     )
 
 
-@router.get("/appointments/{appointment_id}/clinical-readiness/acknowledgments/{acknowledgment_id}", response_model=ClinicalReadinessAcknowledgmentDetailResponse)
+@router.get(
+    "/appointments/{appointment_id}/clinical-readiness/acknowledgments/{acknowledgment_id}",
+    response_model=ClinicalReadinessAcknowledgmentDetailResponse,
+)
 def appointment_clinical_readiness_acknowledgment_detail(
     appointment_id: int,
     acknowledgment_id: int,
@@ -499,17 +556,23 @@ def appointment_clinical_readiness_acknowledgment_detail(
     )
 
 
-@router.post("/appointments/{appointment_id}/clinical-readiness-snapshots/{snapshot_id}/supersede", response_model=ClinicalReadinessSnapshotSupersedeResponse)
+@router.post(
+    "/appointments/{appointment_id}/clinical-readiness-snapshots/{snapshot_id}/supersede",
+    response_model=ClinicalReadinessSnapshotSupersedeResponse,
+    dependencies=[Depends(require_medical_staff)],
+)
 def supersede_appointment_clinical_readiness_snapshot(
     appointment_id: int,
     snapshot_id: int,
     payload: ClinicalReadinessSnapshotSupersedeRequest,
     db: Session = Depends(get_db),
-    actor: Actor = Depends(require_permission("clinical_readiness.snapshots.supersede")),
+    context: CurrentUserContext = Depends(require_active_clinic("clinical_readiness.snapshots.supersede")),
 ):
     """Supersede an immutable preview snapshot; not clinical approval, override, task or outcome evidence."""
-    if actor.actor_type != "user" or actor.user_id is None:
-        raise HTTPException(403, detail="Snapshot supersession zahtijeva prijavljenog korisnika")
+    actor = context.actor
+    appointment = get_appointment_or_404(db, appointment_id)
+    if appointment.clinic_id != context.active_clinic_id:
+        raise HTTPException(404, detail="Termin nije pronaden")
     try:
         new_snapshot = supersede_clinical_readiness_snapshot(
             db,
@@ -537,22 +600,40 @@ def supersede_appointment_clinical_readiness_snapshot(
     )
 
 
-@router.patch("/appointments/{appointment_id}", response_model=AppointmentOut)
+@router.patch("/appointments/{appointment_id}", response_model=AppointmentOperationalOut)
 def update_appointment(
     appointment_id: int,
     payload: AppointmentUpdate,
     request: Request,
     db: Session = Depends(get_db),
-    actor: Actor = Depends(require_permission("appointments.write")),
+    context: CurrentUserContext = Depends(require_active_clinic("appointments.write")),
 ):
     appointment = db.get(Appointment, appointment_id)
-    if not appointment:
+    if not appointment or appointment.clinic_id != context.active_clinic_id:
         raise HTTPException(404, detail="Termin nije pronaden")
     before = snapshot(appointment)
     update_data = payload.model_dump(exclude_unset=True)
+    next_room_id = update_data.get("room_id", appointment.room_id)
+    next_room = db.get(Room, next_room_id)
+    if next_room is None:
+        raise HTTPException(404, detail="Soba nije pronadena")
+    if next_room.clinic_id is None or next_room.clinic_id != context.active_clinic_id:
+        raise HTTPException(403, detail="Termin se moze premjestiti samo unutar aktivne klinike")
+    next_provider_id = update_data.get("provider_id", appointment.provider_id)
+    next_provider = db.get(Provider, next_provider_id)
+    if next_provider is None:
+        raise HTTPException(404, detail="Lijecnik nije pronaden")
+    if next_provider.clinic_id is None or next_provider.clinic_id != context.active_clinic_id:
+        raise HTTPException(403, detail="Termin se moze dodijeliti samo lijecniku aktivne klinike")
+    update_data["clinic_id"] = context.active_clinic_id
     next_patient_id = update_data.get("patient_id", appointment.patient_id)
+    if next_patient_id != appointment.patient_id:
+        raise HTTPException(
+            409,
+            detail="Pacijenta nije moguce promijeniti nakon stvaranja termina; otkazite termin i stvorite novi",
+        )
     if "episode_id" in update_data:
-        validate_episode_for_patient(db, update_data.get("episode_id"), next_patient_id)
+        validate_episode_for_patient(db, update_data.get("episode_id"), next_patient_id, context)
     old_episode_id = appointment.episode_id
     patch_model(appointment, update_data)
     appointment.duration_minutes = validate_appointment_payload(
@@ -569,11 +650,22 @@ def update_appointment(
         appointment_id=appointment.id,
     )
     db.flush()
-    audit(db, "update", "Appointment", appointment.id, "Azuriran termin", actor.user_id, actor.actor_type, actor.api_key_id, before, snapshot(appointment), request)
+    actor = context.actor
+    audit(
+        db, "update", "Appointment", appointment.id, "Azuriran termin",
+        actor.user_id, actor.actor_type, actor.api_key_id, before, snapshot(appointment), request,
+        scope_type="clinic", clinic_id=context.active_clinic_id,
+        institution_id=context.active_clinic.institution_id if context.active_clinic else None,
+    )
     if "episode_id" in update_data and old_episode_id != appointment.episode_id:
         action = "link_episode" if appointment.episode_id else "unlink_episode"
         summary = f"Termin povezan s epizodom #{appointment.episode_id}" if appointment.episode_id else "Termin odvojen od klinicke epizode"
-        audit(db, action, "Appointment", appointment.id, summary, actor.user_id, actor.actor_type, actor.api_key_id, before, snapshot(appointment), request)
+        audit(
+            db, action, "Appointment", appointment.id, summary,
+            actor.user_id, actor.actor_type, actor.api_key_id, before, snapshot(appointment), request,
+            scope_type="clinic", clinic_id=context.active_clinic_id,
+            institution_id=context.active_clinic.institution_id if context.active_clinic else None,
+        )
     db.commit()
     db.refresh(appointment)
     return appointment
@@ -584,27 +676,33 @@ def delete_appointment(
     appointment_id: int,
     request: Request,
     db: Session = Depends(get_db),
-    actor: Actor = Depends(require_permission("appointments.write")),
+    context: CurrentUserContext = Depends(require_active_clinic("appointments.write")),
 ):
     appointment = db.get(Appointment, appointment_id)
-    if not appointment:
+    if not appointment or appointment.clinic_id != context.active_clinic_id:
         raise HTTPException(404, detail="Termin nije pronaden")
     before = snapshot(appointment)
     db.delete(appointment)
-    audit(db, "delete", "Appointment", appointment_id, "Obrisan termin", actor.user_id, actor.actor_type, actor.api_key_id, before, None, request)
+    actor = context.actor
+    audit(
+        db, "delete", "Appointment", appointment_id, "Obrisan termin",
+        actor.user_id, actor.actor_type, actor.api_key_id, before, None, request,
+        scope_type="clinic", clinic_id=context.active_clinic_id,
+        institution_id=context.active_clinic.institution_id if context.active_clinic else None,
+    )
     db.commit()
     return {"ok": True}
 
 
-@router.get("/schedule/day", response_model=list[AppointmentOut])
+@router.get("/schedule/day", response_model=list[AppointmentOperationalOut])
 def day_schedule(
     date: date = Query(...),
     db: Session = Depends(get_db),
-    actor: Actor = Depends(require_permission("appointments.read")),
+    context: CurrentUserContext = Depends(require_active_clinic("appointments.read")),
 ):
     return db.scalars(
         select(Appointment)
         .options(*appointment_load_options())
-        .where(Appointment.date == date)
+        .where(Appointment.date == date, Appointment.clinic_id == context.active_clinic_id)
         .order_by(Appointment.start_time)
     ).all()

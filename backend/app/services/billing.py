@@ -1,4 +1,4 @@
-from datetime import date, datetime
+from datetime import UTC, date
 from decimal import Decimal
 from uuid import uuid4
 
@@ -10,6 +10,7 @@ from app.models.domain import Appointment, Invoice, InvoiceLine, InvoiceNumberSe
 from app.schemas.common import InvoiceLineCreate, InvoiceLineUpdate, PaymentTransactionCreate
 from app.services.fiscalization import FiscalizationProvider, get_fiscalization_provider
 from app.services.inventory import ensure_positive
+from app.services.clinic_time import utc_now
 
 
 def calculate_line_total(quantity: Decimal, unit_price: Decimal) -> Decimal:
@@ -84,6 +85,7 @@ def draft_invoice_from_appointment(db: Session, appointment_id: int) -> tuple[In
         raise HTTPException(status_code=404, detail="Usluga nije pronadena")
     invoice = Invoice(
         patient_id=appointment.patient_id,
+        clinic_id=appointment.clinic_id,
         appointment_id=appointment.id,
         invoice_number=draft_invoice_number(),
         status="draft",
@@ -113,7 +115,7 @@ def draft_invoice_from_journey(db: Session, journey: PatientJourney) -> tuple[In
     activities = db.scalars(select(JourneyActivity).where(JourneyActivity.journey_id == journey.id, JourneyActivity.status == "completed").order_by(JourneyActivity.sequence)).all()
     if not activities:
         raise HTTPException(409, detail="Dolazak nema dovršenu aktivnost za naplatu")
-    invoice = Invoice(patient_id=journey.patient_id, appointment_id=journey.appointment_id, journey_id=journey.id, invoice_number=draft_invoice_number(), status="draft", payment_status="unpaid", total_amount=Decimal("0"))
+    invoice = Invoice(patient_id=journey.patient_id, clinic_id=journey.clinic_id, appointment_id=journey.appointment_id, journey_id=journey.id, invoice_number=draft_invoice_number(), status="draft", payment_status="unpaid", total_amount=Decimal("0"))
     db.add(invoice)
     db.flush()
     for activity in activities:
@@ -190,12 +192,16 @@ def record_payment(invoice: Invoice, payload: PaymentTransactionCreate, created_
     paid = sum((payment.amount for payment in invoice.payments), Decimal("0"))
     if paid + payload.amount > invoice.total_amount:
         raise HTTPException(status_code=409, detail="Uplata prelazi ukupni iznos racuna")
+    paid_at = payload.paid_at or utc_now()
+    if paid_at.tzinfo is None:
+        raise HTTPException(status_code=422, detail="Vrijeme plaćanja mora sadržavati vremensku zonu")
+    paid_at = paid_at.astimezone(UTC)
     payment = PaymentTransaction(
         invoice_id=invoice.id,
         amount=payload.amount,
         method=payload.method,
         reference=payload.reference,
-        paid_at=payload.paid_at or datetime.now(),
+        paid_at=paid_at,
         created_by=created_by,
     )
     invoice.payments.append(payment)

@@ -9,6 +9,11 @@ class DailyDashboardBlocker(BaseModel):
     is_clinical: bool = False
 
 
+class DailyDashboardOperationalReason(BaseModel):
+    code: str
+    label: str
+
+
 class DailyDashboardClinic(BaseModel):
     id: int
     name: str
@@ -50,6 +55,10 @@ class DailyDashboardRow(BaseModel):
     consumables_status: str
     billing_status: str
     payment_status: str
+    operational_status: str
+    operational_status_label: str
+    operational_status_severity: str
+    operational_status_reasons: list[DailyDashboardOperationalReason] = Field(default_factory=list)
     blocker_status: str
     blocker_labels: list[str] = Field(default_factory=list)
     blockers: list[DailyDashboardBlocker] = Field(default_factory=list)

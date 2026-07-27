@@ -11,6 +11,7 @@ from app.core.config import get_settings
 from app.models.domain import (
     ClinicalDocument,
     ClinicalFormInstance,
+    Clinic,
     JourneyActivity,
     PatientJourney,
     ReportDeliveryEvent,
@@ -18,6 +19,7 @@ from app.models.domain import (
     SignedClinicalReport,
     User,
 )
+from app.services.clinical_documents import validate_document_provenance_links
 
 def report_digest(rendered_content: str, structured_data: dict) -> str:
     canonical = json.dumps(structured_data, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
@@ -51,14 +53,32 @@ def create_signed_report(db: Session, instance: ClinicalFormInstance, actor_user
             previous.superseded_at = instance.signed_at
     document_type = instance.form_version.output_document_type
     title = f"{instance.form_version.definition.name} — potpisani nalaz"
+    document_clinic_id = activity.clinic_id or journey.clinic_id
+    document_clinic = db.get(Clinic, document_clinic_id)
+    if not document_clinic or document_clinic.institution_id is None:
+        raise HTTPException(409, detail="Nije moguće dokazati ustanovu potpisanog nalaza")
+    validate_document_provenance_links(
+        db,
+        patient_id=journey.patient_id,
+        clinic_id=document_clinic_id,
+        appointment_id=activity.appointment_id,
+    )
     document = ClinicalDocument(
         patient_id=journey.patient_id,
+        clinic_id=document_clinic_id,
+        institution_id=document_clinic.institution_id,
         source_type="generated_signed_report",
         document_type=document_type,
         origin="ASTRA Clinic Core",
         document_date=date.today(),
         title=title,
         author=signer.full_name,
+        author_user_id=actor_user_id,
+        author_professional_role=signer.role.name if signer.role else None,
+        is_clinical_record=True,
+        record_classification="clinical",
+        classification_reviewed_by=actor_user_id,
+        classification_reviewed_at=instance.signed_at,
         institution="ASTRA Clinic",
         raw_text=instance.rendered_summary or "",
         review_status="signed",

@@ -3,7 +3,7 @@ from fastapi import HTTPException, Request
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 from app.auth.dependencies import Actor
-from app.models.domain import Appointment, JourneyActivity, JourneyBlocker, JourneyEvent, PatientJourney, Room, Service
+from app.models.domain import Appointment, JourneyActivity, JourneyBlocker, JourneyEvent, PatientClinicAssociation, PatientJourney, Room, Service
 from app.services.clinical_visit_readiness import validate_clinical_visit_readiness
 
 INTAKE_CHANNELS={"web","ai_secretary","manual"}
@@ -35,15 +35,18 @@ def create_journey(db:Session,appointment:Appointment,intake_channel:str,initial
  if initial_stage not in {"requested","booked"}: raise HTTPException(422,detail="Početna faza mora biti requested ili booked")
  existing=db.scalar(select(PatientJourney).where(PatientJourney.appointment_id==appointment.id))
  if existing: raise HTTPException(409,detail="Termin već ima kanonski tijek pacijenta")
- journey=PatientJourney(patient_id=appointment.patient_id,appointment_id=appointment.id,intake_channel=intake_channel,current_stage=initial_stage,created_by=actor.user_id,updated_by=actor.user_id)
- db.add(journey);db.flush()
  service=db.get(Service,appointment.service_id)
  room=db.get(Room,appointment.room_id)
+ clinic_id=appointment.clinic_id or (room.clinic_id if room else None)
+ journey=PatientJourney(patient_id=appointment.patient_id,appointment_id=appointment.id,clinic_id=clinic_id,intake_channel=intake_channel,current_stage=initial_stage,created_by=actor.user_id,updated_by=actor.user_id)
+ db.add(journey);db.flush()
+ if clinic_id is not None and not db.scalar(select(PatientClinicAssociation).where(PatientClinicAssociation.patient_id==appointment.patient_id,PatientClinicAssociation.clinic_id==clinic_id)):
+  db.add(PatientClinicAssociation(patient_id=appointment.patient_id,clinic_id=clinic_id,active=True,created_by_user_id=actor.user_id))
  activity=JourneyActivity(
   journey_id=journey.id,appointment_id=appointment.id,service_id=appointment.service_id,
   activity_key="primary",activity_kind="specialist_consultation",
   specialty_key=service.module.key if service and service.module else "general",
-  clinic_id=room.clinic_id if room else None,primary_provider_id=appointment.provider_id,
+  clinic_id=clinic_id,primary_provider_id=appointment.provider_id,
   room_id=appointment.room_id,sequence=1,planned_start=datetime.combine(appointment.date,appointment.start_time),
   planned_end=datetime.combine(appointment.date,appointment.end_time),form_resolution_status="not_required",created_by=actor.user_id,
  )

@@ -1,9 +1,11 @@
 from collections.abc import Generator
+from contextlib import contextmanager
+from dataclasses import dataclass, field
 import os
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine, text
+from sqlalchemy import create_engine, event, text
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
@@ -12,7 +14,34 @@ from app.core.database import get_db
 from app.core.security import hash_password
 from app.main import app
 from app.models import domain  # noqa: F401
-from app.models.domain import Permission, Role, User
+from app.models.domain import Clinic, ClinicMembership, Institution, Permission, Role, User
+
+
+@dataclass
+class SqlQueryCount:
+    statements: list[str] = field(default_factory=list)
+
+    @property
+    def count(self) -> int:
+        return len(self.statements)
+
+
+class SqlQueryCounter:
+    def __init__(self, bind) -> None:
+        self.bind = bind
+
+    @contextmanager
+    def track(self):
+        result = SqlQueryCount()
+
+        def before_cursor_execute(_conn, _cursor, statement, _parameters, _context, _executemany):
+            result.statements.append(statement)
+
+        event.listen(self.bind, "before_cursor_execute", before_cursor_execute)
+        try:
+            yield result
+        finally:
+            event.remove(self.bind, "before_cursor_execute", before_cursor_execute)
 
 
 @pytest.fixture()
@@ -38,6 +67,11 @@ def client(db: Session) -> Generator[TestClient, None, None]:
     with TestClient(app) as test_client:
         yield test_client
     app.dependency_overrides.clear()
+
+
+@pytest.fixture()
+def sql_query_counter(db: Session) -> SqlQueryCounter:
+    return SqlQueryCounter(db.get_bind())
 
 
 @pytest.fixture()
@@ -74,6 +108,7 @@ def auth_setup(db: Session) -> dict[str, User]:
         "patients.write",
         "appointments.read",
         "appointments.write",
+        "appointments.patient_availability.read",
         "episodes.read",
         "episodes.write",
         "clinical_plans.read",
@@ -81,6 +116,12 @@ def auth_setup(db: Session) -> dict[str, User]:
         "clinical_documents.read",
         "clinical_documents.write",
         "clinical_documents.review",
+        "clinical.documents.read_institution",
+        "clinical.documents.edit_own_draft",
+        "clinical.documents.add_addendum",
+        "clinical.documents.sign_own",
+        "clinical.documents.print",
+        "clinical.documents.download",
         "services.read",
         "services.write",
         "inventory.read",
@@ -94,6 +135,7 @@ def auth_setup(db: Session) -> dict[str, User]:
         "billing.write",
         "billing.mark_paid",
         "audit.read",
+        "audit.access_events.write",
         "admin.manage_users",
         "clinical_readiness.snapshots.read",
         "clinical_readiness.snapshots.write",
@@ -149,15 +191,20 @@ def auth_setup(db: Session) -> dict[str, User]:
         "reports.send",
         "reports.send_alternate_recipient",
         "reports.delivery_history",
+        "system.admin",
     ]
     permissions = {name: Permission(name=name, description=name) for name in permission_names}
-    admin_role = Role(name="admin", description="Admin", permissions=list(permissions.values()))
+    admin_role = Role(name="admin", description="Admin", professional_category="medical_staff", permissions=list(permissions.values()))
     limited_role = Role(name="limited", description="Limited", permissions=[permissions["inventory.read"], permissions["billing.read"]])
     admin = User(email="admin@test.local", full_name="Admin", password_hash=hash_password("secret"), role=admin_role)
     limited = User(email="limited@test.local", full_name="Limited", password_hash=hash_password("secret"), role=limited_role)
-    db.add_all([*permissions.values(), admin_role, limited_role, admin, limited])
+    demo_institution = Institution(code="test", name="Test Institution", active=True)
+    demo_clinic = Clinic(name="Test Clinic", institution_key="test", institution=demo_institution)
+    db.add_all([*permissions.values(), admin_role, limited_role, admin, limited, demo_institution, demo_clinic])
     db.flush()
-    return {"admin": admin, "limited": limited}
+    db.add(ClinicMembership(user_id=admin.id, clinic_id=demo_clinic.id, created_by_user_id=admin.id))
+    db.flush()
+    return {"admin": admin, "limited": limited, "clinic": demo_clinic}
 
 
 def login_token(client: TestClient, email: str, password: str = "secret") -> str:
