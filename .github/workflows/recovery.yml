@@ -1,0 +1,135 @@
+name: Recovery contract
+
+on:
+  push:
+    paths:
+      - ".github/workflows/recovery.yml"
+      - "scripts/backup_postgres.py"
+      - "scripts/restore_postgres.py"
+      - "scripts/recovery_common.py"
+      - "scripts/recovery_application_smoke.py"
+      - "scripts/run_recovery_integration.py"
+      - "scripts/validate_recovery_evidence.py"
+      - "scripts/tests/test_validate_recovery_evidence.py"
+      - "backend/app/services/schema_readiness.py"
+      - "backend/tests/test_recovery_tooling.py"
+      - "backend/tests/test_schema_readiness.py"
+      - "backend/alembic/versions/**"
+      - "docs/recovery-contract-0071.md"
+  pull_request:
+    paths:
+      - ".github/workflows/recovery.yml"
+      - "scripts/backup_postgres.py"
+      - "scripts/restore_postgres.py"
+      - "scripts/recovery_common.py"
+      - "scripts/recovery_application_smoke.py"
+      - "scripts/run_recovery_integration.py"
+      - "scripts/validate_recovery_evidence.py"
+      - "scripts/tests/test_validate_recovery_evidence.py"
+      - "backend/app/services/schema_readiness.py"
+      - "backend/tests/test_recovery_tooling.py"
+      - "backend/tests/test_schema_readiness.py"
+      - "backend/alembic/versions/**"
+      - "docs/recovery-contract-0071.md"
+  workflow_dispatch:
+
+env:
+  RECOVERY_SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+
+jobs:
+  recovery:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: postgres
+          POSTGRES_USER: astra
+          POSTGRES_PASSWORD: astra
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U astra -d postgres"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      RECOVERY_ADMIN_DATABASE_URL: postgresql+psycopg://astra:astra@127.0.0.1:5432/postgres
+      ASTRA_RECOVERY_ENVIRONMENT: synthetic-test
+      PYTHONPATH: ${{ github.workspace }}/backend
+      JWT_SECRET: synthetic-recovery-ci-secret-not-production
+      JWT_SECRET_KEY: synthetic-recovery-ci-secret-not-production
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install backend dependencies
+        working-directory: backend
+        run: pip install -r requirements.txt
+      - name: Compile recovery code
+        run: >-
+          python -m compileall -q
+          scripts/recovery_common.py
+          scripts/backup_postgres.py
+          scripts/restore_postgres.py
+          scripts/recovery_application_smoke.py
+          scripts/run_recovery_integration.py
+          scripts/validate_recovery_evidence.py
+      - name: Run recovery contract and evidence meta-tests
+        run: >-
+          python -m pytest -q
+          backend/tests/test_recovery_tooling.py
+          backend/tests/test_schema_readiness.py
+          scripts/tests/test_validate_recovery_evidence.py
+      - name: Run disposable PostgreSQL recovery matrix
+        run: |
+          set -o pipefail
+          evidence_dir=".recovery-evidence/producer"
+          mkdir -p "$evidence_dir"
+          python scripts/run_recovery_integration.py \
+            --result-file "$evidence_dir/scenario-result.json" \
+            2>&1 | tee "$evidence_dir/recovery-integration.log"
+          python scripts/validate_recovery_evidence.py produce \
+            --scenario-result "$evidence_dir/scenario-result.json" \
+            --output-log "$evidence_dir/recovery-integration.log" \
+            --evidence-file "$evidence_dir/recovery-evidence.json" \
+            --source-sha "$RECOVERY_SOURCE_SHA" \
+            --workflow-run-id "$GITHUB_RUN_ID" \
+            --job-name "$GITHUB_JOB"
+      - name: Upload recovery execution evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: recovery-evidence
+          path: .recovery-evidence/producer
+          if-no-files-found: error
+          retention-days: 14
+
+  recovery-evidence:
+    if: always()
+    needs:
+      - recovery
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Require recovery producer success
+        run: |
+          if [ "${{ needs.recovery.result }}" != "success" ]; then
+            echo "Recovery producer result: ${{ needs.recovery.result }}"
+            exit 1
+          fi
+      - name: Download recovery evidence
+        uses: actions/download-artifact@v4
+        with:
+          name: recovery-evidence
+          path: .recovery-evidence/final
+      - name: Validate exact-SHA recovery evidence
+        run: |
+          python scripts/validate_recovery_evidence.py validate \
+            --evidence-dir .recovery-evidence/final \
+            --source-sha "$RECOVERY_SOURCE_SHA" \
+            --workflow-run-id "$GITHUB_RUN_ID"

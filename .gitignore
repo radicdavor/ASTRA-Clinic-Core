@@ -16,5 +16,10 @@ frontend/.e2e-tmp/
 backend/.venv/
 backend/__pycache__/
 
+.recovery-evidence/
+backups/
+*.dump
+*.backup
+
 .DS_Store
 Thumbs.db
