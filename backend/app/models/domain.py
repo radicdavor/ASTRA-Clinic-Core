@@ -223,6 +223,13 @@ class ClinicMembershipMigrationIssue(Base):
     resolved_by_user_id: Mapped[int | None] = mapped_column(
         ForeignKey("users.id", ondelete="RESTRICT"),
     )
+    user: Mapped[User] = relationship(foreign_keys=[user_id])
+    resolution_clinic: Mapped[Clinic | None] = relationship(
+        foreign_keys=[resolution_clinic_id],
+    )
+    resolved_by: Mapped[User | None] = relationship(
+        foreign_keys=[resolved_by_user_id],
+    )
 
 
 class PatientClinicAssociation(Base):

@@ -232,24 +232,15 @@ def upgrade():
     op.execute(
         """
         INSERT INTO clinic_memberships (user_id, clinic_id, active)
-        SELECT DISTINCT appointments.created_by, appointments.clinic_id, true
-        FROM appointments
-        JOIN users ON users.id = appointments.created_by AND users.active = true
-        JOIN clinics ON clinics.id = appointments.clinic_id AND clinics.active = true
-        WHERE appointments.created_by IS NOT NULL
-          AND appointments.clinic_id IS NOT NULL
-        ON CONFLICT (user_id, clinic_id) DO NOTHING
-        """
-    )
-    op.execute(
-        """
-        INSERT INTO clinic_memberships (user_id, clinic_id, active)
-        SELECT DISTINCT appointments.identity_verified_by, appointments.clinic_id, true
-        FROM appointments
-        JOIN users ON users.id = appointments.identity_verified_by AND users.active = true
-        JOIN clinics ON clinics.id = appointments.clinic_id AND clinics.active = true
-        WHERE appointments.identity_verified_by IS NOT NULL
-          AND appointments.clinic_id IS NOT NULL
+        SELECT users.id, clinics.id, true
+        FROM users
+        JOIN roles ON roles.id = users.role_id
+        JOIN role_permissions ON role_permissions.role_id = roles.id
+        JOIN permissions ON permissions.id = role_permissions.permission_id
+        CROSS JOIN clinics
+        WHERE users.active = true
+          AND clinics.active = true
+          AND permissions.name = 'system.admin'
         ON CONFLICT (user_id, clinic_id) DO NOTHING
         """
     )

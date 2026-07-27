@@ -5,6 +5,7 @@ from datetime import datetime, timezone
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.audit.service import audit
 from app.models.domain import (
     Clinic,
     ClinicMembership,
@@ -19,7 +20,8 @@ class MembershipMigrationResolutionError(ValueError):
 
 def membership_migration_status(db: Session) -> dict:
     issues = db.scalars(
-        select(ClinicMembershipMigrationIssue).order_by(
+        select(ClinicMembershipMigrationIssue)
+        .order_by(
             ClinicMembershipMigrationIssue.status,
             ClinicMembershipMigrationIssue.id,
         )
@@ -31,6 +33,8 @@ def membership_migration_status(db: Session) -> dict:
             {
                 "id": issue.id,
                 "user_id": issue.user_id,
+                "user_email": issue.user.email,
+                "user_name": issue.user.full_name,
                 "reason": issue.reason,
                 "candidate_clinic_ids": issue.candidate_clinic_ids,
                 "status": issue.status,
@@ -49,6 +53,9 @@ def resolve_membership_migration_issue(
     operator_email: str,
     note: str,
 ) -> ClinicMembershipMigrationIssue:
+    normalized_note = note.strip()
+    if not normalized_note:
+        raise MembershipMigrationResolutionError("Bilješka operatora je obvezna")
     target = db.scalar(select(User).where(User.email == user_email, User.active.is_(True)))
     operator = db.scalar(select(User).where(User.email == operator_email, User.active.is_(True)))
     clinic = db.scalar(select(Clinic).where(Clinic.id == clinic_id, Clinic.active.is_(True)))
@@ -64,7 +71,7 @@ def resolve_membership_migration_issue(
         select(ClinicMembershipMigrationIssue).where(
             ClinicMembershipMigrationIssue.user_id == target.id,
             ClinicMembershipMigrationIssue.status == "pending",
-        )
+        ).with_for_update()
     )
     if issue is None:
         raise MembershipMigrationResolutionError("Nema otvorenog migracijskog pitanja za korisnika")
@@ -75,21 +82,37 @@ def resolve_membership_migration_issue(
         )
     )
     if membership is None:
-        db.add(
-            ClinicMembership(
-                user_id=target.id,
-                clinic_id=clinic.id,
-                active=True,
-                created_by_user_id=operator.id,
-            )
+        membership = ClinicMembership(
+            user_id=target.id,
+            clinic_id=clinic.id,
+            active=True,
+            created_by_user_id=operator.id,
         )
+        db.add(membership)
     else:
         membership.active = True
         membership.created_by_user_id = operator.id
     issue.status = "resolved"
     issue.resolution_clinic_id = clinic.id
-    issue.resolution_note = note.strip()
+    issue.resolution_note = normalized_note
     issue.resolved_at = datetime.now(timezone.utc)
     issue.resolved_by_user_id = operator.id
     db.flush()
+    audit(
+        db,
+        "clinic_membership_migration_resolved",
+        "ClinicMembership",
+        membership.id,
+        "Operator je razriješio legacy članstvo korisnika u klinici",
+        operator.id,
+        after_json={
+            "user_id": target.id,
+            "clinic_id": clinic.id,
+            "migration_issue_id": issue.id,
+            "active": True,
+        },
+        scope_type="clinic",
+        clinic_id=clinic.id,
+        institution_id=clinic.institution_id,
+    )
     return issue

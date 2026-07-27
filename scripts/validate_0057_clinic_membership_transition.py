@@ -57,6 +57,15 @@ def cleanup() -> None:
             {"prefix": f"{PREFIX}%"},
         )
         connection.execute(
+            text(
+                """
+                DELETE FROM role_permissions
+                WHERE role_id IN (SELECT id FROM roles WHERE name LIKE :prefix)
+                """
+            ),
+            {"prefix": f"{PREFIX}%"},
+        )
+        connection.execute(
             text("DELETE FROM roles WHERE name LIKE :prefix"),
             {"prefix": f"{PREFIX}%"},
         )
@@ -76,16 +85,44 @@ def cleanup() -> None:
         )
 
 
-def create_role_and_user(connection, suffix: str) -> int:
+def create_role_and_user(
+    connection,
+    suffix: str,
+    *,
+    active: bool = True,
+    permission_name: str | None = None,
+) -> int:
     role_id = connection.scalar(
         text("INSERT INTO roles (name) VALUES (:name) RETURNING id"),
         {"name": f"{PREFIX}{suffix}-role"},
     )
+    if permission_name:
+        permission_id = connection.scalar(
+            text(
+                """
+                INSERT INTO permissions (name)
+                VALUES (:name)
+                ON CONFLICT (name) DO UPDATE SET name = EXCLUDED.name
+                RETURNING id
+                """
+            ),
+            {"name": permission_name},
+        )
+        connection.execute(
+            text(
+                """
+                INSERT INTO role_permissions (role_id, permission_id)
+                VALUES (:role_id, :permission_id)
+                ON CONFLICT DO NOTHING
+                """
+            ),
+            {"role_id": role_id, "permission_id": permission_id},
+        )
     return connection.scalar(
         text(
             """
             INSERT INTO users (email, full_name, password_hash, active, role_id)
-            VALUES (:email, :name, :password_hash, true, :role_id)
+            VALUES (:email, :name, :password_hash, :active, :role_id)
             RETURNING id
             """
         ),
@@ -93,6 +130,7 @@ def create_role_and_user(connection, suffix: str) -> int:
             "email": f"{PREFIX}{suffix}@example.invalid",
             "name": f"Synthetic {suffix}",
             "password_hash": password_hash(),
+            "active": active,
             "role_id": role_id,
         },
     )
@@ -101,12 +139,30 @@ def create_role_and_user(connection, suffix: str) -> int:
 def seed_single() -> None:
     engine = create_engine(database_url())
     with engine.begin() as connection:
-        connection.execute(
-            text("INSERT INTO clinics (name, active) VALUES (:name, true)"),
+        clinic_id = connection.scalar(
+            text("INSERT INTO clinics (name, active) VALUES (:name, true) RETURNING id"),
             {"name": f"{PREFIX}single-clinic"},
         )
-        create_role_and_user(connection, "single-a")
-        create_role_and_user(connection, "single-b")
+        create_role_and_user(
+            connection,
+            "single-admin",
+            permission_name="system.admin",
+        )
+        create_role_and_user(connection, "single-medical")
+        connection.execute(
+            text(
+                """
+                INSERT INTO providers
+                    (full_name, email, active, staff_role, clinic_id, weekly_working_hours)
+                VALUES (:name, :email, true, 'physician', :clinic_id, '{}'::json)
+                """
+            ),
+            {
+                "name": f"{PREFIX}single-medical",
+                "email": f"{PREFIX}single-medical@example.invalid",
+                "clinic_id": clinic_id,
+            },
+        )
 
 
 def seed_multi() -> None:
@@ -124,6 +180,10 @@ def seed_multi() -> None:
         creator_user = create_role_and_user(connection, "creator")
         verifier_user = create_role_and_user(connection, "verifier")
         create_role_and_user(connection, "ambiguous")
+        create_role_and_user(connection, "system-admin", permission_name="system.admin")
+        create_role_and_user(connection, "billing")
+        inactive_user = create_role_and_user(connection, "inactive", active=False)
+        orphan_user = create_role_and_user(connection, "orphan-provider")
         provider = connection.scalar(
             text(
                 """
@@ -137,6 +197,19 @@ def seed_multi() -> None:
                 "name": f"{PREFIX}provider",
                 "email": f"{PREFIX}provider@example.invalid",
                 "clinic_id": clinic_a,
+            },
+        )
+        connection.execute(
+            text(
+                """
+                INSERT INTO providers
+                    (full_name, email, active, staff_role, clinic_id, weekly_working_hours)
+                VALUES (:name, :email, true, 'physician', NULL, '{}'::json)
+                """
+            ),
+            {
+                "name": f"{PREFIX}orphan-provider",
+                "email": f"{PREFIX}orphan-provider@example.invalid",
             },
         )
         room = connection.scalar(
@@ -182,7 +255,7 @@ def seed_multi() -> None:
                 "verified_by": verifier_user,
             },
         )
-        assert provider_user and creator_user and verifier_user
+        assert provider_user and creator_user and verifier_user and inactive_user and orphan_user
 
 
 def user_id(connection, suffix: str) -> int:
@@ -219,8 +292,8 @@ def check_single() -> None:
     engine = create_engine(database_url())
     with engine.connect() as connection:
         expected = clinic_id(connection, "single-clinic")
-        assert memberships(connection, "single-a") == [expected]
-        assert memberships(connection, "single-b") == [expected]
+        assert memberships(connection, "single-admin") == [expected]
+        assert memberships(connection, "single-medical") == [expected]
         assert connection.scalar(
             text(
                 """
@@ -230,11 +303,12 @@ def check_single() -> None:
                 """
             ),
             {
-                "first": user_id(connection, "single-a"),
-                "second": user_id(connection, "single-b"),
+                "first": user_id(connection, "single-admin"),
+                "second": user_id(connection, "single-medical"),
             },
         ) == 0
-    assert_route_scope("single-a", {expected})
+    assert_route_scope("single-admin", {expected})
+    assert_route_scope("single-medical", {expected})
 
 
 def assert_route_scope(suffix: str, expected_clinic_ids: set[int]) -> None:
@@ -260,9 +334,15 @@ def check_multi() -> None:
         clinic_a = clinic_id(connection, "clinic-a")
         clinic_b = clinic_id(connection, "clinic-b")
         assert memberships(connection, "provider") == [clinic_a]
-        assert memberships(connection, "creator") == [clinic_b]
-        assert memberships(connection, "verifier") == [clinic_b]
+        # Creating or identity-verifying a record is not authoritative evidence
+        # that the operator belongs to that clinic.
+        assert memberships(connection, "creator") == []
+        assert memberships(connection, "verifier") == []
         assert memberships(connection, "ambiguous") == []
+        assert memberships(connection, "system-admin") == [clinic_a, clinic_b]
+        assert memberships(connection, "billing") == []
+        assert memberships(connection, "inactive") == []
+        assert memberships(connection, "orphan-provider") == []
         issue = connection.execute(
             text(
                 """
@@ -276,6 +356,32 @@ def check_multi() -> None:
         assert issue.reason == "ambiguous_clinic_membership"
         assert issue.candidate_clinic_ids == [clinic_a, clinic_b]
         assert issue.status == "pending"
+        for suffix in ("creator", "verifier", "billing", "orphan-provider"):
+            pending = connection.execute(
+                text(
+                    """
+                    SELECT reason, candidate_clinic_ids, status
+                    FROM clinic_membership_migration_issues
+                    WHERE user_id = :user_id
+                    """
+                ),
+                {"user_id": user_id(connection, suffix)},
+            ).one()
+            assert pending.reason == "ambiguous_clinic_membership"
+            assert pending.candidate_clinic_ids == [clinic_a, clinic_b]
+            assert pending.status == "pending"
+        assert connection.scalar(
+            text(
+                """
+                SELECT count(*) FROM clinic_membership_migration_issues
+                WHERE user_id IN (:inactive, :admin)
+                """
+            ),
+            {
+                "inactive": user_id(connection, "inactive"),
+                "admin": user_id(connection, "system-admin"),
+            },
+        ) == 0
         duplicate_count = connection.scalar(
             text(
                 """
@@ -291,9 +397,12 @@ def check_multi() -> None:
         )
         assert duplicate_count == 0
     assert_route_scope("provider", {clinic_a})
-    assert_route_scope("creator", {clinic_b})
-    assert_route_scope("verifier", {clinic_b})
+    assert_route_scope("creator", set())
+    assert_route_scope("verifier", set())
     assert_route_scope("ambiguous", set())
+    assert_route_scope("system-admin", {clinic_a, clinic_b})
+    assert_route_scope("billing", set())
+    assert_route_scope("orphan-provider", set())
 
 
 if __name__ == "__main__":
