@@ -1,0 +1,256 @@
+# Recovery contract for Alembic 0071
+
+Status: draft pre-production recovery contract.
+
+This runbook is not production authorization. The repository workflow accepts
+only synthetic data, disposable PostgreSQL databases, and allowlisted local CI
+hosts. Production recovery, production deployment, and real patient data
+require separate owner authorization and deployment-specific validation.
+
+## Architectural intent
+
+Recovery is a critical action. It is fail-closed, operator-confirmed, auditable
+through evidence, and designed to preserve the system's single source of truth.
+The workflow prefers roll-forward and never reconstructs access or clinical
+trust removed by a security correction.
+
+## Supported revisions and application pair
+
+The recovery tools in a given Git commit support:
+
+- an empty database migrated by that commit;
+- `0062_signed_report_addendum_integrity`;
+- `0069_legacy_document_trust`;
+- `0070_membership_correction`;
+- `0071_membership_taxonomy`.
+
+The only final application/schema pair validated by this contract is the
+recovery PR commit with `0071_membership_taxonomy`. An older supported backup
+is restored at its recorded revision and then rolled forward with the Alembic
+history from the recovery PR commit.
+
+Running an old application artifact against `0071` is not supported.
+
+## Irreversible security corrections
+
+Recovery and application rollback must not restore:
+
+- legacy clinical-document trust without verified review provenance;
+- unsafe automatic clinic membership;
+- another privilege removed by a security correction.
+
+Schema downgrade is not a mechanism for reconstructing these states. If an
+application deploy fails after a schema migration, keep the verified schema and
+roll the application forward or restore a previously verified backup into a
+new environment.
+
+## Prerequisites
+
+- PostgreSQL 16 client and server tooling;
+- the exact recovery source Git SHA;
+- a supported Alembic revision;
+- `ASTRA_RECOVERY_ENVIRONMENT=synthetic-test`;
+- source and target URLs supplied only through named environment variables;
+- target host in `localhost`, `127.0.0.1`, or the CI service name `postgres`;
+- database names visibly containing `test`, `ci`, `synthetic`, `recovery`, or
+  `restore`;
+- an empty disposable target database and empty target storage directory;
+- no production secrets or production network route.
+
+URLs are never accepted as command-line values and are not printed. Logs show
+only redacted host/database identity and non-sensitive evidence.
+
+## Backup manifest
+
+Every backup directory contains:
+
+- `database.dump`, a custom-format `pg_dump`;
+- `manifest.json`;
+- `files.manifest.json`;
+- `storage/`, containing only referenced canonical document objects.
+
+Manifest version 2 records:
+
+- source Git SHA and `synthetic-test` environment;
+- source Alembic revision;
+- PostgreSQL and tool versions;
+- creation timestamp;
+- safe fixed backup filename, size, and SHA-256;
+- file-manifest SHA-256;
+- complete public-table inventory;
+- row counts and ordered canonical SHA-256 projections for critical tables;
+- invariant results for Alembic rows, foreign keys, memberships, and document
+  institution provenance;
+- the synthetic marker and `forbidden_production: false`.
+
+The manifest contains no database URL, credential, patient identifier, or
+clinical content.
+
+## Dry-run and backup
+
+Set:
+
+```text
+ASTRA_RECOVERY_ENVIRONMENT=synthetic-test
+RECOVERY_SOURCE_DATABASE_URL=<disposable synthetic PostgreSQL URL>
+ASTRA_APPLICATION_COMMIT=<exact 40-character Git SHA>
+```
+
+Run preflight:
+
+```text
+python scripts/backup_postgres.py --dry-run --output <new-safe-directory> --storage-root <synthetic-storage>
+```
+
+Run backup with the same arguments without `--dry-run`. The destination must
+not exist. Publication is an atomic directory rename; overwrite is not
+supported. The semantic snapshot and `pg_dump` share one exported PostgreSQL
+repeatable-read snapshot, so the manifest and database archive describe the
+same committed database state.
+
+## Restore and explicit revision validation
+
+Set:
+
+```text
+ASTRA_RECOVERY_ENVIRONMENT=synthetic-test
+RECOVERY_TARGET_DATABASE_URL=<empty disposable PostgreSQL URL>
+```
+
+Run dry-run first:
+
+```text
+python scripts/restore_postgres.py --dry-run \
+  --artifact <backup-directory> \
+  --target-storage <empty-target-storage> \
+  --expected-manifest-sha256 <out-of-band-manifest-sha256> \
+  --expected-source-revision <supported-revision>
+```
+
+For an actual synthetic restore add:
+
+```text
+--confirm-destructive RESTORE_SYNTHETIC_DISPOSABLE_DATABASE
+```
+
+For `0062`, `0069`, or `0070` also add `--upgrade-head`.
+
+The restore must prove:
+
+1. exactly one `alembic_version` row exists in the source manifest;
+2. the restored revision equals both manifest metadata and the explicitly
+   expected source revision;
+3. an older restore is upgraded through the official Alembic chain;
+4. exactly one final revision exists and equals
+   `0071_membership_taxonomy`.
+
+Missing, multiple, unknown, or mismatched revisions stop recovery.
+
+## Restore integrity and TOCTOU control
+
+Before `pg_restore`, the dump is opened as a non-symlink regular file, hashed,
+and copied through the same open file descriptor into a private temporary file.
+`pg_restore --exit-on-error` consumes only that verified copy.
+
+The operator-supplied manifest SHA-256 is checked before any target database
+mutation and binds the selected manifest to the restore decision.
+
+The restore rejects:
+
+- missing or unsupported manifests;
+- wrong dump, file-manifest, or object hashes;
+- path traversal and symlink inputs;
+- unsupported revisions or environments;
+- non-empty targets;
+- missing destructive confirmation;
+- incomplete table inventory or semantic projections;
+- row-count, checksum, foreign-key, uniqueness, membership, provenance, trust,
+  or audit mismatches.
+
+An interrupted restore leaves `_astra_recovery_incomplete`. `/ready` remains
+fail-closed while that marker exists. The marker is removed only after revision,
+semantic, storage, and invariant checks succeed.
+
+## Membership, document, and audit semantics
+
+The recovery matrix verifies that:
+
+- manual, unrelated, and legitimate single-candidate memberships survive;
+- unsafe automatic membership is not reconstructed;
+- corrected assignment provenance and ambiguity/no-candidate/inactive/invalid
+  taxonomy survive;
+- institution isolation and uniqueness remain enforced;
+- unclassified documents remain untrusted and rediscoverable;
+- classified state is preserved without trust elevation;
+- document institution provenance and stored-object hashes remain consistent;
+- audit counts and critical sentinel events remain unchanged;
+- restore tooling does not create false user-action audit events.
+
+## Application compatibility smoke
+
+After final revision validation, the current application checks:
+
+- `/health` and `/ready`;
+- authentication/session behavior;
+- clinic membership projection;
+- clinic-scoped access;
+- document review queue;
+- episode operational projection when the fixture is present.
+
+The test uses only synthetic identities and content.
+
+## Failure decisions
+
+- Corrupt or malicious backup: reject; do not retry without a newly verified
+  artifact.
+- Interrupted migration/restore: keep the incomplete marker, isolate the
+  target, and restart from a new empty target.
+- Failed application deploy with valid `0071`: do not downgrade security
+  corrections; roll forward the application.
+- Required rollback: restore a previously verified supported backup into a new
+  target, validate its recorded revision, then roll forward to `0071`.
+
+Never restore over a persistent or non-empty database in this workflow.
+
+## Cleanup and operator sign-off
+
+Disposable source, target, failed-restore databases, temporary verified dumps,
+storage staging directories, and test processes must be removed. Evidence is
+valid only when cleanup reports `completed`.
+
+The operator must record:
+
+- incident/change identifier;
+- exact Git SHA and workflow run;
+- source, restored, and final revisions;
+- manifest and backup hashes;
+- executed test IDs;
+- cleanup result;
+- explicit owner decision.
+
+## CI and evidence
+
+`.github/workflows/recovery.yml` runs for recovery-sensitive changes on both
+push and pull-request events. It uses PostgreSQL 16 and executes:
+
+- recovery unit and negative tests;
+- empty database to `0071`;
+- `0062`, `0069`, and `0070` restore plus roll-forward;
+- current `0071` backup/restore;
+- semantic, membership, provenance, trust, audit, application-smoke, corrupt
+  backup, interrupted restore, and non-empty-target checks;
+- exact-SHA recovery evidence production and independent final validation.
+
+The evidence validator rejects wrong SHA/run, stale or failed evidence, skipped
+tests, revision gaps, hash gaps, missing semantic checksums, conflicting
+scenarios, and incomplete cleanup.
+
+## Deployment decisions
+
+- RPO: `OWNER DECISION REQUIRED`
+- RTO: `OWNER DECISION REQUIRED`
+- encryption/KMS: deployment validation required
+- off-site retention: owner and infrastructure decision required
+- production topology and credentials: not covered by this PR
+- production recovery: not authorized
+- real patient data: not authorized
