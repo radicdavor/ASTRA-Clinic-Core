@@ -14,6 +14,7 @@ const AuditLog = lazy(() => import("../pages/AuditLog").then(module => ({ defaul
 const ApiKeys = lazy(() => import("../pages/ApiKeys").then(module => ({ default: module.ApiKeys })));
 const PatientJourneyWorkspace = lazy(() => import("../pages/PatientJourneyWorkspace").then(module => ({ default: module.PatientJourneyWorkspace })));
 const ClinicalDocumentDetail = lazy(() => import("../pages/ClinicalDocumentDetail").then(module => ({ default: module.ClinicalDocumentDetail })));
+const ClinicalDocumentClassificationReview = lazy(() => import("../pages/ClinicalDocumentClassificationReview").then(module => ({ default: module.ClinicalDocumentClassificationReview })));
 const ClinicalDocuments = lazy(() => import("../pages/ClinicalDocuments").then(module => ({ default: module.ClinicalDocuments })));
 const Clinics = lazy(() => import("../pages/Clinics").then(module => ({ default: module.Clinics })));
 const EpisodeDetail = lazy(() => import("../pages/EpisodeDetail").then(module => ({ default: module.EpisodeDetail })));
@@ -79,6 +80,7 @@ export function AppRoutes() {
           <Route path="/episodes/new" element={<EpisodeForm />} />
           <Route path="/episodes/:id" element={<EpisodeDetail />} />
           <Route path="/clinical-documents" element={<ClinicalDocuments />} />
+          <Route path="/clinical-documents/:id/classification" element={<ClinicalDocumentClassificationReview />} />
           <Route path="/laboratory" element={<Laboratory />} />
           <Route path="/therapies" element={<Therapies />} />
           <Route path="/clinical-documents/:id" element={<ClinicalDocumentDetail />} />

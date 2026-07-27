@@ -223,7 +223,7 @@ try {
   if (Date.now() >= frontendDeadline) throw new Error("frontend did not become ready");
   phase("server identity and readiness checks passed");
   phase("running DB-backed Playwright suite");
-  await run(node, [playwrightCli, "test", "-c", "playwright.db.config.ts"], {
+  await run(node, [playwrightCli, "test", "-c", "playwright.db.config.ts", "--reporter=list"], {
     cwd: frontendDir,
     env: {
       ASTRA_E2E_SEED_FILE: seedFile,

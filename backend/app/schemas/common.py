@@ -1920,6 +1920,24 @@ class AppointmentOperationalOut(ORMModel):
     room: RoomOperationalOut | None = None
 
 
+class EpisodeAppointmentOperationalOut(ORMModel):
+    """Institution-operational episode schedule without patient or free-text data."""
+
+    id: int
+    clinic_id: int
+    service_id: int
+    provider_id: int
+    room_id: int
+    date: DateType
+    start_time: TimeType
+    end_time: TimeType
+    duration_minutes: int
+    status: str
+    service: ServiceOperationalOut | None = None
+    provider: ProviderOperationalOut | None = None
+    room: RoomOperationalOut | None = None
+
+
 class AppointmentReceptionOut(AppointmentOperationalOut):
     """Reception projection adds verification contact fields, never notes."""
 

@@ -97,31 +97,6 @@ export type AppointmentOperationalOut = {
   updated_at: string;
 };
 
-export type AppointmentOut = {
-  arrived_at?: string | null;
-  created_at: string;
-  date: string;
-  duration_minutes: number;
-  end_time: string;
-  episode_id?: number | null;
-  id: number;
-  identity_verified_at?: string | null;
-  identity_verified_by?: number | null;
-  notes?: string | null;
-  patient?: PatientOut | null;
-  patient_id: number;
-  provider?: ProviderOut | null;
-  provider_id: number;
-  room?: RoomOut | null;
-  room_id: number;
-  service?: ServiceOut | null;
-  service_id: number;
-  source?: string;
-  start_time: string;
-  status?: string;
-  updated_at: string;
-};
-
 export type AppointmentReceptionOut = {
   arrived_at?: string | null;
   clinic_id?: number | null;
@@ -1108,6 +1083,22 @@ export type EncounterUpdate = {
   procedure_findings?: string | null;
   recommendations?: string | null;
   treatment?: string | null;
+};
+
+export type EpisodeAppointmentOperationalOut = {
+  clinic_id: number;
+  date: string;
+  duration_minutes: number;
+  end_time: string;
+  id: number;
+  provider?: ProviderOperationalOut | null;
+  provider_id: number;
+  room?: RoomOperationalOut | null;
+  room_id: number;
+  service?: ServiceOperationalOut | null;
+  service_id: number;
+  start_time: string;
+  status: string;
 };
 
 export type ErrorResponse = {
@@ -2548,6 +2539,22 @@ export type TokenResponse = {
   token_type?: string;
   user: {
 };
+};
+
+export type UnclassifiedDocumentReviewOut = {
+  clinic_id: number;
+  created_at: string;
+  document_date: string | null;
+  document_type: string;
+  id: number;
+  institution_id: number;
+  patient: ClinicalDocumentPatientIdentityOut;
+  patient_id: number;
+  received_at: string | null;
+  record_classification: string;
+  review_status: string;
+  source_type: string;
+  title: string;
 };
 
 export type ValidationError = {

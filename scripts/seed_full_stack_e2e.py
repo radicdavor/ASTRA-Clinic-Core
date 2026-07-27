@@ -322,7 +322,7 @@ def seed() -> dict:
         dual_role = role(db, "e2e_dual", ["patients.read", "appointments.read", "appointments.write", "appointments.patient_availability.read", "services.read", "journey.read", "checkin.update", "encounter.read"])
         physician_role = role(
             db,
-            "e2e_physician",
+            "physician",
             [
                 "appointments.read",
                 "clinical.documents.read_institution",
@@ -406,8 +406,23 @@ def seed() -> dict:
         link_patient(db, paid_patient, clinic_a, admin_a)
         link_patient(db, foreign_patient, clinic_c, foreign_physician)
 
+        local_episode = ClinicalEpisode(
+            patient_id=shared.id,
+            institution_id=institution_a.id,
+            title="E2E lokalna gastro epizoda",
+            episode_type="gastroenterology",
+            status="open",
+            priority="routine",
+            start_date=day,
+            summary="E2E local episode summary",
+            created_by=physician_a.id,
+        )
+        db.add(local_episode)
+        db.flush()
+
         b_appt = appointment(db, shared, consult, provider_b, room_b1, clinic_b, day, time(9, 0), time(9, 30), admin_a)
         a_appt = appointment(db, shared, consult, provider_a, room_a1, clinic_a, day, time(10, 0), time(10, 30), admin_a)
+        a_appt.episode_id = local_episode.id
         a_appt.notes = "SECRET_APPOINTMENT_NOTE_SENTINEL"
         paid_appt = appointment(db, paid_patient, gastro, provider_a, room_a2, clinic_a, day, time(12, 0), time(12, 30), admin_a)
         only_b_appt = appointment(db, only_b, gastro, provider_b, room_b1, clinic_b, day, time(11, 0), time(11, 30), admin_a)
@@ -689,6 +704,7 @@ def seed() -> dict:
                 "financialSource": financial_source.id,
                 "foreignDocument": foreign_document.id,
                 "clinicBInvoice": clinic_b_invoice.id,
+                "localEpisode": local_episode.id,
                 "foreignEpisode": foreign_episode.id,
                 "foreignFinding": foreign_finding.id,
                 "foreignQuestion": foreign_question.id,

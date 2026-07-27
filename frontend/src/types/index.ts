@@ -123,6 +123,22 @@ export type ClinicalDocument = {
   can_add_addendum?: boolean;
 };
 
+export type UnclassifiedDocumentReview = {
+  id: number;
+  patient_id: number;
+  clinic_id: number;
+  institution_id: number;
+  title: string;
+  document_type: string;
+  source_type: string;
+  document_date?: string | null;
+  received_at?: string | null;
+  created_at: string;
+  review_status: string;
+  record_classification: "unclassified";
+  patient: ClinicalDocumentPatientIdentity;
+};
+
 export type PatientKnowledgeSource = {
   document_id: number;
   title: string;
@@ -225,6 +241,22 @@ export type Appointment = {
   service?: Pick<Service, "id" | "name" | "code" | "duration_minutes">;
   provider?: Pick<Provider, "id" | "full_name" | "specialty" | "staff_role" | "clinic_id">;
   room?: Pick<Room, "id" | "name" | "type" | "clinic_id">;
+};
+
+export type EpisodeAppointmentOperational = {
+  id: number;
+  clinic_id: number;
+  service_id: number;
+  provider_id: number;
+  room_id: number;
+  date: string;
+  start_time: string;
+  end_time: string;
+  duration_minutes: number;
+  status: string;
+  service?: Pick<Service, "id" | "name" | "code" | "duration_minutes"> | null;
+  provider?: Pick<Provider, "id" | "full_name" | "specialty" | "staff_role" | "clinic_id"> | null;
+  room?: Pick<Room, "id" | "name" | "type" | "clinic_id"> | null;
 };
 
 export type PatientAppointmentAvailability = {

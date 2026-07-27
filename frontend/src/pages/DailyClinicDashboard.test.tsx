@@ -1,7 +1,8 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
-import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
+import { ClinicContextProvider, type ClinicContextValue } from "../contexts/ClinicContext";
 import { DailyClinicDashboard } from "./DailyClinicDashboard";
 
 function activity(id: number, time: string, end_time: string, service_name: string, room_name = "Ordinacija 1", status = "ready") {
@@ -153,9 +154,29 @@ function installFetchMock() {
   });
 }
 
-function renderDashboard() {
-  return render(<MemoryRouter initialEntries={["/"]}><Routes><Route path="/" element={<DailyClinicDashboard/>}/><Route path="/journeys/:id" element={<p>Otvoren radni prostor</p>}/></Routes></MemoryRouter>);
-}
+  function renderDashboard() {
+    return render(
+      <ClinicContextProvider value={{
+        status: "clinic_context_ready",
+        ready: true,
+        clinicId: "1",
+        timezone: "Europe/Zagreb",
+        error: null,
+      }}>
+        <MemoryRouter initialEntries={["/"]}><Routes><Route path="/" element={<DailyClinicDashboard/>}/><Route path="/journeys/:id" element={<p>Otvoren radni prostor</p>}/></Routes></MemoryRouter>
+      </ClinicContextProvider>
+    );
+  }
+
+  function dashboardWithClinicContext(value: ClinicContextValue) {
+    return (
+      <ClinicContextProvider value={value}>
+        <MemoryRouter initialEntries={["/"]}>
+          <Routes><Route path="/" element={<DailyClinicDashboard/>}/></Routes>
+        </MemoryRouter>
+      </ClinicContextProvider>
+    );
+  }
 
 async function findPatientBlock(label: RegExp) {
   await screen.findByText(label);
@@ -288,5 +309,144 @@ describe("vremenska dnevna ploča", () => {
     await user.click(advanced.querySelector("summary") as HTMLElement);
     await user.selectOptions(screen.getByRole("combobox", { name: "Klinika" }), "2");
     await waitFor(() => expect(fetch).toHaveBeenCalledWith(expect.stringMatching(/dashboard\/day\?.*clinic_id=2/), expect.anything()));
+  });
+
+  test("waits for the active clinic timezone before requesting the clinic-local day", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    vi.setSystemTime(new Date("2026-07-26T22:30:00.000Z"));
+    try {
+      const view = render(dashboardWithClinicContext({
+        status: "clinic_context_loading",
+        ready: false,
+        clinicId: null,
+        timezone: null,
+        error: null,
+      }));
+      expect(vi.mocked(fetch).mock.calls.filter(([input]) => String(input).includes("/api/dashboard/day"))).toHaveLength(0);
+
+      view.rerender(dashboardWithClinicContext({
+        status: "clinic_context_ready",
+        ready: true,
+        clinicId: "1",
+        timezone: "Europe/Zagreb",
+        error: null,
+      }));
+
+      await waitFor(() => expect(fetch).toHaveBeenCalledWith(
+        expect.stringMatching(/dashboard\/day\?.*selected_date=2026-07-27/),
+        expect.anything(),
+      ));
+      expect(screen.getByDisplayValue("2026-07-27")).toBeTruthy();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  test("clinic switch recalculates auto-today without querying the stale clinic day", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    vi.setSystemTime(new Date("2026-07-27T01:30:00.000Z"));
+    try {
+      const view = render(dashboardWithClinicContext({
+        status: "clinic_context_ready",
+        ready: true,
+        clinicId: "1",
+        timezone: "Europe/Zagreb",
+        error: null,
+      }));
+      await waitFor(() => expect(fetch).toHaveBeenCalledWith(
+        expect.stringMatching(/selected_date=2026-07-27/),
+        expect.anything(),
+      ));
+      vi.mocked(fetch).mockClear();
+
+      view.rerender(dashboardWithClinicContext({
+        status: "clinic_context_ready",
+        ready: true,
+        clinicId: "2",
+        timezone: "America/Los_Angeles",
+        error: null,
+      }));
+
+      await waitFor(() => expect(fetch).toHaveBeenCalledWith(
+        expect.stringMatching(/selected_date=2026-07-26/),
+        expect.anything(),
+      ));
+      expect(vi.mocked(fetch).mock.calls.some(([input]) =>
+        String(input).includes("selected_date=2026-07-27")
+      )).toBe(false);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  test("manual date survives clinic switch and Today returns to clinic-local auto mode", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    vi.setSystemTime(new Date("2026-07-27T01:30:00.000Z"));
+    try {
+      const view = render(dashboardWithClinicContext({
+        status: "clinic_context_ready",
+        ready: true,
+        clinicId: "1",
+        timezone: "Europe/Zagreb",
+        error: null,
+      }));
+      await waitFor(() => expect(fetch).toHaveBeenCalledWith(
+        expect.stringMatching(/selected_date=2026-07-27/),
+        expect.anything(),
+      ));
+      fireEvent.change(document.querySelector("input.native-date-picker") as HTMLInputElement, {
+        target: { value: "2026-08-03" },
+      });
+      await waitFor(() => expect(fetch).toHaveBeenCalledWith(
+        expect.stringMatching(/selected_date=2026-08-03/),
+        expect.anything(),
+      ));
+
+      view.rerender(dashboardWithClinicContext({
+        status: "clinic_context_ready",
+        ready: true,
+        clinicId: "2",
+        timezone: "America/Los_Angeles",
+        error: null,
+      }));
+      expect(screen.getByDisplayValue("03. 08. 2026.")).toBeTruthy();
+
+      fireEvent.click(screen.getByRole("button", { name: "Danas" }));
+      await waitFor(() => expect(fetch).toHaveBeenCalledWith(
+        expect.stringMatching(/selected_date=2026-07-26/),
+        expect.anything(),
+      ));
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  test("midnight rollover issues one new auto-today request", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    vi.setSystemTime(new Date("2026-07-26T21:59:30.000Z"));
+    try {
+      render(dashboardWithClinicContext({
+        status: "clinic_context_ready",
+        ready: true,
+        clinicId: "1",
+        timezone: "Europe/Zagreb",
+        error: null,
+      }));
+      await waitFor(() => expect(fetch).toHaveBeenCalledWith(
+        expect.stringMatching(/selected_date=2026-07-26/),
+        expect.anything(),
+      ));
+      await vi.advanceTimersByTimeAsync(60_000);
+      await waitFor(() => expect(fetch).toHaveBeenCalledWith(
+        expect.stringMatching(/selected_date=2026-07-27/),
+        expect.anything(),
+      ));
+      const dayRequests = vi.mocked(fetch).mock.calls.filter(([input]) =>
+        String(input).includes("/api/dashboard/day")
+      );
+      expect(dayRequests).toHaveLength(2);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

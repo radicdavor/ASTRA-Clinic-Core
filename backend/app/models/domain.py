@@ -191,6 +191,49 @@ class ClinicMembership(Base):
     created_by: Mapped[User | None] = relationship(foreign_keys=[created_by_user_id])
 
 
+class ClinicMembershipMigrationIssue(Base):
+    __tablename__ = "clinic_membership_migration_issues"
+    __table_args__ = (
+        CheckConstraint(
+            "status in ('pending', 'resolved')",
+            name="ck_clinic_membership_migration_issue_status",
+        ),
+        UniqueConstraint(
+            "user_id",
+            name="uq_clinic_membership_migration_issue_user",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"),
+    )
+    reason: Mapped[str] = mapped_column(String(80))
+    candidate_clinic_ids: Mapped[list] = mapped_column(JSON, default=list)
+    correction_reason: Mapped[str | None] = mapped_column(String(80))
+    corrected_clinic_ids: Mapped[list | None] = mapped_column(JSON)
+    status: Mapped[str] = mapped_column(String(40), default="pending", index=True)
+    resolution_clinic_id: Mapped[int | None] = mapped_column(
+        ForeignKey("clinics.id", ondelete="RESTRICT"),
+    )
+    resolution_note: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+    )
+    resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    resolved_by_user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="RESTRICT"),
+    )
+    user: Mapped[User] = relationship(foreign_keys=[user_id])
+    resolution_clinic: Mapped[Clinic | None] = relationship(
+        foreign_keys=[resolution_clinic_id],
+    )
+    resolved_by: Mapped[User | None] = relationship(
+        foreign_keys=[resolved_by_user_id],
+    )
+
+
 class PatientClinicAssociation(Base):
     __tablename__ = "patient_clinic_associations"
     __table_args__ = (UniqueConstraint("patient_id", "clinic_id", name="uq_patient_clinic_association_patient_clinic"),)

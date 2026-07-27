@@ -10,7 +10,7 @@ from app.audit.service import audit, snapshot
 from app.auth.dependencies import CurrentUserContext, get_scoped_patient, require_active_clinic, require_medical_staff
 from app.core.database import get_db
 from app.models.domain import Appointment, AuditLog, Clinic, ClinicalEpisode, ClinicalPlan, Provider
-from app.schemas.common import AppointmentOut, ClinicalDecisionTimelineItem, ClinicalEpisodeCreate, ClinicalEpisodeOut, ClinicalEpisodeUpdate, ClinicalPlanGenerate, ClinicalPlanOut, ClinicalPlanUpdate, ErrorResponse
+from app.schemas.common import ClinicalDecisionTimelineItem, ClinicalEpisodeCreate, ClinicalEpisodeOut, ClinicalEpisodeUpdate, ClinicalPlanGenerate, ClinicalPlanOut, ClinicalPlanUpdate, EpisodeAppointmentOperationalOut, ErrorResponse
 from app.services.clinical_scope import authorized_institution_id, get_institution_clinical_plan, get_institution_episode, institution_episode_statement, provider_belongs_to_institution
 
 ERROR_RESPONSES = {400: {"model": ErrorResponse}, 401: {"model": ErrorResponse}, 403: {"model": ErrorResponse}, 404: {"model": ErrorResponse}, 409: {"model": ErrorResponse}, 422: {"model": ErrorResponse}}
@@ -213,13 +213,12 @@ def close_episode(
     return episode_with_count(db, get_episode_or_404(db, episode.id, context))
 
 
-@router.get("/episodes/{episode_id}/appointments", response_model=list[AppointmentOut])
+@router.get("/episodes/{episode_id}/appointments", response_model=list[EpisodeAppointmentOperationalOut])
 def episode_appointments(episode_id: int, db: Session = Depends(get_db), context: CurrentUserContext = Depends(require_active_clinic("appointments.read"))):
     episode = get_episode_or_404(db, episode_id, context)
     return db.scalars(
         select(Appointment)
         .options(
-            joinedload(Appointment.patient),
             joinedload(Appointment.service),
             joinedload(Appointment.provider),
             joinedload(Appointment.room),

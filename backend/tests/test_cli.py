@@ -58,3 +58,61 @@ def test_schema_status_returns_zero_when_database_is_ready(monkeypatch, capsys):
 
     assert cli.main(["schema-status"]) == 0
     assert json.loads(capsys.readouterr().out)["status"] == "ready"
+
+
+def test_membership_migration_status_reports_pending_as_operator_action(monkeypatch, capsys):
+    class FakeSession:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return None
+
+    monkeypatch.setattr(cli, "SessionLocal", FakeSession)
+    monkeypatch.setattr(
+        cli,
+        "membership_migration_status",
+        lambda _db: {"pending": 1, "resolved": 0, "issues": [{"id": 7}]},
+    )
+
+    assert cli.main(["clinic-membership-migration-status"]) == 2
+    assert json.loads(capsys.readouterr().out)["pending"] == 1
+
+
+def test_resolve_membership_cli_commits_bounded_resolution(monkeypatch, capsys):
+    class FakeIssue:
+        id = 7
+        user_id = 11
+        resolution_clinic_id = 3
+        status = "resolved"
+
+    class FakeSession:
+        committed = False
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return None
+
+        def commit(self):
+            self.committed = True
+
+    session = FakeSession()
+    monkeypatch.setattr(cli, "SessionLocal", lambda: session)
+    monkeypatch.setattr(cli, "resolve_membership_migration_issue", lambda _db, **_kwargs: FakeIssue())
+
+    assert cli.main([
+        "resolve-clinic-membership",
+        "--user-email", "legacy@example.invalid",
+        "--clinic-id", "3",
+        "--operator-email", "operator@example.invalid",
+        "--note", "Owner-approved synthetic resolution",
+    ]) == 0
+    assert session.committed is True
+    assert json.loads(capsys.readouterr().out) == {
+        "clinic_id": 3,
+        "issue_id": 7,
+        "status": "resolved",
+        "user_id": 11,
+    }

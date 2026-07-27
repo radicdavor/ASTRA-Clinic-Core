@@ -1,10 +1,12 @@
 from typing import Any
+from ipaddress import ip_address, ip_network
 
 from fastapi import Request
 from sqlalchemy.inspection import inspect
 from sqlalchemy.orm import Session
 
 from app.models.domain import AuditLog
+from app.core.config import get_settings
 
 
 SAFE_SNAPSHOT_FIELDS = frozenset(
@@ -46,6 +48,28 @@ SAFE_SNAPSHOT_FIELDS = frozenset(
         "closed_at",
     }
 )
+
+def resolved_client_ip(request: Request | None) -> str | None:
+    if request is None or request.client is None:
+        return None
+    peer = request.client.host
+    try:
+        peer_address = ip_address(peer)
+        trusted = any(
+            peer_address in ip_network(network, strict=False)
+            for network in get_settings().trusted_proxy_network_list
+        )
+    except ValueError:
+        trusted = False
+    if not trusted:
+        return peer
+    forwarded = request.headers.get("x-real-ip") or request.headers.get("x-forwarded-for", "").split(",")[0].strip()
+    if not forwarded:
+        return peer
+    try:
+        return str(ip_address(forwarded))
+    except ValueError:
+        return peer
 
 
 def snapshot(obj: Any) -> dict[str, Any] | None:
@@ -102,7 +126,7 @@ def audit(
             after_json=after_json,
             summary=summary,
             request_id=getattr(request.state, "request_id", None) if request else None,
-            ip_address=request.client.host if request and request.client else None,
+            ip_address=resolved_client_ip(request),
             user_agent=request.headers.get("user-agent") if request else None,
         )
     db.add(event)

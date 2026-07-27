@@ -1,12 +1,55 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timezone
 
 from fastapi import HTTPException
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.orm import Session, joinedload
 
 from app.models.domain import Appointment, ClinicalDocument, Patient, PatientClinicAssociation
+
+
+class DocumentClassificationConflict(RuntimeError):
+    pass
+
+
+def confirm_document_classification(
+    db: Session,
+    document: ClinicalDocument,
+    *,
+    record_classification: str,
+    reviewer_user_id: int,
+    note: str | None,
+    reviewed_at: datetime | None = None,
+) -> ClinicalDocument:
+    """Atomically transition one unclassified source exactly once."""
+    now = reviewed_at or datetime.now(timezone.utc)
+    provenance = dict(document.provenance_json or {})
+    provenance["classification_review"] = {
+        "record_classification": record_classification,
+        "note": note,
+        "reviewed_by": reviewer_user_id,
+        "reviewed_at": now.isoformat(),
+    }
+    transition = db.execute(
+        update(ClinicalDocument)
+        .where(
+            ClinicalDocument.id == document.id,
+            ClinicalDocument.record_classification == "unclassified",
+        )
+        .values(
+            record_classification=record_classification,
+            is_clinical_record=record_classification == "clinical",
+            classification_reviewed_by=reviewer_user_id,
+            classification_reviewed_at=now,
+            provenance_json=provenance,
+        )
+        .execution_options(synchronize_session=False)
+    )
+    if transition.rowcount != 1:
+        raise DocumentClassificationConflict
+    db.refresh(document)
+    return document
 
 
 def get_document_or_404(db: Session, document_id: int) -> ClinicalDocument:
