@@ -7,17 +7,14 @@ import { ConfirmActionDialog } from "../components/ConfirmActionDialog";
 import { DateInput } from "../components/DateInput";
 import { HelpHint } from "../components/HelpHint";
 import { StatusBadge, statusLabel } from "../components/StatusBadge";
+import { useClinicContext } from "../contexts/ClinicContext";
 import { useApi } from "../hooks/useApi";
 import { Appointment, Clinic, Provider, ReceptionSlot, Room, Service } from "../types";
+import { getClinicToday } from "../utils/clinicTime";
 import { formatDate } from "../utils/date";
 import { formatPatientName } from "../utils/patientIdentity";
 import { providerHoursForDate } from "../utils/providerSchedule";
 
-function localDateValue(value = new Date()) {
-  return `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, "0")}-${String(value.getDate()).padStart(2, "0")}`;
-}
-
-const today = localDateValue();
 const receptionStatuses = ["scheduled", "confirmed", "arrived", "in_progress", "completed", "cancelled", "no_show"];
 const weekdayLabels = ["Ned", "Pon", "Uto", "Sri", "Čet", "Pet", "Sub"];
 const blockingReceptionStatuses = new Set(["scheduled", "confirmed", "arrived", "in_progress", "waiting_for_result", "follow_up_needed", "rescheduled"]);
@@ -72,16 +69,34 @@ function freeHalfHourTimes(appointments: Appointment[], provider: Provider, date
 
 export function Reception() {
   const location = useLocation();
-  const [date, setDate] = useState(today);
+  const clinicContext = useClinicContext();
+  const [dateMode, setDateMode] = useState<"date_auto_today" | "date_user_selected">("date_auto_today");
+  const [selectedDate, setSelectedDate] = useState("");
+  const [clockInstant, setClockInstant] = useState(() => Date.now());
   const [view, setView] = useState<"day" | "week">("day");
   const [filters, setFilters] = useState({ clinic_id: "", room_id: "", provider_id: "", service_id: "", status: "" });
   const [selected, setSelected] = useState<Appointment | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Appointment | null>(null);
   const [patientDraft, setPatientDraft] = useState({ first_name: "", last_name: "", date_of_birth: "", oib: "", phone: "", email: "" });
-  const clinics = useApi<Clinic[]>("/api/clinics", []);
-  const rooms = useApi<Room[]>("/api/rooms", []);
-  const providers = useApi<Provider[]>("/api/providers", []);
-  const services = useApi<Service[]>("/api/services", []);
+  const clinicContextReady = clinicContext.status === "clinic_context_ready"
+    && clinicContext.clinicId !== null
+    && clinicContext.timezone !== null;
+  const automaticClinicDate = clinicContextReady
+    ? getClinicToday(clinicContext.timezone ?? undefined, new Date(clockInstant))
+    : "";
+  const date = dateMode === "date_auto_today" ? automaticClinicDate : selectedDate;
+  const clinicRequestKey = clinicContextReady ? clinicContext.clinicId : null;
+  const clinics = useApi<Clinic[]>(clinicContextReady ? "/api/clinics" : null, [], clinicRequestKey);
+  const rooms = useApi<Room[]>(clinicContextReady ? "/api/rooms" : null, [], clinicRequestKey);
+  const providers = useApi<Provider[]>(clinicContextReady ? "/api/providers" : null, [], clinicRequestKey);
+  const services = useApi<Service[]>(clinicContextReady ? "/api/services" : null, [], clinicRequestKey);
+  useEffect(() => {
+    if (!clinicContextReady || dateMode !== "date_auto_today") return;
+    const updateAtClinicDateBoundary = window.setInterval(() => {
+      setClockInstant(Date.now());
+    }, 60_000);
+    return () => window.clearInterval(updateAtClinicDateBoundary);
+  }, [clinicContextReady, clinicContext.clinicId, clinicContext.timezone, dateMode]);
   const query = useMemo(() => {
     const params = new URLSearchParams({ date });
     Object.entries(filters).forEach(([key, value]) => {
@@ -89,19 +104,21 @@ export function Reception() {
     });
     return `/api/reception/day?${params.toString()}`;
   }, [date, filters]);
-  const slots = useApi<ReceptionSlot[]>(query, []);
+  const slots = useApi<ReceptionSlot[]>(clinicContextReady && date ? query : null, [], clinicRequestKey);
   const weekDates = useMemo(() => {
+    if (!date) return [];
     const monday = mondayOfWeek(date);
     return Array.from({ length: 7 }, (_, index) => moveDate(monday, index));
   }, [date]);
   const weekQuery = useMemo(() => {
+    if (weekDates.length !== 7) return "";
     const params = new URLSearchParams({ date_from: weekDates[0], date_to: weekDates[6] });
     if (filters.room_id) params.set("room_id", filters.room_id);
     if (filters.provider_id) params.set("provider_id", filters.provider_id);
     if (filters.status) params.set("status", filters.status);
     return `/api/appointments?${params.toString()}`;
   }, [weekDates, filters.room_id, filters.provider_id, filters.status]);
-  const weekData = useApi<Appointment[]>(weekQuery, []);
+  const weekData = useApi<Appointment[]>(clinicContextReady && date ? weekQuery : null, [], clinicRequestKey);
   const weekAppointments = useMemo(() => weekData.data.filter((appointment) => {
     if (filters.service_id && String(appointment.service_id) !== filters.service_id) return false;
     if (filters.clinic_id) {
@@ -207,6 +224,15 @@ export function Reception() {
   const canMarkArrived = Boolean(selected && ["scheduled", "confirmed"].includes(selected.status) && hasIdentityDetails);
   const canStartService = Boolean(selected && selected.status === "arrived" && selected.identity_verified_at);
 
+  if (!clinicContextReady) {
+    return (
+      <section className="page-card clinic-context-empty" aria-live="polite">
+        <h1>Učitavanje klinike</h1>
+        <p>Prijem čeka aktivnu kliniku i njezinu vremensku zonu prije učitavanja dnevnog rasporeda.</p>
+      </section>
+    );
+  }
+
   return (
     <section className="page">
       <div className="page-header">
@@ -217,10 +243,10 @@ export function Reception() {
           <p>{view === "day" ? `Dnevni popis za ${formatDate(date)}.` : `Sedmodnevni pregled od ${formatDate(weekDates[0])} do ${formatDate(weekDates[6])}.`}</p>
         </div>
         <div className="reception-date-controls">
-          <button type="button" className="action-button" onClick={() => setDate(moveDate(date, view === "week" ? -7 : -1))}>Prethodni {view === "week" ? "tjedan" : "dan"}</button>
-          <button type="button" className="action-button" onClick={() => setDate(today)}>Danas</button>
-          <DateInput required value={date} onChange={setDate} />
-          <button type="button" className="action-button" onClick={() => setDate(moveDate(date, view === "week" ? 7 : 1))}>Sljedeći {view === "week" ? "tjedan" : "dan"}</button>
+          <button type="button" className="action-button" onClick={() => { setSelectedDate(moveDate(date, view === "week" ? -7 : -1)); setDateMode("date_user_selected"); }}>Prethodni {view === "week" ? "tjedan" : "dan"}</button>
+          <button type="button" className="action-button" onClick={() => setDateMode("date_auto_today")}>Danas</button>
+          <DateInput required value={date} onChange={(value) => { setSelectedDate(value); setDateMode("date_user_selected"); }} />
+          <button type="button" className="action-button" onClick={() => { setSelectedDate(moveDate(date, view === "week" ? 7 : 1)); setDateMode("date_user_selected"); }}>Sljedeći {view === "week" ? "tjedan" : "dan"}</button>
         </div>
       </div>
 
@@ -277,9 +303,9 @@ export function Reception() {
               const dayAppointments = weekAppointments.filter((appointment) => appointment.date === weekDate);
               const freeTimes = isSunday(weekDate) || !selectedProvider ? [] : freeHalfHourTimes(dayAppointments, selectedProvider, weekDate);
               return (
-                <section className={`reception-week-day ${weekDate === today ? "today" : ""} ${isSunday(weekDate) ? "closed" : ""}`} key={weekDate}>
+                <section className={`reception-week-day ${weekDate === automaticClinicDate ? "today" : ""} ${isSunday(weekDate) ? "closed" : ""}`} key={weekDate}>
                   <header>
-                    <button type="button" onClick={() => { setDate(weekDate); setView("day"); }}>{shortDate(weekDate)}</button>
+                    <button type="button" onClick={() => { setSelectedDate(weekDate); setDateMode("date_user_selected"); setView("day"); }}>{shortDate(weekDate)}</button>
                     <span>{dayAppointments.length}</span>
                   </header>
                   <div className="reception-week-items">
