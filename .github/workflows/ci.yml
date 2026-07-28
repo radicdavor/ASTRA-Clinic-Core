@@ -331,7 +331,7 @@ jobs:
       - name: Produce and validate canonical release evidence
         run: |
           generated_at="$(date --iso-8601=seconds)"
-          mkdir -p .release-evidence
+          mkdir -p release-evidence
           python scripts/release_evidence.py produce \
             --evidence-dir .remediation-evidence/final \
             --source-sha "$REMEDIATION_SOURCE_SHA" \
@@ -341,10 +341,10 @@ jobs:
             --producer-result backend=${{ needs.backend.result }} \
             --producer-result frontend=${{ needs.frontend.result }} \
             --producer-result e2e-db=${{ needs.e2e-db.result }} \
-            --output .release-evidence/release-evidence.json \
+            --output release-evidence/release-evidence.json \
             --generated-at "$generated_at"
           python scripts/release_evidence.py validate \
-            --manifest .release-evidence/release-evidence.json \
+            --manifest release-evidence/release-evidence.json \
             --source-sha "$REMEDIATION_SOURCE_SHA" \
             --workflow-run-id "$GITHUB_RUN_ID"
           python scripts/release_evidence.py truth-report \
@@ -356,6 +356,6 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: release-evidence
-          path: .release-evidence
+          path: release-evidence
           if-no-files-found: error
           retention-days: 14
