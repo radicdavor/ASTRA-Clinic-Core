@@ -203,7 +203,7 @@ def test_downloaded_output_log_hash_is_revalidated(tmp_path):
         workflow_run_id=RUN_ID,
         max_age_hours=24,
     )
-    validate_directory(args)
+    validate_directory(args, now=NOW)
     output.write_text("tampered output\n", encoding="utf-8")
     with pytest.raises(RecoveryError, match="hash_mismatch"):
-        validate_directory(args)
+        validate_directory(args, now=NOW)

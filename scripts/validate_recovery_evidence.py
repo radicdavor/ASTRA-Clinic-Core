@@ -206,7 +206,9 @@ def validate_record(
     return record
 
 
-def validate(args: argparse.Namespace) -> dict[str, int]:
+def validate(
+    args: argparse.Namespace, *, now: datetime | None = None
+) -> dict[str, int]:
     records = list(args.evidence_dir.rglob("recovery-evidence.json"))
     if len(records) != 1:
         raise RecoveryError("recovery_evidence_duplicate_or_missing")
@@ -216,6 +218,7 @@ def validate(args: argparse.Namespace) -> dict[str, int]:
         expected_source_sha=args.source_sha,
         expected_workflow_run_id=str(args.workflow_run_id),
         max_age_hours=args.max_age_hours,
+        now=now,
     )
     output_log = records[0].parent / record["test_output_file"]
     if not output_log.is_file() or sha256_file(output_log) != record["test_output_hash"]:
