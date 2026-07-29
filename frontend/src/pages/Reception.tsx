@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Trash2 } from "lucide-react";
 import { Link, useLocation } from "react-router-dom";
 import { api } from "../api/client";
@@ -7,49 +7,30 @@ import { ConfirmActionDialog } from "../components/ConfirmActionDialog";
 import { DateInput } from "../components/DateInput";
 import { HelpHint } from "../components/HelpHint";
 import { StatusBadge, statusLabel } from "../components/StatusBadge";
+import { useClinicContext } from "../contexts/ClinicContext";
 import { useApi } from "../hooks/useApi";
 import { Appointment, Clinic, Provider, ReceptionSlot, Room, Service } from "../types";
+import { getClinicTodayForTimezone } from "../utils/clinicTime";
 import { formatDate } from "../utils/date";
 import { formatPatientName } from "../utils/patientIdentity";
 import { providerHoursForDate } from "../utils/providerSchedule";
+import {
+  formatShortCalendarDate,
+  isCalendarSunday,
+  mondayOfCalendarWeek,
+  moveCalendarDate,
+} from "../utils/receptionDate";
 
-function localDateValue(value = new Date()) {
-  return `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, "0")}-${String(value.getDate()).padStart(2, "0")}`;
-}
-
-const today = localDateValue();
 const receptionStatuses = ["scheduled", "confirmed", "arrived", "in_progress", "completed", "cancelled", "no_show"];
-const weekdayLabels = ["Ned", "Pon", "Uto", "Sri", "Čet", "Pet", "Sub"];
 const blockingReceptionStatuses = new Set(["scheduled", "confirmed", "arrived", "in_progress", "waiting_for_result", "follow_up_needed", "rescheduled"]);
 const halfHourTimes = Array.from({ length: 29 }, (_, index) => {
   const minutes = 7 * 60 + index * 30;
   return `${String(Math.floor(minutes / 60)).padStart(2, "0")}:${String(minutes % 60).padStart(2, "0")}`;
 });
 
-function moveDate(value: string, days: number) {
-  const next = new Date(`${value}T12:00:00`);
-  next.setDate(next.getDate() + days);
-  return next.toISOString().slice(0, 10);
-}
-
 function isHalfHour(time: string) {
   const minutes = Number(time.slice(3, 5));
   return minutes === 0 || minutes === 30;
-}
-
-function shortDate(value: string) {
-  const parsed = new Date(`${value}T12:00:00`);
-  return `${weekdayLabels[parsed.getDay()]} ${String(parsed.getDate()).padStart(2, "0")}.${String(parsed.getMonth() + 1).padStart(2, "0")}.`;
-}
-
-function mondayOfWeek(value: string) {
-  const parsed = new Date(`${value}T12:00:00`);
-  const daysSinceMonday = (parsed.getDay() + 6) % 7;
-  return moveDate(value, -daysSinceMonday);
-}
-
-function isSunday(value: string) {
-  return new Date(`${value}T12:00:00`).getDay() === 0;
 }
 
 function timeToMinutes(value: string) {
@@ -72,48 +53,112 @@ function freeHalfHourTimes(appointments: Appointment[], provider: Provider, date
 
 export function Reception() {
   const location = useLocation();
-  const [date, setDate] = useState(today);
+  const clinicContext = useClinicContext();
+  const [dateMode, setDateMode] = useState<"date_auto_today" | "date_user_selected">("date_auto_today");
+  const [selectedDate, setSelectedDate] = useState("");
+  const [clockInstant, setClockInstant] = useState(() => Date.now());
   const [view, setView] = useState<"day" | "week">("day");
   const [filters, setFilters] = useState({ clinic_id: "", room_id: "", provider_id: "", service_id: "", status: "" });
+  const [refreshError, setRefreshError] = useState<string | null>(null);
   const [selected, setSelected] = useState<Appointment | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Appointment | null>(null);
   const [patientDraft, setPatientDraft] = useState({ first_name: "", last_name: "", date_of_birth: "", oib: "", phone: "", email: "" });
-  const clinics = useApi<Clinic[]>("/api/clinics", []);
-  const rooms = useApi<Room[]>("/api/rooms", []);
-  const providers = useApi<Provider[]>("/api/providers", []);
-  const services = useApi<Service[]>("/api/services", []);
+  const directRefreshControllerRef = useRef<AbortController | null>(null);
+  const directRefreshGenerationRef = useRef(0);
+  const activeRefreshKeyRef = useRef("");
+  const clinicIdentityReady = clinicContext.status === "clinic_context_ready" && clinicContext.clinicId !== null;
+  const clinicDateState = useMemo(() => {
+    if (!clinicIdentityReady) return { date: "", error: null };
+    if (!clinicContext.timezone?.trim()) {
+      return {
+        date: "",
+        error: "Aktivna klinika nema postavljenu vremensku zonu. Prijem je zaustavljen dok se postavka ne ispravi.",
+      };
+    }
+    try {
+      return {
+        date: getClinicTodayForTimezone(clinicContext.timezone, new Date(clockInstant)),
+        error: null,
+      };
+    } catch {
+      return {
+        date: "",
+        error: "Vremenska zona aktivne klinike nije valjana. Prijem je zaustavljen dok se postavka ne ispravi.",
+      };
+    }
+  }, [clinicIdentityReady, clinicContext.timezone, clockInstant]);
+  const clinicContextReady = clinicIdentityReady && clinicDateState.error === null && clinicDateState.date !== "";
+  const automaticClinicDate = clinicDateState.date;
+  const date = dateMode === "date_auto_today" ? automaticClinicDate : selectedDate;
+  const clinicRequestKey = clinicContextReady ? clinicContext.clinicId : null;
+  const activeClinicFilterId = clinicContextReady ? clinicContext.clinicId! : "";
+  const filtersMatchActiveClinic = filters.clinic_id === activeClinicFilterId;
+  const scopedProviderFilterId = filtersMatchActiveClinic ? filters.provider_id : "";
+  const scopedRoomFilterId = filtersMatchActiveClinic ? filters.room_id : "";
+  useEffect(() => {
+    setFilters((current) => {
+      if (!clinicContextReady) {
+        return current.clinic_id || current.provider_id || current.room_id
+          ? { ...current, clinic_id: "", provider_id: "", room_id: "" }
+          : current;
+      }
+      return current.clinic_id === clinicContext.clinicId
+        ? current
+        : { ...current, clinic_id: clinicContext.clinicId!, provider_id: "", room_id: "" };
+    });
+    setSelected(null);
+    setDeleteTarget(null);
+  }, [clinicContextReady, clinicContext.clinicId]);
+  const clinics = useApi<Clinic[]>(clinicContextReady ? "/api/clinics" : null, [], clinicRequestKey);
+  const rooms = useApi<Room[]>(clinicContextReady ? "/api/rooms" : null, [], clinicRequestKey);
+  const providers = useApi<Provider[]>(clinicContextReady ? "/api/providers" : null, [], clinicRequestKey);
+  const services = useApi<Service[]>(clinicContextReady ? "/api/services" : null, [], clinicRequestKey);
+  useEffect(() => {
+    if (!clinicContextReady || dateMode !== "date_auto_today") return;
+    const updateAtClinicDateBoundary = window.setInterval(() => {
+      setClockInstant(Date.now());
+    }, 60_000);
+    return () => window.clearInterval(updateAtClinicDateBoundary);
+  }, [clinicContextReady, clinicContext.clinicId, clinicContext.timezone, dateMode]);
   const query = useMemo(() => {
     const params = new URLSearchParams({ date });
-    Object.entries(filters).forEach(([key, value]) => {
+    Object.entries({
+      ...filters,
+      clinic_id: activeClinicFilterId,
+      provider_id: scopedProviderFilterId,
+      room_id: scopedRoomFilterId,
+    }).forEach(([key, value]) => {
       if (value) params.set(key, value);
     });
     return `/api/reception/day?${params.toString()}`;
-  }, [date, filters]);
-  const slots = useApi<ReceptionSlot[]>(query, []);
+  }, [date, filters, activeClinicFilterId, scopedProviderFilterId, scopedRoomFilterId]);
+  const slots = useApi<ReceptionSlot[]>(clinicContextReady && date ? query : null, [], clinicRequestKey);
   const weekDates = useMemo(() => {
-    const monday = mondayOfWeek(date);
-    return Array.from({ length: 7 }, (_, index) => moveDate(monday, index));
+    if (!date) return [];
+    const monday = mondayOfCalendarWeek(date);
+    return Array.from({ length: 7 }, (_, index) => moveCalendarDate(monday, index));
   }, [date]);
   const weekQuery = useMemo(() => {
+    if (weekDates.length !== 7) return "";
     const params = new URLSearchParams({ date_from: weekDates[0], date_to: weekDates[6] });
-    if (filters.room_id) params.set("room_id", filters.room_id);
-    if (filters.provider_id) params.set("provider_id", filters.provider_id);
+    if (scopedRoomFilterId) params.set("room_id", scopedRoomFilterId);
+    if (scopedProviderFilterId) params.set("provider_id", scopedProviderFilterId);
     if (filters.status) params.set("status", filters.status);
     return `/api/appointments?${params.toString()}`;
-  }, [weekDates, filters.room_id, filters.provider_id, filters.status]);
-  const weekData = useApi<Appointment[]>(weekQuery, []);
+  }, [weekDates, scopedRoomFilterId, scopedProviderFilterId, filters.status]);
+  const weekData = useApi<Appointment[]>(clinicContextReady && date ? weekQuery : null, [], clinicRequestKey);
   const weekAppointments = useMemo(() => weekData.data.filter((appointment) => {
     if (filters.service_id && String(appointment.service_id) !== filters.service_id) return false;
-    if (filters.clinic_id) {
+    if (activeClinicFilterId) {
       const clinicId = appointment.room?.clinic_id ?? appointment.provider?.clinic_id;
-      if (String(clinicId ?? "") !== filters.clinic_id) return false;
+      if (String(clinicId ?? "") !== activeClinicFilterId) return false;
     }
     return true;
-  }), [weekData.data, filters.service_id, filters.clinic_id]);
-  const clinicProviders = useMemo(() => providers.data.filter((provider) => provider.staff_role === "physician" && (!filters.clinic_id || String(provider.clinic_id ?? "") === filters.clinic_id)), [providers.data, filters.clinic_id]);
-  const clinicRooms = useMemo(() => rooms.data.filter((room) => !filters.clinic_id || String(room.clinic_id ?? "") === filters.clinic_id), [rooms.data, filters.clinic_id]);
-  const selectedProvider = useMemo(() => providers.data.find((provider) => String(provider.id) === filters.provider_id), [providers.data, filters.provider_id]);
-  const resourcesReady = Boolean(filters.clinic_id && filters.provider_id && filters.room_id && selectedProvider);
+  }), [weekData.data, filters.service_id, activeClinicFilterId]);
+  const clinicProviders = useMemo(() => providers.data.filter((provider) => provider.staff_role === "physician" && String(provider.clinic_id ?? "") === activeClinicFilterId), [providers.data, activeClinicFilterId]);
+  const clinicRooms = useMemo(() => rooms.data.filter((room) => String(room.clinic_id ?? "") === activeClinicFilterId), [rooms.data, activeClinicFilterId]);
+  const selectedProvider = useMemo(() => providers.data.find((provider) => String(provider.id) === scopedProviderFilterId), [providers.data, scopedProviderFilterId]);
+  const resourcesReady = Boolean(activeClinicFilterId && scopedProviderFilterId && scopedRoomFilterId && selectedProvider);
   const visibleSlots = useMemo(
     () => slots.data.filter((slot) => Boolean(slot.appointment) || (resourcesReady && slot.empty && isHalfHour(slot.time))),
     [slots.data, resourcesReady]
@@ -122,18 +167,13 @@ export function Reception() {
   const slotWithinProviderHours = (time: string) => Boolean(selectedProviderHours?.enabled
     && timeToMinutes(time) >= timeToMinutes(selectedProviderHours.start)
     && timeToMinutes(time) + 30 <= timeToMinutes(selectedProviderHours.end));
-  const bookingParams = (bookingDate: string, startTime: string) => new URLSearchParams({ date: bookingDate, start_time: startTime, clinic_id: filters.clinic_id, provider_id: filters.provider_id, room_id: filters.room_id }).toString();
-
-  function selectClinic(clinicId: string) {
-    const matchingProviders = providers.data.filter((provider) => provider.staff_role === "physician" && String(provider.clinic_id ?? "") === clinicId);
-    const matchingRooms = rooms.data.filter((room) => String(room.clinic_id ?? "") === clinicId);
-    setFilters({
-      ...filters,
-      clinic_id: clinicId,
-      provider_id: matchingProviders.length === 1 ? String(matchingProviders[0].id) : "",
-      room_id: matchingRooms.length === 1 ? String(matchingRooms[0].id) : ""
-    });
-  }
+  const bookingParams = (bookingDate: string, startTime: string) => new URLSearchParams({
+    date: bookingDate,
+    start_time: startTime,
+    clinic_id: activeClinicFilterId,
+    provider_id: scopedProviderFilterId,
+    room_id: scopedRoomFilterId,
+  }).toString();
 
   function openAppointment(appointment: Appointment) {
     setSelected(appointment);
@@ -147,14 +187,55 @@ export function Reception() {
     });
   }
 
-  async function refresh() {
-    const [nextSlots, nextWeek] = await Promise.all([
-      api<ReceptionSlot[]>(query),
-      api<Appointment[]>(weekQuery)
-    ]);
-    slots.setData(nextSlots);
-    weekData.setData(nextWeek);
-  }
+  const directRefreshKey = clinicContextReady && date
+    ? `${clinicContext.clinicId}|${date}|${query}|${weekQuery}`
+    : "";
+  useEffect(() => {
+    directRefreshGenerationRef.current += 1;
+    directRefreshControllerRef.current?.abort();
+    directRefreshControllerRef.current = null;
+    activeRefreshKeyRef.current = directRefreshKey;
+    setRefreshError(null);
+    return () => {
+      directRefreshGenerationRef.current += 1;
+      directRefreshControllerRef.current?.abort();
+      directRefreshControllerRef.current = null;
+    };
+  }, [directRefreshKey]);
+
+  const refresh = useCallback(async () => {
+    const capturedKey = directRefreshKey;
+    if (!capturedKey || activeRefreshKeyRef.current !== capturedKey) return;
+    directRefreshControllerRef.current?.abort();
+    const controller = new AbortController();
+    const generation = ++directRefreshGenerationRef.current;
+    directRefreshControllerRef.current = controller;
+    setRefreshError(null);
+    try {
+      const [nextSlots, nextWeek] = await Promise.all([
+        api<ReceptionSlot[]>(query, { signal: controller.signal, suppressErrorToast: true }),
+        api<Appointment[]>(weekQuery, { signal: controller.signal, suppressErrorToast: true }),
+      ]);
+      if (
+        !controller.signal.aborted
+        && generation === directRefreshGenerationRef.current
+        && capturedKey === activeRefreshKeyRef.current
+      ) {
+        slots.setData(nextSlots);
+        weekData.setData(nextWeek);
+      }
+    } catch (error) {
+      if (
+        !controller.signal.aborted
+        && generation === directRefreshGenerationRef.current
+        && capturedKey === activeRefreshKeyRef.current
+      ) {
+        setRefreshError(error instanceof Error ? error.message : "Raspored nije osvježen.");
+      }
+    } finally {
+      if (generation === directRefreshGenerationRef.current) directRefreshControllerRef.current = null;
+    }
+  }, [directRefreshKey, query, weekQuery, slots.setData, weekData.setData]);
 
   useEffect(() => {
     function refreshAfterAppointmentChange() {
@@ -162,7 +243,7 @@ export function Reception() {
     }
     window.addEventListener("astra:appointments-changed", refreshAfterAppointmentChange);
     return () => window.removeEventListener("astra:appointments-changed", refreshAfterAppointmentChange);
-  }, [query, weekQuery]);
+  }, [refresh]);
 
   async function markArrived() {
     if (!selected) return;
@@ -207,6 +288,24 @@ export function Reception() {
   const canMarkArrived = Boolean(selected && ["scheduled", "confirmed"].includes(selected.status) && hasIdentityDetails);
   const canStartService = Boolean(selected && selected.status === "arrived" && selected.identity_verified_at);
 
+  if (!clinicIdentityReady) {
+    return (
+      <section className="page-card clinic-context-empty" aria-live="polite">
+        <h1>Učitavanje klinike</h1>
+        <p>Prijem čeka aktivnu kliniku i njezinu vremensku zonu prije učitavanja dnevnog rasporeda.</p>
+      </section>
+    );
+  }
+
+  if (clinicDateState.error) {
+    return (
+      <section className="page-card clinic-context-empty" aria-live="assertive">
+        <h1>Vremenska zona klinike nije dostupna</h1>
+        <p>{clinicDateState.error}</p>
+      </section>
+    );
+  }
+
   return (
     <section className="page">
       <div className="page-header">
@@ -217,10 +316,10 @@ export function Reception() {
           <p>{view === "day" ? `Dnevni popis za ${formatDate(date)}.` : `Sedmodnevni pregled od ${formatDate(weekDates[0])} do ${formatDate(weekDates[6])}.`}</p>
         </div>
         <div className="reception-date-controls">
-          <button type="button" className="action-button" onClick={() => setDate(moveDate(date, view === "week" ? -7 : -1))}>Prethodni {view === "week" ? "tjedan" : "dan"}</button>
-          <button type="button" className="action-button" onClick={() => setDate(today)}>Danas</button>
-          <DateInput required value={date} onChange={setDate} />
-          <button type="button" className="action-button" onClick={() => setDate(moveDate(date, view === "week" ? 7 : 1))}>Sljedeći {view === "week" ? "tjedan" : "dan"}</button>
+          <button type="button" className="action-button" onClick={() => { setSelectedDate(moveCalendarDate(date, view === "week" ? -7 : -1)); setDateMode("date_user_selected"); }}>Prethodni {view === "week" ? "tjedan" : "dan"}</button>
+          <button type="button" className="action-button" onClick={() => { setClockInstant(Date.now()); setDateMode("date_auto_today"); }}>Danas</button>
+          <DateInput required value={date} onChange={(value) => { setSelectedDate(value); setDateMode("date_user_selected"); }} />
+          <button type="button" className="action-button" onClick={() => { setSelectedDate(moveCalendarDate(date, view === "week" ? 7 : 1)); setDateMode("date_user_selected"); }}>Sljedeći {view === "week" ? "tjedan" : "dan"}</button>
         </div>
       </div>
 
@@ -230,7 +329,7 @@ export function Reception() {
       </div>
 
       <div className="filters reception-resource-filters">
-        <select value={filters.clinic_id} onChange={(event) => selectClinic(event.target.value)}><option value="">Odaberi kliniku</option>{clinics.data.map((clinic) => <option key={clinic.id} value={clinic.id}>{clinic.name}</option>)}</select>
+        <select aria-label="Aktivna klinika" disabled value={activeClinicFilterId}><option value={activeClinicFilterId}>{clinics.data.find((clinic) => String(clinic.id) === activeClinicFilterId)?.name ?? `Klinika #${activeClinicFilterId}`}</option></select>
         <select disabled={!filters.clinic_id} value={filters.provider_id} onChange={(event) => setFilters({ ...filters, provider_id: event.target.value })}><option value="">Odaberi liječnika</option>{clinicProviders.map((provider) => { const hours=providerHoursForDate(provider,date); return <option key={provider.id} value={provider.id}>{provider.full_name} · {hours.enabled?`${hours.start}–${hours.end}`:"ne radi"}</option>; })}</select>
         <select disabled={!filters.clinic_id} value={filters.room_id} onChange={(event) => setFilters({ ...filters, room_id: event.target.value })}><option value="">Odaberi prostoriju</option>{clinicRooms.map((room) => <option key={room.id} value={room.id}>{room.name}</option>)}</select>
       </div>
@@ -241,6 +340,7 @@ export function Reception() {
           <select value={filters.status} onChange={(event) => setFilters({ ...filters, status: event.target.value })}><option value="">Svi statusi</option>{receptionStatuses.map((status) => <option key={status} value={status}>{statusLabel(status)}</option>)}</select>
         </div>
       </details>
+      {refreshError && <p className="form-error" role="alert">{refreshError}</p>}
       {!resourcesReady && <p className="resource-filter-prompt">Odaberite kliniku, liječnika i prostoriju kako bi se prikazali stvarno slobodni termini.</p>}
       {resourcesReady && selectedProviderHours && <p className="resource-filter-ready">{selectedProviderHours.enabled ? `Slobodni termini po radnom vremenu liječnika: ${selectedProviderHours.start}–${selectedProviderHours.end}.` : "Liječnik ne radi odabranog dana."}</p>}
 
@@ -262,12 +362,12 @@ export function Reception() {
                   <Trash2 size={18} aria-hidden="true" />
                 </button>
               </div>
-            ) : slot.empty && !isSunday(date) && resourcesReady && slotWithinProviderHours(slot.time) ? (
+            ) : slot.empty && !isCalendarSunday(date) && resourcesReady && slotWithinProviderHours(slot.time) ? (
               <Link className="empty-slot empty-slot-action" to={`/appointments/new?${bookingParams(date, slot.time)}`} state={{ backgroundLocation: location }}>
                 <span>Slobodno</span>
                 <strong>Novi termin</strong>
               </Link>
-            ) : <span className="empty-slot">{isSunday(date) ? "Neradni dan" : !resourcesReady ? "Odaberite resurse" : slot.empty ? "Izvan radnog vremena" : "Zauzeto"}</span>}
+            ) : <span className="empty-slot">{isCalendarSunday(date) ? "Neradni dan" : !resourcesReady ? "Odaberite resurse" : slot.empty ? "Izvan radnog vremena" : "Zauzeto"}</span>}
           </div>
         ))}
       </div> : (
@@ -275,11 +375,11 @@ export function Reception() {
           <div className="reception-week-grid">
             {weekDates.map((weekDate) => {
               const dayAppointments = weekAppointments.filter((appointment) => appointment.date === weekDate);
-              const freeTimes = isSunday(weekDate) || !selectedProvider ? [] : freeHalfHourTimes(dayAppointments, selectedProvider, weekDate);
+              const freeTimes = isCalendarSunday(weekDate) || !selectedProvider ? [] : freeHalfHourTimes(dayAppointments, selectedProvider, weekDate);
               return (
-                <section className={`reception-week-day ${weekDate === today ? "today" : ""} ${isSunday(weekDate) ? "closed" : ""}`} key={weekDate}>
+                <section className={`reception-week-day ${weekDate === automaticClinicDate ? "today" : ""} ${isCalendarSunday(weekDate) ? "closed" : ""}`} key={weekDate}>
                   <header>
-                    <button type="button" onClick={() => { setDate(weekDate); setView("day"); }}>{shortDate(weekDate)}</button>
+                    <button type="button" onClick={() => { setSelectedDate(weekDate); setDateMode("date_user_selected"); setView("day"); }}>{formatShortCalendarDate(weekDate)}</button>
                     <span>{dayAppointments.length}</span>
                   </header>
                   <div className="reception-week-items">
@@ -299,7 +399,7 @@ export function Reception() {
                     ))}
                     {dayAppointments.length === 0 && <p className="week-empty">Nema upisanih pacijenata</p>}
                   </div>
-                  {!isSunday(weekDate) && resourcesReady && (
+                  {!isCalendarSunday(weekDate) && resourcesReady && (
                     <div className="week-free-slots">
                       <strong>Slobodno</strong>
                       <div>
@@ -309,7 +409,7 @@ export function Reception() {
                       </div>
                     </div>
                   )}
-                  {isSunday(weekDate) && <span className="week-closed-label">Neradni dan</span>}
+                  {isCalendarSunday(weekDate) && <span className="week-closed-label">Neradni dan</span>}
                 </section>
               );
             })}

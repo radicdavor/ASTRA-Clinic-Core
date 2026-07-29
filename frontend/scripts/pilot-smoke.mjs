@@ -78,6 +78,8 @@ function unique(values) {
   "src/components/workspace/WorkspaceSection.tsx",
   "src/components/workspace/WorkspaceTabs.tsx",
   "src/utils/patientIdentity.ts",
+  "src/utils/receptionDate.ts",
+  "src/utils/receptionDate.test.ts",
 ].forEach(read);
 
 assertIncludes("src/routes/AppRoutes.tsx", "/appointments/:id");
@@ -627,7 +629,7 @@ assertIncludes("src/pages/Readiness.tsx", "readiness-detail");
 assertIncludes("src/pages/Reception.tsx", "/api/reception/day");
 assertIncludes("src/pages/Reception.tsx", "Dan");
 assertIncludes("src/pages/Reception.tsx", "Tjedan");
-assertIncludes("src/pages/Reception.tsx", "Odaberi kliniku");
+assertIncludes("src/pages/Reception.tsx", "Aktivna klinika");
 assertIncludes("src/pages/Reception.tsx", "Slobodno");
 assertIncludes("src/pages/Reception.tsx", "reception-card");
 assertIncludes("src/pages/Reception.tsx", "Oznaci kao pristigao");
@@ -638,20 +640,31 @@ assertIncludes("src/pages/Reception.tsx", "isHalfHour");
 assertIncludes("src/pages/Reception.tsx", "reception-day-list");
 assertIncludes("src/pages/Reception.tsx", "reception-week-grid");
 assertIncludes("src/pages/Reception.tsx", "Array.from({ length: 7 }");
-assertIncludes("src/pages/Reception.tsx", "mondayOfWeek");
-assertIncludes("src/pages/Reception.tsx", "daysSinceMonday");
-assertIncludes("src/pages/Reception.tsx", "isSunday");
+assertIncludes("src/pages/Reception.tsx", "mondayOfCalendarWeek");
+assertIncludes("src/pages/Reception.tsx", "isCalendarSunday");
 assertIncludes("src/pages/Reception.tsx", "Neradni dan");
 assertIncludes("src/pages/Reception.tsx", "freeHalfHourTimes");
 assertIncludes("src/pages/Reception.tsx", "week-free-slots");
 assertIncludes("src/pages/Reception.tsx", "halfHourTimes");
 assertIncludes("src/pages/Reception.tsx", "Sedmodnevni pregled");
-assertIncludes("src/pages/Reception.tsx", "localDateValue");
+assertIncludes("src/pages/Reception.tsx", "useClinicContext");
+assertIncludes("src/pages/Reception.tsx", "getClinicTodayForTimezone");
+assertIncludes("src/pages/Reception.tsx", "date_auto_today");
+assertIncludes("src/pages/Reception.tsx", "clinicContextReady && date ? query : null");
 assertIncludes("src/pages/Reception.tsx", "bookingParams(date, slot.time)");
 assertIncludes("src/pages/Reception.tsx", "resourcesReady");
 assertIncludes("src/pages/Reception.tsx", "slotWithinProviderHours");
 assertIncludes("src/pages/Reception.tsx", "secondary-filters");
-assertIncludes("src/pages/Reception.tsx", "matchingProviders.length === 1");
+assertIncludes("src/pages/Reception.tsx", "activeClinicFilterId");
+assertIncludes("src/pages/Reception.tsx", "directRefreshGenerationRef");
+assertIncludes("src/pages/Reception.tsx", "activeRefreshKeyRef");
+assertIncludes("src/pages/Reception.tsx", "controller.signal.aborted");
+assertNotIncludes("src/pages/Reception.tsx", 'new Date(`${value}T12:00:00`)');
+assertNotIncludes("src/pages/Reception.tsx", ".setDate(");
+assertIncludes("src/utils/receptionDate.ts", "parseIsoCalendarDate");
+assertIncludes("src/utils/receptionDate.ts", "setUTCDate");
+assertIncludes("src/utils/receptionDate.test.ts", "Pacific/Kiritimati");
+assertIncludes("src/pages/Reception.test.tsx", "deferred clinic-A direct refresh");
 assertIncludes("src/pages/AppointmentForm.tsx", 'params.get("clinic_id")');
 assertIncludes("src/pages/AppointmentForm.tsx", "availableProviders");
 assertIncludes("src/pages/AppointmentForm.tsx", "availableRooms");

@@ -2,14 +2,19 @@ import { getActiveClinicTimezone } from "../api/client";
 
 export const defaultClinicTimezone = "Europe/Zagreb";
 
-export function getClinicToday(timeZone = getActiveClinicTimezone(), instant = new Date()) {
+export function getClinicTodayForTimezone(timeZone: string, instant = new Date()) {
+  if (!timeZone.trim()) throw new RangeError("Clinic timezone is required.");
   const formatter = new Intl.DateTimeFormat("en-CA", {
-    timeZone: timeZone || defaultClinicTimezone,
+    timeZone,
     year: "numeric",
     month: "2-digit",
     day: "2-digit",
   });
   return formatter.format(instant);
+}
+
+export function getClinicToday(timeZone = getActiveClinicTimezone(), instant = new Date()) {
+  return getClinicTodayForTimezone(timeZone || defaultClinicTimezone, instant);
 }
 
 export function formatUtcTimestampInClinic(value: string | null | undefined, timeZone = getActiveClinicTimezone()) {
