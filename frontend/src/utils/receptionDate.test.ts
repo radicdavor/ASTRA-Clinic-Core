@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, test } from "vitest";
+import { afterEach, describe, expect, test, vi } from "vitest";
 import {
   calendarWeekday,
   formatShortCalendarDate,
@@ -8,10 +8,8 @@ import {
   parseIsoCalendarDate,
 } from "./receptionDate";
 
-const originalTimezone = process.env.TZ;
-
 afterEach(() => {
-  process.env.TZ = originalTimezone;
+  vi.unstubAllEnvs();
 });
 
 describe("Reception ISO calendar-date helpers", () => {
@@ -48,7 +46,7 @@ describe("Reception ISO calendar-date helpers", () => {
   test.each(["UTC", "Europe/Zagreb", "Pacific/Kiritimati", "America/Los_Angeles"])(
     "returns identical dates when the process timezone is %s",
     (timezone) => {
-      process.env.TZ = timezone;
+      vi.stubEnv("TZ", timezone);
       expect(moveCalendarDate("2026-12-31", 1)).toBe("2027-01-01");
       expect(mondayOfCalendarWeek("2026-08-02")).toBe("2026-07-27");
       expect(formatShortCalendarDate("2024-02-29")).toBe("Čet 29.02.");
