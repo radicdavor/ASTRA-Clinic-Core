@@ -317,7 +317,7 @@ export function Reception() {
         </div>
         <div className="reception-date-controls">
           <button type="button" className="action-button" onClick={() => { setSelectedDate(moveCalendarDate(date, view === "week" ? -7 : -1)); setDateMode("date_user_selected"); }}>Prethodni {view === "week" ? "tjedan" : "dan"}</button>
-          <button type="button" className="action-button" onClick={() => setDateMode("date_auto_today")}>Danas</button>
+          <button type="button" className="action-button" onClick={() => { setClockInstant(Date.now()); setDateMode("date_auto_today"); }}>Danas</button>
           <DateInput required value={date} onChange={(value) => { setSelectedDate(value); setDateMode("date_user_selected"); }} />
           <button type="button" className="action-button" onClick={() => { setSelectedDate(moveCalendarDate(date, view === "week" ? 7 : 1)); setDateMode("date_user_selected"); }}>Sljedeći {view === "week" ? "tjedan" : "dan"}</button>
         </div>

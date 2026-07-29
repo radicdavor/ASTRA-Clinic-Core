@@ -178,6 +178,38 @@ describe("Reception clinic-local date contract", () => {
     )).toBe(true));
   });
 
+  test("Today immediately refreshes a paused manual-date clock after clinic-local midnight", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    vi.setSystemTime(new Date("2026-07-26T09:59:30.000Z"));
+    const fetchMock = installFetchMock();
+    render(receptionWithClinicContext({
+      status: "clinic_context_ready",
+      ready: true,
+      clinicId: "1",
+      timezone: "Pacific/Kiritimati",
+      error: null,
+    }));
+    await waitFor(() => expect(dayRequests().some(([input]) =>
+      String(input).includes("date=2026-07-26")
+    )).toBe(true));
+
+    fireEvent.change(document.querySelector("input.native-date-picker") as HTMLInputElement, {
+      target: { value: "2026-08-03" },
+    });
+    await waitFor(() => expect(dayRequests().some(([input]) =>
+      String(input).includes("date=2026-08-03")
+    )).toBe(true));
+
+    vi.setSystemTime(new Date("2026-07-26T10:00:30.000Z"));
+    fetchMock.mockClear();
+    fireEvent.click(screen.getByRole("button", { name: "Danas" }));
+
+    await waitFor(() => expect(dayRequests().some(([input]) =>
+      String(input).includes("date=2026-07-27")
+    )).toBe(true));
+    expect(dayRequests().some(([input]) => String(input).includes("date=2026-07-26"))).toBe(false);
+  });
+
   test("long-lived auto-today view advances once across clinic midnight", async () => {
     vi.useFakeTimers({ shouldAdvanceTime: true });
     vi.setSystemTime(new Date("2026-07-26T21:59:30.000Z"));
