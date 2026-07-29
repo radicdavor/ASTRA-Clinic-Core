@@ -23,11 +23,25 @@ records and writes:
 
 The validator is deterministic and has no network dependency.
 
+## Checkout identity
+
+The workflow never relies on the implicit pull-request merge checkout:
+
+- `push` checks out exactly `github.sha`
+- `pull_request` checks out exactly `github.event.pull_request.head.sha`
+
+Every job calculates `git rev-parse HEAD` after checkout. The
+`verify-checkout` command compares that value with the canonical SHA for the
+event and fails before evidence production on a missing or mismatched value.
+The verified checkout SHA is the manifest `source_sha` and the source SHA used
+by every remediation evidence record. No separate declared head SHA can
+override the commit that was actually tested.
+
 ## Required identity
 
 Every manifest binds:
 
-- full source Git SHA
+- full source Git SHA, meaning the commit actually checked out and tested
 - GitHub workflow run ID
 - workflow name and event
 - every producer job result
@@ -36,6 +50,18 @@ Every manifest binds:
 
 Evidence from another SHA, run, failed producer, future timestamp, or stale
 timestamp is rejected.
+
+## Canonical producers
+
+The required producer mapping is a closed, case-sensitive set:
+
+- `backend = success`
+- `frontend = success`
+- `e2e-db = success`
+
+Missing, additional, duplicated, case-variant, whitespace-variant, or
+non-success producer entries are rejected. Remediation behaviour records are
+evidence inputs, not additional canonical producer names.
 
 ## Technical evidence
 
@@ -77,6 +103,21 @@ The CI-generated manifest therefore records:
 - deployment: blocked
 - production: blocked
 - real patient data: blocked
+
+These four keys and values form the complete readiness mapping for schema
+version 1:
+
+- `code_merge = evidence_complete_review_and_owner_decision_required`
+- `deployment = blocked`
+- `production = blocked`
+- `real_patient_data = blocked`
+
+The validator compares the complete mapping, including types and values.
+Unknown keys, missing keys, alternate casing, booleans, nulls, empty strings,
+and positive readiness claims are rejected even when ordinary SHA-256 fields
+have been recomputed. CI cannot emit a positive readiness or authorization
+claim; such a future state requires a versioned contract with corresponding
+authoritative evidence.
 
 ## Formal security limitation
 

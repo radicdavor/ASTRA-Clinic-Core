@@ -19,6 +19,17 @@ ROOT = Path(__file__).resolve().parents[1]
 EXPECTED_MIGRATION_HEAD = "0071_membership_taxonomy"
 SCHEMA_VERSION = 1
 SHA_PATTERN = re.compile(r"^[0-9a-f]{40}$")
+CANONICAL_PRODUCER_RESULTS = {
+    "backend": "success",
+    "frontend": "success",
+    "e2e-db": "success",
+}
+CANONICAL_READINESS = {
+    "code_merge": "evidence_complete_review_and_owner_decision_required",
+    "deployment": "blocked",
+    "production": "blocked",
+    "real_patient_data": "blocked",
+}
 CURRENT_HEAD_PATTERN = re.compile(
     r"(?im)^\s*(?:CURRENT_HEAD|MAIN HEAD|PR #\d+ HEAD)\s*:\s*`?([0-9a-f]{40})`?\s*$"
 )
@@ -36,6 +47,62 @@ SECURITY_LIMITATION = "unavailable_due_to_platform_incident"
 
 class ReleaseEvidenceError(RuntimeError):
     pass
+
+
+def validate_checkout_identity(
+    *,
+    workflow_event: str,
+    github_sha: str,
+    pull_request_head_sha: str,
+    checkout_sha: str,
+) -> dict[str, str]:
+    if workflow_event == "pull_request":
+        expected_sha = pull_request_head_sha
+        expected_field = "pull_request_head_sha"
+    elif workflow_event == "push":
+        expected_sha = github_sha
+        expected_field = "github_sha"
+    else:
+        raise ReleaseEvidenceError(
+            "Canonical release evidence supports only push and pull_request events"
+        )
+    if not SHA_PATTERN.fullmatch(expected_sha):
+        raise ReleaseEvidenceError(
+            f"{expected_field} must be a full lowercase Git SHA"
+        )
+    if not SHA_PATTERN.fullmatch(checkout_sha):
+        raise ReleaseEvidenceError(
+            "checkout_sha must be a full lowercase Git SHA"
+        )
+    if checkout_sha != expected_sha:
+        raise ReleaseEvidenceError(
+            "Checked-out revision does not match the event's canonical source SHA"
+        )
+    return {
+        "workflow_event": workflow_event,
+        "source_sha": checkout_sha,
+    }
+
+
+def _validate_producer_results(producer_results: Any) -> None:
+    if not isinstance(producer_results, dict):
+        raise ReleaseEvidenceError(
+            "Producer results must be a mapping with the canonical producer set"
+        )
+    actual_names = set(producer_results)
+    expected_names = set(CANONICAL_PRODUCER_RESULTS)
+    if actual_names != expected_names:
+        missing = sorted(expected_names - actual_names)
+        unexpected = sorted(actual_names - expected_names)
+        raise ReleaseEvidenceError(
+            "Producer names must exactly match the canonical set; "
+            f"missing={missing}, unexpected={unexpected}"
+        )
+    for name, expected_status in CANONICAL_PRODUCER_RESULTS.items():
+        if producer_results.get(name) != expected_status:
+            raise ReleaseEvidenceError(
+                f"Canonical producer {name!r} must have status {expected_status!r}"
+            )
 
 
 def _canonical_json(payload: dict[str, Any]) -> bytes:
@@ -120,8 +187,7 @@ def produce_release_manifest(
         raise ReleaseEvidenceError("source_sha must be a full lowercase Git SHA")
     if not workflow_run_id.strip() or not workflow_name.strip() or not workflow_event.strip():
         raise ReleaseEvidenceError("workflow identity is required")
-    if not producer_results or any(value != "success" for value in producer_results.values()):
-        raise ReleaseEvidenceError("Every release-evidence producer must have status success")
+    _validate_producer_results(producer_results)
     generated = _parse_timestamp(generated_at, "generated_at")
     behaviour_summary = validate_evidence(
         contract_path=ROOT / "docs" / "security" / "pr3-remediation-behavioural-review-units.json",
@@ -187,12 +253,7 @@ def produce_release_manifest(
             "production": False,
             "real_patient_data": False,
         },
-        "readiness": {
-            "code_merge": "evidence_complete_review_and_owner_decision_required",
-            "deployment": "blocked",
-            "production": "blocked",
-            "real_patient_data": "blocked",
-        },
+        "readiness": dict(CANONICAL_READINESS),
         "producer": {"name": "scripts/release_evidence.py", "version": 1},
     }
     payload["artifact_hash"] = _sha256_bytes(_canonical_json(payload))
@@ -238,10 +299,7 @@ def validate_release_manifest(
     ci = payload.get("ci", {})
     if ci.get("execution_evidence") != "validated":
         raise ReleaseEvidenceError("Execution evidence was not validated")
-    if not ci.get("producer_results") or any(
-        value != "success" for value in ci["producer_results"].values()
-    ):
-        raise ReleaseEvidenceError("A producer did not succeed")
+    _validate_producer_results(ci.get("producer_results"))
     tests = payload.get("tests", {})
     if tests.get("behaviour_units") != 5 or tests.get("coverage_dimensions") != 6:
         raise ReleaseEvidenceError("Release evidence lacks required behaviour coverage")
@@ -263,8 +321,10 @@ def validate_release_manifest(
     if any(authorization.get(key) is not False for key in ("merge", "deployment", "production", "real_patient_data")):
         raise ReleaseEvidenceError("Release evidence contains an unauthorized readiness claim")
     readiness = payload.get("readiness", {})
-    if set(readiness) != {"code_merge", "deployment", "production", "real_patient_data"}:
-        raise ReleaseEvidenceError("Readiness layers are not separated")
+    if readiness != CANONICAL_READINESS:
+        raise ReleaseEvidenceError(
+            "Readiness claims do not match the canonical evidence-only state"
+        )
     return {
         "source_sha": source_sha,
         "workflow_run_id": str(workflow_run_id),
@@ -339,6 +399,11 @@ def _parser() -> argparse.ArgumentParser:
     truth.add_argument("--source-sha", required=True)
     truth.add_argument("--migration-head", default=EXPECTED_MIGRATION_HEAD)
     truth.add_argument("--unresolved-findings", type=int)
+    checkout = subparsers.add_parser("verify-checkout")
+    checkout.add_argument("--workflow-event", required=True)
+    checkout.add_argument("--github-sha", required=True)
+    checkout.add_argument("--pull-request-head-sha", default="")
+    checkout.add_argument("--checkout-sha", required=True)
     return parser
 
 
@@ -365,12 +430,19 @@ def main() -> None:
             workflow_run_id=args.workflow_run_id,
             max_age=timedelta(hours=args.max_age_hours),
         )
-    else:
+    elif args.command == "truth-report":
         result = documentation_truth_report(
             documents=args.document,
             source_sha=args.source_sha,
             migration_head=args.migration_head,
             unresolved_findings=args.unresolved_findings,
+        )
+    else:
+        result = validate_checkout_identity(
+            workflow_event=args.workflow_event,
+            github_sha=args.github_sha,
+            pull_request_head_sha=args.pull_request_head_sha,
+            checkout_sha=args.checkout_sha,
         )
     print(json.dumps(result, sort_keys=True))
 

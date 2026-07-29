@@ -4,9 +4,6 @@ on:
   push:
   pull_request:
 
-env:
-  REMEDIATION_SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
-
 jobs:
   backend:
     runs-on: ubuntu-latest
@@ -34,9 +31,20 @@ jobs:
       PYTHONPATH: ${{ github.workspace }}/backend
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+      - name: Verify exact source checkout
+        run: |
+          checkout_sha="$(git rev-parse HEAD)"
+          python scripts/release_evidence.py verify-checkout \
+            --workflow-event "$GITHUB_EVENT_NAME" \
+            --github-sha "$GITHUB_SHA" \
+            --pull-request-head-sha "${{ github.event.pull_request.head.sha || '' }}" \
+            --checkout-sha "$checkout_sha"
+          echo "REMEDIATION_CHECKOUT_SHA=$checkout_sha" >> "$GITHUB_ENV"
       - name: Install backend dependencies
         working-directory: backend
         run: pip install -r requirements.txt
@@ -87,7 +95,7 @@ jobs:
           completed_at="$(date --iso-8601=seconds)"
           python ../scripts/validate_pr3_remediation_closure.py produce \
             --unit populated_legacy_upgrade \
-            --source-sha "$REMEDIATION_SOURCE_SHA" \
+            --source-sha "$REMEDIATION_CHECKOUT_SHA" \
             --workflow-run-id "$GITHUB_RUN_ID" \
             --job-name "$GITHUB_JOB" \
             --test-command "alembic populated legacy transition and downgrade/re-upgrade" \
@@ -109,7 +117,7 @@ jobs:
           episode_completed="$(date --iso-8601=seconds)"
           python ../scripts/validate_pr3_remediation_closure.py produce \
             --unit cross_scope_dto_projection \
-            --source-sha "$REMEDIATION_SOURCE_SHA" \
+            --source-sha "$REMEDIATION_CHECKOUT_SHA" \
             --workflow-run-id "$GITHUB_RUN_ID" \
             --job-name "$GITHUB_JOB" \
             --test-command "pytest episode cross-scope projection sentinel" \
@@ -127,7 +135,7 @@ jobs:
           proxy_completed="$(date --iso-8601=seconds)"
           python ../scripts/validate_pr3_remediation_closure.py produce \
             --unit deployment_proxy_boundary \
-            --source-sha "$REMEDIATION_SOURCE_SHA" \
+            --source-sha "$REMEDIATION_CHECKOUT_SHA" \
             --workflow-run-id "$GITHUB_RUN_ID" \
             --job-name "$GITHUB_JOB" \
             --test-command "pytest proxy spoof, persisted audit IP, and production compose contract" \
@@ -173,9 +181,20 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+      - name: Verify exact source checkout
+        run: |
+          checkout_sha="$(git rev-parse HEAD)"
+          python scripts/release_evidence.py verify-checkout \
+            --workflow-event "$GITHUB_EVENT_NAME" \
+            --github-sha "$GITHUB_SHA" \
+            --pull-request-head-sha "${{ github.event.pull_request.head.sha || '' }}" \
+            --checkout-sha "$checkout_sha"
+          echo "REMEDIATION_CHECKOUT_SHA=$checkout_sha" >> "$GITHUB_ENV"
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
@@ -199,7 +218,7 @@ jobs:
           completed_at="$(date --iso-8601=seconds)"
           python ../scripts/validate_pr3_remediation_closure.py produce \
             --unit context_initialization \
-            --source-sha "$REMEDIATION_SOURCE_SHA" \
+            --source-sha "$REMEDIATION_CHECKOUT_SHA" \
             --workflow-run-id "$GITHUB_RUN_ID" \
             --job-name "$GITHUB_JOB" \
             --test-command "vitest DailyClinicDashboard context readiness, switch, and midnight" \
@@ -252,9 +271,20 @@ jobs:
       PYTHONPATH: ${{ github.workspace }}/backend
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+      - name: Verify exact source checkout
+        run: |
+          checkout_sha="$(git rev-parse HEAD)"
+          python scripts/release_evidence.py verify-checkout \
+            --workflow-event "$GITHUB_EVENT_NAME" \
+            --github-sha "$GITHUB_SHA" \
+            --pull-request-head-sha "${{ github.event.pull_request.head.sha || '' }}" \
+            --checkout-sha "$checkout_sha"
+          echo "REMEDIATION_CHECKOUT_SHA=$checkout_sha" >> "$GITHUB_ENV"
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
@@ -280,7 +310,7 @@ jobs:
           completed_at="$(date --iso-8601=seconds)"
           python ../scripts/validate_pr3_remediation_closure.py produce \
             --unit transitional_workflow_rediscovery \
-            --source-sha "$REMEDIATION_SOURCE_SHA" \
+            --source-sha "$REMEDIATION_CHECKOUT_SHA" \
             --workflow-run-id "$GITHUB_RUN_ID" \
             --job-name "$GITHUB_JOB" \
             --test-command "DB-backed Playwright source classification reload and one-way transition" \
@@ -305,9 +335,20 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+      - name: Verify exact source checkout
+        run: |
+          checkout_sha="$(git rev-parse HEAD)"
+          python scripts/release_evidence.py verify-checkout \
+            --workflow-event "$GITHUB_EVENT_NAME" \
+            --github-sha "$GITHUB_SHA" \
+            --pull-request-head-sha "${{ github.event.pull_request.head.sha || '' }}" \
+            --checkout-sha "$checkout_sha"
+          echo "REMEDIATION_CHECKOUT_SHA=$checkout_sha" >> "$GITHUB_ENV"
       - name: Require every evidence producer job to succeed
         run: |
           if [ "${{ needs.backend.result }}" != "success" ] \
@@ -326,7 +367,7 @@ jobs:
         run: |
           python scripts/validate_pr3_remediation_closure.py validate \
             --evidence-dir .remediation-evidence/final \
-            --source-sha "$REMEDIATION_SOURCE_SHA" \
+            --source-sha "$REMEDIATION_CHECKOUT_SHA" \
             --workflow-run-id "$GITHUB_RUN_ID"
       - name: Produce and validate canonical release evidence
         run: |
@@ -334,7 +375,7 @@ jobs:
           mkdir -p release-evidence
           python scripts/release_evidence.py produce \
             --evidence-dir .remediation-evidence/final \
-            --source-sha "$REMEDIATION_SOURCE_SHA" \
+            --source-sha "$REMEDIATION_CHECKOUT_SHA" \
             --workflow-run-id "$GITHUB_RUN_ID" \
             --workflow-name "$GITHUB_WORKFLOW" \
             --workflow-event "$GITHUB_EVENT_NAME" \
@@ -345,12 +386,12 @@ jobs:
             --generated-at "$generated_at"
           python scripts/release_evidence.py validate \
             --manifest release-evidence/release-evidence.json \
-            --source-sha "$REMEDIATION_SOURCE_SHA" \
+            --source-sha "$REMEDIATION_CHECKOUT_SHA" \
             --workflow-run-id "$GITHUB_RUN_ID"
           python scripts/release_evidence.py truth-report \
             --document docs/RELEASE_CHECKLIST.md \
             --document docs/release-evidence-contract.md \
-            --source-sha "$REMEDIATION_SOURCE_SHA" \
+            --source-sha "$REMEDIATION_CHECKOUT_SHA" \
             --migration-head "0071_membership_taxonomy"
       - name: Upload canonical release evidence
         uses: actions/upload-artifact@v4

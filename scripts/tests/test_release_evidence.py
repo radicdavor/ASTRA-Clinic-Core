@@ -8,12 +8,16 @@ from pathlib import Path
 import pytest
 
 from scripts.release_evidence import (
+    CANONICAL_PRODUCER_RESULTS,
+    CANONICAL_READINESS,
     EXPECTED_MIGRATION_HEAD,
     ReleaseEvidenceError,
     _canonical_json,
+    _producer_results,
     _sha256_bytes,
     documentation_truth_report,
     produce_release_manifest,
+    validate_checkout_identity,
     validate_release_manifest,
 )
 from scripts.validate_pr3_remediation_closure import (
@@ -96,6 +100,73 @@ def test_valid_exact_sha_release_evidence_passes(tmp_path):
     assert result["migration_head"] == EXPECTED_MIGRATION_HEAD
 
 
+@pytest.mark.parametrize(
+    ("workflow_event", "github_sha", "pull_request_head_sha"),
+    [
+        ("push", SOURCE_SHA, ""),
+        ("pull_request", OTHER_SHA, SOURCE_SHA),
+    ],
+)
+def test_checkout_identity_uses_the_event_canonical_sha(
+    workflow_event,
+    github_sha,
+    pull_request_head_sha,
+):
+    assert validate_checkout_identity(
+        workflow_event=workflow_event,
+        github_sha=github_sha,
+        pull_request_head_sha=pull_request_head_sha,
+        checkout_sha=SOURCE_SHA,
+    ) == {
+        "workflow_event": workflow_event,
+        "source_sha": SOURCE_SHA,
+    }
+
+
+@pytest.mark.parametrize(
+    ("workflow_event", "github_sha", "pull_request_head_sha", "checkout_sha"),
+    [
+        ("push", SOURCE_SHA, "", OTHER_SHA),
+        ("pull_request", OTHER_SHA, SOURCE_SHA, OTHER_SHA),
+        ("pull_request", OTHER_SHA, SOURCE_SHA, ""),
+    ],
+)
+def test_checkout_identity_rejects_missing_or_mismatched_checkout(
+    workflow_event,
+    github_sha,
+    pull_request_head_sha,
+    checkout_sha,
+):
+    with pytest.raises(ReleaseEvidenceError, match="checkout|Checked-out"):
+        validate_checkout_identity(
+            workflow_event=workflow_event,
+            github_sha=github_sha,
+            pull_request_head_sha=pull_request_head_sha,
+            checkout_sha=checkout_sha,
+        )
+
+
+def test_pull_request_checkout_requires_head_sha():
+    with pytest.raises(ReleaseEvidenceError, match="pull_request_head_sha"):
+        validate_checkout_identity(
+            workflow_event="pull_request",
+            github_sha=OTHER_SHA,
+            pull_request_head_sha="",
+            checkout_sha=SOURCE_SHA,
+        )
+
+
+def test_workflow_explicitly_checks_out_and_verifies_the_canonical_source():
+    workflow = (Path(__file__).parents[2] / ".github" / "workflows" / "ci.yml").read_text(
+        encoding="utf-8"
+    )
+    checkout_ref = "ref: ${{ github.event.pull_request.head.sha || github.sha }}"
+    assert workflow.count(checkout_ref) == 4
+    assert workflow.count("name: Verify exact source checkout") == 4
+    assert "REMEDIATION_SOURCE_SHA" not in workflow
+    assert '--source-sha "$REMEDIATION_CHECKOUT_SHA"' in workflow
+
+
 def test_wrong_sha_is_rejected(tmp_path):
     manifest, now = build_manifest(tmp_path)
     with pytest.raises(ReleaseEvidenceError, match="another source SHA"):
@@ -111,10 +182,95 @@ def test_failed_producer_is_rejected_before_manifest_creation(tmp_path):
             workflow_run_id=RUN_ID,
             workflow_name="CI",
             workflow_event="push",
-            producer_results={"backend": "failure"},
+            producer_results={
+                **CANONICAL_PRODUCER_RESULTS,
+                "backend": "failure",
+            },
             output_path=tmp_path / "release.json",
             generated_at=now.isoformat(),
         )
+
+
+@pytest.mark.parametrize("missing_name", sorted(CANONICAL_PRODUCER_RESULTS))
+def test_missing_canonical_producer_is_rejected(tmp_path, missing_name):
+    evidence_dir, now = build_behaviour_evidence(tmp_path)
+    producer_results = dict(CANONICAL_PRODUCER_RESULTS)
+    producer_results.pop(missing_name)
+    with pytest.raises(ReleaseEvidenceError, match="canonical set"):
+        produce_release_manifest(
+            evidence_dir=evidence_dir,
+            source_sha=SOURCE_SHA,
+            workflow_run_id=RUN_ID,
+            workflow_name="CI",
+            workflow_event="push",
+            producer_results=producer_results,
+            output_path=tmp_path / "release.json",
+            generated_at=now.isoformat(),
+        )
+
+
+@pytest.mark.parametrize(
+    "producer_results",
+    [
+        {},
+        {**CANONICAL_PRODUCER_RESULTS, "informational": "success"},
+        {"Backend": "success", "frontend": "success", "e2e-db": "success"},
+        {" backend": "success", "frontend": "success", "e2e-db": "success"},
+    ],
+)
+def test_noncanonical_producer_set_is_rejected(tmp_path, producer_results):
+    evidence_dir, now = build_behaviour_evidence(tmp_path)
+    with pytest.raises(ReleaseEvidenceError, match="canonical set"):
+        produce_release_manifest(
+            evidence_dir=evidence_dir,
+            source_sha=SOURCE_SHA,
+            workflow_run_id=RUN_ID,
+            workflow_name="CI",
+            workflow_event="push",
+            producer_results=producer_results,
+            output_path=tmp_path / "release.json",
+            generated_at=now.isoformat(),
+        )
+
+
+def test_duplicate_producer_argument_is_rejected():
+    with pytest.raises(ReleaseEvidenceError, match="unique"):
+        _producer_results(["backend=success", "backend=success"])
+
+
+def test_canonical_producer_order_does_not_matter(tmp_path):
+    evidence_dir, now = build_behaviour_evidence(tmp_path)
+    manifest = tmp_path / "release.json"
+    produce_release_manifest(
+        evidence_dir=evidence_dir,
+        source_sha=SOURCE_SHA,
+        workflow_run_id=RUN_ID,
+        workflow_name="CI",
+        workflow_event="push",
+        producer_results={
+            "e2e-db": "success",
+            "backend": "success",
+            "frontend": "success",
+        },
+        output_path=manifest,
+        generated_at=now.isoformat(),
+    )
+    assert validate_release_manifest(
+        manifest_path=manifest,
+        source_sha=SOURCE_SHA,
+        workflow_run_id=RUN_ID,
+        now=now,
+    )["authorization_boundaries"] == "validated"
+
+
+def test_rehashed_manifest_with_incomplete_producers_is_rejected(tmp_path):
+    manifest, now = build_manifest(tmp_path)
+    rewrite_manifest(
+        manifest,
+        lambda payload: payload["ci"]["producer_results"].pop("frontend"),
+    )
+    with pytest.raises(ReleaseEvidenceError, match="canonical set"):
+        validate(manifest, now)
 
 
 def test_stale_manifest_is_rejected(tmp_path):
@@ -170,10 +326,58 @@ def test_unauthorized_production_claim_is_rejected(tmp_path):
         validate(manifest, now)
 
 
+def test_canonical_readiness_values_are_accepted(tmp_path):
+    manifest, now = build_manifest(tmp_path)
+    payload = json.loads(manifest.read_text(encoding="utf-8"))
+    assert payload["readiness"] == CANONICAL_READINESS
+    assert validate(manifest, now)["authorization_boundaries"] == "validated"
+
+
 def test_readiness_layers_cannot_be_collapsed(tmp_path):
     manifest, now = build_manifest(tmp_path)
     rewrite_manifest(manifest, lambda payload: payload["readiness"].pop("real_patient_data"))
-    with pytest.raises(ReleaseEvidenceError, match="not separated"):
+    with pytest.raises(ReleaseEvidenceError, match="canonical evidence-only state"):
+        validate(manifest, now)
+
+
+@pytest.mark.parametrize(
+    ("key", "value"),
+    [
+        ("code_merge", "ready"),
+        ("code_merge", ""),
+        ("code_merge", None),
+        ("code_merge", True),
+        ("code_merge", 1),
+        ("deployment", "READY"),
+        ("deployment", "passed"),
+        ("deployment", False),
+        ("production", "ready"),
+        ("production", "authorized"),
+        ("real_patient_data", "true"),
+        ("real_patient_data", True),
+    ],
+)
+def test_rehashed_manifest_with_invalid_readiness_value_is_rejected(
+    tmp_path,
+    key,
+    value,
+):
+    manifest, now = build_manifest(tmp_path)
+    rewrite_manifest(
+        manifest,
+        lambda payload: payload["readiness"].update({key: value}),
+    )
+    with pytest.raises(ReleaseEvidenceError, match="canonical evidence-only state"):
+        validate(manifest, now)
+
+
+def test_rehashed_manifest_with_unknown_readiness_key_is_rejected(tmp_path):
+    manifest, now = build_manifest(tmp_path)
+    rewrite_manifest(
+        manifest,
+        lambda payload: payload["readiness"].update({"unknown": "blocked"}),
+    )
+    with pytest.raises(ReleaseEvidenceError, match="canonical evidence-only state"):
         validate(manifest, now)
 
 
