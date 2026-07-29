@@ -225,6 +225,7 @@ def seed_multi() -> None:
                 INSERT INTO providers
                     (full_name, email, active, staff_role, clinic_id, weekly_working_hours)
                 VALUES
+                    (:inactive_duplicate_name, :inactive_duplicate_email, false, 'physician', :clinic_b, '{}'::json),
                     (:name_a, :email_a, true, 'physician', :clinic_a, '{}'::json),
                     (:name_b, :email_b, true, 'physician', :clinic_b, '{}'::json),
                     (:orphan_name, :orphan_email, true, 'physician', NULL, '{}'::json),
@@ -240,6 +241,8 @@ def seed_multi() -> None:
                 """
             ),
             {
+                "inactive_duplicate_name": f"{PREFIX}provider-inactive-duplicate",
+                "inactive_duplicate_email": f"{PREFIX}Provider@Example.Invalid",
                 "name_a": f"{PREFIX}ambiguous-a",
                 "email_a": f"{PREFIX}AMBIGUOUS@example.invalid",
                 "clinic_a": clinic_a,
@@ -511,6 +514,16 @@ def check_multi() -> None:
         clinic_c = clinic_id(connection, "clinic-c")
         inactive_clinic = clinic_id(connection, "inactive-clinic")
         assert memberships(connection, "provider") == [clinic_a]
+        assert connection.scalar(
+            text(
+                """
+                SELECT count(*)
+                FROM clinic_membership_migration_issues
+                WHERE user_id = :user_id
+                """
+            ),
+            {"user_id": user_id(connection, "provider")},
+        ) == 0
         # Creating or identity-verifying a record is not authoritative evidence
         # that the operator belongs to that clinic.
         assert memberships(connection, "creator") == []
@@ -631,6 +644,7 @@ def check_multi() -> None:
     assert_route_scope("orphan-provider", set())
     print("evidence:test_single_active_candidate")
     print("evidence:test_case_insensitive_single_candidate")
+    print("evidence:test_active_candidate_ignores_inactive_duplicate")
     print("evidence:test_multiple_case_insensitive_active_candidates")
     print("evidence:test_no_candidate")
     print("evidence:test_inactive_provider_candidate")

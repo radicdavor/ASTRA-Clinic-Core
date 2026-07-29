@@ -1,5 +1,5 @@
 from functools import lru_cache
-from ipaddress import ip_network
+from ipaddress import collapse_addresses, ip_network
 from typing import Literal
 
 from pydantic import SecretStr
@@ -98,9 +98,21 @@ class Settings(BaseSettings):
         if self.cors_origin_regex:
             errors.append("Production CORS_ORIGIN_REGEX must be empty; use explicit CORS_ORIGINS.")
         try:
-            trusted_proxy_networks = [
+            configured_proxy_networks = [
                 ip_network(network, strict=False)
                 for network in self.trusted_proxy_network_list
+            ]
+            trusted_proxy_networks = [
+                *collapse_addresses(
+                    network
+                    for network in configured_proxy_networks
+                    if network.version == 4
+                ),
+                *collapse_addresses(
+                    network
+                    for network in configured_proxy_networks
+                    if network.version == 6
+                ),
             ]
         except ValueError:
             errors.append("TRUSTED_PROXY_NETWORKS must contain only valid IP networks.")
@@ -108,7 +120,10 @@ class Settings(BaseSettings):
         if not trusted_proxy_networks:
             errors.append("Production TRUSTED_PROXY_NETWORKS must identify the private reverse-proxy network.")
         elif any(network.prefixlen == 0 for network in trusted_proxy_networks):
-            errors.append("Production TRUSTED_PROXY_NETWORKS must not trust every client address.")
+            errors.append(
+                "Production TRUSTED_PROXY_NETWORKS must not individually or collectively "
+                "trust every IPv4 or IPv6 client address."
+            )
         if self.debug:
             errors.append("Production DEBUG must be false.")
         if self.reload:
