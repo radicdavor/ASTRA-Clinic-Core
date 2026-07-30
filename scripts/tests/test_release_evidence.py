@@ -2,7 +2,10 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import re
+import shlex
+import subprocess
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -121,11 +124,60 @@ fi
 echo "REMEDIATION_CHECKOUT_SHA=$checkout_sha" >> "$GITHUB_ENV"
 """
 EXPECTED_JOBS = {"backend", "frontend", "e2e-db", "remediation-evidence"}
-FORBIDDEN_POST_VERIFY_GIT = re.compile(
-    r"^\s*(?:sudo\s+)?git\s+"
-    r"(?:checkout|switch|reset|restore|clean|merge|rebase|cherry-pick)\b",
-    re.MULTILINE,
+RUNTIME_RECHECK_RUN = """\
+set -euo pipefail
+expected="${REMEDIATION_CHECKOUT_SHA:?missing verified source SHA}"
+actual="$(git rev-parse HEAD)"
+workspace="$(git rev-parse --show-toplevel)"
+test "$actual" = "$expected"
+test "$workspace" = "$GITHUB_WORKSPACE"
+git diff --quiet --exit-code HEAD --
+git diff --cached --quiet --exit-code HEAD --
+for state in MERGE_HEAD REBASE_HEAD CHERRY_PICK_HEAD REVERT_HEAD BISECT_LOG; do
+  test ! -e "$(git rev-parse --git-path "$state")"
+done
+echo "REMEDIATION_CHECKOUT_SHA=$actual" >> "$GITHUB_ENV"
+"""
+RUNTIME_RECHECK_SHA256 = (
+    "8443dba506e5ec0d69f7f03fcc027db7f06d75ff50ead803c81f48b0d33cacdf"
 )
+RUNTIME_RECHECK_IDS = {
+    "recheck-source-before-migrations",
+    "recheck-source-before-backend-evidence",
+    "recheck-source-before-backend-upload",
+    "recheck-source-before-frontend-evidence",
+    "recheck-source-before-frontend-upload",
+    "recheck-source-before-e2e-evidence",
+    "recheck-source-before-e2e-upload",
+    "recheck-source-before-artifact-intake",
+    "recheck-source-before-canonical-evidence",
+    "recheck-source-before-canonical-upload",
+}
+GIT_GLOBAL_OPTIONS_WITH_VALUE = {
+    "-C",
+    "-c",
+    "--config-env",
+    "--exec-path",
+    "--git-dir",
+    "--namespace",
+    "--work-tree",
+}
+GIT_GLOBAL_OPTIONS_WITH_INLINE_VALUE = {
+    "--config-env=",
+    "--exec-path=",
+    "--git-dir=",
+    "--namespace=",
+    "--work-tree=",
+}
+GIT_GLOBAL_OPTIONS_NO_VALUE = {
+    "--glob-pathspecs",
+    "--icase-pathspecs",
+    "--literal-pathspecs",
+    "--no-pager",
+    "--noglob-pathspecs",
+    "--paginate",
+}
+ALLOWED_POST_VERIFY_GIT_SUBCOMMANDS = {"diff", "rev-parse"}
 
 
 class GitHubActionsLoader(yaml.SafeLoader):
@@ -210,6 +262,85 @@ def assert_canonical_verify_step(job_name: str, step: dict) -> None:
     ), f"{job_name}: non-canonical exact-SHA verification command"
 
 
+def shell_tokens(run: str) -> list[str]:
+    lexer = shlex.shlex(run, posix=True, punctuation_chars=";&|(){}")
+    lexer.whitespace_split = True
+    lexer.commenters = "#"
+    try:
+        return list(lexer)
+    except ValueError as exc:
+        raise AssertionError(f"unsupported post-verify shell syntax: {exc}") from exc
+
+
+def is_git_executable(token: str) -> bool:
+    normalized = token.replace("\\", "/").rstrip("/")
+    return normalized == "git" or normalized.endswith("/git")
+
+
+def git_subcommands(run: str) -> list[str]:
+    tokens = shell_tokens(run)
+    subcommands = []
+    for git_index, token in enumerate(tokens):
+        if not is_git_executable(token):
+            continue
+        index = git_index + 1
+        while index < len(tokens):
+            option = tokens[index]
+            if option in GIT_GLOBAL_OPTIONS_WITH_VALUE:
+                assert index + 1 < len(tokens), (
+                    f"Git global option {option} is missing its value"
+                )
+                index += 2
+                continue
+            if any(
+                option.startswith(prefix)
+                for prefix in GIT_GLOBAL_OPTIONS_WITH_INLINE_VALUE
+            ):
+                index += 1
+                continue
+            if option in GIT_GLOBAL_OPTIONS_NO_VALUE:
+                index += 1
+                continue
+            assert not option.startswith("-"), (
+                f"unsupported Git global option after verification: {option}"
+            )
+            assert option not in {";", "&&", "||", "|", "(", ")", "{", "}"}, (
+                "Git command is missing a subcommand"
+            )
+            subcommands.append(option)
+            break
+        else:
+            raise AssertionError("Git command is missing a subcommand")
+    for nested in re.findall(r"\$\(([^()]*)\)|`([^`]*)`", run, flags=re.DOTALL):
+        nested_command = next(value for value in nested if value)
+        subcommands.extend(git_subcommands(nested_command))
+    return subcommands
+
+
+def assert_canonical_runtime_recheck_step(job_name: str, step: dict) -> None:
+    assert set(step) == {"name", "id", "shell", "run"}, (
+        f"{job_name}: runtime integrity recheck contains non-canonical fields"
+    )
+    assert step["id"] in RUNTIME_RECHECK_IDS, (
+        f"{job_name}: runtime integrity recheck ID is not canonical"
+    )
+    assert step["name"] == "Recheck source integrity", (
+        f"{job_name}: runtime integrity recheck name is not canonical"
+    )
+    assert step["shell"] == "bash", (
+        f"{job_name}: runtime integrity recheck shell must be bash"
+    )
+    assert normalize_canonical_run(step["run"]) == normalize_canonical_run(
+        RUNTIME_RECHECK_RUN
+    ), f"{job_name}: non-canonical runtime source-integrity recheck"
+    assert (
+        hashlib.sha256(
+            normalize_canonical_run(step["run"]).encode("utf-8")
+        ).hexdigest()
+        == RUNTIME_RECHECK_SHA256
+    ), f"{job_name}: runtime source-integrity recheck hash mismatch"
+
+
 def assert_no_post_verify_repository_mutation(job_name: str, steps: list[dict]) -> None:
     for index, step in enumerate(steps[2:], start=2):
         uses = step.get("uses", "")
@@ -218,17 +349,22 @@ def assert_no_post_verify_repository_mutation(job_name: str, steps: list[dict]) 
         ), f"{job_name}: later checkout at step {index}"
         run = step.get("run")
         if isinstance(run, str):
-            assert not FORBIDDEN_POST_VERIFY_GIT.search(run), (
-                f"{job_name}: repository-changing Git command after verification"
-            )
-            assert not re.search(
-                r"(^|\n)\s*(?:export\s+)?REMEDIATION_CHECKOUT_SHA\s*=",
-                run,
-            ), f"{job_name}: verified SHA is redefined after verification"
-            assert not re.search(
-                r"REMEDIATION_CHECKOUT_SHA=.*>>\s*[\"']?\$GITHUB_ENV",
-                run,
-            ), f"{job_name}: verified SHA environment value is overwritten"
+            for subcommand in git_subcommands(run):
+                assert subcommand in ALLOWED_POST_VERIFY_GIT_SUBCOMMANDS, (
+                    f"{job_name}: repository-changing or unknown Git subcommand "
+                    f"after verification: {subcommand}"
+                )
+            if step.get("id") in RUNTIME_RECHECK_IDS:
+                assert_canonical_runtime_recheck_step(job_name, step)
+            else:
+                assert not re.search(
+                    r"(^|\n)\s*(?:export\s+)?REMEDIATION_CHECKOUT_SHA\s*=",
+                    run,
+                ), f"{job_name}: verified SHA is redefined after verification"
+                assert not re.search(
+                    r"REMEDIATION_CHECKOUT_SHA=.*>>\s*[\"']?\$GITHUB_ENV",
+                    run,
+                ), f"{job_name}: verified SHA environment value is overwritten"
         env = step.get("env", {})
         assert not (
             isinstance(env, dict) and "REMEDIATION_CHECKOUT_SHA" in env
@@ -239,6 +375,26 @@ def assert_no_post_verify_repository_mutation(job_name: str, steps: list[dict]) 
                 isinstance(download_path, str)
                 and download_path.startswith(".remediation-evidence/")
             ), f"{job_name}: artifact download may overwrite repository root"
+
+
+def assert_recheck_immediately_before(
+    job_name: str,
+    steps: list[dict],
+    target_name: str,
+    recheck_id: str,
+) -> None:
+    target_indexes = [
+        index for index, step in enumerate(steps) if step.get("name") == target_name
+    ]
+    assert len(target_indexes) == 1, f"{job_name}: missing unique {target_name!r} step"
+    target_index = target_indexes[0]
+    assert target_index > 0, f"{job_name}: {target_name!r} cannot be first"
+    recheck = steps[target_index - 1]
+    assert recheck.get("id") == recheck_id, (
+        f"{job_name}: runtime integrity recheck must immediately precede "
+        f"{target_name!r}"
+    )
+    assert_canonical_runtime_recheck_step(job_name, recheck)
 
 
 def assert_workflow_contract(workflow: str) -> None:
@@ -304,6 +460,62 @@ def assert_workflow_contract(workflow: str) -> None:
                 assert '--source-sha "$REMEDIATION_CHECKOUT_SHA"' in run, (
                     f"{job_name}: evidence producer must use the verified checkout SHA"
                 )
+
+    required_boundaries = {
+        "backend": [
+            ("Run database migrations", "recheck-source-before-migrations"),
+            (
+                "Produce episode and proxy execution evidence",
+                "recheck-source-before-backend-evidence",
+            ),
+            (
+                "Upload backend remediation evidence",
+                "recheck-source-before-backend-upload",
+            ),
+        ],
+        "frontend": [
+            (
+                "Produce clinic-context execution evidence",
+                "recheck-source-before-frontend-evidence",
+            ),
+            (
+                "Upload frontend remediation evidence",
+                "recheck-source-before-frontend-upload",
+            ),
+        ],
+        "e2e-db": [
+            (
+                "Run DB-backed full-stack E2E smoke",
+                "recheck-source-before-e2e-evidence",
+            ),
+            (
+                "Upload DB-backed remediation evidence",
+                "recheck-source-before-e2e-upload",
+            ),
+        ],
+        "remediation-evidence": [
+            (
+                "Download remediation execution evidence",
+                "recheck-source-before-artifact-intake",
+            ),
+            (
+                "Produce and validate canonical release evidence",
+                "recheck-source-before-canonical-evidence",
+            ),
+            (
+                "Upload canonical release evidence",
+                "recheck-source-before-canonical-upload",
+            ),
+        ],
+    }
+    for job_name, boundaries in required_boundaries.items():
+        for target_name, recheck_id in boundaries:
+            assert_recheck_immediately_before(
+                job_name,
+                jobs[job_name],
+                target_name,
+                recheck_id,
+            )
 
     def step_index(job_name: str, token: str) -> int:
         if token.startswith("uses:"):
@@ -817,6 +1029,63 @@ def mutate_workflow(workflow: str, mutation: str) -> str:
         remediation.insert(5, remediation.pop(upload_index))
     elif mutation == "git_reset_after_verify":
         backend.insert(2, {"name": "Replace source", "run": "git reset --hard HEAD^"})
+    elif mutation == "removed_runtime_recheck":
+        recheck_index = next(
+            index
+            for index, step in enumerate(backend)
+            if step.get("id") == "recheck-source-before-migrations"
+        )
+        backend.pop(recheck_index)
+    elif mutation == "runtime_recheck_after_evidence":
+        recheck_index = next(
+            index
+            for index, step in enumerate(backend)
+            if step.get("id") == "recheck-source-before-backend-evidence"
+        )
+        producer_index = next(
+            index
+            for index, step in enumerate(backend)
+            if step.get("name") == "Produce episode and proxy execution evidence"
+        )
+        recheck = backend.pop(recheck_index)
+        producer_index = next(
+            index
+            for index, step in enumerate(backend)
+            if step.get("name") == "Produce episode and proxy execution evidence"
+        )
+        backend.insert(producer_index + 1, recheck)
+    elif mutation == "runtime_recheck_or_true":
+        recheck = next(
+            step
+            for step in backend
+            if step.get("id") == "recheck-source-before-migrations"
+        )
+        recheck["run"] = RUNTIME_RECHECK_RUN + "false || true\n"
+    elif mutation == "runtime_recheck_continue_on_error":
+        recheck = next(
+            step
+            for step in backend
+            if step.get("id") == "recheck-source-before-migrations"
+        )
+        recheck["continue-on-error"] = True
+    elif mutation == "runtime_recheck_false_if":
+        recheck = next(
+            step
+            for step in backend
+            if step.get("id") == "recheck-source-before-migrations"
+        )
+        recheck["if"] = "${{ false }}"
+    elif mutation == "runtime_recheck_inert_tokens":
+        recheck = next(
+            step
+            for step in backend
+            if step.get("id") == "recheck-source-before-migrations"
+        )
+        recheck["run"] = (
+            "ignored='git rev-parse HEAD git diff --quiet "
+            "REMEDIATION_CHECKOUT_SHA'\n"
+            "echo integrity-bypassed\n"
+        )
     else:
         raise AssertionError(f"unknown test mutation {mutation}")
 
@@ -848,7 +1117,25 @@ def mutate_workflow(workflow: str, mutation: str) -> str:
         ("mismatch_without_failure", "non-canonical exact-SHA verification command"),
         ("evidence_before_tests", "frontend"),
         ("upload_before_validation", "remediation-evidence"),
-        ("git_reset_after_verify", "repository-changing Git command"),
+        ("git_reset_after_verify", "repository-changing or unknown Git subcommand"),
+        ("removed_runtime_recheck", "runtime integrity recheck must immediately precede"),
+        (
+            "runtime_recheck_after_evidence",
+            "runtime integrity recheck must immediately precede",
+        ),
+        ("runtime_recheck_or_true", "non-canonical runtime source-integrity recheck"),
+        (
+            "runtime_recheck_continue_on_error",
+            "runtime integrity recheck contains non-canonical fields",
+        ),
+        (
+            "runtime_recheck_false_if",
+            "runtime integrity recheck contains non-canonical fields",
+        ),
+        (
+            "runtime_recheck_inert_tokens",
+            "non-canonical runtime source-integrity recheck",
+        ),
     ],
 )
 def test_workflow_ordering_mutations_fail_closed(mutation, error):
@@ -866,6 +1153,197 @@ def test_workflow_contract_accepts_crlf_and_trailing_whitespace():
         encoding="utf-8"
     )
     assert_workflow_contract(workflow.replace("\n", "  \r\n"))
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        'git -C "$GITHUB_WORKSPACE" reset --hard HEAD^',
+        'cd "$GITHUB_WORKSPACE" && git reset --hard HEAD^',
+        "command git reset --hard HEAD^",
+        "env git reset --hard HEAD^",
+        "env FOO=bar git reset --hard HEAD^",
+        'cd "$GITHUB_WORKSPACE"; git reset --hard HEAD^',
+        'cd "$GITHUB_WORKSPACE"\ngit reset --hard HEAD^',
+        "true && git reset --hard HEAD^",
+        (
+            'git --work-tree="$GITHUB_WORKSPACE" '
+            '--git-dir="$GITHUB_WORKSPACE/.git" reset --hard HEAD^'
+        ),
+        '/usr/bin/git -C "$GITHUB_WORKSPACE" reset --hard HEAD^',
+        '"$GIT_EXEC_PATH/git" reset --hard HEAD^',
+        '(cd "$GITHUB_WORKSPACE" && git reset --hard HEAD^)',
+        '{ cd "$GITHUB_WORKSPACE"; git reset --hard HEAD^; }',
+        "if true; then git reset --hard HEAD^; fi",
+        "git -c advice.detachedHead=false reset --hard HEAD^",
+        "git update-ref refs/heads/main HEAD^",
+        "git read-tree HEAD^",
+        "git checkout-index --all --force",
+        "git apply change.patch",
+        'value="$(git reset --hard HEAD^)"',
+        "value=`git reset --hard HEAD^`",
+    ],
+)
+def test_post_verify_git_mutations_with_options_and_prefixes_fail_closed(command):
+    workflow_path = Path(__file__).parents[2] / ".github" / "workflows" / "ci.yml"
+    parsed = parse_workflow(workflow_path.read_text(encoding="utf-8"))
+    parsed["jobs"]["backend"]["steps"].insert(
+        2,
+        {"name": "Mutate verified source", "shell": "bash", "run": command},
+    )
+    mutated = yaml.safe_dump(parsed, sort_keys=False, allow_unicode=True)
+    parse_workflow(mutated)
+    with pytest.raises(
+        AssertionError,
+        match="repository-changing or unknown Git subcommand",
+    ):
+        assert_workflow_contract(mutated)
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        "git frobnicate HEAD",
+        "git --unknown-global-option reset --hard HEAD^",
+    ],
+)
+def test_unknown_post_verify_git_surface_fails_closed(command):
+    workflow_path = Path(__file__).parents[2] / ".github" / "workflows" / "ci.yml"
+    parsed = parse_workflow(workflow_path.read_text(encoding="utf-8"))
+    parsed["jobs"]["backend"]["steps"].insert(
+        2,
+        {"name": "Unsupported Git surface", "shell": "bash", "run": command},
+    )
+    mutated = yaml.safe_dump(parsed, sort_keys=False, allow_unicode=True)
+    with pytest.raises(AssertionError, match="unknown Git subcommand|global option"):
+        assert_workflow_contract(mutated)
+
+
+def _git_bash() -> str:
+    if os.name != "nt":
+        return "/bin/bash"
+    candidates = [
+        Path(r"C:\Program Files\Git\bin\bash.exe"),
+        Path(r"C:\Program Files\Git\usr\bin\bash.exe"),
+    ]
+    for candidate in candidates:
+        if candidate.exists():
+            return str(candidate)
+    pytest.skip("Git Bash is unavailable for the runtime integrity attack test")
+
+
+def _git(repo: Path, *args: str) -> str:
+    result = subprocess.run(
+        ["git", "-C", str(repo), *args],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    return result.stdout.strip()
+
+
+@pytest.mark.parametrize(
+    "attack",
+    [
+        'git -C "$GITHUB_WORKSPACE" reset --hard HEAD^',
+        'cd "$GITHUB_WORKSPACE" && git reset --hard HEAD^',
+    ],
+)
+def test_runtime_recheck_blocks_post_verify_head_mutation(tmp_path, attack):
+    repo = tmp_path / "runtime-attack"
+    repo.mkdir()
+    _git(repo, "init")
+    _git(repo, "config", "user.name", "ASTRA CI")
+    _git(repo, "config", "user.email", "astra-ci@example.invalid")
+    tracked = repo / "tracked.txt"
+    tracked.write_text("first\n", encoding="utf-8")
+    _git(repo, "add", "tracked.txt")
+    _git(repo, "commit", "-m", "first")
+    tracked.write_text("second\n", encoding="utf-8")
+    _git(repo, "commit", "-am", "second")
+    expected = _git(repo, "rev-parse", "HEAD")
+    workspace = _git(repo, "rev-parse", "--show-toplevel")
+    marker = repo / "evidence-produced"
+    script = f"{attack}\n{RUNTIME_RECHECK_RUN}\nprintf evidence > \"$EVIDENCE_MARKER\"\n"
+    env = {
+        **os.environ,
+        "GITHUB_ENV": str(repo / "github-env"),
+        "GITHUB_WORKSPACE": workspace,
+        "REMEDIATION_CHECKOUT_SHA": expected,
+        "EVIDENCE_MARKER": str(marker),
+    }
+    result = subprocess.run(
+        [_git_bash(), "-c", script],
+        cwd=repo,
+        env=env,
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode != 0
+    assert not marker.exists()
+
+
+@pytest.mark.parametrize("staged", [False, True])
+def test_runtime_recheck_blocks_tracked_tree_or_index_drift(tmp_path, staged):
+    repo = tmp_path / "runtime-drift"
+    repo.mkdir()
+    _git(repo, "init")
+    _git(repo, "config", "user.name", "ASTRA CI")
+    _git(repo, "config", "user.email", "astra-ci@example.invalid")
+    tracked = repo / "tracked.txt"
+    tracked.write_text("clean\n", encoding="utf-8")
+    _git(repo, "add", "tracked.txt")
+    _git(repo, "commit", "-m", "initial")
+    expected = _git(repo, "rev-parse", "HEAD")
+    workspace = _git(repo, "rev-parse", "--show-toplevel")
+    tracked.write_text("drift\n", encoding="utf-8")
+    if staged:
+        _git(repo, "add", "tracked.txt")
+    env = {
+        **os.environ,
+        "GITHUB_ENV": str(repo / "github-env"),
+        "GITHUB_WORKSPACE": workspace,
+        "REMEDIATION_CHECKOUT_SHA": expected,
+    }
+    result = subprocess.run(
+        [_git_bash(), "-c", RUNTIME_RECHECK_RUN],
+        cwd=repo,
+        env=env,
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode != 0
+
+
+def test_runtime_recheck_accepts_clean_expected_checkout(tmp_path):
+    repo = tmp_path / "runtime-clean"
+    repo.mkdir()
+    _git(repo, "init")
+    _git(repo, "config", "user.name", "ASTRA CI")
+    _git(repo, "config", "user.email", "astra-ci@example.invalid")
+    (repo / "tracked.txt").write_text("clean\n", encoding="utf-8")
+    _git(repo, "add", "tracked.txt")
+    _git(repo, "commit", "-m", "initial")
+    expected = _git(repo, "rev-parse", "HEAD")
+    workspace = _git(repo, "rev-parse", "--show-toplevel")
+    github_env = repo / "github-env"
+    env = {
+        **os.environ,
+        "GITHUB_ENV": str(github_env),
+        "GITHUB_WORKSPACE": workspace,
+        "REMEDIATION_CHECKOUT_SHA": expected,
+    }
+    result = subprocess.run(
+        [_git_bash(), "-c", RUNTIME_RECHECK_RUN],
+        cwd=repo,
+        env=env,
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0, result.stderr
+    assert github_env.read_text(encoding="utf-8") == (
+        f"REMEDIATION_CHECKOUT_SHA={expected}\n"
+    )
 
 
 def test_github_actions_loader_preserves_on_and_rejects_duplicate_keys():

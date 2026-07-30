@@ -52,10 +52,49 @@ checkout, or a repository-changing Git command after verification are rejected.
 Only line-ending normalization, per-line trailing whitespace, and the final
 newline are non-semantic variations.
 
-The contract also prevents later steps from redefining
+The post-verification guard tokenizes executable shell fields rather than
+matching only line-leading text. It locates Git behind command/environment
+prefixes, assignments, directory changes, chaining, grouping, subshells and
+absolute executable paths. It resolves the Git subcommand after reviewed global
+options including `-C`, `-c`, `--git-dir`, `--work-tree`, `--config-env`,
+`--namespace`, `--exec-path`, pager and pathspec options. Only the narrowly
+required read-only `rev-parse` and `diff` subcommands are accepted. Mutating or
+unknown subcommands and unknown global options fail closed.
+
+This static model is intentionally not represented as a complete Bash
+interpreter. Its role is to reject known unsafe workflow changes and unsupported
+Git surfaces. A canonical runtime integrity recheck is the final authority at
+each evidence trust boundary. The recheck:
+
+- requires the previously verified `REMEDIATION_CHECKOUT_SHA`;
+- compares it with a fresh `git rev-parse HEAD`;
+- confirms the repository root is exactly `GITHUB_WORKSPACE`;
+- requires both the tracked working tree and index to match `HEAD`;
+- rejects merge, rebase, cherry-pick, revert and bisect state;
+- re-exports only the freshly observed matching SHA.
+
+After documented line-ending and trailing-whitespace normalization, the
+canonical runtime recheck SHA-256 is
+`8443dba506e5ec0d69f7f03fcc027db7f06d75ff50ead803c81f48b0d33cacdf`.
+
+The exact canonical recheck must appear immediately before every producer
+operation that emits execution evidence and immediately before every producer
+artifact upload. The remediation aggregator repeats it before artifact intake,
+before canonical evidence production/validation, and before the canonical
+upload. The workflow contract rejects missing, moved, conditional,
+`continue-on-error`, token-stuffed or otherwise modified rechecks.
+
+The contract also prevents other later steps from redefining
 `REMEDIATION_CHECKOUT_SHA`. Artifact downloads are restricted to the dedicated
 remediation-evidence directory so they cannot replace the verified repository
 tree before canonical evidence is produced.
+
+Generated logs, test output and evidence files are intentionally untracked and
+may exist during CI. The runtime invariant therefore covers tracked source and
+the index, while evidence input paths, producer identities, hashes and the
+canonical schema constrain untracked evidence. Temporary-repository attack
+tests prove that both `git -C … reset` and `cd … && git reset` cause the runtime
+recheck to fail before evidence production.
 
 ## Required identity
 

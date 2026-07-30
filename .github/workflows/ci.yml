@@ -58,6 +58,22 @@ jobs:
             scripts/tests/test_validate_pr3_remediation_closure.py \
             scripts/tests/test_release_evidence.py \
             -q
+      - name: Recheck source integrity
+        id: recheck-source-before-migrations
+        shell: bash
+        run: |
+          set -euo pipefail
+          expected="${REMEDIATION_CHECKOUT_SHA:?missing verified source SHA}"
+          actual="$(git rev-parse HEAD)"
+          workspace="$(git rev-parse --show-toplevel)"
+          test "$actual" = "$expected"
+          test "$workspace" = "$GITHUB_WORKSPACE"
+          git diff --quiet --exit-code HEAD --
+          git diff --cached --quiet --exit-code HEAD --
+          for state in MERGE_HEAD REBASE_HEAD CHERRY_PICK_HEAD REVERT_HEAD BISECT_LOG; do
+            test ! -e "$(git rev-parse --git-path "$state")"
+          done
+          echo "REMEDIATION_CHECKOUT_SHA=$actual" >> "$GITHUB_ENV"
       - name: Run database migrations
         id: membership_migrations
         working-directory: backend
@@ -131,6 +147,22 @@ jobs:
           SOURCE_DATABASE_URL: postgresql://astra:astra@localhost:5432/astra_ci
           TARGET_DATABASE_URL: postgresql://astra:astra@localhost:5432/astra_restore_test
         run: docker run --rm --network host -v "$PWD:/workspace:ro" -w /workspace -e SOURCE_DATABASE_URL -e TARGET_DATABASE_URL postgres:16-alpine sh scripts/validate_test_backup_restore.sh
+      - name: Recheck source integrity
+        id: recheck-source-before-backend-evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          expected="${REMEDIATION_CHECKOUT_SHA:?missing verified source SHA}"
+          actual="$(git rev-parse HEAD)"
+          workspace="$(git rev-parse --show-toplevel)"
+          test "$actual" = "$expected"
+          test "$workspace" = "$GITHUB_WORKSPACE"
+          git diff --quiet --exit-code HEAD --
+          git diff --cached --quiet --exit-code HEAD --
+          for state in MERGE_HEAD REBASE_HEAD CHERRY_PICK_HEAD REVERT_HEAD BISECT_LOG; do
+            test ! -e "$(git rev-parse --git-path "$state")"
+          done
+          echo "REMEDIATION_CHECKOUT_SHA=$actual" >> "$GITHUB_ENV"
       - name: Produce episode and proxy execution evidence
         working-directory: backend
         run: |
@@ -171,6 +203,22 @@ jobs:
             --evidence-file "$evidence_dir/deployment_proxy_boundary.json" \
             --started-at "$proxy_started" \
             --completed-at "$proxy_completed"
+      - name: Recheck source integrity
+        id: recheck-source-before-backend-upload
+        shell: bash
+        run: |
+          set -euo pipefail
+          expected="${REMEDIATION_CHECKOUT_SHA:?missing verified source SHA}"
+          actual="$(git rev-parse HEAD)"
+          workspace="$(git rev-parse --show-toplevel)"
+          test "$actual" = "$expected"
+          test "$workspace" = "$GITHUB_WORKSPACE"
+          git diff --quiet --exit-code HEAD --
+          git diff --cached --quiet --exit-code HEAD --
+          for state in MERGE_HEAD REBASE_HEAD CHERRY_PICK_HEAD REVERT_HEAD BISECT_LOG; do
+            test ! -e "$(git rev-parse --git-path "$state")"
+          done
+          echo "REMEDIATION_CHECKOUT_SHA=$actual" >> "$GITHUB_ENV"
       - name: Upload backend remediation evidence
         uses: actions/upload-artifact@v6
         with:
@@ -225,6 +273,22 @@ jobs:
       - name: Build frontend
         working-directory: frontend
         run: npm run build
+      - name: Recheck source integrity
+        id: recheck-source-before-frontend-evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          expected="${REMEDIATION_CHECKOUT_SHA:?missing verified source SHA}"
+          actual="$(git rev-parse HEAD)"
+          workspace="$(git rev-parse --show-toplevel)"
+          test "$actual" = "$expected"
+          test "$workspace" = "$GITHUB_WORKSPACE"
+          git diff --quiet --exit-code HEAD --
+          git diff --cached --quiet --exit-code HEAD --
+          for state in MERGE_HEAD REBASE_HEAD CHERRY_PICK_HEAD REVERT_HEAD BISECT_LOG; do
+            test ! -e "$(git rev-parse --git-path "$state")"
+          done
+          echo "REMEDIATION_CHECKOUT_SHA=$actual" >> "$GITHUB_ENV"
       - name: Produce clinic-context execution evidence
         working-directory: frontend
         run: |
@@ -245,6 +309,22 @@ jobs:
             --evidence-file "$evidence_dir/context_initialization.json" \
             --started-at "$started_at" \
             --completed-at "$completed_at"
+      - name: Recheck source integrity
+        id: recheck-source-before-frontend-upload
+        shell: bash
+        run: |
+          set -euo pipefail
+          expected="${REMEDIATION_CHECKOUT_SHA:?missing verified source SHA}"
+          actual="$(git rev-parse HEAD)"
+          workspace="$(git rev-parse --show-toplevel)"
+          test "$actual" = "$expected"
+          test "$workspace" = "$GITHUB_WORKSPACE"
+          git diff --quiet --exit-code HEAD --
+          git diff --cached --quiet --exit-code HEAD --
+          for state in MERGE_HEAD REBASE_HEAD CHERRY_PICK_HEAD REVERT_HEAD BISECT_LOG; do
+            test ! -e "$(git rev-parse --git-path "$state")"
+          done
+          echo "REMEDIATION_CHECKOUT_SHA=$actual" >> "$GITHUB_ENV"
       - name: Upload frontend remediation evidence
         uses: actions/upload-artifact@v6
         with:
@@ -305,6 +385,22 @@ jobs:
       - name: Install Playwright browser
         working-directory: frontend
         run: npx playwright install --with-deps chromium
+      - name: Recheck source integrity
+        id: recheck-source-before-e2e-evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          expected="${REMEDIATION_CHECKOUT_SHA:?missing verified source SHA}"
+          actual="$(git rev-parse HEAD)"
+          workspace="$(git rev-parse --show-toplevel)"
+          test "$actual" = "$expected"
+          test "$workspace" = "$GITHUB_WORKSPACE"
+          git diff --quiet --exit-code HEAD --
+          git diff --cached --quiet --exit-code HEAD --
+          for state in MERGE_HEAD REBASE_HEAD CHERRY_PICK_HEAD REVERT_HEAD BISECT_LOG; do
+            test ! -e "$(git rev-parse --git-path "$state")"
+          done
+          echo "REMEDIATION_CHECKOUT_SHA=$actual" >> "$GITHUB_ENV"
       - name: Run DB-backed full-stack E2E smoke
         working-directory: frontend
         run: |
@@ -324,6 +420,22 @@ jobs:
             --evidence-file "$evidence_dir/transitional_workflow_rediscovery.json" \
             --started-at "$started_at" \
             --completed-at "$completed_at"
+      - name: Recheck source integrity
+        id: recheck-source-before-e2e-upload
+        shell: bash
+        run: |
+          set -euo pipefail
+          expected="${REMEDIATION_CHECKOUT_SHA:?missing verified source SHA}"
+          actual="$(git rev-parse HEAD)"
+          workspace="$(git rev-parse --show-toplevel)"
+          test "$actual" = "$expected"
+          test "$workspace" = "$GITHUB_WORKSPACE"
+          git diff --quiet --exit-code HEAD --
+          git diff --cached --quiet --exit-code HEAD --
+          for state in MERGE_HEAD REBASE_HEAD CHERRY_PICK_HEAD REVERT_HEAD BISECT_LOG; do
+            test ! -e "$(git rev-parse --git-path "$state")"
+          done
+          echo "REMEDIATION_CHECKOUT_SHA=$actual" >> "$GITHUB_ENV"
       - name: Upload DB-backed remediation evidence
         uses: actions/upload-artifact@v6
         with:
@@ -365,6 +477,22 @@ jobs:
             echo "Evidence producer result: backend=${{ needs.backend.result }}, frontend=${{ needs.frontend.result }}, e2e-db=${{ needs.e2e-db.result }}"
             exit 1
           fi
+      - name: Recheck source integrity
+        id: recheck-source-before-artifact-intake
+        shell: bash
+        run: |
+          set -euo pipefail
+          expected="${REMEDIATION_CHECKOUT_SHA:?missing verified source SHA}"
+          actual="$(git rev-parse HEAD)"
+          workspace="$(git rev-parse --show-toplevel)"
+          test "$actual" = "$expected"
+          test "$workspace" = "$GITHUB_WORKSPACE"
+          git diff --quiet --exit-code HEAD --
+          git diff --cached --quiet --exit-code HEAD --
+          for state in MERGE_HEAD REBASE_HEAD CHERRY_PICK_HEAD REVERT_HEAD BISECT_LOG; do
+            test ! -e "$(git rev-parse --git-path "$state")"
+          done
+          echo "REMEDIATION_CHECKOUT_SHA=$actual" >> "$GITHUB_ENV"
       - name: Download remediation execution evidence
         uses: actions/download-artifact@v8
         with:
@@ -377,6 +505,22 @@ jobs:
             --evidence-dir .remediation-evidence/final \
             --source-sha "$REMEDIATION_CHECKOUT_SHA" \
             --workflow-run-id "$GITHUB_RUN_ID"
+      - name: Recheck source integrity
+        id: recheck-source-before-canonical-evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          expected="${REMEDIATION_CHECKOUT_SHA:?missing verified source SHA}"
+          actual="$(git rev-parse HEAD)"
+          workspace="$(git rev-parse --show-toplevel)"
+          test "$actual" = "$expected"
+          test "$workspace" = "$GITHUB_WORKSPACE"
+          git diff --quiet --exit-code HEAD --
+          git diff --cached --quiet --exit-code HEAD --
+          for state in MERGE_HEAD REBASE_HEAD CHERRY_PICK_HEAD REVERT_HEAD BISECT_LOG; do
+            test ! -e "$(git rev-parse --git-path "$state")"
+          done
+          echo "REMEDIATION_CHECKOUT_SHA=$actual" >> "$GITHUB_ENV"
       - name: Produce and validate canonical release evidence
         run: |
           generated_at="$(date --iso-8601=seconds)"
@@ -401,6 +545,22 @@ jobs:
             --document docs/release-evidence-contract.md \
             --source-sha "$REMEDIATION_CHECKOUT_SHA" \
             --migration-head "0071_membership_taxonomy"
+      - name: Recheck source integrity
+        id: recheck-source-before-canonical-upload
+        shell: bash
+        run: |
+          set -euo pipefail
+          expected="${REMEDIATION_CHECKOUT_SHA:?missing verified source SHA}"
+          actual="$(git rev-parse HEAD)"
+          workspace="$(git rev-parse --show-toplevel)"
+          test "$actual" = "$expected"
+          test "$workspace" = "$GITHUB_WORKSPACE"
+          git diff --quiet --exit-code HEAD --
+          git diff --cached --quiet --exit-code HEAD --
+          for state in MERGE_HEAD REBASE_HEAD CHERRY_PICK_HEAD REVERT_HEAD BISECT_LOG; do
+            test ! -e "$(git rev-parse --git-path "$state")"
+          done
+          echo "REMEDIATION_CHECKOUT_SHA=$actual" >> "$GITHUB_ENV"
       - name: Upload canonical release evidence
         uses: actions/upload-artifact@v6
         with:
