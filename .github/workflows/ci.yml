@@ -30,10 +30,10 @@ jobs:
       DOCUMENT_STORAGE_PATH: /tmp/astra-documents
       PYTHONPATH: ${{ github.workspace }}/backend
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
       - name: Verify exact source checkout
@@ -144,7 +144,7 @@ jobs:
             --started-at "$proxy_started" \
             --completed-at "$proxy_completed"
       - name: Upload backend remediation evidence
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: remediation-evidence-backend
           path: .remediation-evidence/backend
@@ -180,10 +180,10 @@ jobs:
   frontend:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
       - name: Verify exact source checkout
@@ -195,7 +195,7 @@ jobs:
             --pull-request-head-sha "${{ github.event.pull_request.head.sha || '' }}" \
             --checkout-sha "$checkout_sha"
           echo "REMEDIATION_CHECKOUT_SHA=$checkout_sha" >> "$GITHUB_ENV"
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: "22"
           cache: npm
@@ -227,7 +227,7 @@ jobs:
             --started-at "$started_at" \
             --completed-at "$completed_at"
       - name: Upload frontend remediation evidence
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: remediation-evidence-frontend
           path: .remediation-evidence/frontend
@@ -270,10 +270,10 @@ jobs:
       JWT_SECRET: ci-e2e-jwt-secret-with-no-production-value
       PYTHONPATH: ${{ github.workspace }}/backend
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
       - name: Verify exact source checkout
@@ -285,7 +285,7 @@ jobs:
             --pull-request-head-sha "${{ github.event.pull_request.head.sha || '' }}" \
             --checkout-sha "$checkout_sha"
           echo "REMEDIATION_CHECKOUT_SHA=$checkout_sha" >> "$GITHUB_ENV"
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: "22"
           cache: npm
@@ -319,7 +319,7 @@ jobs:
             --started-at "$started_at" \
             --completed-at "$completed_at"
       - name: Upload DB-backed remediation evidence
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: remediation-evidence-e2e-db
           path: .remediation-evidence/e2e-db
@@ -334,10 +334,10 @@ jobs:
       - e2e-db
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
       - name: Verify exact source checkout
@@ -358,7 +358,7 @@ jobs:
             exit 1
           fi
       - name: Download remediation execution evidence
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           pattern: remediation-evidence-*
           path: .remediation-evidence/final
@@ -394,7 +394,7 @@ jobs:
             --source-sha "$REMEDIATION_CHECKOUT_SHA" \
             --migration-head "0071_membership_taxonomy"
       - name: Upload canonical release evidence
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: release-evidence
           path: release-evidence
