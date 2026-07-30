@@ -81,6 +81,8 @@ def produce(args: argparse.Namespace) -> dict[str, Any]:
         "scenarios": result["scenarios"],
         "test_ids": result["test_ids"],
         "cleanup_status": result["cleanup_status"],
+        "scenario_result_file": args.scenario_result.name,
+        "scenario_result_hash": sha256_file(args.scenario_result),
         "test_output_file": args.output_log.name,
         "test_output_hash": sha256_file(args.output_log),
     }
@@ -133,6 +135,8 @@ def validate_record(
         "scenarios",
         "test_ids",
         "cleanup_status",
+        "scenario_result_file",
+        "scenario_result_hash",
         "test_output_file",
         "test_output_hash",
         "record_hash",
@@ -186,15 +190,16 @@ def validate_record(
         raise RecoveryError("recovery_evidence_missing_revision")
     if not isinstance(record["test_ids"], list) or not record["test_ids"]:
         raise RecoveryError("recovery_evidence_missing_test_ids")
-    for key in ("test_output_hash", "record_hash"):
+    for key in ("scenario_result_hash", "test_output_hash", "record_hash"):
         if not isinstance(record[key], str) or len(record[key]) != 64:
             raise RecoveryError("recovery_evidence_hash_mismatch")
-    if (
-        not isinstance(record["test_output_file"], str)
-        or Path(record["test_output_file"]).name != record["test_output_file"]
-        or record["test_output_file"] in {"", ".", ".."}
-    ):
-        raise RecoveryError("invalid_recovery_evidence")
+    for key in ("scenario_result_file", "test_output_file"):
+        if (
+            not isinstance(record[key], str)
+            or Path(record[key]).name != record[key]
+            or record[key] in {"", ".", ".."}
+        ):
+            raise RecoveryError("invalid_recovery_evidence")
     if record["record_hash"] != _record_hash(record):
         raise RecoveryError("recovery_evidence_hash_mismatch")
     started = _parse_timestamp(record["started_at"])
@@ -278,6 +283,24 @@ def validate(
     output_log = records[0].parent / record["test_output_file"]
     if not output_log.is_file() or sha256_file(output_log) != record["test_output_hash"]:
         raise RecoveryError("recovery_evidence_hash_mismatch")
+    scenario_result_path = records[0].parent / record["scenario_result_file"]
+    if (
+        not scenario_result_path.is_file()
+        or sha256_file(scenario_result_path) != record["scenario_result_hash"]
+    ):
+        raise RecoveryError("recovery_evidence_hash_mismatch")
+    scenario_result = read_json(scenario_result_path)
+    expected_result = {
+        "started_at": record["started_at"],
+        "completed_at": record["completed_at"],
+        "postgresql_version": record["postgresql_version"],
+        "empty_database_final_revision": record["empty_database_final_revision"],
+        "scenarios": record["scenarios"],
+        "test_ids": record["test_ids"],
+        "cleanup_status": record["cleanup_status"],
+    }
+    if scenario_result != expected_result:
+        raise RecoveryError("recovery_evidence_scenario_result_mismatch")
     result = {
         "recovery_evidence_records": 1,
         "recovery_scenarios": len(record["scenarios"]),

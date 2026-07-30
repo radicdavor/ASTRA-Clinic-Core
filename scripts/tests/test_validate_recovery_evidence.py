@@ -71,6 +71,8 @@ def record() -> dict:
         "scenarios": scenarios,
         "test_ids": ["empty-to-0071", "0062-to-0071", "0071-restore"],
         "cleanup_status": "completed",
+        "scenario_result_file": "scenario-result.json",
+        "scenario_result_hash": "e" * 64,
         "test_output_file": "recovery-integration.log",
         "test_output_hash": "d" * 64,
     }
@@ -95,6 +97,22 @@ def validate(value: dict) -> dict:
 def rehash(value: dict) -> dict:
     value["record_hash"] = _record_hash(value)
     return value
+
+
+def write_scenario_result(directory: Path, value: dict) -> Path:
+    result = {
+        "started_at": value["started_at"],
+        "completed_at": value["completed_at"],
+        "postgresql_version": value["postgresql_version"],
+        "empty_database_final_revision": value["empty_database_final_revision"],
+        "scenarios": deepcopy(value["scenarios"]),
+        "test_ids": value["test_ids"],
+        "cleanup_status": value["cleanup_status"],
+    }
+    path = directory / value["scenario_result_file"]
+    path.write_bytes(canonical_json_bytes(result))
+    value["scenario_result_hash"] = sha256_file(path)
+    return path
 
 
 def test_valid_exact_sha_evidence_passes():
@@ -300,6 +318,7 @@ def test_downloaded_output_log_hash_is_revalidated(tmp_path):
     output = tmp_path / "recovery-integration.log"
     output.write_text("executed recovery matrix\n", encoding="utf-8")
     value = record()
+    write_scenario_result(tmp_path, value)
     value["test_output_hash"] = sha256_file(output)
     rehash(value)
     evidence.write_bytes(canonical_json_bytes(value))
@@ -319,11 +338,36 @@ def test_downloaded_output_log_hash_is_revalidated(tmp_path):
         validate_directory(args, now=NOW)
 
 
+def test_rehashed_scenario_checksum_mutation_is_rejected_by_real_entrypoint(tmp_path):
+    evidence = tmp_path / "recovery-evidence.json"
+    output = tmp_path / "recovery-integration.log"
+    output.write_text("executed recovery matrix\n", encoding="utf-8")
+    value = record()
+    write_scenario_result(tmp_path, value)
+    value["test_output_hash"] = sha256_file(output)
+    value["scenarios"][0]["backup_hash"] = "f" * 64
+    rehash(value)
+    evidence.write_bytes(canonical_json_bytes(value))
+    args = argparse.Namespace(
+        evidence_dir=tmp_path,
+        source_sha=SOURCE_SHA,
+        expected_source_sha=SOURCE_SHA,
+        app_commit=SOURCE_SHA,
+        workflow_run_id=RUN_ID,
+        workflow_event=WORKFLOW_EVENT,
+        workflow_branch=WORKFLOW_BRANCH,
+        max_age_hours=24,
+    )
+    with pytest.raises(RecoveryError, match="scenario_result_mismatch"):
+        validate_directory(args, now=NOW)
+
+
 def test_duplicate_json_key_is_rejected_by_real_entrypoint(tmp_path):
     evidence = tmp_path / "recovery-evidence.json"
     output = tmp_path / "recovery-integration.log"
     output.write_text("executed recovery matrix\n", encoding="utf-8")
     value = record()
+    write_scenario_result(tmp_path, value)
     value["test_output_hash"] = sha256_file(output)
     rehash(value)
     serialized = canonical_json_bytes(value).decode("utf-8")

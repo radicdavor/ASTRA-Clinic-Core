@@ -261,6 +261,13 @@ creates `.recovery-evidence` output. Trust is instead bounded by tracked
 source/index equality, fixed evidence paths, exact-SHA binding, local
 validation, and artifact checksums.
 
+The recovery evidence record carries the canonical filename and SHA-256 of
+`scenario-result.json`. Final validation re-reads that downloaded file and
+requires its timestamps, PostgreSQL version, migration result, scenarios,
+test IDs, and cleanup status to exactly match the evidence record. A rehashed
+change to a scenario backup or manifest checksum therefore cannot detach the
+record from the recovery matrix result that produced it.
+
 The workflow uses PostgreSQL 16 and executes:
 
 - recovery unit and negative tests;
