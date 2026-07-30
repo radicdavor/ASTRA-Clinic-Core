@@ -19,48 +19,6 @@ ROOT = Path(__file__).resolve().parents[1]
 EXPECTED_MIGRATION_HEAD = "0071_membership_taxonomy"
 SCHEMA_VERSION = 1
 SHA_PATTERN = re.compile(r"^[0-9a-f]{40}$")
-CANONICAL_TOP_LEVEL_KEYS = frozenset(
-    {
-        "artifact_hash",
-        "authorization",
-        "ci",
-        "credential_rotation",
-        "dependencies",
-        "deployment_validation",
-        "findings",
-        "generated_at",
-        "migrations",
-        "producer",
-        "readiness",
-        "recovery",
-        "review",
-        "schema_version",
-        "security",
-        "source_sha",
-        "tests",
-        "usability",
-    }
-)
-CANONICAL_TOP_LEVEL_TYPES = {
-    "artifact_hash": str,
-    "authorization": dict,
-    "ci": dict,
-    "credential_rotation": dict,
-    "dependencies": dict,
-    "deployment_validation": dict,
-    "findings": dict,
-    "generated_at": str,
-    "migrations": dict,
-    "producer": dict,
-    "readiness": dict,
-    "recovery": dict,
-    "review": dict,
-    "schema_version": int,
-    "security": dict,
-    "source_sha": str,
-    "tests": dict,
-    "usability": dict,
-}
 CANONICAL_PRODUCER_RESULTS = {
     "backend": "success",
     "frontend": "success",
@@ -87,8 +45,198 @@ FORMAL_CLOSURE_APPROVED_PATTERN = re.compile(
 SECURITY_LIMITATION = "unavailable_due_to_platform_incident"
 
 
+def _mapping(properties: dict[str, dict[str, Any]]) -> dict[str, Any]:
+    return {"kind": "mapping", "properties": properties}
+
+
+def _string(
+    *,
+    enum: set[str] | None = None,
+    pattern: re.Pattern[str] | None = None,
+) -> dict[str, Any]:
+    return {"kind": "string", "enum": enum, "pattern": pattern}
+
+
+def _literal(value: Any) -> dict[str, Any]:
+    return {"kind": "literal", "value": value}
+
+
+CANONICAL_RELEASE_SCHEMA = _mapping(
+    {
+        "artifact_hash": _string(pattern=re.compile(r"^[0-9a-f]{64}$")),
+        "authorization": _mapping(
+            {
+                "deployment": _literal(False),
+                "merge": _literal(False),
+                "production": _literal(False),
+                "real_patient_data": _literal(False),
+            }
+        ),
+        "ci": _mapping(
+            {
+                "event": _string(enum={"push", "pull_request"}),
+                "execution_evidence": _literal("validated"),
+                "producer_results": _mapping(
+                    {
+                        "backend": _literal("success"),
+                        "e2e-db": _literal("success"),
+                        "frontend": _literal("success"),
+                    }
+                ),
+                "workflow_name": _literal("CI"),
+                "workflow_run_id": _string(pattern=re.compile(r"^[1-9][0-9]*$")),
+            }
+        ),
+        "credential_rotation": _mapping({"status": _literal("pending")}),
+        "dependencies": _mapping({"issue_14": _literal("open")}),
+        "deployment_validation": _mapping(
+            {
+                "proxy_topology": _literal("requires_validation"),
+                "status": _literal("not_performed"),
+            }
+        ),
+        "findings": _mapping(
+            {
+                "status": _string(enum={"not_supplied", "supplied"}),
+                "unresolved_count": {
+                    "kind": "nullable_integer",
+                    "minimum": 0,
+                },
+            }
+        ),
+        "generated_at": _string(),
+        "migrations": _mapping(
+            {
+                "expected_head": _literal(EXPECTED_MIGRATION_HEAD),
+                "head_count": _literal(1),
+                "observed_head": _literal(EXPECTED_MIGRATION_HEAD),
+            }
+        ),
+        "producer": _mapping(
+            {
+                "name": _literal("scripts/release_evidence.py"),
+                "version": _literal(1),
+            }
+        ),
+        "readiness": _mapping(
+            {key: _literal(value) for key, value in CANONICAL_READINESS.items()}
+        ),
+        "recovery": _mapping(
+            {"status": _literal("not_evaluated_by_this_workflow")}
+        ),
+        "review": _mapping({"status": _literal("not_supplied")}),
+        "schema_version": _literal(SCHEMA_VERSION),
+        "security": _mapping(
+            {
+                "formal_codex_security_closure": _literal(SECURITY_LIMITATION),
+                "manual_sealing_used": _literal(False),
+                "sealed": _literal(False),
+            }
+        ),
+        "source_sha": _string(pattern=SHA_PATTERN),
+        "tests": _mapping(
+            {
+                "behaviour_units": _literal(5),
+                "coverage_dimensions": _literal(6),
+                "evidence_records": _literal(5),
+                "executed_target_test_ids": _literal(16),
+                "scope": _literal("remediation_execution_evidence"),
+                "skipped_target_tests": _literal(0),
+            }
+        ),
+        "usability": _mapping({"status": _literal("not_performed")}),
+    }
+)
+CANONICAL_TOP_LEVEL_KEYS = frozenset(
+    CANONICAL_RELEASE_SCHEMA["properties"]
+)
+
+
 class ReleaseEvidenceError(RuntimeError):
     pass
+
+
+def _unique_json_object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+    result: dict[str, Any] = {}
+    for key, value in pairs:
+        if key in result:
+            raise ReleaseEvidenceError(
+                f"Release evidence contains duplicate JSON key {key!r}"
+            )
+        result[key] = value
+    return result
+
+
+def _validate_schema_node(value: Any, schema: dict[str, Any], path: str = "$") -> None:
+    kind = schema["kind"]
+    if kind == "mapping":
+        if not isinstance(value, dict):
+            raise ReleaseEvidenceError(
+                f"{path}: expected mapping, got {type(value).__name__}"
+            )
+        properties = schema["properties"]
+        actual_keys = set(value)
+        expected_keys = set(properties)
+        if actual_keys != expected_keys:
+            missing = sorted(expected_keys - actual_keys)
+            unexpected = sorted(actual_keys - expected_keys)
+            raise ReleaseEvidenceError(
+                f"{path}: mapping keys must exactly match schema version 1; "
+                f"missing={missing}, unexpected={unexpected}"
+            )
+        for key, child_schema in properties.items():
+            _validate_schema_node(value[key], child_schema, f"{path}.{key}")
+        return
+    if kind == "string":
+        if not isinstance(value, str):
+            raise ReleaseEvidenceError(
+                f"{path}: expected string, got {type(value).__name__}"
+            )
+        allowed = schema.get("enum")
+        if allowed is not None and value not in allowed:
+            raise ReleaseEvidenceError(
+                f"{path}: value {value!r} is outside the closed domain"
+            )
+        pattern = schema.get("pattern")
+        if pattern is not None and not pattern.fullmatch(value):
+            raise ReleaseEvidenceError(
+                f"{path}: value does not match the required format"
+            )
+        return
+    if kind == "integer":
+        if type(value) is not int:
+            raise ReleaseEvidenceError(
+                f"{path}: expected integer, got {type(value).__name__}"
+            )
+        minimum = schema.get("minimum")
+        if minimum is not None and value < minimum:
+            raise ReleaseEvidenceError(f"{path}: value must be at least {minimum}")
+        return
+    if kind == "nullable_integer":
+        if value is None:
+            return
+        _validate_schema_node(
+            value,
+            {"kind": "integer", "minimum": schema.get("minimum")},
+            path,
+        )
+        return
+    if kind == "literal":
+        expected = schema["value"]
+        if type(value) is not type(expected) or value != expected:
+            raise ReleaseEvidenceError(
+                f"{path}: expected canonical value {expected!r}"
+            )
+        return
+    if kind == "array":
+        if not isinstance(value, list):
+            raise ReleaseEvidenceError(
+                f"{path}: expected array, got {type(value).__name__}"
+            )
+        for index, item in enumerate(value):
+            _validate_schema_node(item, schema["items"], f"{path}[{index}]")
+        return
+    raise ReleaseEvidenceError(f"{path}: unsupported schema node {kind!r}")
 
 
 def validate_checkout_identity(
@@ -299,6 +447,7 @@ def produce_release_manifest(
         "producer": {"name": "scripts/release_evidence.py", "version": 1},
     }
     payload["artifact_hash"] = _sha256_bytes(_canonical_json(payload))
+    _validate_schema_node(payload, CANONICAL_RELEASE_SCHEMA)
     output_path.parent.mkdir(parents=True, exist_ok=True)
     output_path.write_text(
         json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8"
@@ -317,33 +466,20 @@ def validate_release_manifest(
     now: datetime | None = None,
     max_age: timedelta = timedelta(hours=24),
 ) -> dict[str, Any]:
-    payload = json.loads(manifest_path.read_text(encoding="utf-8"))
+    payload = json.loads(
+        manifest_path.read_text(encoding="utf-8"),
+        object_pairs_hook=_unique_json_object,
+    )
     if not isinstance(payload, dict):
         raise ReleaseEvidenceError("Release evidence must be a JSON object")
-    actual_keys = set(payload)
-    if actual_keys != CANONICAL_TOP_LEVEL_KEYS:
-        missing = sorted(CANONICAL_TOP_LEVEL_KEYS - actual_keys)
-        unexpected = sorted(actual_keys - CANONICAL_TOP_LEVEL_KEYS)
+    _validate_schema_node(payload, CANONICAL_RELEASE_SCHEMA)
+    findings = payload["findings"]
+    if (findings["status"] == "not_supplied") != (
+        findings["unresolved_count"] is None
+    ):
         raise ReleaseEvidenceError(
-            "Release-evidence top-level keys must exactly match schema version 1; "
-            f"missing={missing}, unexpected={unexpected}"
+            "$.findings: status and unresolved_count are inconsistent"
         )
-    invalid_types = sorted(
-        key
-        for key, expected_type in CANONICAL_TOP_LEVEL_TYPES.items()
-        if not isinstance(payload[key], expected_type)
-        or (
-            expected_type is int
-            and isinstance(payload[key], bool)
-        )
-    )
-    if invalid_types:
-        raise ReleaseEvidenceError(
-            "Release-evidence top-level values have invalid types; "
-            f"keys={invalid_types}"
-        )
-    if payload.get("schema_version") != SCHEMA_VERSION:
-        raise ReleaseEvidenceError("Unsupported release-evidence schema")
     if payload.get("source_sha") != source_sha:
         raise ReleaseEvidenceError("Release evidence belongs to another source SHA")
     if payload.get("ci", {}).get("workflow_run_id") != str(workflow_run_id):

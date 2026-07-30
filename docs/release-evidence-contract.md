@@ -94,9 +94,45 @@ Schema version 1 is a closed contract. Its complete top-level key set is:
 - `tests`
 - `usability`
 
-The validator rejects missing keys, additional keys, misspellings, incompatible
-top-level types, and unknown schema versions even when the canonical artifact
-hash and file sidecar were recomputed correctly.
+The validator applies one declarative schema recursively. Every mapping in
+schema version 1 is closed: missing keys, additional keys, misspellings,
+incompatible types, and out-of-domain values are rejected at the exact JSON
+path even when the canonical artifact hash and file sidecar were recomputed.
+This applies to the root and to every nested mapping:
+
+- `authorization`: exactly `deployment`, `merge`, `production`,
+  `real_patient_data`, all boolean `false`
+- `ci`: exactly `event`, `execution_evidence`, `producer_results`,
+  `workflow_name`, `workflow_run_id`
+- `ci.producer_results`: exactly `backend`, `frontend`, `e2e-db`, all
+  `success`
+- `credential_rotation`: exactly `status = pending`
+- `dependencies`: exactly `issue_14 = open`
+- `deployment_validation`: exactly `status = not_performed` and
+  `proxy_topology = requires_validation`
+- `findings`: exactly `status` and `unresolved_count`; the count is null only
+  for `not_supplied`, otherwise a non-negative integer
+- `migrations`: exactly `expected_head`, `observed_head`, `head_count`
+- `producer`: exactly `name = scripts/release_evidence.py`, `version = 1`
+- `readiness`: exactly the four authorization layers documented below
+- `recovery`: exactly `status = not_evaluated_by_this_workflow`
+- `review`: exactly `status = not_supplied`
+- `security`: exactly `formal_codex_security_closure`, `sealed`,
+  `manual_sealing_used`
+- `tests`: exactly `scope`, `behaviour_units`, `coverage_dimensions`,
+  `evidence_records`, `executed_target_test_ids`, `skipped_target_tests`
+- `usability`: exactly `status = not_performed`
+
+Scalar identity fields also have closed formats or domains: schema version is
+the integer `1`, source SHA is 40 lowercase hexadecimal characters, artifact
+hash is 64 lowercase hexadecimal characters, CI event is `push` or
+`pull_request`, and workflow run ID is a positive decimal string.
+
+Schema validation occurs before freshness, hash/sidecar, producer, readiness,
+or authorization validation. Cryptographic consistency is necessary but never
+sufficient for semantic validity. There are no dynamic-key mappings or arrays
+in schema version 1. Duplicate JSON object keys are rejected during parsing
+rather than silently applying last-value-wins semantics.
 
 Adding or changing a field requires one coordinated, reviewed change to the
 producer, validator, tests, this document, and schema version when the contract

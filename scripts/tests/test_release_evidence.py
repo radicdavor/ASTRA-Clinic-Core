@@ -11,6 +11,7 @@ import yaml
 
 from scripts.release_evidence import (
     CANONICAL_PRODUCER_RESULTS,
+    CANONICAL_RELEASE_SCHEMA,
     CANONICAL_READINESS,
     CANONICAL_TOP_LEVEL_KEYS,
     EXPECTED_MIGRATION_HEAD,
@@ -92,6 +93,20 @@ def validate(path: Path, now: datetime, *, source_sha: str = SOURCE_SHA):
         workflow_run_id=RUN_ID,
         now=now,
     )
+
+
+def schema_paths(schema, path="$"):
+    yield path, schema
+    if schema["kind"] == "mapping":
+        for key, child in schema["properties"].items():
+            yield from schema_paths(child, f"{path}.{key}")
+
+
+def value_at_path(payload, path):
+    value = payload
+    for key in path.removeprefix("$.").split(".") if path != "$" else []:
+        value = value[key]
+    return value
 
 
 EXPECTED_SHA_EXPRESSION = "${{ github.event.pull_request.head.sha || github.sha }}"
@@ -403,28 +418,222 @@ def test_rehashed_manifest_with_unknown_top_level_claims_is_rejected(
 ):
     manifest, now = build_manifest(tmp_path)
     rewrite_manifest(manifest, lambda payload: payload.update(unknown_claims))
-    with pytest.raises(ReleaseEvidenceError, match="top-level keys"):
+    with pytest.raises(ReleaseEvidenceError, match=r"\$: mapping keys"):
         validate(manifest, now)
 
 
 def test_rehashed_manifest_with_missing_required_top_level_key_is_rejected(tmp_path):
     manifest, now = build_manifest(tmp_path)
     rewrite_manifest(manifest, lambda payload: payload.pop("authorization"))
-    with pytest.raises(ReleaseEvidenceError, match="top-level keys"):
+    with pytest.raises(ReleaseEvidenceError, match=r"\$: mapping keys"):
         validate(manifest, now)
 
 
 def test_rehashed_manifest_with_unknown_schema_version_is_rejected(tmp_path):
     manifest, now = build_manifest(tmp_path)
     rewrite_manifest(manifest, lambda payload: payload.update(schema_version=2))
-    with pytest.raises(ReleaseEvidenceError, match="Unsupported release-evidence schema"):
+    with pytest.raises(ReleaseEvidenceError, match=r"\$\.schema_version: expected canonical"):
         validate(manifest, now)
 
 
 def test_rehashed_manifest_with_wrong_top_level_type_is_rejected(tmp_path):
     manifest, now = build_manifest(tmp_path)
     rewrite_manifest(manifest, lambda payload: payload.update(authorization="blocked"))
-    with pytest.raises(ReleaseEvidenceError, match="invalid types"):
+    with pytest.raises(ReleaseEvidenceError, match=r"\$\.authorization: expected mapping"):
+        validate(manifest, now)
+
+
+def test_every_mapping_node_rejects_rehashed_unknown_claim(tmp_path):
+    manifest, now = build_manifest(tmp_path)
+    original = json.loads(manifest.read_text(encoding="utf-8"))
+    mapping_paths = [
+        path
+        for path, schema in schema_paths(CANONICAL_RELEASE_SCHEMA)
+        if schema["kind"] == "mapping"
+    ]
+    assert mapping_paths == [
+        "$",
+        "$.authorization",
+        "$.ci",
+        "$.ci.producer_results",
+        "$.credential_rotation",
+        "$.dependencies",
+        "$.deployment_validation",
+        "$.findings",
+        "$.migrations",
+        "$.producer",
+        "$.readiness",
+        "$.recovery",
+        "$.review",
+        "$.security",
+        "$.tests",
+        "$.usability",
+    ]
+    for path in mapping_paths:
+        manifest.write_text(
+            json.dumps(original, indent=2, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
+        manifest.with_suffix(manifest.suffix + ".sha256").write_text(
+            hashlib.sha256(manifest.read_bytes()).hexdigest() + "\n",
+            encoding="ascii",
+        )
+
+        def add_unknown(payload):
+            value_at_path(payload, path)["__unexpected_contract_claim__"] = True
+
+        rewrite_manifest(manifest, add_unknown)
+        with pytest.raises(ReleaseEvidenceError, match=re.escape(path)):
+            validate(manifest, now)
+
+
+def test_every_mapping_node_rejects_missing_key_and_non_mapping_value(tmp_path):
+    manifest, now = build_manifest(tmp_path)
+    original = json.loads(manifest.read_text(encoding="utf-8"))
+    mapping_paths = [
+        path
+        for path, schema in schema_paths(CANONICAL_RELEASE_SCHEMA)
+        if schema["kind"] == "mapping"
+    ]
+    for path in mapping_paths:
+        expected_keys = sorted(value_at_path(original, path))
+        if path == "$":
+            expected_keys.remove("artifact_hash")
+        for mutation in ("missing", "wrong_type"):
+            manifest.write_text(
+                json.dumps(original, indent=2, sort_keys=True) + "\n",
+                encoding="utf-8",
+            )
+            manifest.with_suffix(manifest.suffix + ".sha256").write_text(
+                hashlib.sha256(manifest.read_bytes()).hexdigest() + "\n",
+                encoding="ascii",
+            )
+
+            def mutate_mapping(payload):
+                if path == "$":
+                    if mutation == "missing":
+                        payload.pop(expected_keys[0])
+                    else:
+                        payload["authorization"] = []
+                    return
+                parent_path, key = path.rsplit(".", 1)
+                if mutation == "missing":
+                    value_at_path(payload, path).pop(expected_keys[0])
+                else:
+                    value_at_path(payload, parent_path)[key] = []
+
+            rewrite_manifest(manifest, mutate_mapping)
+            expected_path = path if mutation == "missing" else (
+                "$.authorization" if path == "$" else path
+            )
+            with pytest.raises(ReleaseEvidenceError, match=re.escape(expected_path)):
+                validate(manifest, now)
+
+
+@pytest.mark.parametrize(
+    ("path", "key"),
+    [
+        ("$.authorization", "production_authorized"),
+        ("$.security", "formal_security_approved"),
+        ("$.ci", "deployment_authorized"),
+        ("$.tests", "production_ready"),
+        ("$.producer", "trusted"),
+    ],
+)
+def test_rehashed_nested_authority_claims_are_rejected(tmp_path, path, key):
+    manifest, now = build_manifest(tmp_path)
+    rewrite_manifest(
+        manifest,
+        lambda payload: value_at_path(payload, path).update({key: True}),
+    )
+    with pytest.raises(
+        ReleaseEvidenceError,
+        match=rf"{re.escape(path)}: mapping keys.*{key}",
+    ):
+        validate(manifest, now)
+
+
+def test_every_schema_field_rejects_wrong_nested_type(tmp_path):
+    manifest, now = build_manifest(tmp_path)
+    original = json.loads(manifest.read_text(encoding="utf-8"))
+    leaf_paths = [
+        path
+        for path, schema in schema_paths(CANONICAL_RELEASE_SCHEMA)
+        if schema["kind"] != "mapping" and path != "$.artifact_hash"
+    ]
+    for path in leaf_paths:
+        manifest.write_text(
+            json.dumps(original, indent=2, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
+        manifest.with_suffix(manifest.suffix + ".sha256").write_text(
+            hashlib.sha256(manifest.read_bytes()).hexdigest() + "\n",
+            encoding="ascii",
+        )
+
+        def replace_with_wrong_type(payload):
+            parent_path, key = path.rsplit(".", 1)
+            current = value_at_path(payload, path)
+            replacement = (
+                {"wrong": "type"}
+                if isinstance(current, (str, int, bool)) or current is None
+                else "wrong-type"
+            )
+            value_at_path(payload, parent_path)[key] = replacement
+
+        rewrite_manifest(manifest, replace_with_wrong_type)
+        with pytest.raises(ReleaseEvidenceError, match=re.escape(path)):
+            validate(manifest, now)
+
+
+def test_every_closed_literal_rejects_same_type_noncanonical_value(tmp_path):
+    manifest, now = build_manifest(tmp_path)
+    original = json.loads(manifest.read_text(encoding="utf-8"))
+    literal_paths = [
+        path
+        for path, schema in schema_paths(CANONICAL_RELEASE_SCHEMA)
+        if schema["kind"] == "literal" and path != "$.artifact_hash"
+    ]
+    for path in literal_paths:
+        manifest.write_text(
+            json.dumps(original, indent=2, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
+        manifest.with_suffix(manifest.suffix + ".sha256").write_text(
+            hashlib.sha256(manifest.read_bytes()).hexdigest() + "\n",
+            encoding="ascii",
+        )
+
+        def replace_literal(payload):
+            parent_path, key = path.rsplit(".", 1)
+            current = value_at_path(payload, path)
+            if type(current) is bool:
+                replacement = not current
+            elif type(current) is int:
+                replacement = current + 1
+            else:
+                replacement = "__noncanonical_value__"
+            value_at_path(payload, parent_path)[key] = replacement
+
+        rewrite_manifest(manifest, replace_literal)
+        with pytest.raises(ReleaseEvidenceError, match=re.escape(path)):
+            validate(manifest, now)
+
+
+def test_duplicate_nested_json_key_is_rejected(tmp_path):
+    manifest, now = build_manifest(tmp_path)
+    content = manifest.read_text(encoding="utf-8")
+    content = content.replace(
+        '"production": false,',
+        '"production": false, "production": false,',
+        1,
+    )
+    manifest.write_text(content, encoding="utf-8")
+    manifest.with_suffix(manifest.suffix + ".sha256").write_text(
+        hashlib.sha256(manifest.read_bytes()).hexdigest() + "\n",
+        encoding="ascii",
+    )
+    with pytest.raises(ReleaseEvidenceError, match="duplicate JSON key 'production'"):
         validate(manifest, now)
 
 
@@ -770,7 +979,7 @@ def test_rehashed_manifest_with_incomplete_producers_is_rejected(tmp_path):
         manifest,
         lambda payload: payload["ci"]["producer_results"].pop("frontend"),
     )
-    with pytest.raises(ReleaseEvidenceError, match="canonical set"):
+    with pytest.raises(ReleaseEvidenceError, match=r"\$\.ci\.producer_results"):
         validate(manifest, now)
 
 
@@ -783,7 +992,7 @@ def test_stale_manifest_is_rejected(tmp_path):
 def test_internal_artifact_hash_mismatch_is_rejected(tmp_path):
     manifest, now = build_manifest(tmp_path)
     payload = json.loads(manifest.read_text(encoding="utf-8"))
-    payload["review"]["status"] = "approved"
+    payload["generated_at"] = (now - timedelta(minutes=1)).isoformat()
     manifest.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     manifest.with_suffix(manifest.suffix + ".sha256").write_text(
         hashlib.sha256(manifest.read_bytes()).hexdigest() + "\n", encoding="ascii"
@@ -809,21 +1018,24 @@ def test_skipped_target_test_is_rejected(tmp_path):
 def test_migration_head_drift_is_rejected(tmp_path):
     manifest, now = build_manifest(tmp_path)
     rewrite_manifest(manifest, lambda payload: payload["migrations"].update(observed_head="0069_legacy_document_trust"))
-    with pytest.raises(ReleaseEvidenceError, match="Alembic"):
+    with pytest.raises(ReleaseEvidenceError, match=r"\$\.migrations\.observed_head"):
         validate(manifest, now)
 
 
 def test_false_formal_security_closure_is_rejected(tmp_path):
     manifest, now = build_manifest(tmp_path)
     rewrite_manifest(manifest, lambda payload: payload["security"].update(formal_codex_security_closure="approved", sealed=True))
-    with pytest.raises(ReleaseEvidenceError, match="security limitation"):
+    with pytest.raises(
+        ReleaseEvidenceError,
+        match=r"\$\.security\.formal_codex_security_closure",
+    ):
         validate(manifest, now)
 
 
 def test_unauthorized_production_claim_is_rejected(tmp_path):
     manifest, now = build_manifest(tmp_path)
     rewrite_manifest(manifest, lambda payload: payload["authorization"].update(production=True))
-    with pytest.raises(ReleaseEvidenceError, match="unauthorized"):
+    with pytest.raises(ReleaseEvidenceError, match=r"\$\.authorization\.production"):
         validate(manifest, now)
 
 
@@ -837,7 +1049,7 @@ def test_canonical_readiness_values_are_accepted(tmp_path):
 def test_readiness_layers_cannot_be_collapsed(tmp_path):
     manifest, now = build_manifest(tmp_path)
     rewrite_manifest(manifest, lambda payload: payload["readiness"].pop("real_patient_data"))
-    with pytest.raises(ReleaseEvidenceError, match="canonical evidence-only state"):
+    with pytest.raises(ReleaseEvidenceError, match=r"\$\.readiness"):
         validate(manifest, now)
 
 
@@ -868,7 +1080,7 @@ def test_rehashed_manifest_with_invalid_readiness_value_is_rejected(
         manifest,
         lambda payload: payload["readiness"].update({key: value}),
     )
-    with pytest.raises(ReleaseEvidenceError, match="canonical evidence-only state"):
+    with pytest.raises(ReleaseEvidenceError, match=rf"\$\.readiness\.{key}"):
         validate(manifest, now)
 
 
@@ -878,7 +1090,7 @@ def test_rehashed_manifest_with_unknown_readiness_key_is_rejected(tmp_path):
         manifest,
         lambda payload: payload["readiness"].update({"unknown": "blocked"}),
     )
-    with pytest.raises(ReleaseEvidenceError, match="canonical evidence-only state"):
+    with pytest.raises(ReleaseEvidenceError, match=r"\$\.readiness"):
         validate(manifest, now)
 
 
