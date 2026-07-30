@@ -20,6 +20,7 @@ from recovery_common import (
 
 
 REQUIRED_SCENARIOS = SUPPORTED_BACKUP_REVISIONS
+ALLOWED_FUTURE_CLOCK_SKEW = timedelta(minutes=5)
 
 
 def _is_lower_hex(value: Any, length: int) -> bool:
@@ -204,7 +205,9 @@ def validate_record(
         raise RecoveryError("recovery_evidence_hash_mismatch")
     started = _parse_timestamp(record["started_at"])
     completed = _parse_timestamp(record["completed_at"])
-    current = now or datetime.now(UTC)
+    current = (now or datetime.now(UTC)).astimezone(UTC)
+    if completed > current + ALLOWED_FUTURE_CLOCK_SKEW:
+        raise RecoveryError("recovery_evidence_completed_at_in_future")
     if completed < started or current - completed > timedelta(hours=max_age_hours):
         raise RecoveryError("recovery_evidence_stale")
     scenarios = record["scenarios"]

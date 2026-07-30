@@ -161,7 +161,10 @@ The restore rejects:
 - wrong dump, file-manifest, or object hashes;
 - path traversal and symlink inputs;
 - unsupported revisions or environments;
-- non-empty targets;
+- non-empty targets, including user schemas, tables, partitioned/foreign
+  tables, views, materialized views, sequences, routines, domains, enums, and
+  standalone composite types; system and extension-owned objects are excluded
+  using PostgreSQL catalog ownership rather than a broad name allowlist;
 - missing destructive confirmation;
 - incomplete table inventory or semantic projections;
 - row-count, checksum, foreign-key, uniqueness, membership, provenance, trust,
@@ -215,8 +218,11 @@ Never restore over a persistent or non-empty database in this workflow.
 ## Cleanup and operator sign-off
 
 Disposable source, target, failed-restore databases, temporary verified dumps,
-storage staging directories, and test processes must be removed. Evidence is
-valid only when cleanup reports `completed`.
+storage staging directories, and test processes must be removed. Workspace
+cleanup is verified before the scenario result is written. Evidence is valid
+only when cleanup reports `completed`; deletion errors or a surviving
+workspace fail the run, and a primary recovery failure plus cleanup failure
+preserves both exceptions.
 
 The operator must record:
 
@@ -280,7 +286,10 @@ The workflow uses PostgreSQL 16 and executes:
 
 The evidence validator rejects wrong SHA/run, stale or failed evidence, skipped
 tests, revision gaps, hash gaps, missing semantic checksums, conflicting
-scenarios, and incomplete cleanup.
+scenarios, and incomplete cleanup. Timestamps must be timezone-aware and are
+normalized to UTC. `completed_at` must be no older than the configured maximum
+age and no more than five minutes ahead of the validator's single captured
+clock value.
 
 ## Deployment decisions
 
@@ -290,13 +299,13 @@ scenarios, and incomplete cleanup.
   (maximum 4 h).
 - Proposed production-candidate target: RPO 15 min (maximum 1 h), RTO 2 h
   (maximum 4 h).
-- Owner acceptance of these targets: `false`.
-- Observed RPO: not measured.
-- Observed RTO: not measured.
+- Owner acceptance of these policy targets: `true` (accepted 2026-07-30).
+- Observed production RPO: not measured (`null`).
+- Observed production RTO: not measured (`null`).
 - A synthetic functional restore is not evidence that a production RPO or RTO
   has been achieved.
-- RPO: `OWNER DECISION REQUIRED`
-- RTO: `OWNER DECISION REQUIRED`
+- RPO/RTO policy targets are accepted; achieved production measurements remain
+  unproven and require a separately authorized production-scale drill.
 - encryption/KMS: deployment validation required
 - off-site retention: owner and infrastructure decision required
 - production topology and credentials: not covered by this PR

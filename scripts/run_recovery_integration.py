@@ -10,6 +10,7 @@ import shutil
 import subprocess
 import sys
 from tempfile import mkdtemp
+from typing import Callable
 from urllib.parse import quote, urlsplit, urlunsplit
 from uuid import uuid4
 
@@ -30,6 +31,7 @@ from recovery_common import (
 )
 from restore_postgres import (
     DESTRUCTIVE_CONFIRMATION,
+    _target_is_empty,
     parser as restore_parser,
     restore,
     validate_artifact,
@@ -557,6 +559,92 @@ def run_empty_database_scenario(admin_url: str) -> str:
         drop_database(admin_url, name)
 
 
+def verify_non_empty_target_object_categories(admin_url: str) -> None:
+    cases = {
+        "table": "CREATE TABLE recovery_object (id integer)",
+        "partitioned_table": (
+            "CREATE TABLE recovery_object (id integer) PARTITION BY RANGE (id)"
+        ),
+        "view": "CREATE VIEW recovery_object AS SELECT 1 AS id",
+        "materialized_view": (
+            "CREATE MATERIALIZED VIEW recovery_object AS SELECT 1 AS id"
+        ),
+        "sequence": "CREATE SEQUENCE recovery_object",
+        "function": (
+            "CREATE FUNCTION recovery_object() RETURNS integer "
+            "LANGUAGE SQL IMMUTABLE AS 'SELECT 1'"
+        ),
+        "enum": "CREATE TYPE recovery_object AS ENUM ('synthetic')",
+        "domain": "CREATE DOMAIN recovery_object AS text CHECK (VALUE <> '')",
+        "schema": "CREATE SCHEMA recovery_object",
+        "multiple": (
+            "CREATE SEQUENCE recovery_sequence; "
+            "CREATE VIEW recovery_view AS SELECT 1 AS id"
+        ),
+    }
+    clean_name = f"astra_recovery_object_clean_{uuid4().hex[:8]}"
+    try:
+        recreate_database(admin_url, clean_name)
+        with psycopg.connect(
+            psycopg_url(database_url(admin_url, clean_name))
+        ) as connection:
+            if not _target_is_empty(connection):
+                raise RecoveryError("clean_target_reported_non_empty")
+    finally:
+        drop_database(admin_url, clean_name)
+    for category, statement in cases.items():
+        name = f"astra_recovery_object_{category}_{uuid4().hex[:8]}"
+        try:
+            recreate_database(admin_url, name)
+            with psycopg.connect(
+                psycopg_url(database_url(admin_url, name))
+            ) as connection:
+                connection.execute(statement)
+                connection.commit()
+                if _target_is_empty(connection):
+                    raise RecoveryError(
+                        f"non_empty_target_{category}_was_accepted"
+                    )
+        finally:
+            drop_database(admin_url, name)
+
+
+def _remove_workspace(workspace: Path) -> None:
+    try:
+        shutil.rmtree(workspace)
+    except OSError as exc:
+        raise RecoveryError("scenario_cleanup_failed") from exc
+    if workspace.exists():
+        raise RecoveryError("scenario_cleanup_failed")
+
+
+def _run_with_verified_cleanup(
+    workspace: Path,
+    result_file: Path,
+    operation: Callable[[], dict[str, object]],
+) -> dict[str, object]:
+    try:
+        result = operation()
+    except Exception as primary_error:
+        try:
+            _remove_workspace(workspace)
+        except Exception as cleanup_error:
+            cleanup_failure = (
+                cleanup_error
+                if isinstance(cleanup_error, RecoveryError)
+                else RecoveryError("scenario_cleanup_failed")
+            )
+            raise ExceptionGroup(
+                "recovery_and_cleanup_failed",
+                [primary_error, cleanup_failure],
+            ) from None
+        raise
+    _remove_workspace(workspace)
+    result["cleanup_status"] = "completed"
+    write_json(result_file, result)
+    return result
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(
         description="Run disposable PostgreSQL recovery validation for Alembic 0071"
@@ -579,8 +667,10 @@ def main() -> int:
     os.environ["ASTRA_APPLICATION_COMMIT"] = source_sha
     workspace = Path(mkdtemp(prefix="astra-recovery-"))
     started_at = utc_now()
-    try:
+
+    def run_matrix() -> dict[str, object]:
         empty_revision = run_empty_database_scenario(admin_url)
+        verify_non_empty_target_object_categories(admin_url)
         scenarios = []
         for revision in sorted(SUPPORTED_BACKUP_REVISIONS):
             scenario_workspace = workspace / revision
@@ -597,7 +687,7 @@ def main() -> int:
             )
         with psycopg.connect(psycopg_url(admin_url)) as connection:
             postgres_version = str(connection.info.server_version)
-        result = {
+        return {
             "started_at": started_at,
             "completed_at": utc_now(),
             "postgresql_version": postgres_version,
@@ -617,24 +707,24 @@ def main() -> int:
                 "corrupt_backup_rejection",
                 "failed_pg_restore_marker",
                 "non_empty_target_rejection",
+                "non_empty_user_object_categories",
                 "application_smoke",
             ],
-            "cleanup_status": "completed",
+            "cleanup_status": "not_attempted",
         }
-        write_json(args.result_file, result)
-        print(
-            json.dumps(
-                {
-                    "status": "passed",
-                    "scenarios": len(scenarios),
-                    "final_revision": empty_revision,
-                },
-                sort_keys=True,
-            )
+
+    result = _run_with_verified_cleanup(workspace, args.result_file, run_matrix)
+    print(
+        json.dumps(
+            {
+                "status": "passed",
+                "scenarios": len(result["scenarios"]),
+                "final_revision": result["empty_database_final_revision"],
+            },
+            sort_keys=True,
         )
-        return 0
-    finally:
-        shutil.rmtree(workspace, ignore_errors=True)
+    )
+    return 0
 
 
 if __name__ == "__main__":

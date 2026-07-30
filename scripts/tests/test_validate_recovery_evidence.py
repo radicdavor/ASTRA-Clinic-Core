@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import argparse
 from copy import deepcopy
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime, timedelta, timezone
 from pathlib import Path
 import sys
 
@@ -20,6 +20,7 @@ from recovery_common import (  # noqa: E402
     sha256_file,
 )
 from validate_recovery_evidence import (  # noqa: E402
+    ALLOWED_FUTURE_CLOCK_SKEW,
     _record_hash,
     validate as validate_directory,
     validate_record,
@@ -250,6 +251,55 @@ def test_stale_evidence_fails():
         validate(value)
 
 
+@pytest.mark.parametrize(
+    "offset",
+    [
+        timedelta(0),
+        ALLOWED_FUTURE_CLOCK_SKEW - timedelta(microseconds=1),
+        ALLOWED_FUTURE_CLOCK_SKEW,
+    ],
+)
+def test_completed_at_accepts_recent_and_bounded_future_clock_skew(offset):
+    value = record()
+    value["started_at"] = (NOW - timedelta(minutes=1)).isoformat()
+    value["completed_at"] = (NOW + offset).isoformat()
+    rehash(value)
+    assert validate(value)["conclusion"] == "success"
+
+
+@pytest.mark.parametrize(
+    "offset",
+    [
+        ALLOWED_FUTURE_CLOCK_SKEW + timedelta(microseconds=1),
+        timedelta(days=365),
+    ],
+)
+def test_completed_at_rejects_timestamp_beyond_future_clock_skew(offset):
+    value = record()
+    value["completed_at"] = (NOW + offset).isoformat()
+    rehash(value)
+    with pytest.raises(RecoveryError, match="completed_at_in_future"):
+        validate(value)
+
+
+def test_completed_at_timezone_offset_normalizes_to_same_utc_instant():
+    value = record()
+    value["completed_at"] = NOW.astimezone(
+        timezone(timedelta(hours=2))
+    ).isoformat()
+    rehash(value)
+    assert validate(value)["conclusion"] == "success"
+
+
+@pytest.mark.parametrize("timestamp", ["2026-07-30T18:00:00", "not-a-timestamp"])
+def test_completed_at_rejects_naive_or_invalid_timestamp(timestamp):
+    value = record()
+    value["completed_at"] = timestamp
+    rehash(value)
+    with pytest.raises(RecoveryError, match="invalid_recovery_evidence_timestamp"):
+        validate(value)
+
+
 def test_invalid_record_hash_fails():
     value = record()
     value["record_hash"] = "0" * 64
@@ -359,6 +409,30 @@ def test_rehashed_scenario_checksum_mutation_is_rejected_by_real_entrypoint(tmp_
         max_age_hours=24,
     )
     with pytest.raises(RecoveryError, match="scenario_result_mismatch"):
+        validate_directory(args, now=NOW)
+
+
+def test_rehashed_future_completed_at_is_rejected_by_real_entrypoint(tmp_path):
+    evidence = tmp_path / "recovery-evidence.json"
+    output = tmp_path / "recovery-integration.log"
+    output.write_text("executed recovery matrix\n", encoding="utf-8")
+    value = record()
+    value["completed_at"] = (NOW + timedelta(days=365)).isoformat()
+    write_scenario_result(tmp_path, value)
+    value["test_output_hash"] = sha256_file(output)
+    rehash(value)
+    evidence.write_bytes(canonical_json_bytes(value))
+    args = argparse.Namespace(
+        evidence_dir=tmp_path,
+        source_sha=SOURCE_SHA,
+        expected_source_sha=SOURCE_SHA,
+        app_commit=SOURCE_SHA,
+        workflow_run_id=RUN_ID,
+        workflow_event=WORKFLOW_EVENT,
+        workflow_branch=WORKFLOW_BRANCH,
+        max_age_hours=24,
+    )
+    with pytest.raises(RecoveryError, match="completed_at_in_future"):
         validate_directory(args, now=NOW)
 
 

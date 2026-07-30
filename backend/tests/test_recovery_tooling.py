@@ -28,9 +28,14 @@ from recovery_common import (  # noqa: E402
 )
 from restore_postgres import (  # noqa: E402
     DESTRUCTIVE_CONFIRMATION,
+    _target_is_empty,
     restore,
     validate_artifact,
     validate_file_manifest,
+)
+from run_recovery_integration import (  # noqa: E402
+    _remove_workspace,
+    _run_with_verified_cleanup,
 )
 
 
@@ -311,6 +316,108 @@ class _FakeConnection:
         if "to_regclass" in statement:
             return _FakeResult([("alembic_version",)])
         return _FakeResult(self.rows)
+
+
+@pytest.mark.parametrize("has_user_objects", [True, False])
+def test_target_empty_uses_catalog_wide_user_object_result(has_user_objects):
+    connection = _FakeConnection([(has_user_objects,)])
+    assert _target_is_empty(connection) is (not has_user_objects)
+
+
+def test_target_empty_query_covers_relevant_catalogs_and_relkinds():
+    statements = []
+
+    class RecordingConnection:
+        def execute(self, statement):
+            statements.append(statement)
+            return _FakeResult([(False,)])
+
+    assert _target_is_empty(RecordingConnection())
+    query = statements[0]
+    assert "pg_catalog.pg_namespace" in query
+    assert "pg_catalog.pg_class" in query
+    assert "pg_catalog.pg_proc" in query
+    assert "pg_catalog.pg_type" in query
+    assert "relation.relkind IN ('r', 'p', 'f', 'v', 'm', 'S')" in query
+    assert "dependency.deptype = 'e'" in query
+
+
+def test_workspace_cleanup_verifies_real_postcondition(tmp_path):
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    (workspace / "synthetic.tmp").write_text("synthetic", encoding="utf-8")
+    _remove_workspace(workspace)
+    assert not workspace.exists()
+
+
+def test_workspace_cleanup_exception_blocks_completed_evidence(tmp_path, monkeypatch):
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    result_file = tmp_path / "result.json"
+
+    def fail_cleanup(_workspace):
+        raise OSError("synthetic cleanup denial")
+
+    monkeypatch.setattr("run_recovery_integration.shutil.rmtree", fail_cleanup)
+    with pytest.raises(RecoveryError, match="scenario_cleanup_failed"):
+        _run_with_verified_cleanup(
+            workspace,
+            result_file,
+            lambda: {"cleanup_status": "not_attempted"},
+        )
+    assert not result_file.exists()
+
+
+def test_workspace_cleanup_surviving_path_blocks_completed_evidence(
+    tmp_path, monkeypatch
+):
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    result_file = tmp_path / "result.json"
+    monkeypatch.setattr("run_recovery_integration.shutil.rmtree", lambda _path: None)
+    with pytest.raises(RecoveryError, match="scenario_cleanup_failed"):
+        _run_with_verified_cleanup(
+            workspace,
+            result_file,
+            lambda: {"cleanup_status": "not_attempted"},
+        )
+    assert workspace.exists()
+    assert not result_file.exists()
+
+
+def test_primary_and_cleanup_failures_are_both_preserved(tmp_path, monkeypatch):
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    result_file = tmp_path / "result.json"
+
+    def primary_failure():
+        raise RecoveryError("synthetic_primary_failure")
+
+    monkeypatch.setattr(
+        "run_recovery_integration.shutil.rmtree",
+        lambda _path: (_ for _ in ()).throw(OSError("synthetic cleanup denial")),
+    )
+    with pytest.raises(ExceptionGroup) as captured:
+        _run_with_verified_cleanup(workspace, result_file, primary_failure)
+    assert [str(error) for error in captured.value.exceptions] == [
+        "synthetic_primary_failure",
+        "scenario_cleanup_failed",
+    ]
+    assert not result_file.exists()
+
+
+def test_primary_failure_with_successful_cleanup_preserves_primary_error(tmp_path):
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    result_file = tmp_path / "result.json"
+
+    def primary_failure():
+        raise RecoveryError("synthetic_primary_failure")
+
+    with pytest.raises(RecoveryError, match="synthetic_primary_failure"):
+        _run_with_verified_cleanup(workspace, result_file, primary_failure)
+    assert not workspace.exists()
+    assert not result_file.exists()
 
 
 def test_revision_check_rejects_multiple_rows():

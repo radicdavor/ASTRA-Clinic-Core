@@ -145,13 +145,77 @@ def validate_artifact(
 
 
 def _target_is_empty(connection: psycopg.Connection) -> bool:
-    rows = connection.execute(
+    has_user_objects = connection.execute(
         """
-        SELECT tablename FROM pg_tables
-        WHERE schemaname='public'
+        SELECT EXISTS (
+            SELECT 1
+            FROM pg_catalog.pg_namespace AS namespace
+            WHERE namespace.nspname NOT IN ('pg_catalog', 'information_schema', 'public')
+              AND namespace.nspname !~ '^pg_toast'
+              AND namespace.nspname !~ '^pg_temp_'
+              AND NOT EXISTS (
+                  SELECT 1
+                  FROM pg_catalog.pg_depend AS dependency
+                  WHERE dependency.classid = 'pg_namespace'::regclass
+                    AND dependency.objid = namespace.oid
+                    AND dependency.deptype = 'e'
+              )
+            UNION ALL
+            SELECT 1
+            FROM pg_catalog.pg_class AS relation
+            JOIN pg_catalog.pg_namespace AS namespace
+              ON namespace.oid = relation.relnamespace
+            WHERE namespace.nspname NOT IN ('pg_catalog', 'information_schema')
+              AND namespace.nspname !~ '^pg_toast'
+              AND namespace.nspname !~ '^pg_temp_'
+              AND relation.relkind IN ('r', 'p', 'f', 'v', 'm', 'S')
+              AND NOT EXISTS (
+                  SELECT 1
+                  FROM pg_catalog.pg_depend AS dependency
+                  WHERE dependency.classid = 'pg_class'::regclass
+                    AND dependency.objid = relation.oid
+                    AND dependency.deptype = 'e'
+              )
+            UNION ALL
+            SELECT 1
+            FROM pg_catalog.pg_proc AS routine
+            JOIN pg_catalog.pg_namespace AS namespace
+              ON namespace.oid = routine.pronamespace
+            WHERE namespace.nspname NOT IN ('pg_catalog', 'information_schema')
+              AND namespace.nspname !~ '^pg_toast'
+              AND namespace.nspname !~ '^pg_temp_'
+              AND NOT EXISTS (
+                  SELECT 1
+                  FROM pg_catalog.pg_depend AS dependency
+                  WHERE dependency.classid = 'pg_proc'::regclass
+                    AND dependency.objid = routine.oid
+                    AND dependency.deptype = 'e'
+              )
+            UNION ALL
+            SELECT 1
+            FROM pg_catalog.pg_type AS data_type
+            JOIN pg_catalog.pg_namespace AS namespace
+              ON namespace.oid = data_type.typnamespace
+            LEFT JOIN pg_catalog.pg_class AS relation
+              ON relation.oid = data_type.typrelid
+            WHERE namespace.nspname NOT IN ('pg_catalog', 'information_schema')
+              AND namespace.nspname !~ '^pg_toast'
+              AND namespace.nspname !~ '^pg_temp_'
+              AND (
+                  data_type.typtype IN ('d', 'e', 'r', 'm')
+                  OR (data_type.typtype = 'c' AND relation.relkind = 'c')
+              )
+              AND NOT EXISTS (
+                  SELECT 1
+                  FROM pg_catalog.pg_depend AS dependency
+                  WHERE dependency.classid = 'pg_type'::regclass
+                    AND dependency.objid = data_type.oid
+                    AND dependency.deptype = 'e'
+              )
+        )
         """
-    ).fetchall()
-    return not rows
+    ).fetchone()[0]
+    return not bool(has_user_objects)
 
 
 def _create_marker(connection: psycopg.Connection, operation_id: str) -> None:
