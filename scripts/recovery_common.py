@@ -104,8 +104,19 @@ def read_regular_bytes(path: Path) -> bytes:
 
 
 def read_json(path: Path) -> Any:
+    def unique_object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+        result: dict[str, Any] = {}
+        for key, value in pairs:
+            if key in result:
+                raise RecoveryError("duplicate_json_key")
+            result[key] = value
+        return result
+
     try:
-        return json.loads(read_regular_bytes(path).decode("utf-8"))
+        return json.loads(
+            read_regular_bytes(path).decode("utf-8"),
+            object_pairs_hook=unique_object,
+        )
     except (UnicodeError, json.JSONDecodeError) as exc:
         raise RecoveryError("invalid_json_manifest") from exc
 

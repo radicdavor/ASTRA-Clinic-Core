@@ -231,7 +231,37 @@ The operator must record:
 ## CI and evidence
 
 `.github/workflows/recovery.yml` runs for recovery-sensitive changes on both
-push and pull-request events. It uses PostgreSQL 16 and executes:
+push and pull-request events. The workflow checks out the event-derived source
+SHA (`pull_request.head.sha` for pull requests, otherwise `github.sha`) by
+explicit `ref` and immediately compares it with `git rev-parse HEAD` before
+runtime setup or repository code execution. The verified value is exported as
+`REMEDIATION_CHECKOUT_SHA`; backup, evidence production, and final validation
+must use that value rather than independently deriving a source identity.
+
+The workflow rechecks source integrity immediately before the recovery matrix,
+evidence production, evidence upload, artifact intake, and final evidence
+validation. Each canonical recheck fails unless:
+
+- `HEAD` still equals the initially verified SHA;
+- the Git repository root equals `GITHUB_WORKSPACE`;
+- tracked files and the index still equal `HEAD`;
+- no merge, rebase, cherry-pick, revert, or bisect state is active.
+
+The semantic workflow contract uses the same safe PyYAML model as the primary
+CI contract. It rejects duplicate YAML keys, later checkouts, redefinition of
+the verified SHA, non-canonical verification/recheck commands, artifact
+downloads into the repository root, and repository-mutating or unknown Git
+subcommands after verification. Its shell-token model is deliberately limited;
+it does not claim to interpret arbitrary Bash. Unsupported or unknown Git forms
+fail closed, while the mandatory runtime recheck remains the final authority
+for actual repository state.
+
+Untracked files are not globally forbidden because recovery legitimately
+creates `.recovery-evidence` output. Trust is instead bounded by tracked
+source/index equality, fixed evidence paths, exact-SHA binding, local
+validation, and artifact checksums.
+
+The workflow uses PostgreSQL 16 and executes:
 
 - recovery unit and negative tests;
 - empty database to `0071`;
@@ -247,10 +277,23 @@ scenarios, and incomplete cleanup.
 
 ## Deployment decisions
 
+- Proposed development/test target: RPO 24 h (maximum 24 h), RTO 2 h
+  (maximum 4 h).
+- Proposed synthetic pre-production target: RPO 4 h (maximum 8 h), RTO 2 h
+  (maximum 4 h).
+- Proposed production-candidate target: RPO 15 min (maximum 1 h), RTO 2 h
+  (maximum 4 h).
+- Owner acceptance of these targets: `false`.
+- Observed RPO: not measured.
+- Observed RTO: not measured.
+- A synthetic functional restore is not evidence that a production RPO or RTO
+  has been achieved.
 - RPO: `OWNER DECISION REQUIRED`
 - RTO: `OWNER DECISION REQUIRED`
 - encryption/KMS: deployment validation required
 - off-site retention: owner and infrastructure decision required
 - production topology and credentials: not covered by this PR
 - production recovery: not authorized
+- production deployment: not authorized
+- credential rotation: not authorized
 - real patient data: not authorized

@@ -11,6 +11,9 @@ on:
       - "scripts/run_recovery_integration.py"
       - "scripts/validate_recovery_evidence.py"
       - "scripts/tests/test_validate_recovery_evidence.py"
+      - "scripts/tests/test_recovery_workflow_contract.py"
+      - "scripts/tests/test_release_evidence.py"
+      - "scripts/test-requirements.txt"
       - "backend/app/services/schema_readiness.py"
       - "backend/tests/test_recovery_tooling.py"
       - "backend/tests/test_schema_readiness.py"
@@ -26,15 +29,15 @@ on:
       - "scripts/run_recovery_integration.py"
       - "scripts/validate_recovery_evidence.py"
       - "scripts/tests/test_validate_recovery_evidence.py"
+      - "scripts/tests/test_recovery_workflow_contract.py"
+      - "scripts/tests/test_release_evidence.py"
+      - "scripts/test-requirements.txt"
       - "backend/app/services/schema_readiness.py"
       - "backend/tests/test_recovery_tooling.py"
       - "backend/tests/test_schema_readiness.py"
       - "backend/alembic/versions/**"
       - "docs/recovery-contract-0071.md"
   workflow_dispatch:
-
-env:
-  RECOVERY_SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
 
 jobs:
   recovery:
@@ -61,13 +64,26 @@ jobs:
       JWT_SECRET: synthetic-recovery-ci-secret-not-production
       JWT_SECRET_KEY: synthetic-recovery-ci-secret-not-production
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - name: Verify exact source checkout
+        id: verify-source-sha
+        shell: bash
+        run: |
+          checkout_sha="$(git rev-parse HEAD)"
+          expected_sha="${{ github.event.pull_request.head.sha || github.sha }}"
+          if [ -z "$expected_sha" ] || [ "$checkout_sha" != "$expected_sha" ]; then
+            echo "Checked-out revision $checkout_sha does not match canonical source $expected_sha"
+            exit 1
+          fi
+          echo "REMEDIATION_CHECKOUT_SHA=$checkout_sha" >> "$GITHUB_ENV"
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
       - name: Install backend dependencies
         working-directory: backend
-        run: pip install -r requirements.txt
+        run: pip install -r requirements.txt -r ../scripts/test-requirements.txt
       - name: Compile recovery code
         run: >-
           python -m compileall -q
@@ -83,6 +99,23 @@ jobs:
           backend/tests/test_recovery_tooling.py
           backend/tests/test_schema_readiness.py
           scripts/tests/test_validate_recovery_evidence.py
+          scripts/tests/test_recovery_workflow_contract.py
+      - name: Recheck source integrity
+        id: recheck-source-before-recovery-matrix
+        shell: bash
+        run: |
+          set -euo pipefail
+          expected="${REMEDIATION_CHECKOUT_SHA:?missing verified source SHA}"
+          actual="$(git rev-parse HEAD)"
+          workspace="$(git rev-parse --show-toplevel)"
+          test "$actual" = "$expected"
+          test "$workspace" = "$GITHUB_WORKSPACE"
+          git diff --quiet --exit-code HEAD --
+          git diff --cached --quiet --exit-code HEAD --
+          for state in MERGE_HEAD REBASE_HEAD CHERRY_PICK_HEAD REVERT_HEAD BISECT_LOG; do
+            test ! -e "$(git rev-parse --git-path "$state")"
+          done
+          echo "REMEDIATION_CHECKOUT_SHA=$actual" >> "$GITHUB_ENV"
       - name: Run disposable PostgreSQL recovery matrix
         run: |
           set -o pipefail
@@ -91,15 +124,54 @@ jobs:
           python scripts/run_recovery_integration.py \
             --result-file "$evidence_dir/scenario-result.json" \
             2>&1 | tee "$evidence_dir/recovery-integration.log"
+      - name: Recheck source integrity
+        id: recheck-source-before-recovery-evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          expected="${REMEDIATION_CHECKOUT_SHA:?missing verified source SHA}"
+          actual="$(git rev-parse HEAD)"
+          workspace="$(git rev-parse --show-toplevel)"
+          test "$actual" = "$expected"
+          test "$workspace" = "$GITHUB_WORKSPACE"
+          git diff --quiet --exit-code HEAD --
+          git diff --cached --quiet --exit-code HEAD --
+          for state in MERGE_HEAD REBASE_HEAD CHERRY_PICK_HEAD REVERT_HEAD BISECT_LOG; do
+            test ! -e "$(git rev-parse --git-path "$state")"
+          done
+          echo "REMEDIATION_CHECKOUT_SHA=$actual" >> "$GITHUB_ENV"
+      - name: Produce recovery execution evidence
+        run: |
+          evidence_dir=".recovery-evidence/producer"
           python scripts/validate_recovery_evidence.py produce \
             --scenario-result "$evidence_dir/scenario-result.json" \
             --output-log "$evidence_dir/recovery-integration.log" \
             --evidence-file "$evidence_dir/recovery-evidence.json" \
-            --source-sha "$RECOVERY_SOURCE_SHA" \
+            --source-sha "$REMEDIATION_CHECKOUT_SHA" \
+            --expected-source-sha "$REMEDIATION_CHECKOUT_SHA" \
+            --app-commit "$REMEDIATION_CHECKOUT_SHA" \
             --workflow-run-id "$GITHUB_RUN_ID" \
+            --workflow-event "$GITHUB_EVENT_NAME" \
+            --workflow-branch "${{ github.head_ref || github.ref_name }}" \
             --job-name "$GITHUB_JOB"
+      - name: Recheck source integrity
+        id: recheck-source-before-recovery-upload
+        shell: bash
+        run: |
+          set -euo pipefail
+          expected="${REMEDIATION_CHECKOUT_SHA:?missing verified source SHA}"
+          actual="$(git rev-parse HEAD)"
+          workspace="$(git rev-parse --show-toplevel)"
+          test "$actual" = "$expected"
+          test "$workspace" = "$GITHUB_WORKSPACE"
+          git diff --quiet --exit-code HEAD --
+          git diff --cached --quiet --exit-code HEAD --
+          for state in MERGE_HEAD REBASE_HEAD CHERRY_PICK_HEAD REVERT_HEAD BISECT_LOG; do
+            test ! -e "$(git rev-parse --git-path "$state")"
+          done
+          echo "REMEDIATION_CHECKOUT_SHA=$actual" >> "$GITHUB_ENV"
       - name: Upload recovery execution evidence
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: recovery-evidence
           path: .recovery-evidence/producer
@@ -112,8 +184,21 @@ jobs:
       - recovery
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - name: Verify exact source checkout
+        id: verify-source-sha
+        shell: bash
+        run: |
+          checkout_sha="$(git rev-parse HEAD)"
+          expected_sha="${{ github.event.pull_request.head.sha || github.sha }}"
+          if [ -z "$expected_sha" ] || [ "$checkout_sha" != "$expected_sha" ]; then
+            echo "Checked-out revision $checkout_sha does not match canonical source $expected_sha"
+            exit 1
+          fi
+          echo "REMEDIATION_CHECKOUT_SHA=$checkout_sha" >> "$GITHUB_ENV"
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
       - name: Require recovery producer success
@@ -122,14 +207,50 @@ jobs:
             echo "Recovery producer result: ${{ needs.recovery.result }}"
             exit 1
           fi
+      - name: Recheck source integrity
+        id: recheck-source-before-recovery-artifact-intake
+        shell: bash
+        run: |
+          set -euo pipefail
+          expected="${REMEDIATION_CHECKOUT_SHA:?missing verified source SHA}"
+          actual="$(git rev-parse HEAD)"
+          workspace="$(git rev-parse --show-toplevel)"
+          test "$actual" = "$expected"
+          test "$workspace" = "$GITHUB_WORKSPACE"
+          git diff --quiet --exit-code HEAD --
+          git diff --cached --quiet --exit-code HEAD --
+          for state in MERGE_HEAD REBASE_HEAD CHERRY_PICK_HEAD REVERT_HEAD BISECT_LOG; do
+            test ! -e "$(git rev-parse --git-path "$state")"
+          done
+          echo "REMEDIATION_CHECKOUT_SHA=$actual" >> "$GITHUB_ENV"
       - name: Download recovery evidence
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: recovery-evidence
           path: .recovery-evidence/final
+      - name: Recheck source integrity
+        id: recheck-source-before-recovery-validation
+        shell: bash
+        run: |
+          set -euo pipefail
+          expected="${REMEDIATION_CHECKOUT_SHA:?missing verified source SHA}"
+          actual="$(git rev-parse HEAD)"
+          workspace="$(git rev-parse --show-toplevel)"
+          test "$actual" = "$expected"
+          test "$workspace" = "$GITHUB_WORKSPACE"
+          git diff --quiet --exit-code HEAD --
+          git diff --cached --quiet --exit-code HEAD --
+          for state in MERGE_HEAD REBASE_HEAD CHERRY_PICK_HEAD REVERT_HEAD BISECT_LOG; do
+            test ! -e "$(git rev-parse --git-path "$state")"
+          done
+          echo "REMEDIATION_CHECKOUT_SHA=$actual" >> "$GITHUB_ENV"
       - name: Validate exact-SHA recovery evidence
         run: |
           python scripts/validate_recovery_evidence.py validate \
             --evidence-dir .recovery-evidence/final \
-            --source-sha "$RECOVERY_SOURCE_SHA" \
-            --workflow-run-id "$GITHUB_RUN_ID"
+            --source-sha "$REMEDIATION_CHECKOUT_SHA" \
+            --expected-source-sha "$REMEDIATION_CHECKOUT_SHA" \
+            --app-commit "$REMEDIATION_CHECKOUT_SHA" \
+            --workflow-run-id "$GITHUB_RUN_ID" \
+            --workflow-event "$GITHUB_EVENT_NAME" \
+            --workflow-branch "${{ github.head_ref || github.ref_name }}"

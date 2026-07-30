@@ -28,6 +28,8 @@ from validate_recovery_evidence import (  # noqa: E402
 
 SOURCE_SHA = "a" * 40
 RUN_ID = "12345"
+WORKFLOW_EVENT = "pull_request"
+WORKFLOW_BRANCH = "fix/recovery-contract-0071"
 NOW = datetime(2026, 7, 27, 16, 0, tzinfo=UTC)
 
 
@@ -51,7 +53,11 @@ def record() -> dict:
     value = {
         "schema_version": 1,
         "source_sha": SOURCE_SHA,
+        "expected_source_sha": SOURCE_SHA,
+        "app_commit": SOURCE_SHA,
         "workflow_run_id": RUN_ID,
+        "workflow_event": WORKFLOW_EVENT,
+        "workflow_branch": WORKFLOW_BRANCH,
         "job_name": "recovery",
         "producer": "scripts/validate_recovery_evidence.py@1",
         "producer_status": "success",
@@ -76,7 +82,11 @@ def validate(value: dict) -> dict:
     return validate_record(
         value,
         expected_source_sha=SOURCE_SHA,
+        expected_declared_source_sha=SOURCE_SHA,
+        expected_app_commit=SOURCE_SHA,
         expected_workflow_run_id=RUN_ID,
+        expected_workflow_event=WORKFLOW_EVENT,
+        expected_workflow_branch=WORKFLOW_BRANCH,
         max_age_hours=24,
         now=NOW,
     )
@@ -96,6 +106,102 @@ def test_wrong_sha_fails():
     value["source_sha"] = "e" * 40
     with pytest.raises(RecoveryError, match="wrong_sha"):
         validate(value)
+
+
+@pytest.mark.parametrize(
+    "field",
+    ["expected_source_sha", "app_commit"],
+)
+def test_divergent_declared_source_identity_fails(field):
+    value = record()
+    value[field] = "e" * 40
+    rehash(value)
+    with pytest.raises(RecoveryError, match="wrong_sha"):
+        validate(value)
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("workflow_event", "deployment"),
+        ("workflow_branch", ""),
+    ],
+)
+def test_wrong_workflow_identity_fails(field, value):
+    record_value = record()
+    record_value[field] = value
+    rehash(record_value)
+    with pytest.raises(RecoveryError, match="wrong_workflow"):
+        validate(record_value)
+
+
+def test_missing_source_sha_fails():
+    value = record()
+    del value["source_sha"]
+    rehash(value)
+    with pytest.raises(RecoveryError, match="invalid_recovery_evidence"):
+        validate(value)
+
+
+@pytest.mark.parametrize(
+    ("path", "value"),
+    [
+        (("production_authorized",), True),
+        (("owner_rpo_rto_accepted",), True),
+        (("readiness",), "ready"),
+        (("scenarios", 0, "production_authorized"), True),
+    ],
+)
+def test_unknown_security_significant_keys_fail(path, value):
+    mutated = record()
+    target = mutated
+    for key in path[:-1]:
+        target = target[key]
+    target[path[-1]] = value
+    rehash(mutated)
+    with pytest.raises(
+        RecoveryError,
+        match="invalid_recovery_evidence|invalid_recovery_evidence_scenario",
+    ):
+        validate(mutated)
+
+
+def test_unknown_schema_version_fails():
+    value = record()
+    value["schema_version"] = 2
+    rehash(value)
+    with pytest.raises(RecoveryError, match="invalid_recovery_evidence"):
+        validate(value)
+
+
+def test_wrong_known_field_type_fails():
+    value = record()
+    value["skipped_count"] = "0"
+    rehash(value)
+    with pytest.raises(RecoveryError, match="invalid_recovery_evidence"):
+        validate(value)
+
+
+@pytest.mark.parametrize(
+    ("path", "value"),
+    [
+        (("schema_version",), True),
+        (("skipped_count",), False),
+        (("scenarios", 0, "semantic_checksum_count"), True),
+    ],
+)
+def test_bool_is_not_accepted_as_integer(path, value):
+    mutated = record()
+    target = mutated
+    for key in path[:-1]:
+        target = target[key]
+    target[path[-1]] = value
+    rehash(mutated)
+    with pytest.raises(
+        RecoveryError,
+        match="invalid_recovery_evidence|missing_semantic_checksum",
+    ):
+        validate(mutated)
 
 
 def test_wrong_run_fails():
@@ -200,10 +306,42 @@ def test_downloaded_output_log_hash_is_revalidated(tmp_path):
     args = argparse.Namespace(
         evidence_dir=tmp_path,
         source_sha=SOURCE_SHA,
+        expected_source_sha=SOURCE_SHA,
+        app_commit=SOURCE_SHA,
         workflow_run_id=RUN_ID,
+        workflow_event=WORKFLOW_EVENT,
+        workflow_branch=WORKFLOW_BRANCH,
         max_age_hours=24,
     )
     validate_directory(args, now=NOW)
     output.write_text("tampered output\n", encoding="utf-8")
     with pytest.raises(RecoveryError, match="hash_mismatch"):
+        validate_directory(args, now=NOW)
+
+
+def test_duplicate_json_key_is_rejected_by_real_entrypoint(tmp_path):
+    evidence = tmp_path / "recovery-evidence.json"
+    output = tmp_path / "recovery-integration.log"
+    output.write_text("executed recovery matrix\n", encoding="utf-8")
+    value = record()
+    value["test_output_hash"] = sha256_file(output)
+    rehash(value)
+    serialized = canonical_json_bytes(value).decode("utf-8")
+    serialized = serialized.replace(
+        '"source_sha":"' + SOURCE_SHA + '"',
+        '"source_sha":"' + SOURCE_SHA + '","source_sha":"' + SOURCE_SHA + '"',
+        1,
+    )
+    evidence.write_text(serialized, encoding="utf-8")
+    args = argparse.Namespace(
+        evidence_dir=tmp_path,
+        source_sha=SOURCE_SHA,
+        expected_source_sha=SOURCE_SHA,
+        app_commit=SOURCE_SHA,
+        workflow_run_id=RUN_ID,
+        workflow_event=WORKFLOW_EVENT,
+        workflow_branch=WORKFLOW_BRANCH,
+        max_age_hours=24,
+    )
+    with pytest.raises(RecoveryError, match="duplicate_json_key"):
         validate_directory(args, now=NOW)

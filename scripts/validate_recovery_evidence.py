@@ -22,7 +22,17 @@ from recovery_common import (
 REQUIRED_SCENARIOS = SUPPORTED_BACKUP_REVISIONS
 
 
+def _is_lower_hex(value: Any, length: int) -> bool:
+    return (
+        isinstance(value, str)
+        and len(value) == length
+        and all(character in "0123456789abcdef" for character in value)
+    )
+
+
 def _parse_timestamp(value: str) -> datetime:
+    if not isinstance(value, str):
+        raise RecoveryError("invalid_recovery_evidence_timestamp")
     try:
         parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
     except (TypeError, ValueError) as exc:
@@ -53,7 +63,11 @@ def produce(args: argparse.Namespace) -> dict[str, Any]:
     record = {
         "schema_version": RECOVERY_EVIDENCE_SCHEMA_VERSION,
         "source_sha": args.source_sha,
+        "expected_source_sha": args.expected_source_sha,
+        "app_commit": args.app_commit,
         "workflow_run_id": str(args.workflow_run_id),
+        "workflow_event": args.workflow_event,
+        "workflow_branch": args.workflow_branch,
         "job_name": args.job_name,
         "producer": "scripts/validate_recovery_evidence.py@1",
         "producer_status": "success",
@@ -74,7 +88,11 @@ def produce(args: argparse.Namespace) -> dict[str, Any]:
     validate_record(
         record,
         expected_source_sha=args.source_sha,
+        expected_declared_source_sha=args.expected_source_sha,
+        expected_app_commit=args.app_commit,
         expected_workflow_run_id=str(args.workflow_run_id),
+        expected_workflow_event=args.workflow_event,
+        expected_workflow_branch=args.workflow_branch,
         max_age_hours=args.max_age_hours,
     )
     write_json(args.evidence_file, record)
@@ -86,14 +104,22 @@ def validate_record(
     record: Any,
     *,
     expected_source_sha: str,
+    expected_declared_source_sha: str,
+    expected_app_commit: str,
     expected_workflow_run_id: str,
+    expected_workflow_event: str,
+    expected_workflow_branch: str,
     max_age_hours: int,
     now: datetime | None = None,
 ) -> dict[str, Any]:
     required = {
         "schema_version",
         "source_sha",
+        "expected_source_sha",
+        "app_commit",
         "workflow_run_id",
+        "workflow_event",
+        "workflow_branch",
         "job_name",
         "producer",
         "producer_status",
@@ -111,16 +137,41 @@ def validate_record(
         "test_output_hash",
         "record_hash",
     }
+    if not isinstance(record, dict) or set(record) != required:
+        raise RecoveryError("invalid_recovery_evidence")
     if (
-        not isinstance(record, dict)
-        or set(record) != required
-        or record.get("schema_version") != RECOVERY_EVIDENCE_SCHEMA_VERSION
+        type(record["schema_version"]) is not int
+        or record["schema_version"] != RECOVERY_EVIDENCE_SCHEMA_VERSION
+        or not _is_lower_hex(record["source_sha"], 40)
+        or not _is_lower_hex(record["expected_source_sha"], 40)
+        or not _is_lower_hex(record["app_commit"], 40)
+        or not isinstance(record["workflow_run_id"], str)
+        or not record["workflow_run_id"].isdigit()
+        or record["job_name"] != "recovery"
+        or record["producer"] != "scripts/validate_recovery_evidence.py@1"
+        or type(record["skipped_count"]) is not int
     ):
         raise RecoveryError("invalid_recovery_evidence")
     if record["source_sha"] != expected_source_sha:
         raise RecoveryError("recovery_evidence_wrong_sha")
+    if (
+        record["expected_source_sha"] != expected_declared_source_sha
+        or record["source_sha"] != record["expected_source_sha"]
+        or record["app_commit"] != expected_app_commit
+        or record["app_commit"] != record["source_sha"]
+    ):
+        raise RecoveryError("recovery_evidence_wrong_sha")
     if str(record["workflow_run_id"]) != str(expected_workflow_run_id):
         raise RecoveryError("recovery_evidence_wrong_run")
+    if (
+        record["workflow_event"] != expected_workflow_event
+        or record["workflow_event"]
+        not in {"push", "pull_request", "workflow_dispatch"}
+        or record["workflow_branch"] != expected_workflow_branch
+        or not isinstance(record["workflow_branch"], str)
+        or not record["workflow_branch"]
+    ):
+        raise RecoveryError("recovery_evidence_wrong_workflow")
     if (
         record["producer_status"] != "success"
         or record["execution_status"] != "completed"
@@ -182,12 +233,12 @@ def validate_record(
         ):
             raise RecoveryError("recovery_evidence_missing_revision")
         if any(
-            not isinstance(scenario[key], str) or len(scenario[key]) != 64
+            not _is_lower_hex(scenario[key], 64)
             for key in ("backup_hash", "manifest_hash")
         ):
             raise RecoveryError("recovery_evidence_hash_mismatch")
         if (
-            not isinstance(scenario["semantic_checksum_count"], int)
+            type(scenario["semantic_checksum_count"]) is not int
             or scenario["semantic_checksum_count"] < 1
         ):
             raise RecoveryError("recovery_evidence_missing_semantic_checksum")
@@ -216,7 +267,11 @@ def validate(
     validate_record(
         record,
         expected_source_sha=args.source_sha,
+        expected_declared_source_sha=args.expected_source_sha,
+        expected_app_commit=args.app_commit,
         expected_workflow_run_id=str(args.workflow_run_id),
+        expected_workflow_event=args.workflow_event,
+        expected_workflow_branch=args.workflow_branch,
         max_age_hours=args.max_age_hours,
         now=now,
     )
@@ -239,14 +294,22 @@ def parser() -> argparse.ArgumentParser:
     produce_parser.add_argument("--output-log", type=Path, required=True)
     produce_parser.add_argument("--evidence-file", type=Path, required=True)
     produce_parser.add_argument("--source-sha", required=True)
+    produce_parser.add_argument("--expected-source-sha", required=True)
+    produce_parser.add_argument("--app-commit", required=True)
     produce_parser.add_argument("--workflow-run-id", required=True)
+    produce_parser.add_argument("--workflow-event", required=True)
+    produce_parser.add_argument("--workflow-branch", required=True)
     produce_parser.add_argument("--job-name", required=True)
     produce_parser.add_argument("--max-age-hours", type=int, default=24)
     produce_parser.set_defaults(handler=produce)
     validate_parser = commands.add_parser("validate")
     validate_parser.add_argument("--evidence-dir", type=Path, required=True)
     validate_parser.add_argument("--source-sha", required=True)
+    validate_parser.add_argument("--expected-source-sha", required=True)
+    validate_parser.add_argument("--app-commit", required=True)
     validate_parser.add_argument("--workflow-run-id", required=True)
+    validate_parser.add_argument("--workflow-event", required=True)
+    validate_parser.add_argument("--workflow-branch", required=True)
     validate_parser.add_argument("--max-age-hours", type=int, default=24)
     validate_parser.set_defaults(handler=validate)
     return root
