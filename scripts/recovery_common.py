@@ -12,9 +12,6 @@ import subprocess
 from typing import Any, BinaryIO, Iterator
 from urllib.parse import parse_qsl, quote, unquote, urlencode, urlparse
 
-from psycopg import Error as PsycopgError
-from psycopg.conninfo import conninfo_to_dict
-
 RECOVERY_SCHEMA_VERSION = 2
 RECOVERY_EVIDENCE_SCHEMA_VERSION = 1
 FINAL_ALEMBIC_REVISION = "0071_membership_taxonomy"
@@ -222,6 +219,12 @@ def require_database_url(environment_name: str) -> str:
 
 
 def _database_descriptor(database_url: str) -> dict[str, str | int | None]:
+    try:
+        from psycopg import Error as PsycopgError
+        from psycopg.conninfo import conninfo_to_dict
+    except ImportError as exc:
+        raise RecoveryError("recovery_database_parser_unavailable") from exc
+
     normalized = database_url.replace("postgresql+psycopg://", "postgresql://", 1)
     if not normalized.startswith(("postgresql://", "postgres://")):
         raise RecoveryError("invalid_database_url")

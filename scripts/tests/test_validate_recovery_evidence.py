@@ -3,7 +3,9 @@ from __future__ import annotations
 import argparse
 from copy import deepcopy
 from datetime import UTC, datetime, timedelta, timezone
+import os
 from pathlib import Path
+import subprocess
 import sys
 
 import pytest
@@ -119,6 +121,29 @@ def write_scenario_result(directory: Path, value: dict) -> Path:
 
 def test_valid_exact_sha_evidence_passes():
     assert validate(record())["conclusion"] == "success"
+
+
+def test_evidence_validator_import_does_not_require_database_driver(tmp_path):
+    blocker = tmp_path / "psycopg.py"
+    blocker.write_text(
+        "raise ImportError('database driver intentionally unavailable')\n",
+        encoding="utf-8",
+    )
+    environment = os.environ.copy()
+    environment["PYTHONPATH"] = os.pathsep.join((str(tmp_path), str(SCRIPTS)))
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            "import validate_recovery_evidence; print('validator-import-ok')",
+        ],
+        capture_output=True,
+        check=False,
+        env=environment,
+        text=True,
+    )
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.strip() == "validator-import-ok"
 
 
 @pytest.mark.parametrize(
