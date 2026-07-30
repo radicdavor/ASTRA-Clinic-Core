@@ -38,6 +38,25 @@ The verified checkout SHA is the manifest `source_sha` and the source SHA used
 by every remediation evidence record. No separate declared head SHA can
 override the commit that was actually tested.
 
+The workflow contract parses the GitHub Actions file with the safe PyYAML
+loader declared in `scripts/test-requirements.txt`; it does not infer executable
+behaviour from regular expressions or token presence in raw YAML. The loader
+preserves GitHub's string-valued `on` key and rejects duplicate mapping keys.
+
+Each primary job has exactly one checkout step followed immediately by the
+`verify-source-sha` step. That step is a canonical `bash` block: its executable
+text, shell, ID and allowed fields must match the reviewed contract. Comments,
+inert variables, uncalled functions, here-documents, extra commands,
+`continue-on-error`, conditional skipping, an absent checkout `ref`, a later
+checkout, or a repository-changing Git command after verification are rejected.
+Only line-ending normalization, per-line trailing whitespace, and the final
+newline are non-semantic variations.
+
+The contract also prevents later steps from redefining
+`REMEDIATION_CHECKOUT_SHA`. Artifact downloads are restricted to the dedicated
+remediation-evidence directory so they cannot replace the verified repository
+tree before canonical evidence is produced.
+
 ## Required identity
 
 Every manifest binds:

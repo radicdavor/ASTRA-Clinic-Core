@@ -7,6 +7,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
+import yaml
 
 from scripts.release_evidence import (
     CANONICAL_PRODUCER_RESULTS,
@@ -93,178 +94,283 @@ def validate(path: Path, now: datetime, *, source_sha: str = SOURCE_SHA):
     )
 
 
-def parse_workflow_steps(workflow: str) -> dict[str, list[dict[str, str]]]:
-    """Parse the concrete job/step structure used by this repository workflow."""
-    jobs: dict[str, list[dict[str, str]]] = {}
-    current_job: str | None = None
-    in_steps = False
-    current_step: dict[str, str] | None = None
-    step_lines: list[str] = []
+EXPECTED_SHA_EXPRESSION = "${{ github.event.pull_request.head.sha || github.sha }}"
+VERIFY_STEP_ID = "verify-source-sha"
+CANONICAL_VERIFY_RUN = """\
+checkout_sha="$(git rev-parse HEAD)"
+expected_sha="${{ github.event.pull_request.head.sha || github.sha }}"
+if [ -z "$expected_sha" ] || [ "$checkout_sha" != "$expected_sha" ]; then
+  echo "Checked-out revision $checkout_sha does not match canonical source $expected_sha"
+  exit 1
+fi
+echo "REMEDIATION_CHECKOUT_SHA=$checkout_sha" >> "$GITHUB_ENV"
+"""
+EXPECTED_JOBS = {"backend", "frontend", "e2e-db", "remediation-evidence"}
+FORBIDDEN_POST_VERIFY_GIT = re.compile(
+    r"^\s*(?:sudo\s+)?git\s+"
+    r"(?:checkout|switch|reset|restore|clean|merge|rebase|cherry-pick)\b",
+    re.MULTILINE,
+)
 
-    def finish_step() -> None:
-        nonlocal current_step, step_lines
-        if current_job is not None and current_step is not None:
-            current_step["raw"] = "\n".join(step_lines)
-            jobs[current_job].append(current_step)
-        current_step = None
-        step_lines = []
 
-    for line in workflow.splitlines():
-        job_match = re.match(r"^  ([A-Za-z0-9_-]+):\s*$", line)
-        if job_match:
-            finish_step()
-            current_job = job_match.group(1)
-            jobs[current_job] = []
-            in_steps = False
-            continue
-        if current_job is None:
-            continue
-        if line == "    steps:":
-            in_steps = True
-            continue
-        if not in_steps:
-            continue
-        if re.match(r"^  [A-Za-z0-9_-]+:\s*$", line):
-            finish_step()
-            current_job = None
-            in_steps = False
-            continue
-        step_match = re.match(r"^      - (uses|name|run):\s*(.*)$", line)
-        if step_match:
-            finish_step()
-            current_step = {step_match.group(1): step_match.group(2)}
-            step_lines = [line]
-            continue
-        if current_step is None:
-            continue
-        step_lines.append(line)
-        property_match = re.match(r"^        (uses|name|run):\s*(.*)$", line)
-        if property_match:
-            current_step[property_match.group(1)] = property_match.group(2)
-    finish_step()
+class GitHubActionsLoader(yaml.SafeLoader):
+    """Safe YAML loader that preserves GitHub's `on` key and rejects duplicates."""
+
+
+GitHubActionsLoader.yaml_implicit_resolvers = {
+    key: list(resolvers)
+    for key, resolvers in yaml.SafeLoader.yaml_implicit_resolvers.items()
+}
+for initial in ("o", "O"):
+    GitHubActionsLoader.yaml_implicit_resolvers[initial] = [
+        resolver
+        for resolver in GitHubActionsLoader.yaml_implicit_resolvers.get(initial, [])
+        if resolver[0] != "tag:yaml.org,2002:bool"
+    ]
+
+
+def _construct_unique_mapping(loader, node, deep=False):
+    mapping = {}
+    for key_node, value_node in node.value:
+        key = loader.construct_object(key_node, deep=deep)
+        if key in mapping:
+            raise yaml.constructor.ConstructorError(
+                "while constructing a mapping",
+                node.start_mark,
+                f"duplicate key {key!r}",
+                key_node.start_mark,
+            )
+        mapping[key] = loader.construct_object(value_node, deep=deep)
+    return mapping
+
+
+GitHubActionsLoader.add_constructor(
+    yaml.resolver.BaseResolver.DEFAULT_MAPPING_TAG,
+    _construct_unique_mapping,
+)
+
+
+def parse_workflow(workflow: str) -> dict:
+    parsed = yaml.load(workflow, Loader=GitHubActionsLoader)
+    assert isinstance(parsed, dict), "workflow must be a YAML mapping"
+    assert "on" in parsed, "GitHub Actions `on` key must remain a string"
+    jobs = parsed.get("jobs")
+    assert isinstance(jobs, dict), "workflow jobs must be a mapping"
+    return parsed
+
+
+def parse_workflow_steps(workflow: str) -> dict[str, list[dict]]:
+    parsed = parse_workflow(workflow)
+    jobs: dict[str, list[dict]] = {}
+    for job_name, job in parsed["jobs"].items():
+        assert isinstance(job, dict), f"{job_name}: job must be a mapping"
+        steps = job.get("steps")
+        assert isinstance(steps, list), f"{job_name}: steps must be a list"
+        assert all(isinstance(step, dict) for step in steps), (
+            f"{job_name}: every step must be a mapping"
+        )
+        jobs[job_name] = steps
     return jobs
 
 
-def assert_workflow_contract(workflow: str) -> None:
-    jobs = parse_workflow_steps(workflow)
-    expected_jobs = {"backend", "frontend", "e2e-db", "remediation-evidence"}
-    assert expected_jobs <= set(jobs)
-    checkout_ref = "ref: ${{ github.event.pull_request.head.sha || github.sha }}"
+def normalize_canonical_run(value: str) -> str:
+    assert isinstance(value, str), "canonical verify run must be a string"
+    return "\n".join(
+        line.rstrip()
+        for line in value.replace("\r\n", "\n").replace("\r", "\n").splitlines()
+    )
 
-    for job_name in expected_jobs:
+
+def assert_canonical_verify_step(job_name: str, step: dict) -> None:
+    assert set(step) == {"name", "id", "shell", "run"}, (
+        f"{job_name}: verify step contains non-canonical fields"
+    )
+    assert step["id"] == VERIFY_STEP_ID, f"{job_name}: verify step ID is not canonical"
+    assert step["name"] == "Verify exact source checkout", (
+        f"{job_name}: verify step name is not canonical"
+    )
+    assert step["shell"] == "bash", f"{job_name}: verify shell must be bash"
+    assert normalize_canonical_run(step["run"]) == normalize_canonical_run(
+        CANONICAL_VERIFY_RUN
+    ), f"{job_name}: non-canonical exact-SHA verification command"
+
+
+def assert_no_post_verify_repository_mutation(job_name: str, steps: list[dict]) -> None:
+    for index, step in enumerate(steps[2:], start=2):
+        uses = step.get("uses", "")
+        assert not (
+            isinstance(uses, str) and uses.startswith("actions/checkout@")
+        ), f"{job_name}: later checkout at step {index}"
+        run = step.get("run")
+        if isinstance(run, str):
+            assert not FORBIDDEN_POST_VERIFY_GIT.search(run), (
+                f"{job_name}: repository-changing Git command after verification"
+            )
+            assert not re.search(
+                r"(^|\n)\s*(?:export\s+)?REMEDIATION_CHECKOUT_SHA\s*=",
+                run,
+            ), f"{job_name}: verified SHA is redefined after verification"
+            assert not re.search(
+                r"REMEDIATION_CHECKOUT_SHA=.*>>\s*[\"']?\$GITHUB_ENV",
+                run,
+            ), f"{job_name}: verified SHA environment value is overwritten"
+        env = step.get("env", {})
+        assert not (
+            isinstance(env, dict) and "REMEDIATION_CHECKOUT_SHA" in env
+        ), f"{job_name}: verified SHA is shadowed by step environment"
+        if isinstance(uses, str) and uses.startswith("actions/download-artifact@"):
+            download_path = step.get("with", {}).get("path")
+            assert (
+                isinstance(download_path, str)
+                and download_path.startswith(".remediation-evidence/")
+            ), f"{job_name}: artifact download may overwrite repository root"
+
+
+def assert_workflow_contract(workflow: str) -> None:
+    parsed = parse_workflow(workflow)
+    jobs = parse_workflow_steps(workflow)
+    assert EXPECTED_JOBS <= set(jobs)
+
+    for job_name in EXPECTED_JOBS:
+        job = parsed["jobs"][job_name]
+        assert "REMEDIATION_CHECKOUT_SHA" not in job.get("env", {}), (
+            f"{job_name}: verified SHA must not be predefined at job scope"
+        )
         steps = jobs[job_name]
         checkout_indexes = [
             index
             for index, step in enumerate(steps)
-            if step.get("uses", "").startswith("actions/checkout@")
+            if isinstance(step.get("uses"), str)
+            and step["uses"].startswith("actions/checkout@")
         ]
         verify_indexes = [
             index
             for index, step in enumerate(steps)
-            if step.get("name") == "Verify exact source checkout"
+            if step.get("id") == VERIFY_STEP_ID
         ]
-        assert checkout_indexes == [0], job_name
-        assert verify_indexes == [1], job_name
+        assert checkout_indexes == [0], f"{job_name}: checkout must occur exactly once first"
+        assert verify_indexes == [1], (
+            f"{job_name}: canonical verification must immediately follow checkout"
+        )
         checkout = steps[0]
         verify = steps[1]
-        verify_run = "\n".join(
-            line
-            for line in verify["raw"].splitlines()
-            if not line.lstrip().startswith("#")
+        assert set(checkout) == {"uses", "with"}, (
+            f"{job_name}: checkout step contains non-canonical fields"
         )
-        assert checkout_ref in checkout["raw"], job_name
-        assert "run" in verify, job_name
-        assert "git rev-parse HEAD" in verify_run, job_name
-        assert "${{ github.event.pull_request.head.sha || github.sha }}" in verify_run, job_name
-        assert 'exit 1' in verify_run, job_name
-        assert "REMEDIATION_CHECKOUT_SHA" in verify_run, job_name
+        assert checkout["uses"] == "actions/checkout@v5", (
+            f"{job_name}: checkout action is not canonical"
+        )
+        assert checkout["with"] == {"ref": EXPECTED_SHA_EXPRESSION}, (
+            f"{job_name}: checkout ref is not the event-derived source SHA"
+        )
+        assert_canonical_verify_step(job_name, verify)
         assert all(
             index > verify_indexes[0]
             for index, step in enumerate(steps)
-            if step.get("uses", "").startswith(("actions/setup-", "actions/download-artifact@"))
-        ), job_name
+            if isinstance(step.get("uses"), str)
+            and step["uses"].startswith(("actions/setup-", "actions/download-artifact@"))
+        ), f"{job_name}: runtime or artifact action precedes source verification"
+        assert_no_post_verify_repository_mutation(job_name, steps)
         upload_indexes = [
             index
             for index, step in enumerate(steps)
-            if step.get("uses", "").startswith("actions/upload-artifact@")
+            if isinstance(step.get("uses"), str)
+            and step["uses"].startswith("actions/upload-artifact@")
         ]
-        assert upload_indexes == [len(steps) - 1], job_name
+        assert upload_indexes == [len(steps) - 1], (
+            f"{job_name}: artifact upload must be the final step"
+        )
+        for step in steps:
+            run = step.get("run", "")
+            if isinstance(run, str) and (
+                "validate_pr3_remediation_closure.py produce" in run
+                or "release_evidence.py produce" in run
+            ):
+                assert '--source-sha "$REMEDIATION_CHECKOUT_SHA"' in run, (
+                    f"{job_name}: evidence producer must use the verified checkout SHA"
+                )
 
-    def assert_named_order(job_name: str, names: list[str]) -> None:
-        actual_names = [step.get("name", "") for step in jobs[job_name]]
-        indexes = [actual_names.index(name) for name in names]
-        assert indexes == sorted(indexes), job_name
+    def step_index(job_name: str, token: str) -> int:
+        if token.startswith("uses:"):
+            predicate = lambda step: token.removeprefix("uses:") in step.get("uses", "")
+        elif token.startswith("artifact:"):
+            predicate = lambda step: (
+                step.get("with", {}).get("name") == token.removeprefix("artifact:")
+            )
+        else:
+            predicate = lambda step: token in step.get("run", "")
+        indexes = [
+            index
+            for index, step in enumerate(jobs[job_name])
+            if predicate(step)
+        ]
+        assert len(indexes) == 1, f"{job_name}: expected one executable step for {token}"
+        return indexes[0]
 
-    assert_named_order(
+    def assert_semantic_order(job_name: str, tokens: list[str]) -> None:
+        indexes = [step_index(job_name, token) for token in tokens]
+        assert indexes == sorted(indexes), f"{job_name}: semantic step order changed"
+
+    assert_semantic_order(
         "backend",
         [
-            "Run PR3 security regression gate",
-            "Run fast backend feedback gate",
-            "Run backend non-integration tests",
-            "Run explicit PostgreSQL integration gate",
-            "Validate synthetic test backup and restore",
-            "Produce episode and proxy execution evidence",
-            "Upload backend remediation evidence",
+            "test_pr3_scope_audit_blockers.py",
+            "run_test_gate.py fast",
+            '-m "not integration"',
+            "tests/integration",
+            "validate_test_backup_restore.sh",
+            "--unit cross_scope_dto_projection",
+            "artifact:remediation-evidence-backend",
         ],
     )
-    assert_named_order(
+    assert_semantic_order(
         "frontend",
         [
-            "Test frontend interactions",
-            "Run browser E2E smoke",
-            "Frontend pilot smoke",
-            "Build frontend",
-            "Produce clinic-context execution evidence",
-            "Upload frontend remediation evidence",
+            "npm test -- --run",
+            "npm run e2e",
+            "npm run smoke",
+            "npm run build",
+            "--unit context_initialization",
+            "artifact:remediation-evidence-frontend",
         ],
     )
-    assert_named_order(
+    assert_semantic_order(
         "e2e-db",
         [
-            "Run DB-backed full-stack E2E smoke",
-            "Upload DB-backed remediation evidence",
+            "npm run e2e:db",
+            "artifact:remediation-evidence-e2e-db",
         ],
     )
     producer_contracts = {
         "backend": (
             "--unit cross_scope_dto_projection",
-            "Validate synthetic test backup and restore",
+            "validate_test_backup_restore.sh",
         ),
-        "frontend": ("--unit context_initialization", "Build frontend"),
+        "frontend": ("--unit context_initialization", "npm run build"),
         "e2e-db": (
             "--unit transitional_workflow_rediscovery",
-            "Run DB-backed full-stack E2E smoke",
+            "npm run e2e:db",
         ),
     }
-    for job_name, (producer_token, prerequisite_name) in producer_contracts.items():
+    for job_name, (producer_token, prerequisite_token) in producer_contracts.items():
         steps = jobs[job_name]
         producer_indexes = [
             index
             for index, step in enumerate(steps)
-            if producer_token
-            in "\n".join(
-                line
-                for line in step["raw"].splitlines()
-                if not line.lstrip().startswith("#")
-            )
+            if producer_token in step.get("run", "")
         ]
-        prerequisite_index = [
-            step.get("name", "") for step in steps
-        ].index(prerequisite_name)
+        prerequisite_index = step_index(job_name, prerequisite_token)
         assert len(producer_indexes) == 1, job_name
         assert producer_indexes[0] >= prerequisite_index, job_name
 
-    remediation_names = [
-        step.get("name", "") for step in jobs["remediation-evidence"]
-    ]
-    assert remediation_names.index("Download remediation execution evidence") < remediation_names.index(
-        "Validate exact-SHA remediation execution evidence"
-    )
-    assert remediation_names.index("Validate exact-SHA remediation execution evidence") < remediation_names.index(
-        "Produce and validate canonical release evidence"
-    )
-    assert remediation_names.index("Produce and validate canonical release evidence") < remediation_names.index(
-        "Upload canonical release evidence"
+    assert_semantic_order(
+        "remediation-evidence",
+        [
+            "uses:actions/download-artifact@",
+            "validate_pr3_remediation_closure.py validate",
+            "release_evidence.py produce",
+            "artifact:release-evidence",
+        ],
     )
 
 
@@ -404,64 +510,162 @@ def test_workflow_explicitly_checks_out_and_verifies_the_canonical_source():
     assert '--source-sha "$REMEDIATION_CHECKOUT_SHA"' in workflow
 
 
+def mutate_workflow(workflow: str, mutation: str) -> str:
+    parsed = parse_workflow(workflow)
+    jobs = parsed["jobs"]
+    backend = jobs["backend"]["steps"]
+    verify = backend[1]
+
+    if mutation == "inert_variable_tokens":
+        verify["run"] = (
+            "ignored='git rev-parse HEAD "
+            "${{ github.event.pull_request.head.sha || github.sha }} "
+            "exit 1 REMEDIATION_CHECKOUT_SHA'\n"
+            "echo verification-bypassed\n"
+        )
+    elif mutation == "comment_tokens":
+        verify["run"] = (
+            "# git rev-parse HEAD "
+            "${{ github.event.pull_request.head.sha || github.sha }} "
+            "exit 1 REMEDIATION_CHECKOUT_SHA\n"
+            "echo verification-bypassed\n"
+        )
+    elif mutation == "name_tokens":
+        verify["name"] = (
+            "git rev-parse HEAD "
+            "${{ github.event.pull_request.head.sha || github.sha }} "
+            "exit 1 REMEDIATION_CHECKOUT_SHA"
+        )
+        verify["run"] = "echo verification-bypassed\n"
+    elif mutation == "echo_rev_parse":
+        verify["run"] = 'echo "git rev-parse HEAD"\n'
+    elif mutation == "exit_zero_before_verify":
+        verify["run"] = "exit 0\n" + CANONICAL_VERIFY_RUN
+    elif mutation == "unexecuted_function":
+        verify["run"] = (
+            "verify_source() {\n"
+            + "\n".join(f"  {line}" for line in CANONICAL_VERIFY_RUN.splitlines())
+            + "\n}\n"
+            "echo verification-bypassed\n"
+        )
+    elif mutation == "unexecuted_heredoc":
+        verify["run"] = "cat <<'VERIFY'\n" + CANONICAL_VERIFY_RUN + "VERIFY\n"
+    elif mutation == "or_true":
+        verify["run"] = CANONICAL_VERIFY_RUN + "false || true\n"
+    elif mutation == "set_plus_e":
+        verify["run"] = "set +e\n" + CANONICAL_VERIFY_RUN.replace("exit 1", "false")
+    elif mutation == "continue_on_error":
+        verify["continue-on-error"] = True
+    elif mutation == "false_if":
+        verify["if"] = "${{ false }}"
+    elif mutation == "setup_before_verify":
+        backend[1], backend[2] = backend[2], backend[1]
+    elif mutation == "run_before_verify":
+        backend.insert(1, {"name": "Unsafe preflight", "run": "echo unsafe"})
+    elif mutation == "duplicate_verify_id":
+        backend[2]["id"] = VERIFY_STEP_ID
+    elif mutation == "duplicate_checkout":
+        backend.insert(
+            1,
+            {"uses": "actions/checkout@v5", "with": {"ref": EXPECTED_SHA_EXPRESSION}},
+        )
+    elif mutation == "later_checkout":
+        backend.insert(
+            2,
+            {"uses": "actions/checkout@v5", "with": {"ref": EXPECTED_SHA_EXPRESSION}},
+        )
+    elif mutation == "checkout_without_ref":
+        backend[0].pop("with")
+    elif mutation == "pull_request_merge_ref":
+        backend[0]["with"]["ref"] = "refs/pull/${{ github.event.number }}/merge"
+    elif mutation == "empty_expected_sha":
+        verify["run"] = CANONICAL_VERIFY_RUN.replace(
+            'expected_sha="${{ github.event.pull_request.head.sha || github.sha }}"',
+            'expected_sha=""',
+        )
+    elif mutation == "mismatch_without_failure":
+        verify["run"] = (
+            'checkout_sha="$(git rev-parse HEAD)"\n'
+            'expected_sha="${{ github.event.pull_request.head.sha || github.sha }}"\n'
+            'echo "unchecked $checkout_sha $expected_sha"\n'
+            'echo "REMEDIATION_CHECKOUT_SHA=$checkout_sha" >> "$GITHUB_ENV"\n'
+        )
+    elif mutation == "evidence_before_tests":
+        frontend = jobs["frontend"]["steps"]
+        producer_index = next(
+            index
+            for index, step in enumerate(frontend)
+            if step.get("name") == "Produce clinic-context execution evidence"
+        )
+        frontend.insert(5, frontend.pop(producer_index))
+    elif mutation == "upload_before_validation":
+        remediation = jobs["remediation-evidence"]["steps"]
+        upload_index = next(
+            index
+            for index, step in enumerate(remediation)
+            if step.get("name") == "Upload canonical release evidence"
+        )
+        remediation.insert(5, remediation.pop(upload_index))
+    elif mutation == "git_reset_after_verify":
+        backend.insert(2, {"name": "Replace source", "run": "git reset --hard HEAD^"})
+    else:
+        raise AssertionError(f"unknown test mutation {mutation}")
+
+    return yaml.safe_dump(parsed, sort_keys=False, allow_unicode=True)
+
+
 @pytest.mark.parametrize(
-    "mutation",
+    ("mutation", "error"),
     [
-        lambda workflow: workflow.replace(
-            "      - name: Verify exact source checkout\n",
-            "      - uses: actions/setup-node@v7\n"
-            "        with:\n"
-            '          node-version: "22"\n'
-            "      - name: Verify exact source checkout\n",
-            1,
-        ),
-        lambda workflow: workflow.replace(
-            "      - name: Verify exact source checkout\n",
-            "      - name: Install before verification\n"
-            "        run: echo unsafe\n"
-            "      - name: Verify exact source checkout\n",
-            1,
-        ),
-        lambda workflow: workflow.replace(
-            "      - name: Verify exact source checkout\n",
-            "      # - name: Verify exact source checkout\n",
-            1,
-        ),
-        lambda workflow: workflow.replace(
-            "      - name: Verify exact source checkout\n",
-            "      - name: text mentions Verify exact source checkout\n",
-            1,
-        ),
-        lambda workflow: workflow.replace(
-            "      - uses: actions/checkout@v5\n",
-            "      - uses: actions/checkout@v5\n"
-            "        with:\n"
-            "          ref: ${{ github.event.pull_request.head.sha || github.sha }}\n"
-            "      - uses: actions/checkout@v5\n",
-            1,
-        ),
-        lambda workflow: workflow.replace(
-            "      - name: Upload canonical release evidence\n",
-            "      - name: Premature canonical upload\n"
-            "        uses: actions/upload-artifact@v6\n"
-            "      - name: Upload canonical release evidence\n",
-            1,
-        ),
-        lambda workflow: workflow.replace(
-            "      - name: Produce clinic-context execution evidence\n",
-            "      - name: Premature evidence production\n"
-            "        run: echo --unit context_initialization\n"
-            "      - name: Produce clinic-context execution evidence\n",
-            1,
-        ),
+        ("inert_variable_tokens", "non-canonical exact-SHA verification command"),
+        ("comment_tokens", "non-canonical exact-SHA verification command"),
+        ("name_tokens", "verify step name is not canonical"),
+        ("echo_rev_parse", "non-canonical exact-SHA verification command"),
+        ("exit_zero_before_verify", "non-canonical exact-SHA verification command"),
+        ("unexecuted_function", "non-canonical exact-SHA verification command"),
+        ("unexecuted_heredoc", "non-canonical exact-SHA verification command"),
+        ("or_true", "non-canonical exact-SHA verification command"),
+        ("set_plus_e", "non-canonical exact-SHA verification command"),
+        ("continue_on_error", "verify step contains non-canonical fields"),
+        ("false_if", "verify step contains non-canonical fields"),
+        ("setup_before_verify", "canonical verification must immediately follow checkout"),
+        ("run_before_verify", "canonical verification must immediately follow checkout"),
+        ("duplicate_verify_id", "canonical verification must immediately follow checkout"),
+        ("duplicate_checkout", "checkout must occur exactly once first"),
+        ("later_checkout", "checkout must occur exactly once first"),
+        ("checkout_without_ref", "checkout step contains non-canonical fields"),
+        ("pull_request_merge_ref", "checkout ref is not the event-derived source SHA"),
+        ("empty_expected_sha", "non-canonical exact-SHA verification command"),
+        ("mismatch_without_failure", "non-canonical exact-SHA verification command"),
+        ("evidence_before_tests", "frontend"),
+        ("upload_before_validation", "remediation-evidence"),
+        ("git_reset_after_verify", "repository-changing Git command"),
     ],
 )
-def test_workflow_ordering_mutations_fail_closed(mutation):
+def test_workflow_ordering_mutations_fail_closed(mutation, error):
     workflow = (Path(__file__).parents[2] / ".github" / "workflows" / "ci.yml").read_text(
         encoding="utf-8"
     )
-    with pytest.raises(AssertionError):
-        assert_workflow_contract(mutation(workflow))
+    mutated = mutate_workflow(workflow, mutation)
+    parse_workflow(mutated)
+    with pytest.raises(AssertionError, match=error):
+        assert_workflow_contract(mutated)
+
+
+def test_workflow_contract_accepts_crlf_and_trailing_whitespace():
+    workflow = (Path(__file__).parents[2] / ".github" / "workflows" / "ci.yml").read_text(
+        encoding="utf-8"
+    )
+    assert_workflow_contract(workflow.replace("\n", "  \r\n"))
+
+
+def test_github_actions_loader_preserves_on_and_rejects_duplicate_keys():
+    parsed = parse_workflow("name: CI\non:\n  push:\njobs: {}\n")
+    assert "on" in parsed
+    with pytest.raises(yaml.constructor.ConstructorError, match="duplicate key"):
+        parse_workflow(
+            "name: CI\non:\n  push:\njobs:\n  backend: {}\n  backend: {}\n"
+        )
 
 
 def test_wrong_sha_is_rejected(tmp_path):

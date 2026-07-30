@@ -34,6 +34,8 @@ jobs:
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
       - name: Verify exact source checkout
+        id: verify-source-sha
+        shell: bash
         run: |
           checkout_sha="$(git rev-parse HEAD)"
           expected_sha="${{ github.event.pull_request.head.sha || github.sha }}"
@@ -47,7 +49,7 @@ jobs:
           python-version: "3.12"
       - name: Install backend dependencies
         working-directory: backend
-        run: pip install -r requirements.txt
+        run: pip install -r requirements.txt -r ../scripts/test-requirements.txt
       - name: Check generated OpenAPI frontend types
         run: python scripts/generate_openapi_types.py --check
       - name: Test remediation evidence validator
@@ -184,6 +186,8 @@ jobs:
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
       - name: Verify exact source checkout
+        id: verify-source-sha
+        shell: bash
         run: |
           checkout_sha="$(git rev-parse HEAD)"
           expected_sha="${{ github.event.pull_request.head.sha || github.sha }}"
@@ -274,6 +278,8 @@ jobs:
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
       - name: Verify exact source checkout
+        id: verify-source-sha
+        shell: bash
         run: |
           checkout_sha="$(git rev-parse HEAD)"
           expected_sha="${{ github.event.pull_request.head.sha || github.sha }}"
@@ -338,6 +344,8 @@ jobs:
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
       - name: Verify exact source checkout
+        id: verify-source-sha
+        shell: bash
         run: |
           checkout_sha="$(git rev-parse HEAD)"
           expected_sha="${{ github.event.pull_request.head.sha || github.sha }}"
