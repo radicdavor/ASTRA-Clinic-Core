@@ -31,6 +31,7 @@ from test_release_evidence import (  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[2]
 WORKFLOW = ROOT / ".github" / "workflows" / "recovery.yml"
+RECOVERY_INTEGRATION = ROOT / "scripts" / "run_recovery_integration.py"
 GIT_EXECUTABLE = Path(shutil.which("git") or "git")
 GIT_BASH = (
     GIT_EXECUTABLE.parent.parent / "bin" / "bash.exe"
@@ -211,6 +212,12 @@ def mutate_step_id(job: str, step_id: str, mutator) -> str:
 
 def test_checked_in_recovery_workflow_satisfies_contract():
     assert_recovery_workflow_contract(workflow_text())
+
+
+def test_recovery_matrix_consumes_only_verified_checkout_sha():
+    source = RECOVERY_INTEGRATION.read_text(encoding="utf-8")
+    assert 'os.environ.get("REMEDIATION_CHECKOUT_SHA", "")' in source
+    assert 'os.environ.get("RECOVERY_SOURCE_SHA"' not in source
 
 
 def test_crlf_recovery_workflow_satisfies_contract():

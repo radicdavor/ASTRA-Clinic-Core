@@ -573,7 +573,7 @@ def main() -> int:
     if not admin_url:
         raise RecoveryError("recovery_admin_database_url_missing")
     os.environ["ASTRA_RECOVERY_ENVIRONMENT"] = SYNTHETIC_ENVIRONMENT
-    source_sha = os.environ.get("RECOVERY_SOURCE_SHA", "")
+    source_sha = os.environ.get("REMEDIATION_CHECKOUT_SHA", "")
     if len(source_sha) != 40:
         raise RecoveryError("recovery_source_sha_invalid")
     os.environ["ASTRA_APPLICATION_COMMIT"] = source_sha
