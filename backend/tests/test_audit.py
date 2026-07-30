@@ -1,3 +1,4 @@
+import pytest
 from starlette.requests import Request
 
 from app.audit.service import audit, resolved_client_ip
@@ -5,6 +6,12 @@ from app.core.config import Settings
 from app.models.domain import AuditLog, Clinic, ClinicalDocument, Institution, Patient, PatientClinicAssociation
 from tests.conftest import login_token
 from tests.factories import appointment
+
+
+UNIVERSAL_PROXY_TRUST_ERROR = (
+    "Production TRUSTED_PROXY_NETWORKS must not individually or collectively "
+    "trust every IPv4 or IPv6 client address."
+)
 
 
 def request_with_client(peer: str, headers: dict[str, str] | None = None) -> Request:
@@ -74,13 +81,60 @@ def test_audit_record_persists_resolved_trusted_proxy_client_ip(db, monkeypatch)
     assert event.ip_address == "203.0.113.25"
 
 
-def test_production_proxy_configuration_rejects_global_trust():
-    settings = Settings(
+@pytest.mark.parametrize(
+    "trusted_proxy_networks",
+    (
+        "0.0.0.0/0",
+        "::/0",
+        "0.0.0.0/1,128.0.0.0/1",
+        "::/1,8000::/1",
+        "0.0.0.0/2,64.0.0.0/2,128.0.0.0/2,192.0.0.0/2",
+        "128.0.0.0/1,0.0.0.0/1",
+    ),
+)
+def test_production_proxy_configuration_rejects_collectively_global_trust(
+    trusted_proxy_networks,
+):
+    settings = Settings(app_env="production", trusted_proxy_networks=trusted_proxy_networks)
+
+    assert UNIVERSAL_PROXY_TRUST_ERROR in settings.production_safety_errors()
+
+
+@pytest.mark.parametrize(
+    "trusted_proxy_networks",
+    (
+        "172.30.0.0/24",
+        "10.0.0.0/8,172.16.0.0/12,192.168.0.0/16",
+        "172.30.0.0/24,172.30.0.0/24,172.30.0.0/25",
+        "2001:db8::/32,2001:db8:1::/48",
+    ),
+)
+def test_production_proxy_configuration_accepts_bounded_trust(
+    trusted_proxy_networks,
+):
+    settings = Settings(app_env="production", trusted_proxy_networks=trusted_proxy_networks)
+
+    assert UNIVERSAL_PROXY_TRUST_ERROR not in settings.production_safety_errors()
+
+
+def test_proxy_trust_validation_is_order_independent():
+    first = Settings(
         app_env="production",
-        trusted_proxy_networks="0.0.0.0/0",
+        trusted_proxy_networks="0.0.0.0/1,128.0.0.0/1",
+    )
+    second = Settings(
+        app_env="production",
+        trusted_proxy_networks="128.0.0.0/1,0.0.0.0/1",
     )
 
-    assert "Production TRUSTED_PROXY_NETWORKS must not trust every client address." in settings.production_safety_errors()
+    assert UNIVERSAL_PROXY_TRUST_ERROR in first.production_safety_errors()
+    assert UNIVERSAL_PROXY_TRUST_ERROR in second.production_safety_errors()
+
+
+def test_non_production_proxy_configuration_keeps_existing_policy():
+    settings = Settings(app_env="test", trusted_proxy_networks="0.0.0.0/0")
+
+    assert settings.production_safety_errors() == []
 
 
 def scoped_patient(db, auth_setup, first_name="Audit", last_name="Patient"):

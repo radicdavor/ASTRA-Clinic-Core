@@ -1,5 +1,7 @@
 # Release Checklist
 
+- Canonical `release-evidence.json` and its SHA-256 sidecar validate for the exact source SHA and workflow run.
+- Code-merge, deployment, production and real-patient-data readiness are recorded as separate decisions.
 - Alembic migrations pass from an empty database.
 - Architecture Bible compliance reviewed.
 - Backend tests pass.
@@ -15,3 +17,8 @@
 - Critical actions have warning, confirmation and audit behavior.
 - UI language preserves core ASTRA terms.
 - Manual QA checklist completed.
+
+Machine-readable evidence contract: `docs/release-evidence-contract.md`.
+
+Passing this checklist does not itself authorize deployment, production use or
+real patient data.
