@@ -31,8 +31,9 @@ The workflow never relies on the implicit pull-request merge checkout:
 - `pull_request` checks out exactly `github.event.pull_request.head.sha`
 
 Every job calculates `git rev-parse HEAD` after checkout. The
-`verify-checkout` command compares that value with the canonical SHA for the
-event and fails before evidence production on a missing or mismatched value.
+immediately following shell step compares that value with the canonical SHA for
+the event and fails before runtime setup, repository code execution, or evidence
+production on a missing or mismatched value.
 The verified checkout SHA is the manifest `source_sha` and the source SHA used
 by every remediation evidence record. No separate declared head SHA can
 override the commit that was actually tested.
@@ -50,6 +51,39 @@ Every manifest binds:
 
 Evidence from another SHA, run, failed producer, future timestamp, or stale
 timestamp is rejected.
+
+## Closed schema and evolution
+
+Schema version 1 is a closed contract. Its complete top-level key set is:
+
+- `artifact_hash`
+- `authorization`
+- `ci`
+- `credential_rotation`
+- `dependencies`
+- `deployment_validation`
+- `findings`
+- `generated_at`
+- `migrations`
+- `producer`
+- `readiness`
+- `recovery`
+- `review`
+- `schema_version`
+- `security`
+- `source_sha`
+- `tests`
+- `usability`
+
+The validator rejects missing keys, additional keys, misspellings, incompatible
+top-level types, and unknown schema versions even when the canonical artifact
+hash and file sidecar were recomputed correctly.
+
+Adding or changing a field requires one coordinated, reviewed change to the
+producer, validator, tests, this document, and schema version when the contract
+meaning or compatibility changes. Newer schema versions are rejected until
+explicit support exists; future compatibility never means silently accepting
+unknown claims.
 
 ## Canonical producers
 

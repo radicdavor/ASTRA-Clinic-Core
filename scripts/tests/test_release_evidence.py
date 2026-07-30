@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -10,6 +11,7 @@ import pytest
 from scripts.release_evidence import (
     CANONICAL_PRODUCER_RESULTS,
     CANONICAL_READINESS,
+    CANONICAL_TOP_LEVEL_KEYS,
     EXPECTED_MIGRATION_HEAD,
     ReleaseEvidenceError,
     _canonical_json,
@@ -91,6 +93,181 @@ def validate(path: Path, now: datetime, *, source_sha: str = SOURCE_SHA):
     )
 
 
+def parse_workflow_steps(workflow: str) -> dict[str, list[dict[str, str]]]:
+    """Parse the concrete job/step structure used by this repository workflow."""
+    jobs: dict[str, list[dict[str, str]]] = {}
+    current_job: str | None = None
+    in_steps = False
+    current_step: dict[str, str] | None = None
+    step_lines: list[str] = []
+
+    def finish_step() -> None:
+        nonlocal current_step, step_lines
+        if current_job is not None and current_step is not None:
+            current_step["raw"] = "\n".join(step_lines)
+            jobs[current_job].append(current_step)
+        current_step = None
+        step_lines = []
+
+    for line in workflow.splitlines():
+        job_match = re.match(r"^  ([A-Za-z0-9_-]+):\s*$", line)
+        if job_match:
+            finish_step()
+            current_job = job_match.group(1)
+            jobs[current_job] = []
+            in_steps = False
+            continue
+        if current_job is None:
+            continue
+        if line == "    steps:":
+            in_steps = True
+            continue
+        if not in_steps:
+            continue
+        if re.match(r"^  [A-Za-z0-9_-]+:\s*$", line):
+            finish_step()
+            current_job = None
+            in_steps = False
+            continue
+        step_match = re.match(r"^      - (uses|name|run):\s*(.*)$", line)
+        if step_match:
+            finish_step()
+            current_step = {step_match.group(1): step_match.group(2)}
+            step_lines = [line]
+            continue
+        if current_step is None:
+            continue
+        step_lines.append(line)
+        property_match = re.match(r"^        (uses|name|run):\s*(.*)$", line)
+        if property_match:
+            current_step[property_match.group(1)] = property_match.group(2)
+    finish_step()
+    return jobs
+
+
+def assert_workflow_contract(workflow: str) -> None:
+    jobs = parse_workflow_steps(workflow)
+    expected_jobs = {"backend", "frontend", "e2e-db", "remediation-evidence"}
+    assert expected_jobs <= set(jobs)
+    checkout_ref = "ref: ${{ github.event.pull_request.head.sha || github.sha }}"
+
+    for job_name in expected_jobs:
+        steps = jobs[job_name]
+        checkout_indexes = [
+            index
+            for index, step in enumerate(steps)
+            if step.get("uses", "").startswith("actions/checkout@")
+        ]
+        verify_indexes = [
+            index
+            for index, step in enumerate(steps)
+            if step.get("name") == "Verify exact source checkout"
+        ]
+        assert checkout_indexes == [0], job_name
+        assert verify_indexes == [1], job_name
+        checkout = steps[0]
+        verify = steps[1]
+        verify_run = "\n".join(
+            line
+            for line in verify["raw"].splitlines()
+            if not line.lstrip().startswith("#")
+        )
+        assert checkout_ref in checkout["raw"], job_name
+        assert "run" in verify, job_name
+        assert "git rev-parse HEAD" in verify_run, job_name
+        assert "${{ github.event.pull_request.head.sha || github.sha }}" in verify_run, job_name
+        assert 'exit 1' in verify_run, job_name
+        assert "REMEDIATION_CHECKOUT_SHA" in verify_run, job_name
+        assert all(
+            index > verify_indexes[0]
+            for index, step in enumerate(steps)
+            if step.get("uses", "").startswith(("actions/setup-", "actions/download-artifact@"))
+        ), job_name
+        upload_indexes = [
+            index
+            for index, step in enumerate(steps)
+            if step.get("uses", "").startswith("actions/upload-artifact@")
+        ]
+        assert upload_indexes == [len(steps) - 1], job_name
+
+    def assert_named_order(job_name: str, names: list[str]) -> None:
+        actual_names = [step.get("name", "") for step in jobs[job_name]]
+        indexes = [actual_names.index(name) for name in names]
+        assert indexes == sorted(indexes), job_name
+
+    assert_named_order(
+        "backend",
+        [
+            "Run PR3 security regression gate",
+            "Run fast backend feedback gate",
+            "Run backend non-integration tests",
+            "Run explicit PostgreSQL integration gate",
+            "Validate synthetic test backup and restore",
+            "Produce episode and proxy execution evidence",
+            "Upload backend remediation evidence",
+        ],
+    )
+    assert_named_order(
+        "frontend",
+        [
+            "Test frontend interactions",
+            "Run browser E2E smoke",
+            "Frontend pilot smoke",
+            "Build frontend",
+            "Produce clinic-context execution evidence",
+            "Upload frontend remediation evidence",
+        ],
+    )
+    assert_named_order(
+        "e2e-db",
+        [
+            "Run DB-backed full-stack E2E smoke",
+            "Upload DB-backed remediation evidence",
+        ],
+    )
+    producer_contracts = {
+        "backend": (
+            "--unit cross_scope_dto_projection",
+            "Validate synthetic test backup and restore",
+        ),
+        "frontend": ("--unit context_initialization", "Build frontend"),
+        "e2e-db": (
+            "--unit transitional_workflow_rediscovery",
+            "Run DB-backed full-stack E2E smoke",
+        ),
+    }
+    for job_name, (producer_token, prerequisite_name) in producer_contracts.items():
+        steps = jobs[job_name]
+        producer_indexes = [
+            index
+            for index, step in enumerate(steps)
+            if producer_token
+            in "\n".join(
+                line
+                for line in step["raw"].splitlines()
+                if not line.lstrip().startswith("#")
+            )
+        ]
+        prerequisite_index = [
+            step.get("name", "") for step in steps
+        ].index(prerequisite_name)
+        assert len(producer_indexes) == 1, job_name
+        assert producer_indexes[0] >= prerequisite_index, job_name
+
+    remediation_names = [
+        step.get("name", "") for step in jobs["remediation-evidence"]
+    ]
+    assert remediation_names.index("Download remediation execution evidence") < remediation_names.index(
+        "Validate exact-SHA remediation execution evidence"
+    )
+    assert remediation_names.index("Validate exact-SHA remediation execution evidence") < remediation_names.index(
+        "Produce and validate canonical release evidence"
+    )
+    assert remediation_names.index("Produce and validate canonical release evidence") < remediation_names.index(
+        "Upload canonical release evidence"
+    )
+
+
 def test_valid_exact_sha_release_evidence_passes(tmp_path):
     manifest, now = build_manifest(tmp_path)
     result = validate(manifest, now)
@@ -98,6 +275,68 @@ def test_valid_exact_sha_release_evidence_passes(tmp_path):
     assert result["behaviour_units"] == 5
     assert result["coverage_dimensions"] == 6
     assert result["migration_head"] == EXPECTED_MIGRATION_HEAD
+    payload = json.loads(manifest.read_text(encoding="utf-8"))
+    assert set(payload) == CANONICAL_TOP_LEVEL_KEYS
+
+
+@pytest.mark.parametrize(
+    "unknown_claims",
+    [
+        {"production_authorized": True},
+        {"future_field": "accepted"},
+        {
+            "productionReady": True,
+            "deploymentApproved": True,
+            "realPatientDataAuthorized": True,
+        },
+    ],
+)
+def test_rehashed_manifest_with_unknown_top_level_claims_is_rejected(
+    tmp_path,
+    unknown_claims,
+):
+    manifest, now = build_manifest(tmp_path)
+    rewrite_manifest(manifest, lambda payload: payload.update(unknown_claims))
+    with pytest.raises(ReleaseEvidenceError, match="top-level keys"):
+        validate(manifest, now)
+
+
+def test_rehashed_manifest_with_missing_required_top_level_key_is_rejected(tmp_path):
+    manifest, now = build_manifest(tmp_path)
+    rewrite_manifest(manifest, lambda payload: payload.pop("authorization"))
+    with pytest.raises(ReleaseEvidenceError, match="top-level keys"):
+        validate(manifest, now)
+
+
+def test_rehashed_manifest_with_unknown_schema_version_is_rejected(tmp_path):
+    manifest, now = build_manifest(tmp_path)
+    rewrite_manifest(manifest, lambda payload: payload.update(schema_version=2))
+    with pytest.raises(ReleaseEvidenceError, match="Unsupported release-evidence schema"):
+        validate(manifest, now)
+
+
+def test_rehashed_manifest_with_wrong_top_level_type_is_rejected(tmp_path):
+    manifest, now = build_manifest(tmp_path)
+    rewrite_manifest(manifest, lambda payload: payload.update(authorization="blocked"))
+    with pytest.raises(ReleaseEvidenceError, match="invalid types"):
+        validate(manifest, now)
+
+
+def test_reordered_and_reserialized_canonical_manifest_is_accepted(tmp_path):
+    manifest, now = build_manifest(tmp_path)
+    payload = json.loads(manifest.read_text(encoding="utf-8"))
+    reordered = dict(reversed(list(payload.items())))
+    reordered.pop("artifact_hash")
+    reordered["artifact_hash"] = _sha256_bytes(_canonical_json(reordered))
+    manifest.write_text(
+        json.dumps(reordered, ensure_ascii=False, separators=(",", ":")) + "\n",
+        encoding="utf-8",
+    )
+    manifest.with_suffix(manifest.suffix + ".sha256").write_text(
+        hashlib.sha256(manifest.read_bytes()).hexdigest() + "\n",
+        encoding="ascii",
+    )
+    assert validate(manifest, now)["authorization_boundaries"] == "validated"
 
 
 @pytest.mark.parametrize(
@@ -160,11 +399,69 @@ def test_workflow_explicitly_checks_out_and_verifies_the_canonical_source():
     workflow = (Path(__file__).parents[2] / ".github" / "workflows" / "ci.yml").read_text(
         encoding="utf-8"
     )
-    checkout_ref = "ref: ${{ github.event.pull_request.head.sha || github.sha }}"
-    assert workflow.count(checkout_ref) == 4
-    assert workflow.count("name: Verify exact source checkout") == 4
+    assert_workflow_contract(workflow)
     assert "REMEDIATION_SOURCE_SHA" not in workflow
     assert '--source-sha "$REMEDIATION_CHECKOUT_SHA"' in workflow
+
+
+@pytest.mark.parametrize(
+    "mutation",
+    [
+        lambda workflow: workflow.replace(
+            "      - name: Verify exact source checkout\n",
+            "      - uses: actions/setup-node@v7\n"
+            "        with:\n"
+            '          node-version: "22"\n'
+            "      - name: Verify exact source checkout\n",
+            1,
+        ),
+        lambda workflow: workflow.replace(
+            "      - name: Verify exact source checkout\n",
+            "      - name: Install before verification\n"
+            "        run: echo unsafe\n"
+            "      - name: Verify exact source checkout\n",
+            1,
+        ),
+        lambda workflow: workflow.replace(
+            "      - name: Verify exact source checkout\n",
+            "      # - name: Verify exact source checkout\n",
+            1,
+        ),
+        lambda workflow: workflow.replace(
+            "      - name: Verify exact source checkout\n",
+            "      - name: text mentions Verify exact source checkout\n",
+            1,
+        ),
+        lambda workflow: workflow.replace(
+            "      - uses: actions/checkout@v5\n",
+            "      - uses: actions/checkout@v5\n"
+            "        with:\n"
+            "          ref: ${{ github.event.pull_request.head.sha || github.sha }}\n"
+            "      - uses: actions/checkout@v5\n",
+            1,
+        ),
+        lambda workflow: workflow.replace(
+            "      - name: Upload canonical release evidence\n",
+            "      - name: Premature canonical upload\n"
+            "        uses: actions/upload-artifact@v6\n"
+            "      - name: Upload canonical release evidence\n",
+            1,
+        ),
+        lambda workflow: workflow.replace(
+            "      - name: Produce clinic-context execution evidence\n",
+            "      - name: Premature evidence production\n"
+            "        run: echo --unit context_initialization\n"
+            "      - name: Produce clinic-context execution evidence\n",
+            1,
+        ),
+    ],
+)
+def test_workflow_ordering_mutations_fail_closed(mutation):
+    workflow = (Path(__file__).parents[2] / ".github" / "workflows" / "ci.yml").read_text(
+        encoding="utf-8"
+    )
+    with pytest.raises(AssertionError):
+        assert_workflow_contract(mutation(workflow))
 
 
 def test_wrong_sha_is_rejected(tmp_path):

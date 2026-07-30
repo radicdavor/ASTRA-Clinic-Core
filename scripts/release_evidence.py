@@ -19,6 +19,48 @@ ROOT = Path(__file__).resolve().parents[1]
 EXPECTED_MIGRATION_HEAD = "0071_membership_taxonomy"
 SCHEMA_VERSION = 1
 SHA_PATTERN = re.compile(r"^[0-9a-f]{40}$")
+CANONICAL_TOP_LEVEL_KEYS = frozenset(
+    {
+        "artifact_hash",
+        "authorization",
+        "ci",
+        "credential_rotation",
+        "dependencies",
+        "deployment_validation",
+        "findings",
+        "generated_at",
+        "migrations",
+        "producer",
+        "readiness",
+        "recovery",
+        "review",
+        "schema_version",
+        "security",
+        "source_sha",
+        "tests",
+        "usability",
+    }
+)
+CANONICAL_TOP_LEVEL_TYPES = {
+    "artifact_hash": str,
+    "authorization": dict,
+    "ci": dict,
+    "credential_rotation": dict,
+    "dependencies": dict,
+    "deployment_validation": dict,
+    "findings": dict,
+    "generated_at": str,
+    "migrations": dict,
+    "producer": dict,
+    "readiness": dict,
+    "recovery": dict,
+    "review": dict,
+    "schema_version": int,
+    "security": dict,
+    "source_sha": str,
+    "tests": dict,
+    "usability": dict,
+}
 CANONICAL_PRODUCER_RESULTS = {
     "backend": "success",
     "frontend": "success",
@@ -276,6 +318,30 @@ def validate_release_manifest(
     max_age: timedelta = timedelta(hours=24),
 ) -> dict[str, Any]:
     payload = json.loads(manifest_path.read_text(encoding="utf-8"))
+    if not isinstance(payload, dict):
+        raise ReleaseEvidenceError("Release evidence must be a JSON object")
+    actual_keys = set(payload)
+    if actual_keys != CANONICAL_TOP_LEVEL_KEYS:
+        missing = sorted(CANONICAL_TOP_LEVEL_KEYS - actual_keys)
+        unexpected = sorted(actual_keys - CANONICAL_TOP_LEVEL_KEYS)
+        raise ReleaseEvidenceError(
+            "Release-evidence top-level keys must exactly match schema version 1; "
+            f"missing={missing}, unexpected={unexpected}"
+        )
+    invalid_types = sorted(
+        key
+        for key, expected_type in CANONICAL_TOP_LEVEL_TYPES.items()
+        if not isinstance(payload[key], expected_type)
+        or (
+            expected_type is int
+            and isinstance(payload[key], bool)
+        )
+    )
+    if invalid_types:
+        raise ReleaseEvidenceError(
+            "Release-evidence top-level values have invalid types; "
+            f"keys={invalid_types}"
+        )
     if payload.get("schema_version") != SCHEMA_VERSION:
         raise ReleaseEvidenceError("Unsupported release-evidence schema")
     if payload.get("source_sha") != source_sha:
