@@ -33,21 +33,23 @@ jobs:
       - uses: actions/checkout@v5
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - name: Verify exact source checkout
+        id: verify-source-sha
+        shell: bash
+        run: |
+          checkout_sha="$(git rev-parse HEAD)"
+          expected_sha="${{ github.event.pull_request.head.sha || github.sha }}"
+          if [ -z "$expected_sha" ] || [ "$checkout_sha" != "$expected_sha" ]; then
+            echo "Checked-out revision $checkout_sha does not match canonical source $expected_sha"
+            exit 1
+          fi
+          echo "REMEDIATION_CHECKOUT_SHA=$checkout_sha" >> "$GITHUB_ENV"
       - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
-      - name: Verify exact source checkout
-        run: |
-          checkout_sha="$(git rev-parse HEAD)"
-          python scripts/release_evidence.py verify-checkout \
-            --workflow-event "$GITHUB_EVENT_NAME" \
-            --github-sha "$GITHUB_SHA" \
-            --pull-request-head-sha "${{ github.event.pull_request.head.sha || '' }}" \
-            --checkout-sha "$checkout_sha"
-          echo "REMEDIATION_CHECKOUT_SHA=$checkout_sha" >> "$GITHUB_ENV"
       - name: Install backend dependencies
         working-directory: backend
-        run: pip install -r requirements.txt
+        run: pip install -r requirements.txt -r ../scripts/test-requirements.txt
       - name: Check generated OpenAPI frontend types
         run: python scripts/generate_openapi_types.py --check
       - name: Test remediation evidence validator
@@ -56,6 +58,22 @@ jobs:
             scripts/tests/test_validate_pr3_remediation_closure.py \
             scripts/tests/test_release_evidence.py \
             -q
+      - name: Recheck source integrity
+        id: recheck-source-before-migrations
+        shell: bash
+        run: |
+          set -euo pipefail
+          expected="${REMEDIATION_CHECKOUT_SHA:?missing verified source SHA}"
+          actual="$(git rev-parse HEAD)"
+          workspace="$(git rev-parse --show-toplevel)"
+          test "$actual" = "$expected"
+          test "$workspace" = "$GITHUB_WORKSPACE"
+          git diff --quiet --exit-code HEAD --
+          git diff --cached --quiet --exit-code HEAD --
+          for state in MERGE_HEAD REBASE_HEAD CHERRY_PICK_HEAD REVERT_HEAD BISECT_LOG; do
+            test ! -e "$(git rev-parse --git-path "$state")"
+          done
+          echo "REMEDIATION_CHECKOUT_SHA=$actual" >> "$GITHUB_ENV"
       - name: Run database migrations
         id: membership_migrations
         working-directory: backend
@@ -103,6 +121,48 @@ jobs:
             --evidence-file "$evidence_dir/populated_legacy_upgrade.json" \
             --started-at "$started_at" \
             --completed-at "$completed_at"
+      - name: Run PR3 security regression gate
+        working-directory: backend
+        run: |
+          python -m pytest -q \
+            tests/test_contract_hardening.py::test_production_example_uses_one_same_origin_browser_auth_contract \
+            tests/test_browser_sessions.py::test_csrf_token_from_another_session_is_rejected \
+            tests/test_browser_sessions.py::test_invalid_browser_session_audit_survives_unauthorized_response \
+            tests/test_browser_sessions.py::test_security_audit_commit_does_not_commit_business_transaction \
+            tests/test_institution_clinical_document_access.py::test_unresolved_document_is_hidden_from_all_standard_clinical_read_paths \
+            tests/test_institution_clinical_document_access.py::test_processing_jobs_do_not_disclose_foreign_or_unresolved_documents \
+            tests/test_pr3_scope_audit_blockers.py \
+            tests/test_remaining_patient_scope.py
+      - name: Run fast backend feedback gate
+        working-directory: backend
+        run: python ../scripts/run_test_gate.py fast
+      - name: Run backend non-integration tests
+        working-directory: backend
+        run: python -m pytest -m "not integration"
+      - name: Run explicit PostgreSQL integration gate
+        working-directory: backend
+        run: python -m pytest tests/integration -q -rs
+      - name: Validate synthetic test backup and restore
+        env:
+          SOURCE_DATABASE_URL: postgresql://astra:astra@localhost:5432/astra_ci
+          TARGET_DATABASE_URL: postgresql://astra:astra@localhost:5432/astra_restore_test
+        run: docker run --rm --network host -v "$PWD:/workspace:ro" -w /workspace -e SOURCE_DATABASE_URL -e TARGET_DATABASE_URL postgres:16-alpine sh scripts/validate_test_backup_restore.sh
+      - name: Recheck source integrity
+        id: recheck-source-before-backend-evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          expected="${REMEDIATION_CHECKOUT_SHA:?missing verified source SHA}"
+          actual="$(git rev-parse HEAD)"
+          workspace="$(git rev-parse --show-toplevel)"
+          test "$actual" = "$expected"
+          test "$workspace" = "$GITHUB_WORKSPACE"
+          git diff --quiet --exit-code HEAD --
+          git diff --cached --quiet --exit-code HEAD --
+          for state in MERGE_HEAD REBASE_HEAD CHERRY_PICK_HEAD REVERT_HEAD BISECT_LOG; do
+            test ! -e "$(git rev-parse --git-path "$state")"
+          done
+          echo "REMEDIATION_CHECKOUT_SHA=$actual" >> "$GITHUB_ENV"
       - name: Produce episode and proxy execution evidence
         working-directory: backend
         run: |
@@ -143,6 +203,22 @@ jobs:
             --evidence-file "$evidence_dir/deployment_proxy_boundary.json" \
             --started-at "$proxy_started" \
             --completed-at "$proxy_completed"
+      - name: Recheck source integrity
+        id: recheck-source-before-backend-upload
+        shell: bash
+        run: |
+          set -euo pipefail
+          expected="${REMEDIATION_CHECKOUT_SHA:?missing verified source SHA}"
+          actual="$(git rev-parse HEAD)"
+          workspace="$(git rev-parse --show-toplevel)"
+          test "$actual" = "$expected"
+          test "$workspace" = "$GITHUB_WORKSPACE"
+          git diff --quiet --exit-code HEAD --
+          git diff --cached --quiet --exit-code HEAD --
+          for state in MERGE_HEAD REBASE_HEAD CHERRY_PICK_HEAD REVERT_HEAD BISECT_LOG; do
+            test ! -e "$(git rev-parse --git-path "$state")"
+          done
+          echo "REMEDIATION_CHECKOUT_SHA=$actual" >> "$GITHUB_ENV"
       - name: Upload backend remediation evidence
         uses: actions/upload-artifact@v6
         with:
@@ -150,32 +226,6 @@ jobs:
           path: .remediation-evidence/backend
           if-no-files-found: error
           retention-days: 14
-      - name: Run PR3 security regression gate
-        working-directory: backend
-        run: |
-          python -m pytest -q \
-            tests/test_contract_hardening.py::test_production_example_uses_one_same_origin_browser_auth_contract \
-            tests/test_browser_sessions.py::test_csrf_token_from_another_session_is_rejected \
-            tests/test_browser_sessions.py::test_invalid_browser_session_audit_survives_unauthorized_response \
-            tests/test_browser_sessions.py::test_security_audit_commit_does_not_commit_business_transaction \
-            tests/test_institution_clinical_document_access.py::test_unresolved_document_is_hidden_from_all_standard_clinical_read_paths \
-            tests/test_institution_clinical_document_access.py::test_processing_jobs_do_not_disclose_foreign_or_unresolved_documents \
-            tests/test_pr3_scope_audit_blockers.py \
-            tests/test_remaining_patient_scope.py
-      - name: Run fast backend feedback gate
-        working-directory: backend
-        run: python ../scripts/run_test_gate.py fast
-      - name: Run backend non-integration tests
-        working-directory: backend
-        run: python -m pytest -m "not integration"
-      - name: Run explicit PostgreSQL integration gate
-        working-directory: backend
-        run: python -m pytest tests/integration -q -rs
-      - name: Validate synthetic test backup and restore
-        env:
-          SOURCE_DATABASE_URL: postgresql://astra:astra@localhost:5432/astra_ci
-          TARGET_DATABASE_URL: postgresql://astra:astra@localhost:5432/astra_restore_test
-        run: docker run --rm --network host -v "$PWD:/workspace:ro" -w /workspace -e SOURCE_DATABASE_URL -e TARGET_DATABASE_URL postgres:16-alpine sh scripts/validate_test_backup_restore.sh
 
   frontend:
     runs-on: ubuntu-latest
@@ -183,19 +233,21 @@ jobs:
       - uses: actions/checkout@v5
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - name: Verify exact source checkout
+        id: verify-source-sha
+        shell: bash
+        run: |
+          checkout_sha="$(git rev-parse HEAD)"
+          expected_sha="${{ github.event.pull_request.head.sha || github.sha }}"
+          if [ -z "$expected_sha" ] || [ "$checkout_sha" != "$expected_sha" ]; then
+            echo "Checked-out revision $checkout_sha does not match canonical source $expected_sha"
+            exit 1
+          fi
+          echo "REMEDIATION_CHECKOUT_SHA=$checkout_sha" >> "$GITHUB_ENV"
       - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
-      - name: Verify exact source checkout
-        run: |
-          checkout_sha="$(git rev-parse HEAD)"
-          python scripts/release_evidence.py verify-checkout \
-            --workflow-event "$GITHUB_EVENT_NAME" \
-            --github-sha "$GITHUB_SHA" \
-            --pull-request-head-sha "${{ github.event.pull_request.head.sha || '' }}" \
-            --checkout-sha "$checkout_sha"
-          echo "REMEDIATION_CHECKOUT_SHA=$checkout_sha" >> "$GITHUB_ENV"
-      - uses: actions/setup-node@v5
+      - uses: actions/setup-node@v7
         with:
           node-version: "22"
           cache: npm
@@ -206,6 +258,37 @@ jobs:
       - name: Typecheck frontend
         working-directory: frontend
         run: npm run typecheck
+      - name: Test frontend interactions
+        working-directory: frontend
+        run: npm test -- --run
+      - name: Install Playwright browsers
+        working-directory: frontend
+        run: npx playwright install --with-deps chromium
+      - name: Run browser E2E smoke
+        working-directory: frontend
+        run: npm run e2e
+      - name: Frontend pilot smoke
+        working-directory: frontend
+        run: npm run smoke
+      - name: Build frontend
+        working-directory: frontend
+        run: npm run build
+      - name: Recheck source integrity
+        id: recheck-source-before-frontend-evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          expected="${REMEDIATION_CHECKOUT_SHA:?missing verified source SHA}"
+          actual="$(git rev-parse HEAD)"
+          workspace="$(git rev-parse --show-toplevel)"
+          test "$actual" = "$expected"
+          test "$workspace" = "$GITHUB_WORKSPACE"
+          git diff --quiet --exit-code HEAD --
+          git diff --cached --quiet --exit-code HEAD --
+          for state in MERGE_HEAD REBASE_HEAD CHERRY_PICK_HEAD REVERT_HEAD BISECT_LOG; do
+            test ! -e "$(git rev-parse --git-path "$state")"
+          done
+          echo "REMEDIATION_CHECKOUT_SHA=$actual" >> "$GITHUB_ENV"
       - name: Produce clinic-context execution evidence
         working-directory: frontend
         run: |
@@ -226,6 +309,22 @@ jobs:
             --evidence-file "$evidence_dir/context_initialization.json" \
             --started-at "$started_at" \
             --completed-at "$completed_at"
+      - name: Recheck source integrity
+        id: recheck-source-before-frontend-upload
+        shell: bash
+        run: |
+          set -euo pipefail
+          expected="${REMEDIATION_CHECKOUT_SHA:?missing verified source SHA}"
+          actual="$(git rev-parse HEAD)"
+          workspace="$(git rev-parse --show-toplevel)"
+          test "$actual" = "$expected"
+          test "$workspace" = "$GITHUB_WORKSPACE"
+          git diff --quiet --exit-code HEAD --
+          git diff --cached --quiet --exit-code HEAD --
+          for state in MERGE_HEAD REBASE_HEAD CHERRY_PICK_HEAD REVERT_HEAD BISECT_LOG; do
+            test ! -e "$(git rev-parse --git-path "$state")"
+          done
+          echo "REMEDIATION_CHECKOUT_SHA=$actual" >> "$GITHUB_ENV"
       - name: Upload frontend remediation evidence
         uses: actions/upload-artifact@v6
         with:
@@ -233,21 +332,6 @@ jobs:
           path: .remediation-evidence/frontend
           if-no-files-found: error
           retention-days: 14
-      - name: Test frontend interactions
-        working-directory: frontend
-        run: npm test -- --run
-      - name: Install Playwright browsers
-        working-directory: frontend
-        run: npx playwright install --with-deps chromium
-      - name: Run browser E2E smoke
-        working-directory: frontend
-        run: npm run e2e
-      - name: Frontend pilot smoke
-        working-directory: frontend
-        run: npm run smoke
-      - name: Build frontend
-        working-directory: frontend
-        run: npm run build
 
   e2e-db:
     runs-on: ubuntu-latest
@@ -273,19 +357,21 @@ jobs:
       - uses: actions/checkout@v5
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - name: Verify exact source checkout
+        id: verify-source-sha
+        shell: bash
+        run: |
+          checkout_sha="$(git rev-parse HEAD)"
+          expected_sha="${{ github.event.pull_request.head.sha || github.sha }}"
+          if [ -z "$expected_sha" ] || [ "$checkout_sha" != "$expected_sha" ]; then
+            echo "Checked-out revision $checkout_sha does not match canonical source $expected_sha"
+            exit 1
+          fi
+          echo "REMEDIATION_CHECKOUT_SHA=$checkout_sha" >> "$GITHUB_ENV"
       - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
-      - name: Verify exact source checkout
-        run: |
-          checkout_sha="$(git rev-parse HEAD)"
-          python scripts/release_evidence.py verify-checkout \
-            --workflow-event "$GITHUB_EVENT_NAME" \
-            --github-sha "$GITHUB_SHA" \
-            --pull-request-head-sha "${{ github.event.pull_request.head.sha || '' }}" \
-            --checkout-sha "$checkout_sha"
-          echo "REMEDIATION_CHECKOUT_SHA=$checkout_sha" >> "$GITHUB_ENV"
-      - uses: actions/setup-node@v5
+      - uses: actions/setup-node@v7
         with:
           node-version: "22"
           cache: npm
@@ -299,6 +385,22 @@ jobs:
       - name: Install Playwright browser
         working-directory: frontend
         run: npx playwright install --with-deps chromium
+      - name: Recheck source integrity
+        id: recheck-source-before-e2e-evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          expected="${REMEDIATION_CHECKOUT_SHA:?missing verified source SHA}"
+          actual="$(git rev-parse HEAD)"
+          workspace="$(git rev-parse --show-toplevel)"
+          test "$actual" = "$expected"
+          test "$workspace" = "$GITHUB_WORKSPACE"
+          git diff --quiet --exit-code HEAD --
+          git diff --cached --quiet --exit-code HEAD --
+          for state in MERGE_HEAD REBASE_HEAD CHERRY_PICK_HEAD REVERT_HEAD BISECT_LOG; do
+            test ! -e "$(git rev-parse --git-path "$state")"
+          done
+          echo "REMEDIATION_CHECKOUT_SHA=$actual" >> "$GITHUB_ENV"
       - name: Run DB-backed full-stack E2E smoke
         working-directory: frontend
         run: |
@@ -318,6 +420,22 @@ jobs:
             --evidence-file "$evidence_dir/transitional_workflow_rediscovery.json" \
             --started-at "$started_at" \
             --completed-at "$completed_at"
+      - name: Recheck source integrity
+        id: recheck-source-before-e2e-upload
+        shell: bash
+        run: |
+          set -euo pipefail
+          expected="${REMEDIATION_CHECKOUT_SHA:?missing verified source SHA}"
+          actual="$(git rev-parse HEAD)"
+          workspace="$(git rev-parse --show-toplevel)"
+          test "$actual" = "$expected"
+          test "$workspace" = "$GITHUB_WORKSPACE"
+          git diff --quiet --exit-code HEAD --
+          git diff --cached --quiet --exit-code HEAD --
+          for state in MERGE_HEAD REBASE_HEAD CHERRY_PICK_HEAD REVERT_HEAD BISECT_LOG; do
+            test ! -e "$(git rev-parse --git-path "$state")"
+          done
+          echo "REMEDIATION_CHECKOUT_SHA=$actual" >> "$GITHUB_ENV"
       - name: Upload DB-backed remediation evidence
         uses: actions/upload-artifact@v6
         with:
@@ -337,18 +455,20 @@ jobs:
       - uses: actions/checkout@v5
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - name: Verify exact source checkout
+        id: verify-source-sha
+        shell: bash
+        run: |
+          checkout_sha="$(git rev-parse HEAD)"
+          expected_sha="${{ github.event.pull_request.head.sha || github.sha }}"
+          if [ -z "$expected_sha" ] || [ "$checkout_sha" != "$expected_sha" ]; then
+            echo "Checked-out revision $checkout_sha does not match canonical source $expected_sha"
+            exit 1
+          fi
+          echo "REMEDIATION_CHECKOUT_SHA=$checkout_sha" >> "$GITHUB_ENV"
       - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
-      - name: Verify exact source checkout
-        run: |
-          checkout_sha="$(git rev-parse HEAD)"
-          python scripts/release_evidence.py verify-checkout \
-            --workflow-event "$GITHUB_EVENT_NAME" \
-            --github-sha "$GITHUB_SHA" \
-            --pull-request-head-sha "${{ github.event.pull_request.head.sha || '' }}" \
-            --checkout-sha "$checkout_sha"
-          echo "REMEDIATION_CHECKOUT_SHA=$checkout_sha" >> "$GITHUB_ENV"
       - name: Require every evidence producer job to succeed
         run: |
           if [ "${{ needs.backend.result }}" != "success" ] \
@@ -357,8 +477,24 @@ jobs:
             echo "Evidence producer result: backend=${{ needs.backend.result }}, frontend=${{ needs.frontend.result }}, e2e-db=${{ needs.e2e-db.result }}"
             exit 1
           fi
+      - name: Recheck source integrity
+        id: recheck-source-before-artifact-intake
+        shell: bash
+        run: |
+          set -euo pipefail
+          expected="${REMEDIATION_CHECKOUT_SHA:?missing verified source SHA}"
+          actual="$(git rev-parse HEAD)"
+          workspace="$(git rev-parse --show-toplevel)"
+          test "$actual" = "$expected"
+          test "$workspace" = "$GITHUB_WORKSPACE"
+          git diff --quiet --exit-code HEAD --
+          git diff --cached --quiet --exit-code HEAD --
+          for state in MERGE_HEAD REBASE_HEAD CHERRY_PICK_HEAD REVERT_HEAD BISECT_LOG; do
+            test ! -e "$(git rev-parse --git-path "$state")"
+          done
+          echo "REMEDIATION_CHECKOUT_SHA=$actual" >> "$GITHUB_ENV"
       - name: Download remediation execution evidence
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v8
         with:
           pattern: remediation-evidence-*
           path: .remediation-evidence/final
@@ -369,6 +505,22 @@ jobs:
             --evidence-dir .remediation-evidence/final \
             --source-sha "$REMEDIATION_CHECKOUT_SHA" \
             --workflow-run-id "$GITHUB_RUN_ID"
+      - name: Recheck source integrity
+        id: recheck-source-before-canonical-evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          expected="${REMEDIATION_CHECKOUT_SHA:?missing verified source SHA}"
+          actual="$(git rev-parse HEAD)"
+          workspace="$(git rev-parse --show-toplevel)"
+          test "$actual" = "$expected"
+          test "$workspace" = "$GITHUB_WORKSPACE"
+          git diff --quiet --exit-code HEAD --
+          git diff --cached --quiet --exit-code HEAD --
+          for state in MERGE_HEAD REBASE_HEAD CHERRY_PICK_HEAD REVERT_HEAD BISECT_LOG; do
+            test ! -e "$(git rev-parse --git-path "$state")"
+          done
+          echo "REMEDIATION_CHECKOUT_SHA=$actual" >> "$GITHUB_ENV"
       - name: Produce and validate canonical release evidence
         run: |
           generated_at="$(date --iso-8601=seconds)"
@@ -393,6 +545,22 @@ jobs:
             --document docs/release-evidence-contract.md \
             --source-sha "$REMEDIATION_CHECKOUT_SHA" \
             --migration-head "0071_membership_taxonomy"
+      - name: Recheck source integrity
+        id: recheck-source-before-canonical-upload
+        shell: bash
+        run: |
+          set -euo pipefail
+          expected="${REMEDIATION_CHECKOUT_SHA:?missing verified source SHA}"
+          actual="$(git rev-parse HEAD)"
+          workspace="$(git rev-parse --show-toplevel)"
+          test "$actual" = "$expected"
+          test "$workspace" = "$GITHUB_WORKSPACE"
+          git diff --quiet --exit-code HEAD --
+          git diff --cached --quiet --exit-code HEAD --
+          for state in MERGE_HEAD REBASE_HEAD CHERRY_PICK_HEAD REVERT_HEAD BISECT_LOG; do
+            test ! -e "$(git rev-parse --git-path "$state")"
+          done
+          echo "REMEDIATION_CHECKOUT_SHA=$actual" >> "$GITHUB_ENV"
       - name: Upload canonical release evidence
         uses: actions/upload-artifact@v6
         with:

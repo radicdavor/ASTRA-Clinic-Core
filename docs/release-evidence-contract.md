@@ -31,11 +31,70 @@ The workflow never relies on the implicit pull-request merge checkout:
 - `pull_request` checks out exactly `github.event.pull_request.head.sha`
 
 Every job calculates `git rev-parse HEAD` after checkout. The
-`verify-checkout` command compares that value with the canonical SHA for the
-event and fails before evidence production on a missing or mismatched value.
+immediately following shell step compares that value with the canonical SHA for
+the event and fails before runtime setup, repository code execution, or evidence
+production on a missing or mismatched value.
 The verified checkout SHA is the manifest `source_sha` and the source SHA used
 by every remediation evidence record. No separate declared head SHA can
 override the commit that was actually tested.
+
+The workflow contract parses the GitHub Actions file with the safe PyYAML
+loader declared in `scripts/test-requirements.txt`; it does not infer executable
+behaviour from regular expressions or token presence in raw YAML. The loader
+preserves GitHub's string-valued `on` key and rejects duplicate mapping keys.
+
+Each primary job has exactly one checkout step followed immediately by the
+`verify-source-sha` step. That step is a canonical `bash` block: its executable
+text, shell, ID and allowed fields must match the reviewed contract. Comments,
+inert variables, uncalled functions, here-documents, extra commands,
+`continue-on-error`, conditional skipping, an absent checkout `ref`, a later
+checkout, or a repository-changing Git command after verification are rejected.
+Only line-ending normalization, per-line trailing whitespace, and the final
+newline are non-semantic variations.
+
+The post-verification guard tokenizes executable shell fields rather than
+matching only line-leading text. It locates Git behind command/environment
+prefixes, assignments, directory changes, chaining, grouping, subshells and
+absolute executable paths. It resolves the Git subcommand after reviewed global
+options including `-C`, `-c`, `--git-dir`, `--work-tree`, `--config-env`,
+`--namespace`, `--exec-path`, pager and pathspec options. Only the narrowly
+required read-only `rev-parse` and `diff` subcommands are accepted. Mutating or
+unknown subcommands and unknown global options fail closed.
+
+This static model is intentionally not represented as a complete Bash
+interpreter. Its role is to reject known unsafe workflow changes and unsupported
+Git surfaces. A canonical runtime integrity recheck is the final authority at
+each evidence trust boundary. The recheck:
+
+- requires the previously verified `REMEDIATION_CHECKOUT_SHA`;
+- compares it with a fresh `git rev-parse HEAD`;
+- confirms the repository root is exactly `GITHUB_WORKSPACE`;
+- requires both the tracked working tree and index to match `HEAD`;
+- rejects merge, rebase, cherry-pick, revert and bisect state;
+- re-exports only the freshly observed matching SHA.
+
+After documented line-ending and trailing-whitespace normalization, the
+canonical runtime recheck SHA-256 is
+`8443dba506e5ec0d69f7f03fcc027db7f06d75ff50ead803c81f48b0d33cacdf`.
+
+The exact canonical recheck must appear immediately before every producer
+operation that emits execution evidence and immediately before every producer
+artifact upload. The remediation aggregator repeats it before artifact intake,
+before canonical evidence production/validation, and before the canonical
+upload. The workflow contract rejects missing, moved, conditional,
+`continue-on-error`, token-stuffed or otherwise modified rechecks.
+
+The contract also prevents other later steps from redefining
+`REMEDIATION_CHECKOUT_SHA`. Artifact downloads are restricted to the dedicated
+remediation-evidence directory so they cannot replace the verified repository
+tree before canonical evidence is produced.
+
+Generated logs, test output and evidence files are intentionally untracked and
+may exist during CI. The runtime invariant therefore covers tracked source and
+the index, while evidence input paths, producer identities, hashes and the
+canonical schema constrain untracked evidence. Temporary-repository attack
+tests prove that both `git -C … reset` and `cd … && git reset` cause the runtime
+recheck to fail before evidence production.
 
 ## Required identity
 
@@ -50,6 +109,75 @@ Every manifest binds:
 
 Evidence from another SHA, run, failed producer, future timestamp, or stale
 timestamp is rejected.
+
+## Closed schema and evolution
+
+Schema version 1 is a closed contract. Its complete top-level key set is:
+
+- `artifact_hash`
+- `authorization`
+- `ci`
+- `credential_rotation`
+- `dependencies`
+- `deployment_validation`
+- `findings`
+- `generated_at`
+- `migrations`
+- `producer`
+- `readiness`
+- `recovery`
+- `review`
+- `schema_version`
+- `security`
+- `source_sha`
+- `tests`
+- `usability`
+
+The validator applies one declarative schema recursively. Every mapping in
+schema version 1 is closed: missing keys, additional keys, misspellings,
+incompatible types, and out-of-domain values are rejected at the exact JSON
+path even when the canonical artifact hash and file sidecar were recomputed.
+This applies to the root and to every nested mapping:
+
+- `authorization`: exactly `deployment`, `merge`, `production`,
+  `real_patient_data`, all boolean `false`
+- `ci`: exactly `event`, `execution_evidence`, `producer_results`,
+  `workflow_name`, `workflow_run_id`
+- `ci.producer_results`: exactly `backend`, `frontend`, `e2e-db`, all
+  `success`
+- `credential_rotation`: exactly `status = pending`
+- `dependencies`: exactly `issue_14 = open`
+- `deployment_validation`: exactly `status = not_performed` and
+  `proxy_topology = requires_validation`
+- `findings`: exactly `status` and `unresolved_count`; the count is null only
+  for `not_supplied`, otherwise a non-negative integer
+- `migrations`: exactly `expected_head`, `observed_head`, `head_count`
+- `producer`: exactly `name = scripts/release_evidence.py`, `version = 1`
+- `readiness`: exactly the four authorization layers documented below
+- `recovery`: exactly `status = not_evaluated_by_this_workflow`
+- `review`: exactly `status = not_supplied`
+- `security`: exactly `formal_codex_security_closure`, `sealed`,
+  `manual_sealing_used`
+- `tests`: exactly `scope`, `behaviour_units`, `coverage_dimensions`,
+  `evidence_records`, `executed_target_test_ids`, `skipped_target_tests`
+- `usability`: exactly `status = not_performed`
+
+Scalar identity fields also have closed formats or domains: schema version is
+the integer `1`, source SHA is 40 lowercase hexadecimal characters, artifact
+hash is 64 lowercase hexadecimal characters, CI event is `push` or
+`pull_request`, and workflow run ID is a positive decimal string.
+
+Schema validation occurs before freshness, hash/sidecar, producer, readiness,
+or authorization validation. Cryptographic consistency is necessary but never
+sufficient for semantic validity. There are no dynamic-key mappings or arrays
+in schema version 1. Duplicate JSON object keys are rejected during parsing
+rather than silently applying last-value-wins semantics.
+
+Adding or changing a field requires one coordinated, reviewed change to the
+producer, validator, tests, this document, and schema version when the contract
+meaning or compatibility changes. Newer schema versions are rejected until
+explicit support exists; future compatibility never means silently accepting
+unknown claims.
 
 ## Canonical producers
 
