@@ -10,7 +10,10 @@ import re
 import stat
 import subprocess
 from typing import Any, BinaryIO, Iterator
-from urllib.parse import parse_qs, unquote, urlparse
+from urllib.parse import parse_qsl, quote, unquote, urlencode, urlparse
+
+from psycopg import Error as PsycopgError
+from psycopg.conninfo import conninfo_to_dict
 
 RECOVERY_SCHEMA_VERSION = 2
 RECOVERY_EVIDENCE_SCHEMA_VERSION = 1
@@ -53,6 +56,27 @@ CRITICAL_TABLES = (
     "appointments",
     "clinical_documents",
     "audit_logs",
+)
+RECOVERY_TEST_IDS = (
+    "empty_database_to_0071",
+    "0062_restore_and_roll_forward",
+    "0069_restore_and_roll_forward",
+    "0070_restore_and_roll_forward",
+    "0071_backup_restore",
+    "explicit_source_restored_final_revision",
+    "semantic_checksums",
+    "membership_fail_closed_recovery",
+    "document_provenance_and_trust_recovery",
+    "audit_recovery",
+    "corrupt_backup_rejection",
+    "failed_pg_restore_marker",
+    "non_empty_target_rejection",
+    "non_empty_user_object_categories",
+    "application_smoke",
+)
+ALLOWED_DATABASE_QUERY_PARAMETERS = frozenset({"sslmode"})
+ALLOWED_SSL_MODES = frozenset(
+    {"disable", "allow", "prefer", "require", "verify-ca", "verify-full"}
 )
 
 
@@ -197,37 +221,138 @@ def require_database_url(environment_name: str) -> str:
     return value
 
 
-def database_identity(database_url: str) -> dict[str, str | int]:
+def _database_descriptor(database_url: str) -> dict[str, str | int | None]:
     normalized = database_url.replace("postgresql+psycopg://", "postgresql://", 1)
+    if not normalized.startswith(("postgresql://", "postgres://")):
+        raise RecoveryError("invalid_database_url")
     parsed = urlparse(normalized)
-    database = unquote(parsed.path.lstrip("/"))
-    host = parsed.hostname or ""
-    if parsed.scheme not in {"postgresql", "postgres"} or not host or not database:
+    try:
+        parsed_port = parsed.port
+        libpq = conninfo_to_dict(normalized)
+    except (TypeError, ValueError, UnicodeError, PsycopgError) as exc:
+        raise RecoveryError("invalid_database_url") from exc
+    query_pairs = parse_qsl(parsed.query, keep_blank_values=True)
+    query_keys = [key for key, _value in query_pairs]
+    if (
+        parsed.scheme not in {"postgresql", "postgres"}
+        or parsed.params
+        or parsed.fragment
+        or len(query_keys) != len(set(query_keys))
+        or any(key not in ALLOWED_DATABASE_QUERY_PARAMETERS for key in query_keys)
+    ):
+        raise RecoveryError("recovery_database_parameters_not_allowed")
+    allowed_libpq = {"host", "port", "dbname", "user", "password", "sslmode"}
+    if set(libpq) - allowed_libpq:
+        raise RecoveryError("recovery_database_parameters_not_allowed")
+    host = str(libpq.get("host") or "")
+    database = str(libpq.get("dbname") or "")
+    user = str(libpq.get("user") or "")
+    if (
+        not host
+        or "," in host
+        or not database
+        or not user
+        or parsed.username is None
+        or parsed.path.count("/") != 1
+    ):
         raise RecoveryError("invalid_database_url")
     if host not in {"localhost", "127.0.0.1", "postgres"}:
         raise RecoveryError("recovery_database_host_not_allowed")
     if not SAFE_DATABASE_NAME.fullmatch(database) or not SAFE_TEST_DATABASE.search(database):
         raise RecoveryError("recovery_database_name_not_allowed")
-    return {"host": host, "port": parsed.port or 5432, "database": database}
+    port_raw = libpq.get("port") or parsed_port or 5432
+    try:
+        port = int(port_raw)
+    except (TypeError, ValueError) as exc:
+        raise RecoveryError("invalid_database_url") from exc
+    if not 1 <= port <= 65535:
+        raise RecoveryError("invalid_database_url")
+    sslmode = libpq.get("sslmode")
+    if sslmode is not None and sslmode not in ALLOWED_SSL_MODES:
+        raise RecoveryError("recovery_database_parameters_not_allowed")
+    return {
+        "host": host,
+        "port": port,
+        "database": database,
+        "user": user,
+        "password": unquote(parsed.password) if parsed.password is not None else None,
+        "sslmode": str(sslmode) if sslmode is not None else None,
+    }
+
+
+def database_identity(database_url: str) -> dict[str, str | int]:
+    descriptor = _database_descriptor(database_url)
+    return {
+        "host": str(descriptor["host"]),
+        "port": int(descriptor["port"]),
+        "database": str(descriptor["database"]),
+        "user": str(descriptor["user"]),
+    }
+
+
+def canonical_database_url(database_url: str) -> str:
+    descriptor = _database_descriptor(database_url)
+    credentials = quote(str(descriptor["user"]), safe="")
+    if descriptor["password"] is not None:
+        credentials += ":" + quote(str(descriptor["password"]), safe="")
+    query = (
+        urlencode({"sslmode": descriptor["sslmode"]})
+        if descriptor["sslmode"] is not None
+        else ""
+    )
+    return (
+        f"postgresql+psycopg://{credentials}@{descriptor['host']}:{descriptor['port']}/"
+        f"{quote(str(descriptor['database']), safe='')}"
+        + (f"?{query}" if query else "")
+    )
+
+
+def verify_database_connection(connection: Any, database_url: str) -> dict[str, str | int]:
+    expected = database_identity(database_url)
+    info = connection.info
+    try:
+        row = connection.execute(
+            "SELECT current_database(), current_user, inet_server_port()"
+        ).fetchone()
+    except Exception as exc:
+        raise RecoveryError("recovery_database_identity_unavailable") from exc
+    actual = {
+        "host": str(info.host or ""),
+        "port": int(info.port),
+        "database": str(row[0]),
+        "user": str(row[1]),
+        "server_port": int(row[2]),
+    }
+    if (
+        actual["host"] != expected["host"]
+        or actual["port"] != expected["port"]
+        or actual["server_port"] != expected["port"]
+        or actual["database"] != expected["database"]
+        or actual["user"] != expected["user"]
+    ):
+        raise RecoveryError("recovery_database_identity_mismatch")
+    return expected
 
 
 def postgres_environment(database_url: str) -> dict[str, str]:
-    identity = database_identity(database_url)
-    parsed = urlparse(database_url.replace("postgresql+psycopg://", "postgresql://", 1))
-    environment = os.environ.copy()
+    descriptor = _database_descriptor(database_url)
+    environment = {
+        key: value
+        for key, value in os.environ.items()
+        if not key.upper().startswith("PG")
+    }
     environment.update(
         {
-            "PGHOST": str(identity["host"]),
-            "PGPORT": str(identity["port"]),
-            "PGUSER": unquote(parsed.username or ""),
-            "PGDATABASE": str(identity["database"]),
+            "PGHOST": str(descriptor["host"]),
+            "PGPORT": str(descriptor["port"]),
+            "PGUSER": str(descriptor["user"]),
+            "PGDATABASE": str(descriptor["database"]),
         }
     )
-    if parsed.password is not None:
-        environment["PGPASSWORD"] = unquote(parsed.password)
-    query = parse_qs(parsed.query)
-    if query.get("sslmode"):
-        environment["PGSSLMODE"] = query["sslmode"][0]
+    if descriptor["password"] is not None:
+        environment["PGPASSWORD"] = str(descriptor["password"])
+    if descriptor["sslmode"] is not None:
+        environment["PGSSLMODE"] = str(descriptor["sslmode"])
     return environment
 
 

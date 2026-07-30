@@ -23,6 +23,7 @@ from recovery_common import (
     SUPPORTED_BACKUP_REVISIONS,
     SYNTHETIC_ENVIRONMENT,
     RecoveryError,
+    canonical_database_url,
     database_identity,
     operation_log,
     postgres_environment,
@@ -39,6 +40,7 @@ from recovery_common import (
     semantic_snapshot,
     sha256_file,
     validate_main_manifest,
+    verify_database_connection,
     verified_private_copy,
 )
 
@@ -248,12 +250,7 @@ def _run_alembic_upgrade(database_url: str) -> None:
         raise RecoveryError("post_restore_alembic_upgrade_failed") from exc
 
 
-def _restore_storage(
-    artifact: Path,
-    target: Path,
-    entries: list[dict[str, object]],
-    operation_id: str,
-) -> Path:
+def _preflight_target_storage(target: Path, operation_id: str) -> None:
     if target.is_symlink() or (
         target.exists() and (not target.is_dir() or any(target.iterdir()))
     ):
@@ -266,6 +263,16 @@ def _restore_storage(
     staging = target.with_name(f".{target.name}.restore-{operation_id}")
     if staging.exists() or staging.is_symlink():
         raise RecoveryError("target_storage_staging_exists")
+
+
+def _restore_storage(
+    artifact: Path,
+    target: Path,
+    entries: list[dict[str, object]],
+    operation_id: str,
+) -> Path:
+    _preflight_target_storage(target, operation_id)
+    staging = target.with_name(f".{target.name}.restore-{operation_id}")
     staging.mkdir()
     source_root = resolved_child(artifact, safe_relative_path(STORAGE_DIRECTORY_NAME))
     try:
@@ -371,6 +378,7 @@ def _assert_final_invariants(snapshot: dict[str, object]) -> None:
 def restore(args: argparse.Namespace) -> dict[str, object]:
     require_recovery_environment(args.environment_env)
     target_url = require_database_url(args.database_url_env)
+    canonical_target_url = canonical_database_url(target_url)
     identity = database_identity(target_url)
     artifact = require_safe_artifact_root(args.artifact, must_exist=True)
     operation_id = args.operation_id or uuid4().hex
@@ -417,9 +425,11 @@ def restore(args: argparse.Namespace) -> dict[str, object]:
     )
     marker_created = False
     try:
-        with psycopg.connect(psycopg_url(target_url)) as connection:
+        with psycopg.connect(psycopg_url(canonical_target_url)) as connection:
+            verify_database_connection(connection, canonical_target_url)
             if not _target_is_empty(connection):
                 raise RecoveryError("target_database_not_empty")
+            _preflight_target_storage(target_storage, operation_id)
             _create_marker(connection, operation_id)
             marker_created = True
 
@@ -436,13 +446,14 @@ def restore(args: argparse.Namespace) -> dict[str, object]:
                     "--exit-on-error",
                     "--no-owner",
                     "--no-privileges",
-                    f"--dbname={postgres_environment(target_url)['PGDATABASE']}",
+                    f"--dbname={postgres_environment(canonical_target_url)['PGDATABASE']}",
                     str(verified_dump),
                 ],
-                target_url,
+                canonical_target_url,
             )
 
-        with psycopg.connect(psycopg_url(target_url)) as connection:
+        with psycopg.connect(psycopg_url(canonical_target_url)) as connection:
+            verify_database_connection(connection, canonical_target_url)
             restored_revision = read_alembic_revision(connection)
             if restored_revision != source_revision:
                 raise RecoveryError("restored_revision_mismatch")
@@ -453,12 +464,13 @@ def restore(args: argparse.Namespace) -> dict[str, object]:
             )
 
         if needs_upgrade:
-            _run_alembic_upgrade(target_url)
+            _run_alembic_upgrade(canonical_target_url)
 
         restored_storage = _restore_storage(
             artifact, target_storage, entries, operation_id
         )
-        with psycopg.connect(psycopg_url(target_url)) as connection:
+        with psycopg.connect(psycopg_url(canonical_target_url)) as connection:
+            verify_database_connection(connection, canonical_target_url)
             final_revision = read_alembic_revision(connection)
             final_snapshot = semantic_snapshot(connection)
             _assert_final_invariants(final_snapshot)

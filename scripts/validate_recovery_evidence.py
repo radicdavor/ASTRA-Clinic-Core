@@ -10,6 +10,7 @@ from typing import Any
 from recovery_common import (
     FINAL_ALEMBIC_REVISION,
     RECOVERY_EVIDENCE_SCHEMA_VERSION,
+    RECOVERY_TEST_IDS,
     SUPPORTED_BACKUP_REVISIONS,
     RecoveryError,
     canonical_json_bytes,
@@ -189,8 +190,15 @@ def validate_record(
         raise RecoveryError("recovery_evidence_incomplete_cleanup")
     if record["empty_database_final_revision"] != FINAL_ALEMBIC_REVISION:
         raise RecoveryError("recovery_evidence_missing_revision")
-    if not isinstance(record["test_ids"], list) or not record["test_ids"]:
-        raise RecoveryError("recovery_evidence_missing_test_ids")
+    test_ids = record["test_ids"]
+    if not isinstance(test_ids, list):
+        raise RecoveryError("recovery_evidence_test_ids_wrong_type")
+    if any(not isinstance(test_id, str) or not test_id for test_id in test_ids):
+        raise RecoveryError("recovery_evidence_test_id_invalid")
+    if len(test_ids) != len(set(test_ids)):
+        raise RecoveryError("recovery_evidence_test_ids_duplicate")
+    if test_ids != list(RECOVERY_TEST_IDS):
+        raise RecoveryError("recovery_evidence_test_ids_mismatch")
     for key in ("scenario_result_hash", "test_output_hash", "record_hash"):
         if not isinstance(record[key], str) or len(record[key]) != 64:
             raise RecoveryError("recovery_evidence_hash_mismatch")

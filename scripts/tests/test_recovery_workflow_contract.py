@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from copy import deepcopy
+import ast
+from pathlib import PurePosixPath
 import os
 from pathlib import Path
 import shutil
@@ -64,6 +66,52 @@ BOUNDARIES = {
 }
 
 
+def directly_executed_fixture_scripts() -> set[str]:
+    tree = ast.parse(RECOVERY_INTEGRATION.read_text(encoding="utf-8"))
+    paths: set[str] = set()
+    for node in tree.body:
+        if not isinstance(node, ast.Assign):
+            continue
+        names = [
+            target.id for target in node.targets if isinstance(target, ast.Name)
+        ]
+        if not any(name.endswith("_SCRIPT") for name in names):
+            continue
+        string_parts = [
+            child.value
+            for child in ast.walk(node.value)
+            if isinstance(child, ast.Constant) and isinstance(child.value, str)
+        ]
+        scripts = [part for part in string_parts if part.endswith(".py")]
+        if len(scripts) == 1:
+            paths.add(f"scripts/{scripts[0]}")
+    return paths
+
+
+def path_is_covered(path: str, patterns: list[str]) -> bool:
+    return any(
+        pattern == path or PurePosixPath(path).match(pattern)
+        for pattern in patterns
+    )
+
+
+def assert_recovery_path_filter_contract(parsed: dict) -> None:
+    required = directly_executed_fixture_scripts()
+    assert required == {
+        "scripts/validate_0057_clinic_membership_transition.py",
+        "scripts/validate_0063_document_provenance.py",
+    }
+    triggers = parsed["on"]
+    for event in ("push", "pull_request"):
+        patterns = triggers[event]["paths"]
+        assert isinstance(patterns, list)
+        for path in required:
+            assert path_is_covered(path, patterns), (
+                f"{event}: directly executed recovery input is not path-filtered: "
+                f"{path}"
+            )
+
+
 def workflow_text() -> str:
     return WORKFLOW.read_text(encoding="utf-8")
 
@@ -95,6 +143,7 @@ def assert_runtime_recheck(job_name: str, step: dict) -> None:
 
 def assert_recovery_workflow_contract(workflow: str) -> None:
     parsed = parse_workflow(workflow)
+    assert_recovery_path_filter_contract(parsed)
     jobs = parse_workflow_steps(workflow)
     assert set(jobs) == EXPECTED_JOBS
     assert "RECOVERY_SOURCE_SHA" not in parsed.get("env", {})
@@ -212,6 +261,35 @@ def mutate_step_id(job: str, step_id: str, mutator) -> str:
 
 def test_checked_in_recovery_workflow_satisfies_contract():
     assert_recovery_workflow_contract(workflow_text())
+
+
+@pytest.mark.parametrize("event", ["push", "pull_request"])
+@pytest.mark.parametrize(
+    "path",
+    [
+        "scripts/validate_0057_clinic_membership_transition.py",
+        "scripts/validate_0063_document_provenance.py",
+    ],
+)
+def test_direct_fixture_script_must_be_covered_by_each_path_filter(event, path):
+    parsed = parse_workflow(workflow_text())
+    parsed["on"][event]["paths"].remove(path)
+    with pytest.raises(AssertionError, match="not path-filtered"):
+        assert_recovery_workflow_contract(dump_workflow(parsed))
+
+
+def test_similar_or_comment_only_path_cannot_satisfy_filter_contract():
+    parsed = parse_workflow(workflow_text())
+    path = "scripts/validate_0057_clinic_membership_transition.py"
+    parsed["on"]["push"]["paths"].remove(path)
+    parsed["on"]["push"]["paths"].append(
+        "scripts/validate_0057_clinic_membership_transition_test.py"
+    )
+    parsed["jobs"]["recovery"]["steps"].append(
+        {"name": f"Comment only: {path}", "run": "echo inert"}
+    )
+    with pytest.raises(AssertionError, match="not path-filtered"):
+        assert_recovery_workflow_contract(dump_workflow(parsed))
 
 
 def test_recovery_matrix_consumes_only_verified_checkout_sha():

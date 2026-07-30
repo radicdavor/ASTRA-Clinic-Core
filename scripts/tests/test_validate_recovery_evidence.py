@@ -14,6 +14,7 @@ sys.path.insert(0, str(SCRIPTS))
 
 from recovery_common import (  # noqa: E402
     FINAL_ALEMBIC_REVISION,
+    RECOVERY_TEST_IDS,
     SUPPORTED_BACKUP_REVISIONS,
     RecoveryError,
     canonical_json_bytes,
@@ -70,7 +71,7 @@ def record() -> dict:
         "postgresql_version": "160014",
         "empty_database_final_revision": FINAL_ALEMBIC_REVISION,
         "scenarios": scenarios,
-        "test_ids": ["empty-to-0071", "0062-to-0071", "0071-restore"],
+        "test_ids": list(RECOVERY_TEST_IDS),
         "cleanup_status": "completed",
         "scenario_result_file": "scenario-result.json",
         "scenario_result_hash": "e" * 64,
@@ -118,6 +119,33 @@ def write_scenario_result(directory: Path, value: dict) -> Path:
 
 def test_valid_exact_sha_evidence_passes():
     assert validate(record())["conclusion"] == "success"
+
+
+@pytest.mark.parametrize(
+    ("mutation", "error"),
+    [
+        (lambda ids: [], "test_ids_mismatch"),
+        (lambda ids: ids[:-1], "test_ids_mismatch"),
+        (lambda ids: ids[:-2], "test_ids_mismatch"),
+        (lambda ids: ids + ["unknown"], "test_ids_mismatch"),
+        (lambda ids: ids + [ids[0]], "test_ids_duplicate"),
+        (lambda ids: ["placeholder"], "test_ids_mismatch"),
+        (lambda ids: "not-a-list", "test_ids_wrong_type"),
+        (lambda ids: {"id": ids[0]}, "test_ids_wrong_type"),
+        (lambda ids: None, "test_ids_wrong_type"),
+        (lambda ids: 1, "test_ids_wrong_type"),
+        (lambda ids: True, "test_ids_wrong_type"),
+        (lambda ids: ids[:-1] + [1], "test_id_invalid"),
+        (lambda ids: ids[:-1] + [""], "test_id_invalid"),
+        (lambda ids: list(reversed(ids)), "test_ids_mismatch"),
+    ],
+)
+def test_rehashed_noncanonical_test_ids_are_rejected(mutation, error):
+    value = record()
+    value["test_ids"] = mutation(list(RECOVERY_TEST_IDS))
+    rehash(value)
+    with pytest.raises(RecoveryError, match=error):
+        validate(value)
 
 
 def test_wrong_sha_fails():

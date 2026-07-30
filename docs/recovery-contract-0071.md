@@ -291,6 +291,47 @@ normalized to UTC. `completed_at` must be no older than the configured maximum
 age and no more than five minutes ahead of the validator's single captured
 clock value.
 
+## Verified database and storage prerequisites
+
+Recovery accepts only an explicit PostgreSQL URI whose authority and path name
+a local disposable recovery database. Libpq parses the connection string before
+use. Target-selecting or unknown URI parameters, duplicates, keyword DSNs,
+services, service files, host-address overrides, multi-host targets, and
+arbitrary options are rejected. The only supported query parameter is a
+documented `sslmode` value.
+
+The connection URI is rebuilt from the validated host, port, database, user,
+password, and optional SSL mode. PostgreSQL subprocess environments are created
+from those components after inherited `PG*` overrides are removed. The original
+query string is never reused by `pg_restore` or Alembic.
+
+After connecting, but before the incomplete-recovery marker or any database
+mutation, recovery compares `connection.info` and server-reported current
+database/user/port with the authorized descriptor. Mismatch stops recovery
+without logging the DSN or credentials.
+
+The target storage descriptor is then checked before the marker, restore, or
+migration. Non-empty or unsafe targets, unsafe parents, and existing staging
+paths fail before database mutation. Checks that depend on restored content
+remain post-restore invariants. Preflight is repeated at the copy boundary to
+reduce TOCTOU exposure.
+
+## Canonical test IDs and workflow inputs
+
+Evidence schema version 1 requires the ordered, versioned
+`RECOVERY_TEST_IDS` tuple from `scripts/recovery_common.py`. The producer emits
+that list and the validator rejects wrong collection types, non-string or empty
+values, duplicates, omissions, additions, and reordered lists. Rehashing a
+non-canonical list does not make it valid.
+
+The semantic workflow contract derives directly executed fixture scripts from
+the Python AST and requires both push and pull-request path filters to cover:
+
+- `scripts/validate_0057_clinic_membership_transition.py`
+- `scripts/validate_0063_document_provenance.py`
+
+Comments, step names, and similar-but-wrong paths do not satisfy the contract.
+
 ## Deployment decisions
 
 - Proposed development/test target: RPO 24 h (maximum 24 h), RTO 2 h

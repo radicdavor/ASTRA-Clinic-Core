@@ -19,6 +19,7 @@ import psycopg
 from backup_postgres import create_backup, parser as backup_parser
 from recovery_common import (
     FINAL_ALEMBIC_REVISION,
+    RECOVERY_TEST_IDS,
     SUPPORTED_BACKUP_REVISIONS,
     SYNTHETIC_ENVIRONMENT,
     RecoveryError,
@@ -693,23 +694,7 @@ def main() -> int:
             "postgresql_version": postgres_version,
             "empty_database_final_revision": empty_revision,
             "scenarios": scenarios,
-            "test_ids": [
-                "empty_database_to_0071",
-                "0062_restore_and_roll_forward",
-                "0069_restore_and_roll_forward",
-                "0070_restore_and_roll_forward",
-                "0071_backup_restore",
-                "explicit_source_restored_final_revision",
-                "semantic_checksums",
-                "membership_fail_closed_recovery",
-                "document_provenance_and_trust_recovery",
-                "audit_recovery",
-                "corrupt_backup_rejection",
-                "failed_pg_restore_marker",
-                "non_empty_target_rejection",
-                "non_empty_user_object_categories",
-                "application_smoke",
-            ],
+            "test_ids": list(RECOVERY_TEST_IDS),
             "cleanup_status": "not_attempted",
         }
 

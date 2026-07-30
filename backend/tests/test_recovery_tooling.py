@@ -15,19 +15,24 @@ from recovery_common import (  # noqa: E402
     FINAL_ALEMBIC_REVISION,
     MANIFEST_NAME,
     RECOVERY_SCHEMA_VERSION,
+    RECOVERY_TEST_IDS,
     SYNTHETIC_ENVIRONMENT,
     SYNTHETIC_MARKER,
     RecoveryError,
+    canonical_database_url,
     database_identity,
     operation_log,
+    postgres_environment,
     read_alembic_revision,
     require_recovery_environment,
     safe_relative_path,
     sha256_file,
+    verify_database_connection,
     write_json,
 )
 from restore_postgres import (  # noqa: E402
     DESTRUCTIVE_CONFIRMATION,
+    _preflight_target_storage,
     _target_is_empty,
     restore,
     validate_artifact,
@@ -128,6 +133,116 @@ def test_recovery_environment_is_synthetic_only(monkeypatch):
 def test_recovery_target_allowlist_rejects_production_like_urls(url: str, error: str):
     with pytest.raises(RecoveryError, match=error):
         database_identity(url)
+
+
+def test_canonical_database_identity_accepts_required_uri_only():
+    url = (
+        "postgresql+psycopg://astra:synthetic-secret@127.0.0.1:5432/"
+        "astra_recovery_test?sslmode=disable"
+    )
+    assert database_identity(url) == {
+        "host": "127.0.0.1",
+        "port": 5432,
+        "database": "astra_recovery_test",
+        "user": "astra",
+    }
+    canonical = canonical_database_url(url)
+    assert canonical.startswith("postgresql+psycopg://astra:")
+    assert "sslmode=disable" in canonical
+
+
+@pytest.mark.parametrize(
+    "suffix",
+    [
+        "?host=other-host",
+        "?hostaddr=127.0.0.2",
+        "?dbname=other-db",
+        "?port=6543",
+        "?user=other",
+        "?service=production",
+        "?servicefile=%2Ftmp%2Fpg_service.conf",
+        "?host=127.0.0.1%2Cother-host",
+        "?host=127.0.0.1&host=other-host",
+        "?%68ost=other-host",
+        "?dbname=astra_recovery_test",
+        "?options=-c%20search_path%3Dother",
+    ],
+)
+def test_database_identity_rejects_target_selecting_or_unknown_parameters(suffix):
+    with pytest.raises(
+        RecoveryError, match="parameters_not_allowed|invalid_database_url"
+    ):
+        database_identity(
+            "postgresql://astra:secret@127.0.0.1:5432/astra_recovery_test"
+            + suffix
+        )
+
+
+def test_database_identity_rejects_keyword_dsn_and_multi_host():
+    with pytest.raises(RecoveryError, match="invalid_database_url"):
+        database_identity(
+            "host=127.0.0.1 dbname=astra_recovery_test user=astra"
+        )
+    with pytest.raises(RecoveryError, match="invalid_database_url|parameters_not_allowed"):
+        database_identity(
+            "postgresql://astra:secret@127.0.0.1,localhost/astra_recovery_test"
+        )
+
+
+def test_postgres_environment_removes_external_pg_target_overrides(monkeypatch):
+    monkeypatch.setenv("PGHOST", "attacker")
+    monkeypatch.setenv("PGHOSTADDR", "203.0.113.5")
+    monkeypatch.setenv("PGDATABASE", "production")
+    monkeypatch.setenv("PGSERVICE", "production")
+    environment = postgres_environment(
+        "postgresql://astra:secret@127.0.0.1:5432/astra_recovery_test"
+    )
+    assert environment["PGHOST"] == "127.0.0.1"
+    assert environment["PGPORT"] == "5432"
+    assert environment["PGDATABASE"] == "astra_recovery_test"
+    assert environment["PGUSER"] == "astra"
+    assert "PGHOSTADDR" not in environment
+    assert "PGSERVICE" not in environment
+
+
+class _ConnectionInfo:
+    host = "127.0.0.1"
+    port = 5432
+
+
+class _IdentityConnection:
+    info = _ConnectionInfo()
+
+    def __init__(self, row=("astra_recovery_test", "astra", 5432)):
+        self.row = row
+
+    def execute(self, statement):
+        assert "current_database()" in statement
+        return _FakeResult([self.row])
+
+
+def test_effective_database_identity_accepts_matching_connection():
+    assert verify_database_connection(
+        _IdentityConnection(),
+        "postgresql://astra:secret@127.0.0.1:5432/astra_recovery_test",
+    )["database"] == "astra_recovery_test"
+
+
+@pytest.mark.parametrize(
+    "row",
+    [
+        ("other_database", "astra", 5432),
+        ("astra_recovery_test", "other_user", 5432),
+        ("astra_recovery_test", "astra", 6543),
+    ],
+)
+def test_effective_database_identity_rejects_mismatch_without_secret(row):
+    with pytest.raises(RecoveryError, match="recovery_database_identity_mismatch") as exc:
+        verify_database_connection(
+            _IdentityConnection(row),
+            "postgresql://astra:do-not-leak@127.0.0.1:5432/astra_recovery_test",
+        )
+    assert "do-not-leak" not in str(exc.value)
 
 
 def test_artifact_rejects_missing_manifest(tmp_path):
@@ -269,6 +384,119 @@ def test_restore_rejects_manifest_without_expected_out_of_band_hash(
     )
     with pytest.raises(RecoveryError, match="expected_manifest_checksum_mismatch"):
         restore(args)
+
+
+def test_storage_preflight_rejects_nonempty_target_without_mutation(tmp_path):
+    target = tmp_path / "target-storage"
+    target.mkdir()
+    (target / "existing.bin").write_bytes(b"synthetic")
+    with pytest.raises(RecoveryError, match="target_storage_not_empty_or_unsafe"):
+        _preflight_target_storage(target, "operation")
+
+
+def test_restore_storage_preflight_fails_before_marker(tmp_path, monkeypatch):
+    root = artifact(tmp_path)
+    target = tmp_path / "restore-storage"
+    target.mkdir()
+    (target / "existing.bin").write_bytes(b"synthetic")
+    monkeypatch.setenv("ASTRA_RECOVERY_ENVIRONMENT", SYNTHETIC_ENVIRONMENT)
+    monkeypatch.setenv(
+        "RECOVERY_TARGET_DATABASE_URL",
+        "postgresql://astra:secret@127.0.0.1:5432/astra_recovery_test",
+    )
+    marker_calls = []
+    mutation_calls = []
+
+    class Connection(_IdentityConnection):
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+        def execute(self, statement):
+            if "current_database()" in statement:
+                return _FakeResult([self.row])
+            return _FakeResult([(False,)])
+
+    monkeypatch.setattr("restore_postgres.psycopg.connect", lambda *_a, **_k: Connection())
+    monkeypatch.setattr(
+        "restore_postgres._create_marker",
+        lambda *_a, **_k: marker_calls.append("marker"),
+    )
+    monkeypatch.setattr(
+        "restore_postgres.run_postgres_tool",
+        lambda *_a, **_k: mutation_calls.append("pg_restore"),
+    )
+    monkeypatch.setattr(
+        "restore_postgres._run_alembic_upgrade",
+        lambda *_a, **_k: mutation_calls.append("alembic"),
+    )
+    args = argparse.Namespace(
+        artifact=root,
+        target_storage=target,
+        expected_source_revision=FINAL_ALEMBIC_REVISION,
+        expected_manifest_sha256=sha256_file(root / MANIFEST_NAME),
+        database_url_env="RECOVERY_TARGET_DATABASE_URL",
+        environment_env="ASTRA_RECOVERY_ENVIRONMENT",
+        pg_restore="pg_restore",
+        operation_id="test-operation",
+        upgrade_head=False,
+        dry_run=False,
+        confirm_destructive=DESTRUCTIVE_CONFIRMATION,
+    )
+    with pytest.raises(RecoveryError, match="target_storage_not_empty_or_unsafe"):
+        restore(args)
+    assert marker_calls == []
+    assert mutation_calls == []
+    assert (target / "existing.bin").read_bytes() == b"synthetic"
+
+
+def test_effective_identity_mismatch_fails_before_marker_or_storage_mutation(
+    tmp_path, monkeypatch
+):
+    root = artifact(tmp_path)
+    target = tmp_path / "restore-storage"
+    monkeypatch.setenv("ASTRA_RECOVERY_ENVIRONMENT", SYNTHETIC_ENVIRONMENT)
+    monkeypatch.setenv(
+        "RECOVERY_TARGET_DATABASE_URL",
+        "postgresql://astra:do-not-leak@127.0.0.1:5432/astra_recovery_test",
+    )
+    marker_calls = []
+
+    class Connection(_IdentityConnection):
+        def __init__(self):
+            super().__init__(("other_database", "astra", 5432))
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+    monkeypatch.setattr("restore_postgres.psycopg.connect", lambda *_a, **_k: Connection())
+    monkeypatch.setattr(
+        "restore_postgres._create_marker",
+        lambda *_a, **_k: marker_calls.append("marker"),
+    )
+    args = argparse.Namespace(
+        artifact=root,
+        target_storage=target,
+        expected_source_revision=FINAL_ALEMBIC_REVISION,
+        expected_manifest_sha256=sha256_file(root / MANIFEST_NAME),
+        database_url_env="RECOVERY_TARGET_DATABASE_URL",
+        environment_env="ASTRA_RECOVERY_ENVIRONMENT",
+        pg_restore="pg_restore",
+        operation_id="test-operation",
+        upgrade_head=False,
+        dry_run=False,
+        confirm_destructive=DESTRUCTIVE_CONFIRMATION,
+    )
+    with pytest.raises(RecoveryError, match="recovery_database_identity_mismatch") as exc:
+        restore(args)
+    assert marker_calls == []
+    assert not target.exists()
+    assert "do-not-leak" not in str(exc.value)
 
 
 def test_structured_logs_redact_credentials_and_patient_data(capsys):
