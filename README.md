@@ -27,9 +27,10 @@ production use, a patient pilot or real patient data. Green CI and generated
 evidence prove only the technical scope stated by their exact commit and run;
 they do not grant deployment, production or real-data authorization.
 
-The repository is publicly visible but currently has no `LICENSE` file. Do not
-assume that public source visibility grants reuse, redistribution or
-open-source rights. License selection remains an explicit owner decision.
+The repository is licensed under the
+[Apache License 2.0](LICENSE), including its explicit patent grant. Licensing
+does not grant deployment, production, clinical or real-patient-data
+authorization.
 
 ## Current status
 

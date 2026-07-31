@@ -94,8 +94,19 @@ def test_readme_is_a_bounded_current_entrypoint() -> None:
     assert text.count("](docs/") <= 15
     assert "controlled synthetic demo" in text.lower()
     assert "do not enter real patient" in text.lower()
-    assert "currently has no `LICENSE`" in text
+    assert "Apache License 2.0" in text
     assert "production" in text and "real patient data" in text
+
+
+def test_apache_license_is_canonical_and_linked() -> None:
+    license_text = (ROOT / "LICENSE").read_text(encoding="utf-8")
+    assert "Apache License" in license_text
+    assert "Version 2.0, January 2004" in license_text
+    assert "Grant of Patent License" in license_text
+    assert "END OF TERMS AND CONDITIONS" in license_text
+    assert "[Apache License 2.0](LICENSE)" in (ROOT / "README.md").read_text(
+        encoding="utf-8"
+    )
 
 
 def test_documentation_index_has_unambiguous_categories() -> None:

@@ -1,9 +1,9 @@
 # Security Policy
 
-ASTRA Clinic Core is a publicly visible, pre-1.0 clinic-operations foundation.
-The repository does not currently contain a license, so public visibility must
-not be described as a grant of open-source reuse rights. ASTRA is not a
-certified EMR or medical device and is not authorized for real patient data.
+ASTRA Clinic Core is a publicly visible, Apache-2.0-licensed, pre-1.0
+clinic-operations foundation. The software license does not authorize
+deployment, production use, clinical use or real patient data. ASTRA is not a
+certified EMR or medical device.
 
 ## Production Baseline
 
