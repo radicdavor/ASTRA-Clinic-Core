@@ -136,11 +136,13 @@ npm run dev
 
 ## Tests
 
-Run checks proportional to the change. Common commands are:
+Run checks proportional to the change. Run the backend gate commands below
+from the repository root; the wrapper establishes the backend working directory
+and import path without requiring an inherited `PYTHONPATH`.
 
 ```bash
 # Backend fast suite
-python -m pytest backend/tests -q
+python scripts/run_test_gate.py fast
 
 # Governance and evidence contracts
 python -m pytest scripts/tests/test_repository_governance.py \

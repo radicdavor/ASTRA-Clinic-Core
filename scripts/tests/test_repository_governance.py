@@ -49,6 +49,22 @@ def _relative_links(path: Path) -> list[str]:
     ]
 
 
+def _markdown_code_blocks(path: Path) -> list[tuple[str, ...]]:
+    blocks: list[tuple[str, ...]] = []
+    current: list[str] | None = None
+    for line in path.read_text(encoding="utf-8").splitlines():
+        if line.startswith("```"):
+            if current is None:
+                current = []
+            else:
+                blocks.append(tuple(current))
+                current = None
+        elif current is not None:
+            current.append(line.strip())
+    assert current is None, f"unclosed Markdown code block in {path}"
+    return blocks
+
+
 @pytest.mark.parametrize(
     "path",
     sorted((ROOT / ".github").rglob("*.yml"))
@@ -96,6 +112,20 @@ def test_readme_is_a_bounded_current_entrypoint() -> None:
     assert "do not enter real patient" in text.lower()
     assert "Apache License 2.0" in text
     assert "production" in text and "real patient data" in text
+
+
+def test_current_docs_use_executable_root_relative_fast_gate() -> None:
+    documents = [ROOT / "README.md", ROOT / "docs" / "test-strategy.md"]
+    blocks = [block for document in documents for block in _markdown_code_blocks(document)]
+    commands = {line for block in blocks for line in block if line and not line.startswith("#")}
+
+    assert "python scripts/run_test_gate.py fast" in commands
+    assert "python -m pytest backend/tests -q" not in commands
+    assert not any(
+        "cd backend" in block and "python scripts/run_test_gate.py fast" in block
+        for block in blocks
+    )
+    assert (ROOT / "scripts" / "run_test_gate.py").is_file()
 
 
 def test_apache_license_is_canonical_and_linked() -> None:
