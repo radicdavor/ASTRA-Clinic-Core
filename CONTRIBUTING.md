@@ -59,9 +59,11 @@ backup/restore, recovery and evidence changes require explicit security-aware
 review. Frontend visibility is not authorization. AI output remains assistive
 and human-reviewed.
 
-Report vulnerabilities according to [`SECURITY.md`](SECURITY.md). Do not place
-sensitive vulnerability details in public issues while no verified private
-reporting channel is configured.
+Report vulnerabilities according to [`SECURITY.md`](SECURITY.md). Submit
+sensitive reports through the private GitHub Security Advisory flow linked
+there; never place sensitive vulnerability details in a public issue. Channel
+availability does not prove response ownership, an SLA, an exercised incident
+intake process or production readiness.
 
 ## Authorization boundaries
 

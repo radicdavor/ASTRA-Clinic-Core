@@ -65,6 +65,34 @@ def _markdown_code_blocks(path: Path) -> list[tuple[str, ...]]:
     return blocks
 
 
+def _assert_private_reporting_consistency(documents: dict[str, str]) -> None:
+    normalized = {
+        name: " ".join(text.lower().split()) for name, text in documents.items()
+    }
+    combined = "\n".join(normalized.values())
+    forbidden_stale_claims = (
+        "private vulnerability reporting is not currently enabled",
+        "private vulnerability-reporting channel is not currently configured",
+        "no verified private reporting channel",
+    )
+    for claim in forbidden_stale_claims:
+        assert claim not in combined, f"stale private-reporting claim: {claim}"
+
+    contributing = normalized["CONTRIBUTING.md"]
+    assert "[`security.md`](security.md)" in contributing, (
+        "CONTRIBUTING.md must link to the canonical security policy"
+    )
+    assert "private github security advisory flow" in contributing, (
+        "CONTRIBUTING.md must direct sensitive reports to the private flow"
+    )
+    assert "never place sensitive vulnerability details in a public issue" in contributing
+    assert "does not prove response ownership" in contributing, (
+        "channel availability must not claim operational completion"
+    )
+    assert "response ownership" in combined and "sla" in combined
+    assert "exercised" in combined and "intake" in combined
+
+
 @pytest.mark.parametrize(
     "path",
     sorted((ROOT / ".github").rglob("*.yml"))
@@ -152,12 +180,20 @@ def test_license_decision_matches_canonical_apache_license() -> None:
 
 
 def test_private_vulnerability_reporting_documents_are_consistent() -> None:
-    security = (ROOT / "SECURITY.md").read_text(encoding="utf-8")
-    readme = (ROOT / "README.md").read_text(encoding="utf-8")
+    documents = {
+        path: (ROOT / path).read_text(encoding="utf-8")
+        for path in (
+            "README.md",
+            "SECURITY.md",
+            "CONTRIBUTING.md",
+            "docs/PRODUCTION_READINESS_BACKLOG.md",
+            "docs/README.md",
+        )
+    }
+    security = documents["SECURITY.md"]
+    readme = documents["README.md"]
     normalized_readme = " ".join(readme.lower().split())
-    backlog = (ROOT / "docs" / "PRODUCTION_READINESS_BACKLOG.md").read_text(
-        encoding="utf-8"
-    )
+    backlog = documents["docs/PRODUCTION_READINESS_BACKLOG.md"]
     advisory_url = (
         "https://github.com/radicdavor/ASTRA-Clinic-Core/security/advisories/new"
     )
@@ -172,6 +208,39 @@ def test_private_vulnerability_reporting_documents_are_consistent() -> None:
     assert "GitHub private vulnerability reporting enabled" in vulnerability_row
     assert "response ownership" in vulnerability_row
     assert vulnerability_row.endswith("| DESIGNED |")
+    _assert_private_reporting_consistency(documents)
+
+
+@pytest.mark.parametrize(
+    ("replacement", "message"),
+    [
+        (
+            "No verified private reporting channel is configured.",
+            "stale private-reporting claim",
+        ),
+        ("Submit sensitive reports privately.", "canonical security policy"),
+        (
+            "[`SECURITY.md`](SECURITY.md) proves the response process is complete.",
+            "private flow",
+        ),
+    ],
+)
+def test_private_reporting_consistency_rejects_mutations(
+    replacement: str, message: str
+) -> None:
+    documents = {
+        path: (ROOT / path).read_text(encoding="utf-8")
+        for path in (
+            "README.md",
+            "SECURITY.md",
+            "CONTRIBUTING.md",
+            "docs/PRODUCTION_READINESS_BACKLOG.md",
+            "docs/README.md",
+        )
+    }
+    documents["CONTRIBUTING.md"] = replacement
+    with pytest.raises(AssertionError, match=message):
+        _assert_private_reporting_consistency(documents)
 
 
 def test_documentation_index_has_unambiguous_categories() -> None:
