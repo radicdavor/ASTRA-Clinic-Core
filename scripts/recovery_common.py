@@ -218,7 +218,9 @@ def require_database_url(environment_name: str) -> str:
     return value
 
 
-def _database_descriptor(database_url: str) -> dict[str, str | int | None]:
+def _database_descriptor(
+    database_url: str, *, allow_admin_database: bool = False
+) -> dict[str, str | int | None]:
     try:
         from psycopg import Error as PsycopgError
         from psycopg.conninfo import conninfo_to_dict
@@ -261,7 +263,10 @@ def _database_descriptor(database_url: str) -> dict[str, str | int | None]:
         raise RecoveryError("invalid_database_url")
     if host not in {"localhost", "127.0.0.1", "postgres"}:
         raise RecoveryError("recovery_database_host_not_allowed")
-    if not SAFE_DATABASE_NAME.fullmatch(database) or not SAFE_TEST_DATABASE.search(database):
+    database_allowed = bool(SAFE_TEST_DATABASE.search(database)) or (
+        allow_admin_database and database == "postgres"
+    )
+    if not SAFE_DATABASE_NAME.fullmatch(database) or not database_allowed:
         raise RecoveryError("recovery_database_name_not_allowed")
     port_raw = libpq.get("port") or parsed_port or 5432
     try:
@@ -283,8 +288,12 @@ def _database_descriptor(database_url: str) -> dict[str, str | int | None]:
     }
 
 
-def database_identity(database_url: str) -> dict[str, str | int]:
-    descriptor = _database_descriptor(database_url)
+def database_identity(
+    database_url: str, *, allow_admin_database: bool = False
+) -> dict[str, str | int]:
+    descriptor = _database_descriptor(
+        database_url, allow_admin_database=allow_admin_database
+    )
     return {
         "host": str(descriptor["host"]),
         "port": int(descriptor["port"]),
@@ -293,8 +302,9 @@ def database_identity(database_url: str) -> dict[str, str | int]:
     }
 
 
-def canonical_database_url(database_url: str) -> str:
-    descriptor = _database_descriptor(database_url)
+def _canonical_url_from_descriptor(
+    descriptor: dict[str, str | int | None], database: str
+) -> str:
     credentials = quote(str(descriptor["user"]), safe="")
     if descriptor["password"] is not None:
         credentials += ":" + quote(str(descriptor["password"]), safe="")
@@ -305,13 +315,46 @@ def canonical_database_url(database_url: str) -> str:
     )
     return (
         f"postgresql+psycopg://{credentials}@{descriptor['host']}:{descriptor['port']}/"
-        f"{quote(str(descriptor['database']), safe='')}"
+        f"{quote(database, safe='')}"
         + (f"?{query}" if query else "")
     )
 
 
-def verify_database_connection(connection: Any, database_url: str) -> dict[str, str | int]:
-    expected = database_identity(database_url)
+def canonical_database_url(database_url: str) -> str:
+    descriptor = _database_descriptor(database_url)
+    return _canonical_url_from_descriptor(descriptor, str(descriptor["database"]))
+
+
+def canonical_admin_database_url(database_url: str) -> str:
+    descriptor = _database_descriptor(database_url, allow_admin_database=True)
+    if descriptor["database"] != "postgres":
+        raise RecoveryError("recovery_admin_database_invalid")
+    return _canonical_url_from_descriptor(descriptor, "postgres")
+
+
+def database_url_for_name(admin_database_url: str, database_name: str) -> str:
+    if (
+        not SAFE_DATABASE_NAME.fullmatch(database_name)
+        or not SAFE_TEST_DATABASE.search(database_name)
+    ):
+        raise RecoveryError("recovery_database_name_not_allowed")
+    descriptor = _database_descriptor(
+        admin_database_url, allow_admin_database=True
+    )
+    if descriptor["database"] != "postgres":
+        raise RecoveryError("recovery_admin_database_invalid")
+    return _canonical_url_from_descriptor(descriptor, database_name)
+
+
+def verify_database_connection(
+    connection: Any,
+    database_url: str,
+    *,
+    allow_admin_database: bool = False,
+) -> dict[str, str | int]:
+    expected = database_identity(
+        database_url, allow_admin_database=allow_admin_database
+    )
     info = connection.info
     try:
         row = connection.execute(
@@ -539,6 +582,13 @@ def validate_snapshot(snapshot: Any) -> dict[str, Any]:
         or not isinstance(snapshot["invariants"], dict)
     ):
         raise RecoveryError("invalid_semantic_snapshot")
+    if snapshot["missing_critical_tables"] != []:
+        raise RecoveryError("critical_tables_missing")
+    if (
+        set(snapshot["critical_tables"]) != set(CRITICAL_TABLES)
+        or not set(CRITICAL_TABLES).issubset(snapshot["table_inventory"])
+    ):
+        raise RecoveryError("critical_tables_incomplete")
     for projection in snapshot["critical_tables"].values():
         if (
             not isinstance(projection, dict)

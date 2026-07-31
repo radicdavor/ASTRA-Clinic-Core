@@ -12,6 +12,7 @@ SCRIPTS = Path(__file__).resolve().parents[2] / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 
 from recovery_common import (  # noqa: E402
+    CRITICAL_TABLES,
     FINAL_ALEMBIC_REVISION,
     MANIFEST_NAME,
     RECOVERY_SCHEMA_VERSION,
@@ -19,8 +20,10 @@ from recovery_common import (  # noqa: E402
     SYNTHETIC_ENVIRONMENT,
     SYNTHETIC_MARKER,
     RecoveryError,
+    canonical_admin_database_url,
     canonical_database_url,
     database_identity,
+    database_url_for_name,
     operation_log,
     postgres_environment,
     read_alembic_revision,
@@ -28,10 +31,12 @@ from recovery_common import (  # noqa: E402
     safe_relative_path,
     sha256_file,
     verify_database_connection,
+    validate_snapshot,
     write_json,
 )
 from restore_postgres import (  # noqa: E402
     DESTRUCTIVE_CONFIRMATION,
+    _assert_final_invariants,
     _preflight_target_storage,
     _target_is_empty,
     restore,
@@ -41,15 +46,18 @@ from restore_postgres import (  # noqa: E402
 from run_recovery_integration import (  # noqa: E402
     _remove_workspace,
     _run_with_verified_cleanup,
+    recreate_database,
 )
+import run_recovery_integration as recovery_integration  # noqa: E402
 
 
 def semantic_snapshot() -> dict[str, object]:
     return {
         "revision": FINAL_ALEMBIC_REVISION,
-        "table_inventory": ["alembic_version"],
+        "table_inventory": list(CRITICAL_TABLES),
         "critical_tables": {
-            "alembic_version": {"row_count": 1, "sha256": "a" * 64}
+            table: {"row_count": 1, "sha256": "a" * 64}
+            for table in CRITICAL_TABLES
         },
         "missing_critical_tables": [],
         "invariants": {
@@ -151,6 +159,53 @@ def test_canonical_database_identity_accepts_required_uri_only():
     assert "sslmode=disable" in canonical
 
 
+def test_admin_database_url_is_canonical_and_only_changes_database_name():
+    admin = canonical_admin_database_url(
+        "postgresql+psycopg://astra:synthetic-secret@127.0.0.1:5432/"
+        "postgres?sslmode=disable"
+    )
+    assert database_identity(admin, allow_admin_database=True) == {
+        "host": "127.0.0.1",
+        "port": 5432,
+        "database": "postgres",
+        "user": "astra",
+    }
+    target = database_url_for_name(admin, "astra_recovery_generated")
+    assert database_identity(target)["database"] == "astra_recovery_generated"
+    assert "sslmode=disable" in target
+
+
+@pytest.mark.parametrize(
+    "suffix",
+    [
+        "?host=other-host",
+        "?hostaddr=127.0.0.2",
+        "?dbname=production",
+        "?port=6543",
+        "?user=other",
+        "?service=production",
+        "?servicefile=%2Ftmp%2Fpg_service.conf",
+        "?host=127.0.0.1%2Cother-host",
+        "?host=127.0.0.1&host=other-host",
+        "?%68ost=other-host",
+    ],
+)
+def test_admin_database_url_rejects_target_selection(suffix):
+    with pytest.raises(
+        RecoveryError, match="parameters_not_allowed|invalid_database_url"
+    ):
+        canonical_admin_database_url(
+            "postgresql://astra:secret@127.0.0.1:5432/postgres" + suffix
+        )
+
+
+def test_admin_database_url_rejects_unapproved_database():
+    with pytest.raises(RecoveryError, match="database_name_not_allowed"):
+        canonical_admin_database_url(
+            "postgresql://astra:secret@127.0.0.1:5432/production"
+        )
+
+
 @pytest.mark.parametrize(
     "suffix",
     [
@@ -226,6 +281,75 @@ def test_effective_database_identity_accepts_matching_connection():
         _IdentityConnection(),
         "postgresql://astra:secret@127.0.0.1:5432/astra_recovery_test",
     )["database"] == "astra_recovery_test"
+
+
+def test_effective_admin_identity_rejects_mismatch_before_mutation():
+    with pytest.raises(RecoveryError, match="recovery_database_identity_mismatch"):
+        verify_database_connection(
+            _IdentityConnection(row=("production", "astra", 5432)),
+            "postgresql://astra:secret@127.0.0.1:5432/postgres",
+            allow_admin_database=True,
+        )
+
+
+class _AdminConnection(_IdentityConnection):
+    def __init__(self, row=("postgres", "astra", 5432)):
+        super().__init__(row)
+        self.statements: list[str] = []
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *_args):
+        return False
+
+    def execute(self, statement, *_args):
+        if "current_database()" in statement:
+            return _FakeResult([self.row])
+        self.statements.append(str(statement))
+        return _FakeResult([])
+
+
+def test_admin_identity_mismatch_blocks_create_drop_and_fixture_mutation(monkeypatch):
+    connection = _AdminConnection(row=("production", "astra", 5432))
+    monkeypatch.setattr(
+        recovery_integration.psycopg,
+        "connect",
+        lambda *_args, **_kwargs: connection,
+    )
+    with pytest.raises(RecoveryError, match="recovery_database_identity_mismatch"):
+        recreate_database(
+            "postgresql://astra:secret@127.0.0.1:5432/postgres",
+            "astra_recovery_identity_test",
+        )
+    assert connection.statements == []
+
+
+@pytest.mark.parametrize(
+    ("mutation", "error"),
+    [
+        (lambda value: value.pop("missing_critical_tables"), "invalid_semantic_snapshot"),
+        (lambda value: value.__setitem__("missing_critical_tables", None), "invalid_semantic_snapshot"),
+        (lambda value: value.__setitem__("missing_critical_tables", "appointments"), "invalid_semantic_snapshot"),
+        (lambda value: value.__setitem__("missing_critical_tables", ["appointments"]), "critical_tables_missing"),
+        (lambda value: value["critical_tables"].pop("appointments"), "critical_tables_incomplete"),
+        (lambda value: value["table_inventory"].remove("appointments"), "critical_tables_incomplete"),
+    ],
+)
+def test_snapshot_rejects_missing_or_inconsistent_critical_tables(mutation, error):
+    snapshot = semantic_snapshot()
+    mutation(snapshot)
+    with pytest.raises(RecoveryError, match=error):
+        validate_snapshot(snapshot)
+
+
+def test_final_invariants_reject_missing_critical_table_before_readiness():
+    snapshot = semantic_snapshot()
+    snapshot["missing_critical_tables"] = ["appointments"]
+    snapshot["critical_tables"].pop("appointments")
+    snapshot["table_inventory"].remove("appointments")
+    with pytest.raises(RecoveryError, match="critical_tables_missing"):
+        _assert_final_invariants(snapshot)
 
 
 @pytest.mark.parametrize(

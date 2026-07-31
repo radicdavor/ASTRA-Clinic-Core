@@ -363,6 +363,8 @@ def _assert_snapshot_equal(
 def _assert_final_invariants(snapshot: dict[str, object]) -> None:
     if snapshot["revision"] != FINAL_ALEMBIC_REVISION:
         raise RecoveryError("final_revision_mismatch")
+    if snapshot.get("missing_critical_tables") != []:
+        raise RecoveryError("critical_tables_missing")
     invariants = snapshot["invariants"]
     if invariants.get("alembic_revision_rows") != 1:
         raise RecoveryError("alembic_revision_row_count_invalid")

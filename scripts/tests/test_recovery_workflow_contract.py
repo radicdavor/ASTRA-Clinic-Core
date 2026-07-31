@@ -41,6 +41,10 @@ GIT_BASH = (
     else Path(shutil.which("bash") or "/bin/bash")
 )
 EXPECTED_JOBS = {"recovery", "recovery-evidence"}
+REQUIRED_ALEMBIC_PATHS = {
+    "backend/alembic.ini",
+    "backend/alembic/env.py",
+}
 RECHECK_IDS = {
     "recheck-source-before-recovery-matrix",
     "recheck-source-before-recovery-evidence",
@@ -96,11 +100,12 @@ def path_is_covered(path: str, patterns: list[str]) -> bool:
 
 
 def assert_recovery_path_filter_contract(parsed: dict) -> None:
-    required = directly_executed_fixture_scripts()
-    assert required == {
+    fixtures = directly_executed_fixture_scripts()
+    assert fixtures == {
         "scripts/validate_0057_clinic_membership_transition.py",
         "scripts/validate_0063_document_provenance.py",
     }
+    required = fixtures | REQUIRED_ALEMBIC_PATHS
     triggers = parsed["on"]
     for event in ("push", "pull_request"):
         patterns = triggers[event]["paths"]
@@ -269,6 +274,8 @@ def test_checked_in_recovery_workflow_satisfies_contract():
     [
         "scripts/validate_0057_clinic_membership_transition.py",
         "scripts/validate_0063_document_provenance.py",
+        "backend/alembic.ini",
+        "backend/alembic/env.py",
     ],
 )
 def test_direct_fixture_script_must_be_covered_by_each_path_filter(event, path):

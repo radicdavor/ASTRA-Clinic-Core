@@ -11,7 +11,6 @@ import subprocess
 import sys
 from tempfile import mkdtemp
 from typing import Callable
-from urllib.parse import quote, urlsplit, urlunsplit
 from uuid import uuid4
 
 import psycopg
@@ -23,11 +22,14 @@ from recovery_common import (
     SUPPORTED_BACKUP_REVISIONS,
     SYNTHETIC_ENVIRONMENT,
     RecoveryError,
+    canonical_admin_database_url,
+    database_url_for_name,
     psycopg_url,
     read_alembic_revision,
     read_json,
     sha256_file,
     utc_now,
+    verify_database_connection,
     write_json,
 )
 from restore_postgres import (
@@ -47,20 +49,7 @@ PREFIX = "membership-migration-"
 
 
 def database_url(base_url: str, database_name: str) -> str:
-    parsed = urlsplit(base_url.replace("postgresql+psycopg://", "postgresql://", 1))
-    if parsed.hostname not in {"localhost", "127.0.0.1", "postgres"}:
-        raise RecoveryError("recovery_admin_host_not_allowed")
-    if parsed.path.lstrip("/") != "postgres":
-        raise RecoveryError("recovery_admin_database_invalid")
-    return urlunsplit(
-        (
-            "postgresql+psycopg",
-            parsed.netloc,
-            "/" + quote(database_name),
-            parsed.query,
-            "",
-        )
-    )
+    return database_url_for_name(base_url, database_name)
 
 
 def _safe_database_name(name: str) -> None:
@@ -73,6 +62,9 @@ def _safe_database_name(name: str) -> None:
 def recreate_database(admin_url: str, name: str) -> None:
     _safe_database_name(name)
     with psycopg.connect(psycopg_url(admin_url), autocommit=True) as connection:
+        verify_database_connection(
+            connection, admin_url, allow_admin_database=True
+        )
         connection.execute(
             """
             SELECT pg_terminate_backend(pid)
@@ -88,6 +80,9 @@ def recreate_database(admin_url: str, name: str) -> None:
 def drop_database(admin_url: str, name: str) -> None:
     _safe_database_name(name)
     with psycopg.connect(psycopg_url(admin_url), autocommit=True) as connection:
+        verify_database_connection(
+            connection, admin_url, allow_admin_database=True
+        )
         connection.execute(
             """
             SELECT pg_terminate_backend(pid)
@@ -560,6 +555,33 @@ def run_empty_database_scenario(admin_url: str) -> str:
         drop_database(admin_url, name)
 
 
+def verify_missing_critical_table_rejected(
+    admin_url: str, workspace: Path, pg_dump: str
+) -> None:
+    name = f"astra_recovery_missing_critical_{uuid4().hex[:8]}"
+    url = database_url(admin_url, name)
+    storage = workspace / "missing-critical-storage"
+    artifact = workspace / "missing-critical-artifact"
+    try:
+        recreate_database(admin_url, name)
+        alembic(url, "upgrade", FINAL_ALEMBIC_REVISION)
+        storage.mkdir()
+        with psycopg.connect(psycopg_url(url)) as connection:
+            connection.execute("DROP TABLE appointments CASCADE")
+            connection.commit()
+        try:
+            _backup(url, storage, artifact, pg_dump)
+        except RecoveryError as exc:
+            if exc.code != "critical_tables_missing":
+                raise
+        else:
+            raise RecoveryError("missing_critical_table_accepted")
+        if artifact.exists():
+            raise RecoveryError("missing_critical_table_artifact_created")
+    finally:
+        drop_database(admin_url, name)
+
+
 def verify_non_empty_target_object_categories(admin_url: str) -> None:
     cases = {
         "table": "CREATE TABLE recovery_object (id integer)",
@@ -661,6 +683,11 @@ def main() -> int:
     admin_url = os.environ.get(args.admin_database_url_env, "")
     if not admin_url:
         raise RecoveryError("recovery_admin_database_url_missing")
+    admin_url = canonical_admin_database_url(admin_url)
+    with psycopg.connect(psycopg_url(admin_url)) as connection:
+        verify_database_connection(
+            connection, admin_url, allow_admin_database=True
+        )
     os.environ["ASTRA_RECOVERY_ENVIRONMENT"] = SYNTHETIC_ENVIRONMENT
     source_sha = os.environ.get("REMEDIATION_CHECKOUT_SHA", "")
     if len(source_sha) != 40:
@@ -672,6 +699,9 @@ def main() -> int:
     def run_matrix() -> dict[str, object]:
         empty_revision = run_empty_database_scenario(admin_url)
         verify_non_empty_target_object_categories(admin_url)
+        verify_missing_critical_table_rejected(
+            admin_url, workspace, args.pg_dump
+        )
         scenarios = []
         for revision in sorted(SUPPORTED_BACKUP_REVISIONS):
             scenario_workspace = workspace / revision

@@ -31,6 +31,7 @@ from recovery_common import (
     run_postgres_tool,
     safe_relative_path,
     semantic_snapshot,
+    validate_snapshot,
     sha256_file,
     tool_version,
     utc_now,
@@ -157,7 +158,7 @@ def create_backup(args: argparse.Namespace) -> Path | None:
             ).fetchone()[0]
             if recovery_marker is not None:
                 raise RecoveryError("source_recovery_incomplete")
-            snapshot = semantic_snapshot(connection)
+            snapshot = validate_snapshot(semantic_snapshot(connection))
             objects = source_objects(connection)
             postgres_version = str(connection.info.server_version)
             if args.dry_run:

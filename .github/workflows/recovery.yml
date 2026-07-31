@@ -19,6 +19,8 @@ on:
       - "backend/app/services/schema_readiness.py"
       - "backend/tests/test_recovery_tooling.py"
       - "backend/tests/test_schema_readiness.py"
+      - "backend/alembic.ini"
+      - "backend/alembic/env.py"
       - "backend/alembic/versions/**"
       - "docs/recovery-contract-0071.md"
   pull_request:
@@ -39,6 +41,8 @@ on:
       - "backend/app/services/schema_readiness.py"
       - "backend/tests/test_recovery_tooling.py"
       - "backend/tests/test_schema_readiness.py"
+      - "backend/alembic.ini"
+      - "backend/alembic/env.py"
       - "backend/alembic/versions/**"
       - "docs/recovery-contract-0071.md"
   workflow_dispatch:

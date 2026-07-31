@@ -310,11 +310,25 @@ mutation, recovery compares `connection.info` and server-reported current
 database/user/port with the authorized descriptor. Mismatch stops recovery
 without logging the DSN or credentials.
 
+The integration runner applies this same canonical identity contract to its
+administrative connection. Only the `postgres` administrative database is
+allowlisted; host, port, role, TLS mode, and server identity must match the
+disposable targets. Target URLs are rebuilt from verified components rather
+than copied query strings, and each create/drop connection is identity-checked
+before its first mutating statement.
+
 The target storage descriptor is then checked before the marker, restore, or
 migration. Non-empty or unsafe targets, unsafe parents, and existing staging
 paths fail before database mutation. Checks that depend on restored content
 remain post-restore invariants. Preflight is repeated at the copy boundary to
 reduce TOCTOU exposure.
+
+`CRITICAL_TABLES` is also enforced at backup production, restore intake, and
+final readiness. A valid snapshot contains every critical table in both its
+catalog inventory and checksum projection and exactly
+`missing_critical_tables: []`. The actual post-restore PostgreSQL catalog is
+checked again before the incomplete marker can be removed or success evidence
+can be produced.
 
 ## Canonical test IDs and workflow inputs
 
@@ -329,6 +343,8 @@ the Python AST and requires both push and pull-request path filters to cover:
 
 - `scripts/validate_0057_clinic_membership_transition.py`
 - `scripts/validate_0063_document_provenance.py`
+- `backend/alembic.ini`
+- `backend/alembic/env.py`
 
 Comments, step names, and similar-but-wrong paths do not satisfy the contract.
 
