@@ -17,6 +17,7 @@ backend/.venv/
 backend/__pycache__/
 
 .recovery-evidence/
+.astra-dev/
 backups/
 *.dump
 *.backup

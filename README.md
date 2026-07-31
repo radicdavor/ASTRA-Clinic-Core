@@ -84,19 +84,24 @@ Core boundaries, API-first behavior, auditability and demo-data safety.
 - For direct development: Python 3.12 and Node.js compatible with the checked-in
   frontend toolchain
 
-## Quick start
+## Quick start: choose one development mode
 
-Copy the development environment template, review every value, then start the
-local stack:
+The following modes are alternatives. Do not start the full Compose backend and
+a native backend together because both publish host port `8000`.
+
+### Option A: full Compose stack
+
+From the repository root, copy the development environment template, review
+every value, then start PostgreSQL, backend and frontend in Compose:
 
 ```bash
 cp .env.example .env
 docker compose up --build
 ```
 
-From the repository root, run migrations as a one-shot `backend` container.
-This uses the Compose-only `db` hostname and does not require a long-running
-backend container:
+The backend runs in its container and uses the Compose-only `db` hostname and
+container storage path. Do not start native Uvicorn in this mode. To verify the
+current migration or rerun it explicitly from the repository root:
 
 ```bash
 docker compose run --rm --entrypoint alembic backend upgrade head
@@ -115,14 +120,21 @@ Reset only the local synthetic demo when required:
 docker compose exec backend python -m app.demo.reset
 ```
 
-Development defaults are not production configuration. Never place production
-secrets or real records in `.env`, fixtures, logs, screenshots or artifacts.
+Stop this mode from the repository root with `docker compose down`.
 
-## Backend development
+### Option B: native backend with Compose PostgreSQL
 
-For native host development, keep the Compose database running and use its
-host-published loopback endpoint. Run one of these blocks from the repository
-root; database migrations remain the container command in Quick start above.
+This is an alternative to Option A. From the repository root, start only the
+PostgreSQL service; this command does not start the Compose backend:
+
+```bash
+docker compose up -d db
+docker compose run --rm --entrypoint alembic backend upgrade head
+```
+
+Then run one native block from the repository root. Both use the database's
+host-published loopback endpoint, create a host-writable synthetic document
+directory, and keep native Uvicorn on port `8000`.
 
 Linux/bash:
 
@@ -131,7 +143,9 @@ python -m venv .venv
 source .venv/bin/activate
 pip install -r backend/requirements.txt -r scripts/test-requirements.txt
 export DATABASE_URL=postgresql+psycopg://astra:astra@127.0.0.1:5432/astra_clinic
-python -m uvicorn app.main:app --reload --app-dir backend
+mkdir -p "$(pwd)/.astra-dev/documents"
+export DOCUMENT_STORAGE_PATH="$(pwd)/.astra-dev/documents"
+python -m uvicorn app.main:app --reload --app-dir backend --port 8000
 ```
 
 Windows PowerShell:
@@ -141,11 +155,20 @@ python -m venv .venv
 .venv\Scripts\Activate.ps1
 pip install -r backend/requirements.txt -r scripts/test-requirements.txt
 $env:DATABASE_URL = "postgresql+psycopg://astra:astra@127.0.0.1:5432/astra_clinic"
-python -m uvicorn app.main:app --reload --app-dir backend
+$storage = Join-Path (Get-Location) ".astra-dev\documents"
+New-Item -ItemType Directory -Force -Path $storage | Out-Null
+$env:DOCUMENT_STORAGE_PATH = $storage
+python -m uvicorn app.main:app --reload --app-dir backend --port 8000
 ```
 
-These are local synthetic-development defaults, not production credentials or
-evidence of production migration readiness.
+Stop native Uvicorn with `Ctrl+C`, then stop the DB-only dependency from the
+repository root with `docker compose down`. The ignored `.astra-dev/` directory
+contains synthetic local files and may be removed after confirming it contains
+nothing you need.
+
+Development defaults are not production configuration. Never place production
+secrets or real records in `.env`, `.astra-dev/`, fixtures, logs, screenshots or
+artifacts. Neither mode is evidence of production migration or storage readiness.
 
 ## Frontend development
 

@@ -81,40 +81,92 @@ def _assert_private_reporting_consistency(documents: dict[str, str]) -> None:
     assert "exercised" in combined and "intake" in combined
 
 
-def _assert_database_guidance(readme: str, compose: dict) -> None:
-    blocks = _markdown_code_blocks_from_text(readme)
-    commands = {line for block in blocks for line in block if line}
+def _assert_database_guidance(readme: str, compose: dict, gitignore: str) -> None:
+    assert "### Option A: full Compose stack" in readme
+    assert "### Option B: native backend with Compose PostgreSQL" in readme
+    full = readme.split("### Option A: full Compose stack", 1)[1].split(
+        "### Option B: native backend with Compose PostgreSQL", 1
+    )[0]
+    native = readme.split(
+        "### Option B: native backend with Compose PostgreSQL", 1
+    )[1].split("## Frontend development", 1)[0]
+    full_blocks = _markdown_fenced_blocks_from_text(full)
+    native_blocks = _markdown_fenced_blocks_from_text(native)
+    full_commands = {
+        line for _, block in full_blocks for line in block if line
+    }
+    native_commands = {
+        line for _, block in native_blocks for line in block if line
+    }
     services = compose["services"]
 
     assert {"db", "backend"} <= set(services), "Compose DB/backend services are required"
     assert "127.0.0.1:5432:5432" in services["db"]["ports"], (
         "native-host guidance requires the loopback PostgreSQL port"
     )
-    assert "docker compose up --build" in commands
-    assert "docker compose run --rm --entrypoint alembic backend upgrade head" in commands
+    assert "docker compose up --build" in full_commands
+    assert not any("uvicorn" in line for line in full_commands)
+    assert "alternatives" in readme.lower()
+    assert "docker compose up -d db" in native_commands
     assert not any(
-        "alembic upgrade head" in block and "cd backend" in block for block in blocks
+        re.fullmatch(r"docker compose up(?:\s+-d)?", line)
+        or line == "docker compose up --build"
+        for line in native_commands
+    ), "native mode must start only the DB service"
+    assert "docker compose up -d backend" not in native_commands
+    assert (
+        "docker compose run --rm --entrypoint alembic backend upgrade head"
+        in native_commands
+    )
+    assert not any(
+        "alembic upgrade head" in block and "cd backend" in block
+        for _, block in native_blocks
     ), "migration guidance must not mix host cwd and container DNS"
 
-    native_blocks = [block for block in blocks if any("uvicorn" in line for line in block)]
-    assert len(native_blocks) == 2, "README must define bash and PowerShell host blocks"
-    for block in native_blocks:
+    uvicorn_blocks = [
+        (language, block)
+        for language, block in native_blocks
+        if any("uvicorn" in line for line in block)
+    ]
+    assert {language for language, _ in uvicorn_blocks} == {"bash", "powershell"}
+    assert len(uvicorn_blocks) == 2, "README must define bash and PowerShell host blocks"
+    for language, block in uvicorn_blocks:
         joined = "\n".join(block)
         assert "127.0.0.1:5432/astra_clinic" in joined
         assert "@db:5432" not in joined
         assert "cd backend" not in block
         assert "--app-dir backend" in joined
+        assert "--port 8000" in joined
+        assert "DOCUMENT_STORAGE_PATH" in joined
+        assert "/app/data/documents" not in joined
+        assert ".astra-dev" in joined and "documents" in joined
+        if language == "bash":
+            assert "mkdir -p" in joined and "$(pwd)" in joined
+            assert "$env:" not in joined and "New-Item" not in joined
+        else:
+            assert "Join-Path (Get-Location)" in joined and "New-Item" in joined
+            assert "export " not in joined and "$(pwd)" not in joined
+    assert "`docker compose down`" in native
+    assert ".astra-dev/" in gitignore.splitlines()
 
 
 def _markdown_code_blocks_from_text(text: str) -> list[tuple[str, ...]]:
-    blocks: list[tuple[str, ...]] = []
+    return [block for _, block in _markdown_fenced_blocks_from_text(text)]
+
+
+def _markdown_fenced_blocks_from_text(
+    text: str,
+) -> list[tuple[str, tuple[str, ...]]]:
+    blocks: list[tuple[str, tuple[str, ...]]] = []
     current: list[str] | None = None
+    language = ""
     for line in text.splitlines():
         if line.startswith("```"):
             if current is None:
                 current = []
+                language = line[3:].strip().lower()
             else:
-                blocks.append(tuple(current))
+                blocks.append((language, tuple(current)))
                 current = None
         elif current is not None:
             current.append(line.strip())
@@ -215,27 +267,61 @@ def test_readme_database_guidance_has_one_execution_context() -> None:
     _assert_database_guidance(
         (ROOT / "README.md").read_text(encoding="utf-8"),
         _load_yaml(ROOT / "docker-compose.yml"),
+        (ROOT / ".gitignore").read_text(encoding="utf-8"),
     )
 
 
 @pytest.mark.parametrize(
-    "mutation",
+    ("mutation", "gitignore_mutation"),
     (
-        lambda text: text.replace(
-            "docker compose run --rm --entrypoint alembic backend upgrade head",
-            "cd backend\nalembic upgrade head",
+        (
+            lambda text: text.replace(
+                "### Option B: native backend with Compose PostgreSQL",
+                "### Option B: native backend with Compose PostgreSQL\n\n```bash\ndocker compose up --build\n```",
+            ),
+            lambda text: text,
         ),
-        lambda text: text.replace(
-            "@127.0.0.1:5432/astra_clinic", "@db:5432/astra_clinic", 1
+        (
+            lambda text: text.replace("docker compose up -d db", "docker compose up -d"),
+            lambda text: text,
         ),
-        lambda text: text.replace("--app-dir backend", "backend/app/main.py", 1),
+        (
+            lambda text: text.replace("docker compose up -d db", "docker compose up -d backend"),
+            lambda text: text,
+        ),
+        (
+            lambda text: text.replace("export DOCUMENT_STORAGE_PATH=\"$(pwd)/.astra-dev/documents\"", "")
+            .replace("$env:DOCUMENT_STORAGE_PATH = $storage", ""),
+            lambda text: text,
+        ),
+        (
+            lambda text: text.replace(".astra-dev/documents", "/app/data/documents")
+            .replace(".astra-dev\\documents", "/app/data/documents"),
+            lambda text: text,
+        ),
+        (
+            lambda text: text.replace("@127.0.0.1:5432/astra_clinic", "@db:5432/astra_clinic"),
+            lambda text: text,
+        ),
+        (lambda text: text, lambda text: text.replace(".astra-dev/", "")),
+        (
+            lambda text: text.replace("mkdir -p \"$(pwd)/.astra-dev/documents\"", "$storage = Join-Path (Get-Location) '.astra-dev'", 1),
+            lambda text: text,
+        ),
+        (
+            lambda text: text.replace("--port 8000", "--port 8001"),
+            lambda text: text,
+        ),
     ),
 )
-def test_readme_database_guidance_rejects_context_mutations(mutation) -> None:
+def test_readme_database_guidance_rejects_context_mutations(
+    mutation, gitignore_mutation
+) -> None:
     with pytest.raises(AssertionError):
         _assert_database_guidance(
             mutation((ROOT / "README.md").read_text(encoding="utf-8")),
             _load_yaml(ROOT / "docker-compose.yml"),
+            gitignore_mutation((ROOT / ".gitignore").read_text(encoding="utf-8")),
         )
 
 
