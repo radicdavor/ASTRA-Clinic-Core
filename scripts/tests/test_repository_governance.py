@@ -50,19 +50,7 @@ def _relative_links(path: Path) -> list[str]:
 
 
 def _markdown_code_blocks(path: Path) -> list[tuple[str, ...]]:
-    blocks: list[tuple[str, ...]] = []
-    current: list[str] | None = None
-    for line in path.read_text(encoding="utf-8").splitlines():
-        if line.startswith("```"):
-            if current is None:
-                current = []
-            else:
-                blocks.append(tuple(current))
-                current = None
-        elif current is not None:
-            current.append(line.strip())
-    assert current is None, f"unclosed Markdown code block in {path}"
-    return blocks
+    return _markdown_code_blocks_from_text(path.read_text(encoding="utf-8"))
 
 
 def _assert_private_reporting_consistency(documents: dict[str, str]) -> None:
@@ -91,6 +79,73 @@ def _assert_private_reporting_consistency(documents: dict[str, str]) -> None:
     )
     assert "response ownership" in combined and "sla" in combined
     assert "exercised" in combined and "intake" in combined
+
+
+def _assert_database_guidance(readme: str, compose: dict) -> None:
+    blocks = _markdown_code_blocks_from_text(readme)
+    commands = {line for block in blocks for line in block if line}
+    services = compose["services"]
+
+    assert {"db", "backend"} <= set(services), "Compose DB/backend services are required"
+    assert "127.0.0.1:5432:5432" in services["db"]["ports"], (
+        "native-host guidance requires the loopback PostgreSQL port"
+    )
+    assert "docker compose up --build" in commands
+    assert "docker compose run --rm --entrypoint alembic backend upgrade head" in commands
+    assert not any(
+        "alembic upgrade head" in block and "cd backend" in block for block in blocks
+    ), "migration guidance must not mix host cwd and container DNS"
+
+    native_blocks = [block for block in blocks if any("uvicorn" in line for line in block)]
+    assert len(native_blocks) == 2, "README must define bash and PowerShell host blocks"
+    for block in native_blocks:
+        joined = "\n".join(block)
+        assert "127.0.0.1:5432/astra_clinic" in joined
+        assert "@db:5432" not in joined
+        assert "cd backend" not in block
+        assert "--app-dir backend" in joined
+
+
+def _markdown_code_blocks_from_text(text: str) -> list[tuple[str, ...]]:
+    blocks: list[tuple[str, ...]] = []
+    current: list[str] | None = None
+    for line in text.splitlines():
+        if line.startswith("```"):
+            if current is None:
+                current = []
+            else:
+                blocks.append(tuple(current))
+                current = None
+        elif current is not None:
+            current.append(line.strip())
+    assert current is None, "unclosed Markdown code block"
+    return blocks
+
+
+RPO_RTO_TARGETS = (
+    "RPO 24 h (maximum 24 h), RTO 2 h (maximum 4 h)",
+    "RPO 4 h (maximum 8 h), RTO 2 h (maximum 4 h)",
+    "RPO 15 min (maximum 1 h), RTO 2 h (maximum 4 h)",
+)
+
+
+def _assert_rpo_rto_consistency(documents: dict[str, str]) -> None:
+    recovery = " ".join(documents["recovery"].split())
+    limitations = " ".join(documents["limitations"].split())
+    backlog = " ".join(documents["backlog"].split())
+    combined = "\n".join((recovery, limitations, backlog)).lower()
+
+    for target in RPO_RTO_TARGETS:
+        assert target in recovery, f"missing accepted RPO/RTO target: {target}"
+    assert "Owner acceptance of these policy targets: `true` (accepted 2026-07-30)" in recovery
+    assert "Observed production RPO: not measured (`null`)" in recovery
+    assert "Observed production RTO: not measured (`null`)" in recovery
+    assert "accepted the [recovery contract](recovery-contract-0071.md) RPO/RTO policy targets on 2026-07-30" in limitations
+    assert "observed production RPO and RTO remain `null`" in limitations
+    assert "Policy targets accepted by the owner on 2026-07-30; observed values are `null`" in backlog
+    assert "rpo/rto and operator drills are not approved" not in combined
+    assert "production recovery: not authorized" in combined
+    assert "no row in this backlog is currently `production_authorized`" in combined
 
 
 @pytest.mark.parametrize(
@@ -154,6 +209,84 @@ def test_current_docs_use_executable_root_relative_fast_gate() -> None:
         for block in blocks
     )
     assert (ROOT / "scripts" / "run_test_gate.py").is_file()
+
+
+def test_readme_database_guidance_has_one_execution_context() -> None:
+    _assert_database_guidance(
+        (ROOT / "README.md").read_text(encoding="utf-8"),
+        _load_yaml(ROOT / "docker-compose.yml"),
+    )
+
+
+@pytest.mark.parametrize(
+    "mutation",
+    (
+        lambda text: text.replace(
+            "docker compose run --rm --entrypoint alembic backend upgrade head",
+            "cd backend\nalembic upgrade head",
+        ),
+        lambda text: text.replace(
+            "@127.0.0.1:5432/astra_clinic", "@db:5432/astra_clinic", 1
+        ),
+        lambda text: text.replace("--app-dir backend", "backend/app/main.py", 1),
+    ),
+)
+def test_readme_database_guidance_rejects_context_mutations(mutation) -> None:
+    with pytest.raises(AssertionError):
+        _assert_database_guidance(
+            mutation((ROOT / "README.md").read_text(encoding="utf-8")),
+            _load_yaml(ROOT / "docker-compose.yml"),
+        )
+
+
+def test_canonical_rpo_rto_documents_are_consistent() -> None:
+    _assert_rpo_rto_consistency(
+        {
+            "recovery": (ROOT / "docs/recovery-contract-0071.md").read_text(
+                encoding="utf-8"
+            ),
+            "limitations": (
+                ROOT / "docs/CURRENT_OPERATIONAL_LIMITATIONS.md"
+            ).read_text(encoding="utf-8"),
+            "backlog": (
+                ROOT / "docs/PRODUCTION_READINESS_BACKLOG.md"
+            ).read_text(encoding="utf-8"),
+        }
+    )
+
+
+@pytest.mark.parametrize(
+    ("document", "old", "new"),
+    (
+        ("recovery", "RPO 15 min", "RPO 30 min"),
+        ("recovery", "policy targets: `true`", "policy targets: `false`"),
+        ("recovery", "not measured (`null`)", "measured (`15 min`)"),
+        ("backlog", "observed values are `null`", "production readiness is proven"),
+        (
+            "limitations",
+            "accepted the [recovery contract]",
+            "has not approved the [recovery contract]",
+        ),
+    ),
+)
+def test_rpo_rto_consistency_rejects_mutations(
+    document: str, old: str, new: str
+) -> None:
+    documents = {
+        "recovery": (ROOT / "docs/recovery-contract-0071.md").read_text(
+            encoding="utf-8"
+        ),
+        "limitations": (ROOT / "docs/CURRENT_OPERATIONAL_LIMITATIONS.md").read_text(
+            encoding="utf-8"
+        ),
+        "backlog": (ROOT / "docs/PRODUCTION_READINESS_BACKLOG.md").read_text(
+            encoding="utf-8"
+        ),
+    }
+    assert old in documents[document]
+    documents[document] = documents[document].replace(old, new, 1)
+    with pytest.raises(AssertionError):
+        _assert_rpo_rto_consistency(documents)
 
 
 def test_apache_license_is_canonical_and_linked() -> None:

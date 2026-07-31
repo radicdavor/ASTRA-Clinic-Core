@@ -8,7 +8,7 @@ This is the canonical limitation register.
 - OCR supports local plain text only. PDF/image OCR returns an explicit failure.
 - AI summaries are deterministic local drafts; they are not clinical conclusions.
 - Communication `sent` means the demo sender accepted the action, not delivery.
-- Backup/restore validation covers a synthetic local/test PostgreSQL drill only. Encryption, retention, off-site copies, production credentials, RPO/RTO and operator drills are not approved.
+- Backup/restore validation covers a synthetic local/test PostgreSQL drill only. The owner accepted the [recovery contract](recovery-contract-0071.md) RPO/RTO policy targets on 2026-07-30, but observed production RPO and RTO remain `null`. Encryption, retention, off-site copies, production credentials, achievement of those targets and operator drills are not approved or proven.
 - Monitoring is limited to health checks and logs. Alerting, on-call ownership, centralized observability and incident service levels are absent.
 - Privacy/governance gaps include DPIA/DPA, processor review, retention/deletion policy, audit retention, data-subject procedures and clinic-owner permission approval.
 - Accessibility has automated semantics/interaction checks but no complete WCAG audit or assistive-technology human evaluation.

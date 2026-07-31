@@ -94,10 +94,18 @@ cp .env.example .env
 docker compose up --build
 ```
 
-Run migrations and seed synthetic demo data:
+From the repository root, run migrations as a one-shot `backend` container.
+This uses the Compose-only `db` hostname and does not require a long-running
+backend container:
 
 ```bash
-docker compose exec backend alembic upgrade head
+docker compose run --rm --entrypoint alembic backend upgrade head
+```
+
+After `docker compose up --build` has left the backend service running, seed
+synthetic demo data inside that container:
+
+```bash
 docker compose exec backend python -m app.demo.seed
 ```
 
@@ -112,16 +120,32 @@ secrets or real records in `.env`, fixtures, logs, screenshots or artifacts.
 
 ## Backend development
 
+For native host development, keep the Compose database running and use its
+host-published loopback endpoint. Run one of these blocks from the repository
+root; database migrations remain the container command in Quick start above.
+
+Linux/bash:
+
 ```bash
 python -m venv .venv
 source .venv/bin/activate
 pip install -r backend/requirements.txt -r scripts/test-requirements.txt
-cd backend
-alembic upgrade head
-uvicorn app.main:app --reload
+export DATABASE_URL=postgresql+psycopg://astra:astra@127.0.0.1:5432/astra_clinic
+python -m uvicorn app.main:app --reload --app-dir backend
 ```
 
-On Windows PowerShell, activate with `.venv\Scripts\Activate.ps1`.
+Windows PowerShell:
+
+```powershell
+python -m venv .venv
+.venv\Scripts\Activate.ps1
+pip install -r backend/requirements.txt -r scripts/test-requirements.txt
+$env:DATABASE_URL = "postgresql+psycopg://astra:astra@127.0.0.1:5432/astra_clinic"
+python -m uvicorn app.main:app --reload --app-dir backend
+```
+
+These are local synthetic-development defaults, not production credentials or
+evidence of production migration readiness.
 
 ## Frontend development
 

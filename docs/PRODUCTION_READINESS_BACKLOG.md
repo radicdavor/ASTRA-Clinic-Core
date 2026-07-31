@@ -33,9 +33,11 @@ Status vocabulary: `NOT_STARTED`, `DESIGNED`, `SYNTHETICALLY_TESTED`,
 | E-mail/SMS delivery semantics | Local/demo acceptance only | Delivery, bounce, retry, consent and audit semantics | Product/operations owner | Provider governance | End-to-end synthetic provider test | NOT_STARTED |
 | Fiscalization | Noop/stub | Legal integration, certificates and failure handling | Finance/legal owner | Regulatory/provider decision | Certified integration evidence | NOT_STARTED |
 | WCAG and assistive technology | Automated semantic checks | Full audit and human assistive-technology evaluation | Accessibility/product owner | Stable UI candidate | Findings closure and evaluation report | SYNTHETICALLY_TESTED |
-| Production RPO/RTO measurement | Policy targets accepted; observed values are `null` | Timed production-like measurement and owner acceptance | Operations/database owner | Approved recovery environment | Observed RPO/RTO and verification time | OWNER_ACCEPTED |
+| Production RPO/RTO measurement | Policy targets accepted by the owner on 2026-07-30; observed values are `null` | Timed production-like measurement and proof that the targets are achieved | Operations/database owner | Approved recovery environment | Observed RPO/RTO and verification time | OWNER_ACCEPTED |
 | Real-patient-data authorization | Explicitly prohibited | All legal, privacy, security, operational and clinical gates | Organizational owner | All prerequisite evidence reviewed | Separate written authorization | NOT_STARTED |
 
 `OWNER_ACCEPTED` for RPO/RTO means only that policy targets were accepted. It
 does not mean the targets were observed or that production recovery is proven.
+The exact accepted values and production boundaries are maintained in the
+[recovery contract](recovery-contract-0071.md).
 No row in this backlog is currently `PRODUCTION_AUTHORIZED`.
