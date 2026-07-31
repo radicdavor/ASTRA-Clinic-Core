@@ -1,0 +1,20 @@
+# Repository-wide fallback owner.
+* @radicdavor
+
+# CI, release and repository governance.
+/.github/workflows/ @radicdavor
+/.github/dependabot.yml @radicdavor
+/SECURITY.md @radicdavor
+/CONTRIBUTING.md @radicdavor
+
+# Authentication, authorization and sensitive scope boundaries.
+/backend/app/auth/ @radicdavor
+/backend/app/core/security.py @radicdavor
+/backend/app/api/routes/auth.py @radicdavor
+
+# Schema and recovery/evidence integrity.
+/backend/alembic/ @radicdavor
+/scripts/*recovery* @radicdavor
+/scripts/backup_postgres.* @radicdavor
+/scripts/restore_postgres.py @radicdavor
+/scripts/*evidence* @radicdavor
