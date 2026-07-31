@@ -20,10 +20,11 @@ certified EMR or medical device.
 ## Reporting
 
 Do not open public issues containing vulnerability details that could expose
-patient, billing, authentication or infrastructure data. GitHub private
-vulnerability reporting is not currently enabled and no other verified private
-reporting channel is published. Enabling and owning such a channel is an open
-repository-owner decision; do not invent or infer a contact address or SLA.
+patient, billing, authentication or infrastructure data. For sensitive reports,
+use GitHub's private Security Advisory flow: [Report a vulnerability](https://github.com/radicdavor/ASTRA-Clinic-Core/security/advisories/new).
+Private vulnerability reporting is enabled, but no response SLA or dedicated
+security-team contact is promised; operational response ownership remains a
+production-readiness gate.
 
 Non-sensitive hardening proposals may use ordinary pull requests without
 including exploit details, credentials or real records.

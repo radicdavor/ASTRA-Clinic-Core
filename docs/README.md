@@ -58,6 +58,7 @@ production use or real patient data.
 
 ## Current program decisions
 
+- [License decision](LICENSE_DECISION.md) — Apache-2.0 owner decision and its explicit operational boundaries.
 - [Readiness model](ASTRA_READINESS_MODEL.md)
 - [Operational evidence loop](ASTRA_OPERATIONAL_EVIDENCE_LOOP.md)
 - [Current product state](CURRENT_PRODUCT_STATE.md)

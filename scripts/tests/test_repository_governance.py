@@ -109,6 +109,41 @@ def test_apache_license_is_canonical_and_linked() -> None:
     )
 
 
+def test_license_decision_matches_canonical_apache_license() -> None:
+    decision = (ROOT / "docs" / "LICENSE_DECISION.md").read_text(encoding="utf-8")
+    normalized_decision = " ".join(decision.lower().split())
+    index = (ROOT / "docs" / "README.md").read_text(encoding="utf-8")
+    assert "selected the **Apache License 2.0**" in decision
+    assert "[`LICENSE`](../LICENSE) file is the authoritative license text" in decision
+    assert "No final open-source license has been selected" not in decision
+    assert "[License decision](LICENSE_DECISION.md)" in index
+    for boundary in ("deployment", "production", "real patient data"):
+        assert boundary in normalized_decision
+
+
+def test_private_vulnerability_reporting_documents_are_consistent() -> None:
+    security = (ROOT / "SECURITY.md").read_text(encoding="utf-8")
+    readme = (ROOT / "README.md").read_text(encoding="utf-8")
+    normalized_readme = " ".join(readme.lower().split())
+    backlog = (ROOT / "docs" / "PRODUCTION_READINESS_BACKLOG.md").read_text(
+        encoding="utf-8"
+    )
+    advisory_url = (
+        "https://github.com/radicdavor/ASTRA-Clinic-Core/security/advisories/new"
+    )
+    assert advisory_url in security
+    assert "private vulnerability reporting is enabled" in security.lower()
+    assert "private vulnerability reporting is enabled" in normalized_readme
+    assert "not currently configured" not in readme
+    assert "not currently enabled" not in security
+    vulnerability_row = next(
+        line for line in backlog.splitlines() if line.startswith("| Vulnerability disclosure")
+    )
+    assert "GitHub private vulnerability reporting enabled" in vulnerability_row
+    assert "response ownership" in vulnerability_row
+    assert vulnerability_row.endswith("| DESIGNED |")
+
+
 def test_documentation_index_has_unambiguous_categories() -> None:
     text = (ROOT / "docs" / "README.md").read_text(encoding="utf-8")
     required = {

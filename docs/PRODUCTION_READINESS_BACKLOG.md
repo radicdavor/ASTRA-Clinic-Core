@@ -23,7 +23,7 @@ Status vocabulary: `NOT_STARTED`, `DESIGNED`, `SYNTHETICALLY_TESTED`,
 | Alerting | No production alert service | Thresholds, routing and escalation tests | Operations owner | Monitoring signals | Alert delivery and response drill | NOT_STARTED |
 | On-call and incident response | No assigned production service | Owners, severity model and communication path | Organizational owner | Service ownership decision | Approved rota/runbook and exercise | NOT_STARTED |
 | Dependency governance | Pinned direct files and weekly proposal config | Alert ownership, SBOM and Python hash locking | Repository/security owner | Governance PR merged | Audited update cycle and backlog | DESIGNED |
-| Vulnerability disclosure | Public SECURITY policy | Verified private channel and response ownership | Repository owner | Select reporting channel | Enabled/tested private reporting process | NOT_STARTED |
+| Vulnerability disclosure | GitHub private vulnerability reporting enabled; SECURITY policy links the private advisory flow | Assigned response ownership, triage expectations and an exercised intake process | Repository owner | Assign response ownership and exercise private intake | Tested intake and documented response ownership | DESIGNED |
 | SBOM | Not generated | Format, producer, retention and validation | Security/release owner | Dependency sources stable | Exact-SHA SBOM artifact | NOT_STARTED |
 | Deployment topology | Local Docker Compose only | Supported proxy, TLS, network and environment design | Platform owner | Hosting decision | Reviewed deployment architecture | NOT_STARTED |
 | High availability | Not implemented | Service/database redundancy and failover | Platform/database owner | Production topology | Controlled failover drill | NOT_STARTED |

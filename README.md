@@ -170,9 +170,9 @@ See the [test strategy](docs/test-strategy.md) and
 - Backend authorization, not hidden UI controls, enforces access.
 - AI output is a suggestion and requires human review.
 - Critical actions require explicit controls and audit evidence.
-- Report security concerns according to [SECURITY.md](SECURITY.md). A verified
-  private vulnerability-reporting channel is not currently configured; that is
-  an open owner decision, not permission to disclose sensitive details publicly.
+- Report security concerns according to [SECURITY.md](SECURITY.md). Private
+  vulnerability reporting is enabled; submit sensitive reports through the
+  linked GitHub Security Advisory flow, never through a public issue.
 
 ## Dependencies
 
