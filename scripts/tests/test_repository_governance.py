@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -81,7 +82,9 @@ def _assert_private_reporting_consistency(documents: dict[str, str]) -> None:
     assert "exercised" in combined and "intake" in combined
 
 
-def _assert_database_guidance(readme: str, compose: dict, gitignore: str) -> None:
+def _assert_database_guidance(
+    readme: str, compose: dict, gitignore: str, entrypoint: str
+) -> None:
     assert "### Option A: full Compose stack" in readme
     assert "### Option B: native backend with Compose PostgreSQL" in readme
     full = readme.split("### Option A: full Compose stack", 1)[1].split(
@@ -114,10 +117,12 @@ def _assert_database_guidance(readme: str, compose: dict, gitignore: str) -> Non
         for line in native_commands
     ), "native mode must start only the DB service"
     assert "docker compose up -d backend" not in native_commands
-    assert (
-        "docker compose run --rm --entrypoint alembic backend upgrade head"
-        in native_commands
+    seed_command = (
+        "docker compose run --rm "
+        "-e DATABASE_URL=postgresql+psycopg://astra:astra@db:5432/astra_clinic "
+        "backend true"
     )
+    assert seed_command in native_commands
     assert not any(
         "alembic upgrade head" in block and "cd backend" in block
         for _, block in native_blocks
@@ -133,13 +138,21 @@ def _assert_database_guidance(readme: str, compose: dict, gitignore: str) -> Non
     for language, block in uvicorn_blocks:
         joined = "\n".join(block)
         assert "127.0.0.1:5432/astra_clinic" in joined
-        assert "@db:5432" not in joined
+        assert not any(
+            "@db:5432" in line and line != seed_command for line in block
+        ), "only the one-shot seed container may use Compose-only DB DNS"
         assert "cd backend" not in block
         assert "--app-dir backend" in joined
         assert "--port 8000" in joined
         assert "DOCUMENT_STORAGE_PATH" in joined
         assert "/app/data/documents" not in joined
         assert ".astra-dev" in joined and "documents" in joined
+        assert "APP_ENV" in joined and "development" in joined
+        assert "DEMO_MODE" in joined and "true" in joined
+        assert "REAL_DATA_ALLOWED" in joined and "false" in joined
+        assert block.index(seed_command) < next(
+            index for index, line in enumerate(block) if "uvicorn" in line
+        )
         if language == "bash":
             assert "mkdir -p" in joined and "$(pwd)" in joined
             assert "$env:" not in joined and "New-Item" not in joined
@@ -148,6 +161,38 @@ def _assert_database_guidance(readme: str, compose: dict, gitignore: str) -> Non
             assert "export " not in joined and "$(pwd)" not in joined
     assert "`docker compose down`" in native
     assert ".astra-dev/" in gitignore.splitlines()
+    assert "they do not prove\nthat demo users exist" in native
+    assert "successful synthetic login is not evidence of production readiness" in native
+    assert "never run the demo seed against a production database" in native.lower()
+    _assert_entrypoint_sequence(entrypoint)
+
+
+def _assert_entrypoint_sequence(entrypoint: str) -> None:
+    executable = [
+        line.strip()
+        for line in entrypoint.splitlines()
+        if line.strip() and not line.lstrip().startswith("#")
+    ]
+    canonical = ("alembic upgrade head", "python -m app.seed", "python -m app.demo.seed")
+    positions = [executable.index(command) for command in canonical]
+    assert positions == sorted(positions)
+    assert executable[-1] == 'exec "$@"'
+
+
+def _assert_entrypoint_file_contract(
+    attributes: str, content: bytes, mode: str, dockerfile: str
+) -> None:
+    rules = {
+        line.strip()
+        for line in attributes.splitlines()
+        if line.strip() and not line.lstrip().startswith("#")
+    }
+    assert "backend/entrypoint.sh text eol=lf" in rules
+    assert b"\r\n" not in content
+    assert not content.startswith(b"\xef\xbb\xbf")
+    assert content.startswith(b"#!/bin/sh\n")
+    assert mode == "100644"
+    assert "RUN chmod +x /app/entrypoint.sh" in dockerfile
 
 
 def _markdown_code_blocks_from_text(text: str) -> list[tuple[str, ...]]:
@@ -268,7 +313,75 @@ def test_readme_database_guidance_has_one_execution_context() -> None:
         (ROOT / "README.md").read_text(encoding="utf-8"),
         _load_yaml(ROOT / "docker-compose.yml"),
         (ROOT / ".gitignore").read_text(encoding="utf-8"),
+        (ROOT / "backend/entrypoint.sh").read_text(encoding="utf-8"),
     )
+
+
+def test_entrypoint_has_portable_lf_and_executable_image_contract() -> None:
+    attributes = (ROOT / ".gitattributes").read_text(encoding="utf-8")
+    mode = subprocess.run(
+        ["git", "ls-files", "-s", "backend/entrypoint.sh"],
+        cwd=ROOT,
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.split()[0]
+    _assert_entrypoint_file_contract(
+        attributes,
+        (ROOT / "backend/entrypoint.sh").read_bytes(),
+        mode,
+        (ROOT / "backend/Dockerfile").read_text(encoding="utf-8"),
+    )
+    result = subprocess.run(
+        ["git", "check-attr", "text", "eol", "--", "backend/entrypoint.sh"],
+        cwd=ROOT,
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout
+    assert "text: set" in result and "eol: lf" in result
+
+
+@pytest.mark.parametrize(
+    ("attributes", "content", "mode", "dockerfile"),
+    (
+        ("", b"#!/bin/sh\n", "100644", "RUN chmod +x /app/entrypoint.sh"),
+        ("backend/entrypoint.sh text eol=crlf\n", b"#!/bin/sh\n", "100644", "RUN chmod +x /app/entrypoint.sh"),
+        ("backend/entrypoint.sh text eol=native\n", b"#!/bin/sh\n", "100644", "RUN chmod +x /app/entrypoint.sh"),
+        ("backend/entrypoint.s text eol=lf\n", b"#!/bin/sh\n", "100644", "RUN chmod +x /app/entrypoint.sh"),
+        ("backend/entrypoint.sh text eol=lf\n", b"#!/bin/sh\r\n", "100644", "RUN chmod +x /app/entrypoint.sh"),
+        ("backend/entrypoint.sh text eol=lf\n", b"\xef\xbb\xbf#!/bin/sh\n", "100644", "RUN chmod +x /app/entrypoint.sh"),
+        ("backend/entrypoint.sh text eol=lf\n", b"#!/usr/bin/missing\n", "100644", "RUN chmod +x /app/entrypoint.sh"),
+        ("backend/entrypoint.sh text eol=lf\n", b"#!/bin/sh\n", "100755", "RUN chmod +x /app/entrypoint.sh"),
+        ("backend/entrypoint.sh text eol=lf\n", b"#!/bin/sh\n", "100644", ""),
+    ),
+)
+def test_entrypoint_file_contract_rejects_mutations(
+    attributes: str, content: bytes, mode: str, dockerfile: str
+) -> None:
+    with pytest.raises(AssertionError):
+        _assert_entrypoint_file_contract(attributes, content, mode, dockerfile)
+
+
+@pytest.mark.parametrize(
+    "mutation",
+    (
+        lambda text: text.replace("  python -m app.seed\n", ""),
+        lambda text: text.replace("    python -m app.demo.seed\n", ""),
+        lambda text: text.replace(
+            "  alembic upgrade head\n  python -m app.seed",
+            "  python -m app.seed\n  alembic upgrade head",
+        ),
+        lambda text: text.replace(
+            "    python -m app.demo.seed\n  fi",
+            "  fi\n  exec \"$@\"\n  # python -m app.demo.seed",
+        ),
+    ),
+)
+def test_entrypoint_sequence_rejects_mutations(mutation) -> None:
+    entrypoint = (ROOT / "backend/entrypoint.sh").read_text(encoding="utf-8")
+    with pytest.raises((AssertionError, ValueError)):
+        _assert_entrypoint_sequence(mutation(entrypoint))
 
 
 @pytest.mark.parametrize(
@@ -312,6 +425,45 @@ def test_readme_database_guidance_has_one_execution_context() -> None:
             lambda text: text.replace("--port 8000", "--port 8001"),
             lambda text: text,
         ),
+        (
+            lambda text: text.replace(
+                "docker compose run --rm -e DATABASE_URL=postgresql+psycopg://astra:astra@db:5432/astra_clinic backend true",
+                "",
+            ),
+            lambda text: text,
+        ),
+        (
+            lambda text: text.replace(
+                "docker compose run --rm -e DATABASE_URL=postgresql+psycopg://astra:astra@db:5432/astra_clinic backend true\npython -m uvicorn",
+                "python -m uvicorn",
+            ).replace(
+                "--app-dir backend --port 8000",
+                "--app-dir backend --port 8000\ndocker compose run --rm -e DATABASE_URL=postgresql+psycopg://astra:astra@db:5432/astra_clinic backend true",
+            ),
+            lambda text: text,
+        ),
+        (
+            lambda text: text.replace(
+                "backend true", "--entrypoint python backend -m app.demo.seed"
+            ),
+            lambda text: text,
+        ),
+        (
+            lambda text: text.replace("backend true", "backend sh /app/entrypoint.sh true"),
+            lambda text: text,
+        ),
+        (
+            lambda text: text.replace(
+                "they do not prove\nthat demo users exist",
+                "they prove that demo users exist",
+            ),
+            lambda text: text,
+        ),
+        (
+            lambda text: text.replace("APP_ENV=development", "APP_ENV=production")
+            .replace('$env:APP_ENV = "development"', '$env:APP_ENV = "production"'),
+            lambda text: text,
+        ),
     ),
 )
 def test_readme_database_guidance_rejects_context_mutations(
@@ -322,6 +474,7 @@ def test_readme_database_guidance_rejects_context_mutations(
             mutation((ROOT / "README.md").read_text(encoding="utf-8")),
             _load_yaml(ROOT / "docker-compose.yml"),
             gitignore_mutation((ROOT / ".gitignore").read_text(encoding="utf-8")),
+            (ROOT / "backend/entrypoint.sh").read_text(encoding="utf-8"),
         )
 
 

@@ -124,17 +124,14 @@ Stop this mode from the repository root with `docker compose down`.
 
 ### Option B: native backend with Compose PostgreSQL
 
-This is an alternative to Option A. From the repository root, start only the
-PostgreSQL service; this command does not start the Compose backend:
+This is an alternative to Option A. Run one complete block below from the
+repository root. Each block starts only PostgreSQL, invokes the existing
+`backend/entrypoint.sh` contract once to apply migrations, the base seed and the
+demo seed, and only then starts native Uvicorn on port `8000`.
 
-```bash
-docker compose up -d db
-docker compose run --rm --entrypoint alembic backend upgrade head
-```
-
-Then run one native block from the repository root. Both use the database's
-host-published loopback endpoint, create a host-writable synthetic document
-directory, and keep native Uvicorn on port `8000`.
+The one-shot `backend true` container exits after the canonical entrypoint has
+completed. It does not start the long-running Compose backend or publish port
+`8000`. Do not replace it with copied SQL or direct seed-module calls.
 
 Linux/bash:
 
@@ -142,9 +139,14 @@ Linux/bash:
 python -m venv .venv
 source .venv/bin/activate
 pip install -r backend/requirements.txt -r scripts/test-requirements.txt
+export APP_ENV=development
+export DEMO_MODE=true
+export REAL_DATA_ALLOWED=false
 export DATABASE_URL=postgresql+psycopg://astra:astra@127.0.0.1:5432/astra_clinic
 mkdir -p "$(pwd)/.astra-dev/documents"
 export DOCUMENT_STORAGE_PATH="$(pwd)/.astra-dev/documents"
+docker compose up -d db
+docker compose run --rm -e DATABASE_URL=postgresql+psycopg://astra:astra@db:5432/astra_clinic backend true
 python -m uvicorn app.main:app --reload --app-dir backend --port 8000
 ```
 
@@ -154,12 +156,22 @@ Windows PowerShell:
 python -m venv .venv
 .venv\Scripts\Activate.ps1
 pip install -r backend/requirements.txt -r scripts/test-requirements.txt
+$env:APP_ENV = "development"
+$env:DEMO_MODE = "true"
+$env:REAL_DATA_ALLOWED = "false"
 $env:DATABASE_URL = "postgresql+psycopg://astra:astra@127.0.0.1:5432/astra_clinic"
 $storage = Join-Path (Get-Location) ".astra-dev\documents"
 New-Item -ItemType Directory -Force -Path $storage | Out-Null
 $env:DOCUMENT_STORAGE_PATH = $storage
+docker compose up -d db
+docker compose run --rm -e DATABASE_URL=postgresql+psycopg://astra:astra@db:5432/astra_clinic backend true
 python -m uvicorn app.main:app --reload --app-dir backend --port 8000
 ```
+
+`/health` and `/ready` verify process and schema readiness; they do not prove
+that demo users exist. After the seed step, sign in with the synthetic demo
+administrator account documented in the [pilot runbook](docs/PILOT_RUNBOOK.md).
+A successful synthetic login is not evidence of production readiness.
 
 Stop native Uvicorn with `Ctrl+C`, then stop the DB-only dependency from the
 repository root with `docker compose down`. The ignored `.astra-dev/` directory
@@ -168,7 +180,9 @@ nothing you need.
 
 Development defaults are not production configuration. Never place production
 secrets or real records in `.env`, `.astra-dev/`, fixtures, logs, screenshots or
-artifacts. Neither mode is evidence of production migration or storage readiness.
+artifacts. Never run the demo seed against a production database. Neither mode
+authorizes deployment, production use, or real patient data and neither is
+evidence of production migration, authentication, or storage readiness.
 
 ## Frontend development
 
