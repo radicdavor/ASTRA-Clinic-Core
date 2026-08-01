@@ -57,6 +57,8 @@ jobs:
           python -m pytest \
             scripts/tests/test_validate_pr3_remediation_closure.py \
             scripts/tests/test_release_evidence.py \
+            scripts/tests/test_repository_governance.py \
+            scripts/tests/test_native_dev.py \
             -q
       - name: Recheck source integrity
         id: recheck-source-before-migrations
