@@ -194,6 +194,58 @@ def _load_yaml(path: Path):
     return yaml.load(path.read_text(encoding="utf-8"), Loader=UniqueKeyLoader)
 
 
+def _compose_healthcheck_invariants(compose: dict) -> dict[str, bool]:
+    services = compose.get("services", {})
+    db = services.get("db", {})
+    healthcheck = db.get("healthcheck")
+    healthcheck_valid = False
+    if isinstance(healthcheck, dict):
+        test = healthcheck.get("test")
+        if (
+            isinstance(test, list)
+            and len(test) == 2
+            and test[0] == "CMD-SHELL"
+            and isinstance(test[1], str)
+        ):
+            command = test[1]
+            sample = command.replace("$${POSTGRES_USER}", "synthetic user").replace(
+                "$${POSTGRES_DB}", "demo clinic"
+            )
+            try:
+                argv = shlex.split(sample, posix=True)
+            except ValueError:
+                argv = []
+            healthcheck_valid = (
+                argv == [
+                    "pg_isready",
+                    "-U",
+                    "synthetic user",
+                    "-d",
+                    "demo clinic",
+                ]
+                and command.count('"$${POSTGRES_USER}"') == 1
+                and command.count('"$${POSTGRES_DB}"') == 1
+                and "${POSTGRES_USER}" not in command.replace("$${POSTGRES_USER}", "")
+                and "${POSTGRES_DB}" not in command.replace("$${POSTGRES_DB}", "")
+                and "POSTGRES_PASSWORD" not in command
+                and "DATABASE_URL" not in command
+                and "astra_clinic" not in command
+                and "-W" not in argv
+            )
+    backend = services.get("backend", {})
+    dependency = backend.get("depends_on", {}).get("db")
+    return {
+        "healthcheck": healthcheck_valid,
+        "dependency": dependency == {"condition": "service_healthy"},
+    }
+
+
+def _assert_compose_healthcheck_contract(compose: dict) -> None:
+    invariants = _compose_healthcheck_invariants(compose)
+    for name, valid in invariants.items():
+        assert valid, f"Compose PostgreSQL {name} contract failed"
+
+
 def _normalize_markdown_cell(value: str) -> str:
     return re.sub(r"`([^`]*)`", r"\1", value).strip()
 
@@ -982,6 +1034,111 @@ def test_github_yaml_is_safe_and_has_unique_keys(path: Path) -> None:
 def test_duplicate_yaml_keys_are_rejected() -> None:
     with pytest.raises(yaml.constructor.ConstructorError, match="duplicate key"):
         yaml.load("version: 2\nversion: 3\n", Loader=UniqueKeyLoader)
+
+
+COMPOSE_HEALTHCHECK_MUTATIONS = (
+    "unquote-database",
+    "unquote-user",
+    "host-expand-database",
+    "host-expand-user",
+    "hardcode-database",
+    "hardcode-user",
+    "remove-database-flag",
+    "remove-user-flag",
+    "remove-healthcheck",
+    "replace-command-with-label",
+    "break-shell-semantics",
+    "include-password",
+    "remove-health-dependency",
+)
+
+
+def _mutate_compose_healthcheck(compose: dict, mutation: str) -> None:
+    db = compose["services"]["db"]
+    if mutation == "remove-healthcheck":
+        db.pop("healthcheck")
+        return
+    if mutation == "remove-health-dependency":
+        compose["services"]["backend"]["depends_on"].pop("db")
+        return
+
+    test = db["healthcheck"]["test"]
+    replacements = {
+        "unquote-database": ('"$${POSTGRES_DB}"', "$${POSTGRES_DB}"),
+        "unquote-user": ('"$${POSTGRES_USER}"', "$${POSTGRES_USER}"),
+        "host-expand-database": ("$${POSTGRES_DB}", "${POSTGRES_DB}"),
+        "host-expand-user": ("$${POSTGRES_USER}", "${POSTGRES_USER}"),
+        "hardcode-database": ('"$${POSTGRES_DB}"', "astra_clinic"),
+        "hardcode-user": ('"$${POSTGRES_USER}"', "astra"),
+        "remove-database-flag": (
+            ' -d "$${POSTGRES_DB}"',
+            ' "$${POSTGRES_DB}"',
+        ),
+        "remove-user-flag": (' -U "$${POSTGRES_USER}"', ' "$${POSTGRES_USER}"'),
+    }
+    if mutation in replacements:
+        test[1] = test[1].replace(*replacements[mutation])
+    elif mutation == "replace-command-with-label":
+        db["healthcheck"].update({"test": ["CMD-SHELL", "true"], "label": test[1]})
+    elif mutation == "break-shell-semantics":
+        test[0] = "CMD"
+    elif mutation == "include-password":
+        test[1] += ' -W "$${POSTGRES_PASSWORD}"'
+    else:
+        raise AssertionError(f"unknown Compose healthcheck mutation: {mutation}")
+
+
+def test_compose_healthcheck_quotes_container_database_identity() -> None:
+    _assert_compose_healthcheck_contract(_load_yaml(ROOT / "docker-compose.yml"))
+
+
+@pytest.mark.parametrize(
+    "case_id",
+    COMPOSE_HEALTHCHECK_MUTATIONS,
+)
+def test_compose_healthcheck_rejects_single_fault_mutations(case_id: str) -> None:
+    canonical = _load_yaml(ROOT / "docker-compose.yml")
+    assert _compose_healthcheck_invariants(canonical) == {
+        "healthcheck": True,
+        "dependency": True,
+    }
+    mutated = copy.deepcopy(canonical)
+    _mutate_compose_healthcheck(mutated, case_id)
+    assert mutated != canonical, f"{case_id} mutation was ineffective"
+    target = "dependency" if case_id == "remove-health-dependency" else "healthcheck"
+    failed = {
+        name
+        for name, valid in _compose_healthcheck_invariants(mutated).items()
+        if not valid
+    }
+    assert failed == {target}, f"{case_id} was not single-fault: {sorted(failed)}"
+    with pytest.raises(AssertionError, match=target):
+        _assert_compose_healthcheck_contract(mutated)
+
+
+def test_compose_healthcheck_mutation_controls() -> None:
+    canonical = _load_yaml(ROOT / "docker-compose.yml")
+    mutants = []
+    for mutation in COMPOSE_HEALTHCHECK_MUTATIONS:
+        mutant = copy.deepcopy(canonical)
+        _mutate_compose_healthcheck(mutant, mutation)
+        mutants.append(mutant)
+    assert all(mutant != canonical for mutant in mutants)
+    assert len({yaml.safe_dump(mutant, sort_keys=True) for mutant in mutants}) == len(mutants)
+
+    noop = copy.deepcopy(canonical)
+    assert noop == canonical
+    _assert_compose_healthcheck_contract(noop)
+
+    compound = copy.deepcopy(canonical)
+    _mutate_compose_healthcheck(compound, COMPOSE_HEALTHCHECK_MUTATIONS[0])
+    _mutate_compose_healthcheck(compound, COMPOSE_HEALTHCHECK_MUTATIONS[-1])
+    failed = {
+        name
+        for name, valid in _compose_healthcheck_invariants(compound).items()
+        if not valid
+    }
+    assert failed == {"healthcheck", "dependency"}
 
 
 def test_ci_collects_native_development_safety_contract() -> None:
