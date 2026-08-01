@@ -4,7 +4,9 @@ import re
 import shlex
 import subprocess
 import sys
+from dataclasses import dataclass
 from pathlib import Path
+from typing import Callable
 
 import pytest
 import yaml
@@ -25,6 +27,94 @@ NATIVE_DEV_NODE_IDS = {
     },
     f"{NATIVE_DEV_TEST_PATH}::test_seed_keeps_database_url_out_of_command_line",
 }
+
+
+@dataclass(frozen=True)
+class ReadmeMutationCase:
+    case_id: str
+    target_invariant: str
+    mutate_readme: Callable[[str], str]
+    mutate_gitignore: Callable[[str], str] = lambda text: text
+
+
+README_MUTATION_CASES = (
+    ReadmeMutationCase(
+        "mode-full-compose-in-native",
+        "mode_separation",
+        lambda text: text.replace(
+            "### Option B: native backend with Compose PostgreSQL",
+            "### Option B: native backend with Compose PostgreSQL"
+            "\n\n```bash\ndocker compose up --build\n```",
+        ),
+    ),
+    ReadmeMutationCase(
+        "db-service-unbounded-up",
+        "db_only",
+        lambda text: text.replace("docker compose up -d db", "docker compose up -d"),
+    ),
+    ReadmeMutationCase(
+        "db-service-backend-up",
+        "db_only",
+        lambda text: text.replace(
+            "docker compose up -d db", "docker compose up -d backend"
+        ),
+    ),
+    ReadmeMutationCase(
+        "storage-container-path",
+        "storage",
+        lambda text: text.replace(".astra-dev/documents", "/app/data/documents"),
+    ),
+    ReadmeMutationCase(
+        "storage-unignored-root",
+        "storage",
+        lambda text: text,
+        lambda text: text.replace(".astra-dev/", ""),
+    ),
+    ReadmeMutationCase(
+        "port-native-8001",
+        "port",
+        lambda text: text.replace(
+            "native Uvicorn on port `8000`", "native Uvicorn on port `8001`"
+        ),
+    ),
+    ReadmeMutationCase(
+        "environment-real-data-authorized",
+        "environment",
+        lambda text: text.replace(
+            "Neither mode\nauthorizes deployment, production use, or real patient data",
+            "Neither mode\nauthorizes deployment or production use; real patient data is allowed",
+        ),
+    ),
+    ReadmeMutationCase(
+        "ordering-seed-after-serve",
+        "ordering",
+        lambda text: text.replace(
+            "python scripts/native_dev.py seed\npython scripts/native_dev.py serve",
+            "python scripts/native_dev.py serve\npython scripts/native_dev.py seed",
+        ),
+    ),
+    ReadmeMutationCase(
+        "ssot-execute-dotenv",
+        "ssot",
+        lambda text: text.replace(
+            "instead of executing `.env`", "by executing `.env` as shell code"
+        ),
+    ),
+    ReadmeMutationCase(
+        "readiness-claims-demo-users",
+        "readiness",
+        lambda text: text.replace(
+            "they do not prove\nthat demo users exist", "they prove that demo users exist"
+        ),
+    ),
+    ReadmeMutationCase(
+        "shell-bash-labelled-powershell",
+        "shells",
+        lambda text: text.replace(
+            "Linux/bash:\n\n```bash", "Linux/bash:\n\n```powershell", 1
+        ),
+    ),
+)
 
 
 class UniqueKeyLoader(yaml.SafeLoader):
@@ -176,6 +266,9 @@ def _assert_database_guidance(
     native_commands = {
         line for _, block in native_blocks for line in block if line
     }
+    invariants = _database_guidance_invariants(readme, gitignore)
+    for invariant, valid in invariants.items():
+        assert valid, f"README native {invariant} contract failed"
     services = compose["services"]
 
     assert {"db", "backend"} <= set(services), "Compose DB/backend services are required"
@@ -193,7 +286,6 @@ def _assert_database_guidance(
     ), "native mode must start only the DB service"
     assert "docker compose up -d backend" not in native_commands
     seed_command = "python scripts/native_dev.py seed"
-    assert seed_command in native_commands
     assert not any(
         "alembic upgrade head" in block and "cd backend" in block
         for _, block in native_blocks
@@ -211,22 +303,140 @@ def _assert_database_guidance(
         assert "DATABASE_URL=" not in joined and "@db:" not in joined
         assert "cd backend" not in block
         assert "python scripts/native_dev.py serve" in joined
-        assert "/app/data/documents" not in joined
-        assert block.index(seed_command) < next(
-            index for index, line in enumerate(block) if "native_dev.py serve" in line
-        )
         if language == "bash":
             assert "$env:" not in joined and "New-Item" not in joined
         else:
             assert "export " not in joined and "$(pwd)" not in joined
     assert "`docker compose down`" in native
-    assert ".astra-dev/" in gitignore.splitlines()
-    assert "`.astra-dev/documents` directory" in native
     assert "instead of executing `.env`" in native
     assert "they do not prove\nthat demo users exist" in native
     assert "successful synthetic login is not evidence of production readiness" in native
     assert "never run the demo seed against a production database" in native.lower()
     _assert_entrypoint_sequence(entrypoint)
+
+
+def _database_guidance_invariants(readme: str, gitignore: str) -> dict[str, bool]:
+    native_heading = "### Option B: native backend with Compose PostgreSQL"
+    if native_heading not in readme or "## Frontend development" not in readme:
+        return {
+            name: False
+            for name in (
+                "mode_separation",
+                "db_only",
+                "storage",
+                "port",
+                "environment",
+                "seed",
+                "ordering",
+                "ssot",
+                "readiness",
+                "shells",
+            )
+        }
+    native = readme.split(native_heading, 1)[1].split("## Frontend development", 1)[0]
+    native_blocks = _markdown_fenced_blocks_from_text(native)
+    native_commands = {line for _, block in native_blocks for line in block if line}
+    serve_blocks = [
+        block
+        for _, block in native_blocks
+        if any("native_dev.py serve" in line for line in block)
+    ]
+    seed_command = "python scripts/native_dev.py seed"
+    serve_command = "python scripts/native_dev.py serve"
+    seed_present = bool(serve_blocks) and all(seed_command in block for block in serve_blocks)
+    ordering_valid = seed_present and all(
+        block.index(seed_command) < block.index(serve_command) for block in serve_blocks
+    )
+    joined_serve_blocks = "\n".join("\n".join(block) for block in serve_blocks)
+    return {
+        "mode_separation": (
+            "This is an alternative to Option A" in native
+            and "docker compose up --build" not in native_commands
+        ),
+        "db_only": (
+            "docker compose up -d db" in native_commands
+            and "docker compose up -d backend" not in native_commands
+            and not any(
+                re.fullmatch(r"docker compose up(?:\s+-d)?", line)
+                for line in native_commands
+            )
+        ),
+        "storage": (
+            "`.astra-dev/documents` directory" in native
+            and ".astra-dev/" in gitignore.splitlines()
+            and "/app/data/documents" not in joined_serve_blocks
+        ),
+        "port": (
+            "native Uvicorn on port `8000`" in native
+            and "native Uvicorn on port `8001`" not in native
+        ),
+        "environment": (
+            "Never run the demo seed against a production database" in native
+            and "Neither mode\nauthorizes deployment, production use, or real patient data"
+            in native
+        ),
+        "seed": seed_present,
+        "ordering": ordering_valid,
+        "ssot": "instead of executing `.env`" in native,
+        "readiness": "they do not prove\nthat demo users exist" in native,
+        "shells": (
+            {
+                language
+                for language, block in native_blocks
+                if any("native_dev.py serve" in line for line in block)
+            }
+            == {"bash", "powershell"}
+        ),
+    }
+
+
+def _evaluate_readme_mutant(
+    case: ReadmeMutationCase,
+    canonical: str,
+    canonical_gitignore: str,
+) -> dict[str, object]:
+    mutated = case.mutate_readme(canonical)
+    mutated_gitignore = case.mutate_gitignore(canonical_gitignore)
+    content_changed = (mutated, mutated_gitignore) != (canonical, canonical_gitignore)
+    semantic_changed = (
+        "".join(mutated.split()), "".join(mutated_gitignore.split())
+    ) != ("".join(canonical.split()), "".join(canonical_gitignore.split()))
+    invariants = _database_guidance_invariants(mutated, mutated_gitignore)
+    target_failed = not invariants[case.target_invariant]
+    unrelated_failed = sorted(
+        name
+        for name, valid in invariants.items()
+        if name != case.target_invariant and not valid
+    )
+    full_validator_failed = False
+    failure = ""
+    try:
+        _assert_database_guidance(
+            mutated,
+            _load_yaml(ROOT / "docker-compose.yml"),
+            mutated_gitignore,
+            (ROOT / "backend/entrypoint.sh").read_text(encoding="utf-8"),
+        )
+    except AssertionError as exc:
+        full_validator_failed = True
+        failure = str(exc)
+    return {
+        "case_id": case.case_id,
+        "target_invariant": case.target_invariant,
+        "content_changed": content_changed,
+        "semantic_changed": semantic_changed,
+        "target_failed": target_failed,
+        "unrelated_failed": unrelated_failed,
+        "full_validator_failed": full_validator_failed,
+        "failure_attributed_to_target": (
+            content_changed
+            and target_failed
+            and not unrelated_failed
+            and full_validator_failed
+            and case.target_invariant in failure
+        ),
+        "mutant": (mutated, mutated_gitignore),
+    }
 
 
 def _assert_entrypoint_sequence(entrypoint: str) -> None:
@@ -530,100 +740,97 @@ def test_entrypoint_sequence_rejects_mutations(mutation) -> None:
         _assert_entrypoint_sequence(mutation(entrypoint))
 
 
-@pytest.mark.parametrize(
-    ("mutation", "gitignore_mutation"),
-    (
-        (
-            lambda text: text.replace(
-                "### Option B: native backend with Compose PostgreSQL",
-                "### Option B: native backend with Compose PostgreSQL\n\n```bash\ndocker compose up --build\n```",
-            ),
-            lambda text: text,
+def test_readme_database_guidance_baseline() -> None:
+    _assert_database_guidance(
+        (ROOT / "README.md").read_text(encoding="utf-8"),
+        _load_yaml(ROOT / "docker-compose.yml"),
+        (ROOT / ".gitignore").read_text(encoding="utf-8"),
+        (ROOT / "backend/entrypoint.sh").read_text(encoding="utf-8"),
+    )
+
+
+@pytest.mark.parametrize("case", README_MUTATION_CASES, ids=lambda case: case.case_id)
+def test_readme_database_guidance_rejects_single_fault_mutations(case) -> None:
+    result = _evaluate_readme_mutant(
+        case,
+        (ROOT / "README.md").read_text(encoding="utf-8"),
+        (ROOT / ".gitignore").read_text(encoding="utf-8"),
+    )
+    assert result["content_changed"], f"{case.case_id} was an ineffective mutation"
+    assert result["semantic_changed"], f"{case.case_id} changed only whitespace"
+    assert result["target_failed"], f"{case.case_id} did not break {case.target_invariant}"
+    assert result["unrelated_failed"] == [], (
+        f"{case.case_id} also broke {result['unrelated_failed']}"
+    )
+    assert result["full_validator_failed"]
+    assert result["failure_attributed_to_target"]
+
+
+def test_readme_mutation_noop_control_is_not_a_killed_mutant() -> None:
+    canonical = (ROOT / "README.md").read_text(encoding="utf-8")
+    gitignore = (ROOT / ".gitignore").read_text(encoding="utf-8")
+    result = _evaluate_readme_mutant(
+        ReadmeMutationCase("noop-storage", "storage", lambda text: text),
+        canonical,
+        gitignore,
+    )
+    assert result["content_changed"] is False
+    assert result["semantic_changed"] is False
+    assert result["target_failed"] is False
+    assert result["full_validator_failed"] is False
+    assert result["failure_attributed_to_target"] is False
+
+
+def test_readme_mutation_matrix_has_unique_effective_outputs() -> None:
+    canonical = (ROOT / "README.md").read_text(encoding="utf-8")
+    gitignore = (ROOT / ".gitignore").read_text(encoding="utf-8")
+    results = [
+        _evaluate_readme_mutant(case, canonical, gitignore)
+        for case in README_MUTATION_CASES
+    ]
+    case_ids = [case.case_id for case in README_MUTATION_CASES]
+    outputs = [result["mutant"] for result in results]
+    assert len(case_ids) == len(set(case_ids))
+    assert len(outputs) == len(set(outputs))
+    assert all(result["content_changed"] for result in results)
+    assert all(result["semantic_changed"] for result in results)
+    assert all(case.target_invariant for case in README_MUTATION_CASES)
+
+
+def test_readme_mutation_harness_rejects_compound_faults() -> None:
+    canonical = (ROOT / "README.md").read_text(encoding="utf-8")
+    gitignore = (ROOT / ".gitignore").read_text(encoding="utf-8")
+    compound = ReadmeMutationCase(
+        "compound-storage-seed",
+        "storage",
+        lambda text: text.replace(".astra-dev/documents", "/app/data/documents").replace(
+            "python scripts/native_dev.py seed", ""
         ),
-        (
-            lambda text: text.replace("docker compose up -d db", "docker compose up -d"),
-            lambda text: text,
+    )
+    result = _evaluate_readme_mutant(compound, canonical, gitignore)
+    assert result["content_changed"] is True
+    assert result["target_failed"] is True
+    assert result["unrelated_failed"] == ["ordering", "seed"]
+    assert result["full_validator_failed"] is True
+    assert result["failure_attributed_to_target"] is False
+
+
+def test_old_common_seed_kill_switch_cannot_claim_targeted_coverage() -> None:
+    canonical = (ROOT / "README.md").read_text(encoding="utf-8")
+    gitignore = (ROOT / ".gitignore").read_text(encoding="utf-8")
+    legacy_coupled = ReadmeMutationCase(
+        "legacy-noop-storage-plus-seed-removal",
+        "storage",
+        lambda text: text.replace("obsolete storage command", "replacement").replace(
+            "python scripts/native_dev.py seed", ""
         ),
-        (
-            lambda text: text.replace("docker compose up -d db", "docker compose up -d backend"),
-            lambda text: text,
-        ),
-        (
-            lambda text: text.replace("export DOCUMENT_STORAGE_PATH=\"$(pwd)/.astra-dev/documents\"", "")
-            .replace("$env:DOCUMENT_STORAGE_PATH = $storage", ""),
-            lambda text: text,
-        ),
-        (
-            lambda text: text.replace(".astra-dev/documents", "/app/data/documents")
-            .replace(".astra-dev\\documents", "/app/data/documents"),
-            lambda text: text,
-        ),
-        (
-            lambda text: text.replace("@127.0.0.1:5432/astra_clinic", "@db:5432/astra_clinic"),
-            lambda text: text,
-        ),
-        (lambda text: text, lambda text: text.replace(".astra-dev/", "")),
-        (
-            lambda text: text.replace("mkdir -p \"$(pwd)/.astra-dev/documents\"", "$storage = Join-Path (Get-Location) '.astra-dev'", 1),
-            lambda text: text,
-        ),
-        (
-            lambda text: text.replace("--port 8000", "--port 8001"),
-            lambda text: text,
-        ),
-        (
-            lambda text: text.replace(
-                "docker compose run --rm -e DATABASE_URL=postgresql+psycopg://astra:astra@db:5432/astra_clinic backend true",
-                "",
-            ),
-            lambda text: text,
-        ),
-        (
-            lambda text: text.replace(
-                "docker compose run --rm -e DATABASE_URL=postgresql+psycopg://astra:astra@db:5432/astra_clinic backend true\npython -m uvicorn",
-                "python -m uvicorn",
-            ).replace(
-                "--app-dir backend --port 8000",
-                "--app-dir backend --port 8000\ndocker compose run --rm -e DATABASE_URL=postgresql+psycopg://astra:astra@db:5432/astra_clinic backend true",
-            ),
-            lambda text: text,
-        ),
-        (
-            lambda text: text.replace(
-                "backend true", "--entrypoint python backend -m app.demo.seed"
-            ),
-            lambda text: text,
-        ),
-        (
-            lambda text: text.replace("backend true", "backend sh /app/entrypoint.sh true"),
-            lambda text: text,
-        ),
-        (
-            lambda text: text.replace(
-                "they do not prove\nthat demo users exist",
-                "they prove that demo users exist",
-            ),
-            lambda text: text,
-        ),
-        (
-            lambda text: text.replace("APP_ENV=development", "APP_ENV=production")
-            .replace('$env:APP_ENV = "development"', '$env:APP_ENV = "production"'),
-            lambda text: text,
-        ),
-    ),
-)
-def test_readme_database_guidance_rejects_context_mutations(
-    mutation, gitignore_mutation
-) -> None:
-    original = (ROOT / "README.md").read_text(encoding="utf-8")
-    mutated = mutation(original).replace("python scripts/native_dev.py seed", "")
-    with pytest.raises(AssertionError):
-        _assert_database_guidance(
-            mutated,
-            _load_yaml(ROOT / "docker-compose.yml"),
-            gitignore_mutation((ROOT / ".gitignore").read_text(encoding="utf-8")),
-            (ROOT / "backend/entrypoint.sh").read_text(encoding="utf-8"),
-        )
+    )
+    result = _evaluate_readme_mutant(legacy_coupled, canonical, gitignore)
+    assert result["content_changed"] is True
+    assert result["target_failed"] is False
+    assert result["unrelated_failed"] == ["ordering", "seed"]
+    assert result["full_validator_failed"] is True
+    assert result["failure_attributed_to_target"] is False
 
 
 def test_canonical_rpo_rto_documents_are_consistent() -> None:
