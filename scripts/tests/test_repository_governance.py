@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import re
+import shlex
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -10,6 +12,19 @@ import yaml
 
 ROOT = Path(__file__).resolve().parents[2]
 ALLOWED_CODEOWNERS = {"@radicdavor"}
+NATIVE_DEV_TEST_PATH = "scripts/tests/test_native_dev.py"
+NATIVE_DEV_NODE_IDS = {
+    f"{NATIVE_DEV_TEST_PATH}::test_resolved_identity_percent_encodes_without_leaking",
+    *{
+        f"{NATIVE_DEV_TEST_PATH}::test_resolved_identity_rejects_unsafe_config[bad{index}]"
+        for index in range(5)
+    },
+    *{
+        f"{NATIVE_DEV_TEST_PATH}::test_database_url_rejects_target_overrides[{host}]"
+        for host in ("remote", "db,remote", "127.0.0.1?host=remote")
+    },
+    f"{NATIVE_DEV_TEST_PATH}::test_seed_keeps_database_url_out_of_command_line",
+}
 
 
 class UniqueKeyLoader(yaml.SafeLoader):
@@ -38,6 +53,66 @@ UniqueKeyLoader.add_constructor(
 
 def _load_yaml(path: Path):
     return yaml.load(path.read_text(encoding="utf-8"), Loader=UniqueKeyLoader)
+
+
+def _assert_native_dev_ci_contract(workflow: dict) -> None:
+    events = workflow.get("on", workflow.get(True))
+    assert isinstance(events, dict)
+    assert {"push", "pull_request"} <= set(events)
+    required_paths = {
+        "scripts/native_dev.py",
+        NATIVE_DEV_TEST_PATH,
+        ".github/workflows/ci.yml",
+        "scripts/tests/test_repository_governance.py",
+    }
+    for event in ("push", "pull_request"):
+        event_config = events[event]
+        if isinstance(event_config, dict) and "paths" in event_config:
+            assert required_paths <= set(event_config["paths"])
+
+    backend = workflow["jobs"]["backend"]
+    assert backend.get("name", "backend") == "backend"
+    steps = backend["steps"]
+    test_steps = [step for step in steps if step.get("name") == "Test remediation evidence validator"]
+    assert len(test_steps) == 1
+    step = test_steps[0]
+    assert "if" not in step and not step.get("continue-on-error", False)
+    assert step.get("working-directory", ".") in (".", "${{ github.workspace }}")
+
+    raw_command = step.get("run", "")
+    assert not any(token in raw_command for token in ("&&", "||", ";", "exit ", "if "))
+    assert not any(line.lstrip().startswith("#") for line in raw_command.splitlines())
+    command = re.sub(r"\\\s*\n", " ", raw_command)
+    tokens = shlex.split(command, posix=True)
+    assert tokens[:3] == ["python", "-m", "pytest"]
+    pytest_arguments = tokens[3:]
+    assert NATIVE_DEV_TEST_PATH in tokens
+    assert tokens.count(NATIVE_DEV_TEST_PATH) == 1
+    assert not any(
+        token == "-k" or token.startswith("-k=") for token in pytest_arguments
+    )
+    assert not any(
+        token == "-m" or token.startswith("-m=") for token in pytest_arguments
+    )
+    assert not any(
+        token == "--ignore" or token.startswith("--ignore=")
+        for token in pytest_arguments
+    )
+
+
+def _collect_native_dev_node_ids() -> list[str]:
+    result = subprocess.run(
+        [sys.executable, "-m", "pytest", NATIVE_DEV_TEST_PATH, "--collect-only", "-q"],
+        cwd=ROOT,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    return [
+        line.strip()
+        for line in result.stdout.splitlines()
+        if line.startswith(f"{NATIVE_DEV_TEST_PATH}::")
+    ]
 
 
 def _relative_links(path: Path) -> list[str]:
@@ -244,6 +319,90 @@ def test_github_yaml_is_safe_and_has_unique_keys(path: Path) -> None:
 def test_duplicate_yaml_keys_are_rejected() -> None:
     with pytest.raises(yaml.constructor.ConstructorError, match="duplicate key"):
         yaml.load("version: 2\nversion: 3\n", Loader=UniqueKeyLoader)
+
+
+def test_ci_collects_native_development_safety_contract() -> None:
+    workflow = _load_yaml(ROOT / ".github/workflows/ci.yml")
+    _assert_native_dev_ci_contract(workflow)
+    node_ids = _collect_native_dev_node_ids()
+    assert len(node_ids) == len(set(node_ids)), "native-dev collection has duplicates"
+    assert set(node_ids) == NATIVE_DEV_NODE_IDS
+
+
+@pytest.mark.parametrize(
+    "mutation",
+    (
+        "remove-target",
+        "typo-target",
+        "ignore-target",
+        "deselect-k",
+        "exclude-marker",
+        "comment-only",
+        "step-name-only",
+        "dead-branch",
+        "noop",
+        "push-only",
+        "pull-request-only",
+        "rename-check",
+        "missing-native-path-filter",
+        "missing-test-path-filter",
+    ),
+)
+def test_native_development_ci_contract_rejects_mutations(mutation: str) -> None:
+    workflow = _load_yaml(ROOT / ".github/workflows/ci.yml")
+    events = workflow.get("on", workflow.get(True))
+    backend = workflow["jobs"]["backend"]
+    step = next(
+        item
+        for item in backend["steps"]
+        if item.get("name") == "Test remediation evidence validator"
+    )
+    if mutation == "remove-target":
+        step["run"] = step["run"].replace(f"{NATIVE_DEV_TEST_PATH} \\\n", "")
+    elif mutation == "typo-target":
+        step["run"] = step["run"].replace(NATIVE_DEV_TEST_PATH, "scripts/tests/test_native_de.py")
+    elif mutation == "ignore-target":
+        step["run"] += f" --ignore={NATIVE_DEV_TEST_PATH}"
+    elif mutation == "deselect-k":
+        step["run"] += " -k 'not native_dev'"
+    elif mutation == "exclude-marker":
+        step["run"] += " -m 'not native_dev'"
+    elif mutation == "comment-only":
+        step["run"] = "# " + NATIVE_DEV_TEST_PATH + "\npython -m pytest scripts/tests/test_repository_governance.py -q"
+    elif mutation == "step-name-only":
+        step["name"] += f" {NATIVE_DEV_TEST_PATH}"
+        step["run"] = step["run"].replace(NATIVE_DEV_TEST_PATH, "")
+    elif mutation == "dead-branch":
+        step["run"] = "exit 0\n" + step["run"]
+    elif mutation == "noop":
+        step["run"] = f"echo {NATIVE_DEV_TEST_PATH}"
+    elif mutation == "push-only":
+        events.pop("pull_request")
+    elif mutation == "pull-request-only":
+        events.pop("push")
+    elif mutation == "rename-check":
+        backend["name"] = "backend-renamed"
+    elif mutation == "missing-native-path-filter":
+        events["push"] = {"paths": [NATIVE_DEV_TEST_PATH, ".github/workflows/ci.yml", "scripts/tests/test_repository_governance.py"]}
+    elif mutation == "missing-test-path-filter":
+        events["pull_request"] = {"paths": ["scripts/native_dev.py", ".github/workflows/ci.yml", "scripts/tests/test_repository_governance.py"]}
+    with pytest.raises((AssertionError, KeyError, ValueError)):
+        _assert_native_dev_ci_contract(workflow)
+
+
+@pytest.mark.parametrize(
+    "node_ids",
+    (
+        [],
+        sorted(NATIVE_DEV_NODE_IDS)[:-1],
+        [*sorted(NATIVE_DEV_NODE_IDS), sorted(NATIVE_DEV_NODE_IDS)[0]],
+    ),
+)
+def test_native_development_collection_rejects_incomplete_or_duplicate_nodes(
+    node_ids: list[str],
+) -> None:
+    with pytest.raises(AssertionError):
+        assert len(node_ids) == len(set(node_ids)) and set(node_ids) == NATIVE_DEV_NODE_IDS
 
 
 def test_codeowners_uses_only_known_owner_identities() -> None:
