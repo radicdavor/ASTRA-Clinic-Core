@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import ast
+import copy
 import re
 import shlex
 import subprocess
@@ -131,6 +132,25 @@ class UniqueKeyLoader(yaml.SafeLoader):
     pass
 
 
+@dataclass(frozen=True, order=True)
+class DependencyInventoryRow:
+    ecosystem: str
+    directory: str
+    surfaces: tuple[str, ...]
+    interval: str
+    day: str | None
+
+
+DEPENDABOT_INVENTORY_HEADING = "### Canonical Dependabot inventory"
+DEPENDABOT_INVENTORY_HEADER = (
+    "ecosystem",
+    "directory",
+    "tracked surface/manifests",
+    "interval",
+    "day",
+)
+
+
 def _construct_mapping(loader: UniqueKeyLoader, node: yaml.MappingNode, deep: bool = False):
     mapping = {}
     for key_node, value_node in node.value:
@@ -153,6 +173,129 @@ UniqueKeyLoader.add_constructor(
 
 def _load_yaml(path: Path):
     return yaml.load(path.read_text(encoding="utf-8"), Loader=UniqueKeyLoader)
+
+
+def _normalize_markdown_cell(value: str) -> str:
+    return re.sub(r"`([^`]*)`", r"\1", value).strip()
+
+
+def _configured_dependency_surfaces(ecosystem: str, directory: str) -> tuple[str, ...]:
+    relative_directory = directory.lstrip("/")
+    root = ROOT / relative_directory if relative_directory else ROOT
+    if ecosystem == "pip":
+        candidates = sorted(
+            path.relative_to(ROOT).as_posix()
+            for pattern in ("requirements*.txt", "*requirements*.txt", "pyproject.toml", "Pipfile", "Pipfile.lock")
+            for path in root.glob(pattern)
+            if path.is_file()
+        )
+        assert candidates, f"pip directory {directory!r} has no supported manifest"
+        return tuple(dict.fromkeys(candidates))
+    if ecosystem == "npm":
+        candidates = [root / "package.json", root / "package-lock.json"]
+        assert candidates[0].is_file(), f"npm directory {directory!r} has no package.json"
+        return tuple(sorted(path.relative_to(ROOT).as_posix() for path in candidates if path.is_file()))
+    if ecosystem == "github-actions":
+        assert directory == "/"
+        assert any((ROOT / ".github" / "workflows").glob("*.yml"))
+        return (".github/workflows/*.yml",)
+    raise AssertionError(f"unsupported Dependabot ecosystem: {ecosystem!r}")
+
+
+def _configured_dependabot_inventory(config: dict) -> tuple[DependencyInventoryRow, ...]:
+    rows = []
+    seen = set()
+    for entry in config["updates"]:
+        identity = (entry["package-ecosystem"], entry["directory"])
+        assert identity not in seen, f"duplicate Dependabot identity: {identity!r}"
+        seen.add(identity)
+        schedule = entry["schedule"]
+        rows.append(
+            DependencyInventoryRow(
+                ecosystem=identity[0],
+                directory=identity[1],
+                surfaces=_configured_dependency_surfaces(*identity),
+                interval=schedule["interval"].lower(),
+                day=schedule.get("day", None).lower() if schedule.get("day") else None,
+            )
+        )
+    return tuple(sorted(rows))
+
+
+def _documented_dependabot_inventory(markdown: str) -> tuple[DependencyInventoryRow, ...]:
+    without_comments = re.sub(r"<!--.*?-->", "", markdown, flags=re.DOTALL)
+    assert without_comments.count(DEPENDABOT_INVENTORY_HEADING) == 1
+    section = without_comments.split(DEPENDABOT_INVENTORY_HEADING, 1)[1]
+    section = re.split(r"\n#{1,3} ", section, maxsplit=1)[0]
+    table_lines = [line.strip() for line in section.splitlines() if line.strip().startswith("|")]
+    assert len(table_lines) >= 3, "canonical Dependabot inventory table is missing"
+    assert sum(1 for line in section.splitlines() if line.strip().startswith("|")) == len(table_lines)
+    cells = [tuple(_normalize_markdown_cell(cell) for cell in line.strip("|").split("|")) for line in table_lines]
+    assert tuple(cell.lower() for cell in cells[0]) == DEPENDABOT_INVENTORY_HEADER
+    assert all(re.fullmatch(r"-+", cell.replace(":", "")) for cell in cells[1])
+    rows = []
+    seen = set()
+    for raw in cells[2:]:
+        assert len(raw) == len(DEPENDABOT_INVENTORY_HEADER)
+        assert all(raw), "canonical Dependabot inventory has an empty cell"
+        ecosystem, directory, surfaces, interval, day = raw
+        identity = (ecosystem.lower(), directory)
+        assert identity not in seen, f"duplicate documented Dependabot identity: {identity!r}"
+        seen.add(identity)
+        rows.append(
+            DependencyInventoryRow(
+                ecosystem=identity[0],
+                directory=identity[1],
+                surfaces=tuple(sorted(part.strip() for part in surfaces.split(";") if part.strip())),
+                interval=interval.lower(),
+                day=None if day.lower() in {"none", "null", "-"} else day.lower(),
+            )
+        )
+    assert rows
+    return tuple(sorted(rows))
+
+
+def _dependency_inventory_dimensions(config: dict, markdown: str) -> dict[str, bool]:
+    configured = _configured_dependabot_inventory(config)
+    documented = _documented_dependabot_inventory(markdown)
+    configured_by_id = {(row.ecosystem, row.directory): row for row in configured}
+    documented_by_id = {(row.ecosystem, row.directory): row for row in documented}
+    configured_ids = set(configured_by_id)
+    documented_ids = set(documented_by_id)
+    shared = configured_ids & documented_ids
+    tracked = set(
+        subprocess.run(
+            ["git", "ls-files"], cwd=ROOT, check=True, capture_output=True, text=True
+        ).stdout.splitlines()
+    )
+    surfaces_valid = all(
+        configured_by_id[identity].surfaces == documented_by_id[identity].surfaces
+        and all(
+            surface == ".github/workflows/*.yml"
+            or ((ROOT / surface).is_file() and surface in tracked)
+            for surface in documented_by_id[identity].surfaces
+        )
+        for identity in shared
+    )
+    return {
+        "identities": configured_ids == documented_ids,
+        "surfaces": surfaces_valid and configured_ids == documented_ids,
+        "schedule": configured_ids == documented_ids
+        and all(
+            (configured_by_id[identity].interval, configured_by_id[identity].day)
+            == (documented_by_id[identity].interval, documented_by_id[identity].day)
+            for identity in shared
+        ),
+        "policy": "Dependabot never merges automatically" in markdown
+        and "human review" in markdown
+        and "pre-approved" in markdown,
+    }
+
+
+def _assert_dependency_inventory_parity(config: dict, markdown: str) -> None:
+    dimensions = _dependency_inventory_dimensions(config, markdown)
+    failed = sorted(name for name, valid in dimensions.items() if not valid)
+    assert not failed, f"Dependabot inventory parity failed: {failed}"
 
 
 def _assert_native_dev_ci_contract(workflow: dict) -> None:
@@ -1106,3 +1249,226 @@ def test_dependabot_covers_real_ecosystems_without_automerge() -> None:
     assert all(entry["schedule"]["interval"] == "weekly" for entry in updates)
     assert "automerge" not in raw.lower()
     assert (ROOT / "scripts" / "test-requirements.txt").is_file()
+
+
+def test_dependabot_documentation_inventory_matches_configuration_bidirectionally() -> None:
+    config = _load_yaml(ROOT / ".github" / "dependabot.yml")
+    markdown = (ROOT / "docs" / "dependency-management.md").read_text(encoding="utf-8")
+    configured = _configured_dependabot_inventory(config)
+    documented = _documented_dependabot_inventory(markdown)
+
+    _assert_dependency_inventory_parity(config, markdown)
+    assert configured == documented
+    assert DependencyInventoryRow(
+        "pip",
+        "/scripts",
+        ("scripts/test-requirements.txt",),
+        "weekly",
+        "monday",
+    ) in configured
+
+
+def test_dependabot_manifest_discovery_is_nonrecursive_and_git_tracked() -> None:
+    config = _load_yaml(ROOT / ".github" / "dependabot.yml")
+    rows = _configured_dependabot_inventory(config)
+    tracked = set(
+        subprocess.run(
+            ["git", "ls-files"], cwd=ROOT, check=True, capture_output=True, text=True
+        ).stdout.splitlines()
+    )
+    expected = {
+        ("npm", "/frontend"): ("frontend/package-lock.json", "frontend/package.json"),
+        ("pip", "/backend"): ("backend/requirements.txt",),
+        ("pip", "/scripts"): ("scripts/test-requirements.txt",),
+        ("github-actions", "/"): (".github/workflows/*.yml",),
+    }
+    assert {(row.ecosystem, row.directory): row.surfaces for row in rows} == expected
+    for row in rows:
+        for surface in row.surfaces:
+            if surface != ".github/workflows/*.yml":
+                assert surface in tracked
+                assert (ROOT / surface).is_file()
+
+
+@pytest.mark.parametrize(
+    ("case_id", "old", "new", "failed_dimensions"),
+    [
+        (
+            "missing-scripts-row",
+            "| `pip` | `/scripts` | `scripts/test-requirements.txt` | Weekly | Monday |\n",
+            "",
+            {"identities", "surfaces", "schedule"},
+        ),
+        ("wrong-scripts-directory", "| `/scripts` |", "| `/script` |", {"identities", "surfaces", "schedule"}),
+        ("wrong-scripts-ecosystem", "| `pip` | `/scripts` |", "| `npm` | `/scripts` |", {"identities", "surfaces", "schedule"}),
+        (
+            "wrong-scripts-manifest",
+            "| `pip` | `/scripts` | `scripts/test-requirements.txt` |",
+            "| `pip` | `/scripts` | `scripts/requirements.txt` |",
+            {"surfaces"},
+        ),
+        (
+            "nonexistent-manifest",
+            "| `pip` | `/scripts` | `scripts/test-requirements.txt` |",
+            "| `pip` | `/scripts` | `scripts/missing-requirements.txt` |",
+            {"surfaces"},
+        ),
+        ("wrong-interval", "| Weekly | Monday |", "| Daily | Monday |", {"schedule"}),
+        ("wrong-day", "| Weekly | Monday |", "| Weekly | Tuesday |", {"schedule"}),
+        (
+            "missing-backend-row",
+            "| `pip` | `/backend` | `backend/requirements.txt` | Weekly | Monday |\n",
+            "",
+            {"identities", "surfaces", "schedule"},
+        ),
+        (
+            "missing-npm-row",
+            "| `npm` | `/frontend` | `frontend/package.json`; `frontend/package-lock.json` | Weekly | Monday |\n",
+            "",
+            {"identities", "surfaces", "schedule"},
+        ),
+        (
+            "missing-actions-row",
+            "| `github-actions` | `/` | `.github/workflows/*.yml` | Weekly | Monday |\n",
+            "",
+            {"identities", "surfaces", "schedule"},
+        ),
+        (
+            "extra-documentation-entry",
+            "| `pip` | `/scripts` | `scripts/test-requirements.txt` | Weekly | Monday |",
+            "| `pip` | `/scripts` | `scripts/test-requirements.txt` | Weekly | Monday |\n| `pip` | `/tooling` | `tooling/requirements.txt` | Weekly | Monday |",
+            {"identities", "surfaces", "schedule"},
+        ),
+        ("false-automerge", "Dependabot never merges automatically", "Dependabot merges automatically", {"policy"}),
+        ("remove-owner-review", "human review", "automated approval", {"policy"}),
+    ],
+)
+def test_dependabot_documentation_inventory_rejects_single_fault_mutations(
+    case_id: str, old: str, new: str, failed_dimensions: set[str]
+) -> None:
+    config = _load_yaml(ROOT / ".github" / "dependabot.yml")
+    canonical = (ROOT / "docs" / "dependency-management.md").read_text(encoding="utf-8")
+    assert old in canonical, f"{case_id} fixture no longer matches the canonical document"
+    mutated = canonical.replace(old, new, 1)
+    assert mutated != canonical, f"{case_id} mutation was ineffective"
+    dimensions = _dependency_inventory_dimensions(config, mutated)
+    assert {name for name, valid in dimensions.items() if not valid} == failed_dimensions
+    with pytest.raises(AssertionError, match="Dependabot inventory parity failed"):
+        _assert_dependency_inventory_parity(config, mutated)
+
+
+@pytest.mark.parametrize(
+    ("case_id", "mutation"),
+    [
+        (
+            "duplicate-row",
+            lambda text: text.replace(
+                "| `pip` | `/scripts` | `scripts/test-requirements.txt` | Weekly | Monday |",
+                "| `pip` | `/scripts` | `scripts/test-requirements.txt` | Weekly | Monday |\n"
+                "| `pip` | `/scripts` | `scripts/test-requirements.txt` | Weekly | Monday |",
+                1,
+            ),
+        ),
+        (
+            "duplicate-identity",
+            lambda text: text.replace(
+                "| `pip` | `/scripts` | `scripts/test-requirements.txt` | Weekly | Monday |",
+                "| `pip` | `/scripts` | `scripts/other.txt` | Weekly | Monday |\n"
+                "| `pip` | `/scripts` | `scripts/test-requirements.txt` | Weekly | Monday |",
+                1,
+            ),
+        ),
+        (
+            "empty-manifest",
+            lambda text: text.replace("| `pip` | `/scripts` | `scripts/test-requirements.txt` |", "| `pip` | `/scripts` |  |", 1),
+        ),
+        (
+            "contradictory-table",
+            lambda text: text.replace(
+                "This inventory mirrors",
+                "| Ecosystem | Directory | Tracked surface/manifests | Interval | Day |\n"
+                "| --- | --- | --- | --- | --- |\n"
+                "| `pip` | `/scripts` | `scripts/other.txt` | Daily | Tuesday |\n\n"
+                "This inventory mirrors",
+                1,
+            ),
+        ),
+    ],
+)
+def test_dependabot_inventory_parser_rejects_ambiguous_tables(case_id, mutation) -> None:
+    canonical = (ROOT / "docs" / "dependency-management.md").read_text(encoding="utf-8")
+    mutated = mutation(canonical)
+    assert mutated != canonical, f"{case_id} mutation was ineffective"
+    with pytest.raises(AssertionError):
+        _documented_dependabot_inventory(mutated)
+
+
+def test_dependabot_inventory_ignores_comment_and_narrative_stuffing() -> None:
+    config = _load_yaml(ROOT / ".github" / "dependabot.yml")
+    canonical = (ROOT / "docs" / "dependency-management.md").read_text(encoding="utf-8")
+    scripts_row = "| `pip` | `/scripts` | `scripts/test-requirements.txt` | Weekly | Monday |\n"
+    without_row = canonical.replace(scripts_row, "", 1)
+    for stuffing in (
+        "<!-- | pip | /scripts | scripts/test-requirements.txt | Weekly | Monday | -->",
+        "The /scripts test-requirements.txt tooling is weekly on Monday.",
+    ):
+        mutated = without_row.replace(DEPENDABOT_INVENTORY_HEADING, DEPENDABOT_INVENTORY_HEADING + "\n\n" + stuffing, 1)
+        with pytest.raises(AssertionError, match="Dependabot inventory parity failed"):
+            _assert_dependency_inventory_parity(config, mutated)
+
+
+def test_dependabot_inventory_noop_and_compound_controls() -> None:
+    config = _load_yaml(ROOT / ".github" / "dependabot.yml")
+    canonical = (ROOT / "docs" / "dependency-management.md").read_text(encoding="utf-8")
+    noop = canonical.replace("not-present-in-canonical", "still-not-present", 1)
+    assert noop == canonical
+    _assert_dependency_inventory_parity(config, noop)
+
+    compound = canonical.replace(
+        "| `pip` | `/scripts` | `scripts/test-requirements.txt` |",
+        "| `pip` | `/scripts` | `scripts/missing.txt` |",
+        1,
+    ).replace(
+        "Dependabot never merges automatically", "Dependabot merges automatically", 1
+    )
+    failed = {name for name, valid in _dependency_inventory_dimensions(config, compound).items() if not valid}
+    assert failed == {"surfaces", "policy"}
+    assert len(failed) > 1, "compound mutant must not count as a single-fault case"
+
+
+def test_dependabot_documentation_mutants_have_unique_outputs() -> None:
+    canonical = (ROOT / "docs" / "dependency-management.md").read_text(encoding="utf-8")
+    outputs = {
+        canonical.replace("/scripts", replacement, 1)
+        for replacement in ("/script", "/backend", "/tooling")
+    }
+    assert canonical not in outputs
+    assert len(outputs) == 3
+
+
+def test_dependabot_yaml_mutations_break_parity_or_validation() -> None:
+    canonical_config = _load_yaml(ROOT / ".github" / "dependabot.yml")
+    markdown = (ROOT / "docs" / "dependency-management.md").read_text(encoding="utf-8")
+
+    removed_scripts = copy.deepcopy(canonical_config)
+    removed_scripts["updates"] = [
+        entry for entry in removed_scripts["updates"] if entry["directory"] != "/scripts"
+    ]
+    changed_schedule = copy.deepcopy(canonical_config)
+    next(entry for entry in changed_schedule["updates"] if entry["directory"] == "/scripts")["schedule"]["day"] = "tuesday"
+    duplicate_identity = copy.deepcopy(canonical_config)
+    duplicate_identity["updates"].append(copy.deepcopy(duplicate_identity["updates"][-1]))
+    nonexistent_directory = copy.deepcopy(canonical_config)
+    next(entry for entry in nonexistent_directory["updates"] if entry["directory"] == "/scripts")["directory"] = "/missing-tooling"
+    pip_without_manifest = copy.deepcopy(canonical_config)
+    next(entry for entry in pip_without_manifest["updates"] if entry["directory"] == "/scripts")["directory"] = "/backend/tests"
+
+    for mutated in (removed_scripts, changed_schedule):
+        with pytest.raises(AssertionError, match="Dependabot inventory parity failed"):
+            _assert_dependency_inventory_parity(mutated, markdown)
+    for mutated in (duplicate_identity, nonexistent_directory, pip_without_manifest):
+        with pytest.raises(AssertionError):
+            _assert_dependency_inventory_parity(mutated, markdown)
+
+    with pytest.raises(yaml.constructor.ConstructorError, match="duplicate key"):
+        yaml.load("version: 2\nupdates: []\nupdates: []\n", Loader=UniqueKeyLoader)

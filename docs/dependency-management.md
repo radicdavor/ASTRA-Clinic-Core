@@ -24,9 +24,18 @@ pip-tools or another packaging migration.
 
 ## Automated proposals
 
-Dependabot checks npm (`/frontend`), pip (`/backend`) and GitHub Actions (`/`)
-weekly. Compatible patch/minor proposals may be grouped. Major upgrades require
-a separate pull request and explicit compatibility review.
+### Canonical Dependabot inventory
+
+| Ecosystem | Directory | Tracked surface/manifests | Interval | Day |
+| --- | --- | --- | --- | --- |
+| `npm` | `/frontend` | `frontend/package.json`; `frontend/package-lock.json` | Weekly | Monday |
+| `pip` | `/backend` | `backend/requirements.txt` | Weekly | Monday |
+| `github-actions` | `/` | `.github/workflows/*.yml` | Weekly | Monday |
+| `pip` | `/scripts` | `scripts/test-requirements.txt` | Weekly | Monday |
+
+This inventory mirrors `.github/dependabot.yml`; each row describes a configured
+update surface, not an approval. Compatible patch/minor proposals may be grouped.
+Major upgrades require a separate pull request and explicit compatibility review.
 
 Dependabot never merges automatically. Each proposal needs exact-head CI and
 human review. Repository governance settings must not treat a bot-authored
