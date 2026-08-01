@@ -129,9 +129,12 @@ repository root. Each block starts only PostgreSQL, invokes the existing
 `backend/entrypoint.sh` contract once to apply migrations, the base seed and the
 demo seed, and only then starts native Uvicorn on port `8000`.
 
-The one-shot `backend true` container exits after the canonical entrypoint has
-completed. It does not start the long-running Compose backend or publish port
-`8000`. Do not replace it with copied SQL or direct seed-module calls.
+The helper requires Compose to build the backend image from the current checkout
+before the one-shot `backend true` container runs. The container exits after the
+canonical entrypoint has completed; it does not start the long-running Compose
+backend or publish port `8000`. No prior Full Compose build or manual image
+deletion is required. Do not replace it with copied SQL or direct seed-module
+calls.
 
 Linux/bash:
 

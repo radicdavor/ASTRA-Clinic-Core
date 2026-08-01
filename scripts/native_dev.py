@@ -66,11 +66,24 @@ def safe_environment(url: str) -> dict[str, str]:
     return environment
 
 
+def seed_command(args: argparse.Namespace) -> list[str]:
+    return [
+        *compose_command(args),
+        "run",
+        "--build",
+        "--rm",
+        "-e",
+        "DATABASE_URL",
+        "backend",
+        "true",
+    ]
+
+
 def seed(args: argparse.Namespace) -> int:
     values, _ = resolved_identity(args)
     environment = safe_environment(database_url(values, "db", 5432))
     return subprocess.run(
-        [*compose_command(args), "run", "--rm", "-e", "DATABASE_URL", "backend", "true"],
+        seed_command(args),
         cwd=ROOT, env=environment, check=False,
     ).returncode
 

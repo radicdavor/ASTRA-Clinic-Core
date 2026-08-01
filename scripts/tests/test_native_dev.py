@@ -54,6 +54,24 @@ def test_seed_keeps_database_url_out_of_command_line(monkeypatch):
     monkeypatch.setattr(native_dev.subprocess, "run", lambda command, **kwargs: calls.append((command, kwargs)) or Result())
     assert native_dev.seed(args()) == 0
     command, kwargs = calls[0]
-    assert command[-6:] == ["run", "--rm", "-e", "DATABASE_URL", "backend", "true"]
+    assert command[-7:] == ["run", "--build", "--rm", "-e", "DATABASE_URL", "backend", "true"]
     assert not any("synthetic" in item for item in command)
     assert kwargs["env"]["REAL_DATA_ALLOWED"] == "false"
+    assert "--entrypoint" not in command
+    assert "app.seed" not in command and "app.demo.seed" not in command
+
+
+def test_seed_build_failure_is_fail_closed(monkeypatch):
+    values = config()["services"]["db"]["environment"]
+    monkeypatch.setattr(native_dev, "resolved_identity", lambda _: (values, 55432))
+    calls = []
+    monkeypatch.setattr(
+        native_dev.subprocess,
+        "run",
+        lambda command, **kwargs: calls.append((command, kwargs)) or Result(returncode=17),
+    )
+    assert native_dev.seed(args()) == 17
+    assert len(calls) == 1
+    assert calls[0][0][-7:] == [
+        "run", "--build", "--rm", "-e", "DATABASE_URL", "backend", "true"
+    ]

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import ast
 import re
 import shlex
 import subprocess
@@ -26,6 +27,7 @@ NATIVE_DEV_NODE_IDS = {
         for host in ("remote", "db,remote", "127.0.0.1?host=remote")
     },
     f"{NATIVE_DEV_TEST_PATH}::test_seed_keeps_database_url_out_of_command_line",
+    f"{NATIVE_DEV_TEST_PATH}::test_seed_build_failure_is_fail_closed",
 }
 
 
@@ -83,6 +85,14 @@ README_MUTATION_CASES = (
         lambda text: text.replace(
             "Neither mode\nauthorizes deployment, production use, or real patient data",
             "Neither mode\nauthorizes deployment or production use; real patient data is allowed",
+        ),
+    ),
+    ReadmeMutationCase(
+        "image-build-not-required",
+        "image_build",
+        lambda text: text.replace(
+            "The helper requires Compose to build the backend image from the current checkout",
+            "The helper may reuse an existing backend image",
         ),
     ),
     ReadmeMutationCase(
@@ -203,6 +213,43 @@ def _collect_native_dev_node_ids() -> list[str]:
         for line in result.stdout.splitlines()
         if line.startswith(f"{NATIVE_DEV_TEST_PATH}::")
     ]
+
+
+def _assert_native_seed_build_contract(source: str) -> None:
+    tree = ast.parse(source)
+    functions = {
+        node.name: node for node in tree.body if isinstance(node, ast.FunctionDef)
+    }
+    seed_command = functions["seed_command"]
+    returns = [node for node in ast.walk(seed_command) if isinstance(node, ast.Return)]
+    assert len(returns) == 1 and isinstance(returns[0].value, ast.List)
+    literals = [
+        element.value
+        for element in returns[0].value.elts
+        if isinstance(element, ast.Constant) and isinstance(element.value, str)
+    ]
+    assert literals == [
+        "run", "--build", "--rm", "-e", "DATABASE_URL", "backend", "true"
+    ], "native seed must use one active Compose run --build contract"
+
+    seed = functions["seed"]
+    run_calls = [
+        node
+        for node in ast.walk(seed)
+        if isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Attribute)
+        and node.func.attr == "run"
+    ]
+    assert len(run_calls) == 1
+    command = run_calls[0].args[0]
+    assert (
+        isinstance(command, ast.Call)
+        and isinstance(command.func, ast.Name)
+        and command.func.id == "seed_command"
+    ), "seed must execute the build-bound argv directly"
+    assert "sh /app/entrypoint.sh" not in source
+    assert "python -m app.seed" not in source
+    assert "python -m app.demo.seed" not in source
 
 
 def _relative_links(path: Path) -> list[str]:
@@ -326,6 +373,7 @@ def _database_guidance_invariants(readme: str, gitignore: str) -> dict[str, bool
                 "storage",
                 "port",
                 "environment",
+                "image_build",
                 "seed",
                 "ordering",
                 "ssot",
@@ -374,6 +422,11 @@ def _database_guidance_invariants(readme: str, gitignore: str) -> dict[str, bool
             "Never run the demo seed against a production database" in native
             and "Neither mode\nauthorizes deployment, production use, or real patient data"
             in native
+        ),
+        "image_build": (
+            "The helper requires Compose to build the backend image from the current checkout"
+            in native
+            and "No prior Full Compose build or manual image\ndeletion is required" in native
         ),
         "seed": seed_present,
         "ordering": ordering_valid,
@@ -537,6 +590,52 @@ def test_ci_collects_native_development_safety_contract() -> None:
     node_ids = _collect_native_dev_node_ids()
     assert len(node_ids) == len(set(node_ids)), "native-dev collection has duplicates"
     assert set(node_ids) == NATIVE_DEV_NODE_IDS
+
+
+def test_native_seed_requires_current_backend_build() -> None:
+    _assert_native_seed_build_contract(
+        (ROOT / "scripts/native_dev.py").read_text(encoding="utf-8")
+    )
+
+
+@pytest.mark.parametrize(
+    ("case_id", "mutation"),
+    (
+        ("missing-build", lambda source: source.replace('        "--build",\n', "")),
+        (
+            "comment-only-build",
+            lambda source: source.replace('        "--build",', '        "--no-deps",  # --build'),
+        ),
+        (
+            "build-after-service",
+            lambda source: source.replace(
+                '        "--build",\n        "--rm",',
+                '        "--rm",\n        "backend",\n        "--build",',
+            ).replace('        "backend",\n        "true",', '        "true",', 1),
+        ),
+        ("wrong-service", lambda source: source.replace('        "backend",', '        "frontend",', 1)),
+        ("missing-rm", lambda source: source.replace('        "--rm",\n', "", 1)),
+        (
+            "shell-entrypoint-workaround",
+            lambda source: source.replace('        "true",', '        "sh /app/entrypoint.sh",', 1),
+        ),
+        (
+            "duplicated-base-seed",
+            lambda source: source.replace('        "true",', '        "python -m app.seed",', 1),
+        ),
+        (
+            "run-bypasses-build-command",
+            lambda source: source.replace("seed_command(args),", "compose_command(args),", 1),
+        ),
+    ),
+    ids=lambda value: value if isinstance(value, str) else None,
+)
+def test_native_seed_build_contract_rejects_mutations(case_id, mutation) -> None:
+    source = (ROOT / "scripts/native_dev.py").read_text(encoding="utf-8")
+    mutated = mutation(source)
+    assert mutated != source, f"{case_id} mutation was ineffective"
+    with pytest.raises(AssertionError):
+        _assert_native_seed_build_contract(mutated)
 
 
 @pytest.mark.parametrize(
