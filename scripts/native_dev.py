@@ -10,6 +10,8 @@ import sys
 from pathlib import Path
 from urllib.parse import quote
 
+from sqlalchemy.engine import make_url
+
 ROOT = Path(__file__).resolve().parents[1]
 DB_KEYS = ("POSTGRES_DB", "POSTGRES_USER", "POSTGRES_PASSWORD")
 
@@ -55,9 +57,20 @@ def resolved_identity(args: argparse.Namespace) -> tuple[dict[str, str], int]:
 def database_url(values: dict[str, str], host: str, port: int) -> str:
     if host not in {"127.0.0.1", "db"}:
         raise RuntimeError("Development database host is not trusted")
-    components = [quote(values[key], safe="") for key in DB_KEYS]
-    database, user, password = components
-    return f"postgresql+psycopg://{user}:{password}@{host}:{port}/{database}"
+    database = values["POSTGRES_DB"]
+    user = quote(values["POSTGRES_USER"], safe="")
+    password = quote(values["POSTGRES_PASSWORD"], safe="")
+    result = f"postgresql+psycopg://{user}:{password}@{host}:{port}/{database}"
+    parsed = make_url(result)
+    if (
+        parsed.database != database
+        or parsed.username != values["POSTGRES_USER"]
+        or parsed.password != values["POSTGRES_PASSWORD"]
+        or parsed.host != host
+        or parsed.port != port
+    ):
+        raise RuntimeError("Compose database name cannot be represented safely")
+    return result
 
 
 def safe_environment(url: str) -> dict[str, str]:

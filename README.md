@@ -159,9 +159,10 @@ python scripts/native_dev.py serve
 ```
 
 The helper reads the resolved Compose model instead of executing `.env` or
-maintaining a second DSN. It percent-encodes the resolved database, user and
-password, uses the published loopback port for native Uvicorn, creates the
-ignored `.astra-dev/documents` directory, and never prints the connection URL.
+maintaining a second DSN. It preserves the logical database name, percent-encodes
+the user and password at the URL transport boundary, verifies the parsed target,
+uses the published loopback port for native Uvicorn, creates the ignored
+`.astra-dev/documents` directory, and never prints the connection URL.
 
 `/health` and `/ready` verify process and schema readiness; they do not prove
 that demo users exist. After the seed step, sign in with the synthetic demo

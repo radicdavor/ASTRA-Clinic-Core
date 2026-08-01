@@ -9,16 +9,33 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable
+from urllib.parse import quote, unquote
 
 import pytest
 import yaml
+from sqlalchemy.engine import make_url
 
 
 ROOT = Path(__file__).resolve().parents[2]
 ALLOWED_CODEOWNERS = {"@radicdavor"}
 NATIVE_DEV_TEST_PATH = "scripts/tests/test_native_dev.py"
 NATIVE_DEV_NODE_IDS = {
-    f"{NATIVE_DEV_TEST_PATH}::test_resolved_identity_percent_encodes_without_leaking",
+    f"{NATIVE_DEV_TEST_PATH}::test_resolved_identity_encodes_credentials_without_leaking",
+    *{
+        f"{NATIVE_DEV_TEST_PATH}::test_database_url_preserves_logical_database_identity[{database}]"
+        for database in (
+            "astra_clinic",
+            "demo clinic",
+            "demo%clinic",
+            "demo/clinic",
+            "demo#clinic",
+            "demo+clinic",
+            "klinika \\u010d",
+        )
+    },
+    f"{NATIVE_DEV_TEST_PATH}::test_database_url_rejects_database_query_delimiter",
+    f"{NATIVE_DEV_TEST_PATH}::test_database_url_boundary_failure_does_not_leak_credentials",
+    f"{NATIVE_DEV_TEST_PATH}::test_seed_and_serve_preserve_one_logical_database_identity",
     *{
         f"{NATIVE_DEV_TEST_PATH}::test_resolved_identity_rejects_unsafe_config[bad{index}]"
         for index in range(5)
@@ -515,6 +532,126 @@ def _assert_native_seed_build_contract(source: str) -> None:
     assert "python -m app.demo.seed" not in source
 
 
+def _load_native_database_url(source: str) -> Callable:
+    tree = ast.parse(source)
+    function = next(
+        node
+        for node in tree.body
+        if isinstance(node, ast.FunctionDef) and node.name == "database_url"
+    )
+    namespace = {"quote": quote, "unquote": unquote, "make_url": make_url}
+    exec(compile(ast.Module(body=[function], type_ignores=[]), "native_dev.py", "exec"), namespace)
+    return namespace["database_url"]
+
+
+def _database_url_call(source: str, function_name: str) -> ast.Call:
+    tree = ast.parse(source)
+    function = next(
+        node
+        for node in tree.body
+        if isinstance(node, ast.FunctionDef) and node.name == function_name
+    )
+    calls = [
+        node
+        for node in ast.walk(function)
+        if isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Name)
+        and node.func.id == "database_url"
+    ]
+    assert len(calls) == 1, f"{function_name} must use the canonical database_url once"
+    return calls[0]
+
+
+def _native_database_identity_results(source: str) -> dict[str, bool]:
+    try:
+        build_url = _load_native_database_url(source)
+    except (AssertionError, SyntaxError):
+        return {name: False for name in (
+            "database_identity", "credential_identity", "target_guard", "redaction",
+            "seed_identity", "serve_identity", "image_build",
+        )}
+    values = {
+        "POSTGRES_DB": "demo clinic/%+#č",
+        "POSTGRES_USER": "synthetic user",
+        "POSTGRES_PASSWORD": "synthetic:/@ value%",
+    }
+    try:
+        parsed = make_url(build_url(values, "127.0.0.1", 55432))
+        database_identity = parsed.database == values["POSTGRES_DB"]
+        credential_identity = (
+            parsed.username == values["POSTGRES_USER"]
+            and parsed.password == values["POSTGRES_PASSWORD"]
+        )
+    except Exception:
+        database_identity = credential_identity = False
+    try:
+        build_url({**values, "POSTGRES_DB": "demo?clinic"}, "127.0.0.1", 55432)
+        query_delimiter_rejected = False
+    except RuntimeError:
+        query_delimiter_rejected = True
+    database_identity = database_identity and query_delimiter_rejected
+    try:
+        build_url(values, "remote", 5432)
+        target_guard = False
+    except RuntimeError:
+        target_guard = True
+    tree = ast.parse(source)
+    database_function = next(
+        node
+        for node in tree.body
+        if isinstance(node, ast.FunctionDef) and node.name == "database_url"
+    )
+    redaction = all(
+        not any(
+            isinstance(item, ast.JoinedStr)
+            or (isinstance(item, ast.Name) and item.id in {"result", "values", "database", "user", "password"})
+            for item in ast.walk(raise_node.exc)
+        )
+        for raise_node in ast.walk(database_function)
+        if isinstance(raise_node, ast.Raise) and raise_node.exc is not None
+    )
+    try:
+        seed_call = _database_url_call(source, "seed")
+        seed_identity = (
+            len(seed_call.args) == 3
+            and isinstance(seed_call.args[0], ast.Name)
+            and seed_call.args[0].id == "values"
+            and isinstance(seed_call.args[1], ast.Constant)
+            and seed_call.args[1].value == "db"
+            and isinstance(seed_call.args[2], ast.Constant)
+            and seed_call.args[2].value == 5432
+        )
+    except (AssertionError, StopIteration):
+        seed_identity = False
+    try:
+        serve_call = _database_url_call(source, "serve")
+        serve_identity = (
+            len(serve_call.args) == 3
+            and isinstance(serve_call.args[0], ast.Name)
+            and serve_call.args[0].id == "values"
+            and isinstance(serve_call.args[1], ast.Constant)
+            and serve_call.args[1].value == "127.0.0.1"
+            and isinstance(serve_call.args[2], ast.Name)
+            and serve_call.args[2].id == "port"
+        )
+    except (AssertionError, StopIteration):
+        serve_identity = False
+    try:
+        _assert_native_seed_build_contract(source)
+        image_build = True
+    except AssertionError:
+        image_build = False
+    return {
+        "database_identity": database_identity,
+        "credential_identity": credential_identity,
+        "target_guard": target_guard,
+        "redaction": redaction,
+        "seed_identity": seed_identity,
+        "serve_identity": serve_identity,
+        "image_build": image_build,
+    }
+
+
 def _relative_links(path: Path) -> list[str]:
     text = path.read_text(encoding="utf-8")
     return [
@@ -899,6 +1036,154 @@ def test_native_seed_build_contract_rejects_mutations(case_id, mutation) -> None
     assert mutated != source, f"{case_id} mutation was ineffective"
     with pytest.raises(AssertionError):
         _assert_native_seed_build_contract(mutated)
+
+
+NATIVE_DATABASE_MUTATIONS = (
+    (
+        "remove-database-boundary-validation",
+        "database_identity",
+        lambda source: source.replace(
+            "    if (\n        parsed.database != database",
+            "    if (\n        False\n        or parsed.database != parsed.database",
+            1,
+        ).replace(
+            "        or parsed.username != values[\"POSTGRES_USER\"]",
+            "        and parsed.username != values[\"POSTGRES_USER\"]",
+            1,
+        ).replace(
+            "        or parsed.password != values[\"POSTGRES_PASSWORD\"]",
+            "        and parsed.password != values[\"POSTGRES_PASSWORD\"]",
+            1,
+        ).replace(
+            "        or parsed.host != host", "        and parsed.host != host", 1
+        ).replace("        or parsed.port != port", "        and parsed.port != port", 1),
+    ),
+    (
+        "double-encode-database",
+        "database_identity",
+        lambda source: source.replace(
+            '    database = values["POSTGRES_DB"]',
+            '    database = quote(quote(values["POSTGRES_DB"], safe=""), safe="")',
+            1,
+        ),
+    ),
+    (
+        "encoded-database-as-logical-identity",
+        "database_identity",
+        lambda source: source.replace(
+            '    database = values["POSTGRES_DB"]',
+            '    database = quote(values["POSTGRES_DB"], safe="")',
+            1,
+        ),
+    ),
+    (
+        "decode-entire-dsn",
+        "credential_identity",
+        lambda source: source.replace("    return result", "    return unquote(result)", 1),
+    ),
+    (
+        "space-as-plus",
+        "database_identity",
+        lambda source: source.replace(
+            '    database = values["POSTGRES_DB"]',
+            '    database = values["POSTGRES_DB"].replace(" ", "+")',
+            1,
+        ),
+    ),
+    (
+        "hardcoded-default-database",
+        "database_identity",
+        lambda source: source.replace(
+            '    database = values["POSTGRES_DB"]', '    database = "astra_clinic"', 1
+        ),
+    ),
+    (
+        "separate-seed-database",
+        "seed_identity",
+        lambda source: source.replace(
+            'database_url(values, "db", 5432)',
+            'database_url({**values, "POSTGRES_DB": "seed_only"}, "db", 5432)',
+            1,
+        ),
+    ),
+    (
+        "separate-uvicorn-database",
+        "serve_identity",
+        lambda source: source.replace(
+            'database_url(values, "127.0.0.1", port)',
+            'database_url({**values, "POSTGRES_DB": "serve_only"}, "127.0.0.1", port)',
+            1,
+        ),
+    ),
+    (
+        "allow-target-override",
+        "target_guard",
+        lambda source: source.replace(
+            '    if host not in {"127.0.0.1", "db"}:',
+            '    if False and host not in {"127.0.0.1", "db"}:',
+            1,
+        ),
+    ),
+    (
+        "leak-dsn-in-error",
+        "redaction",
+        lambda source: source.replace(
+            'raise RuntimeError("Compose database name cannot be represented safely")',
+            'raise RuntimeError(f"Compose database URL cannot be represented: {result}")',
+            1,
+        ),
+    ),
+    (
+        "remove-run-build",
+        "image_build",
+        lambda source: source.replace('        "--build",\n', "", 1),
+    ),
+)
+
+
+@pytest.mark.parametrize(
+    ("case_id", "target", "mutation"),
+    NATIVE_DATABASE_MUTATIONS,
+    ids=[case[0] for case in NATIVE_DATABASE_MUTATIONS],
+)
+def test_native_database_identity_rejects_single_fault_mutations(
+    case_id: str, target: str, mutation: Callable[[str], str]
+) -> None:
+    canonical = (ROOT / "scripts/native_dev.py").read_text(encoding="utf-8")
+    baseline = _native_database_identity_results(canonical)
+    assert all(baseline.values())
+    mutated = mutation(canonical)
+    assert mutated != canonical, f"{case_id} mutation was ineffective"
+    results = _native_database_identity_results(mutated)
+    failed = {name for name, passed in results.items() if not passed}
+    assert failed == {target}, f"{case_id} was not single-fault: {sorted(failed)}"
+
+
+def test_native_database_identity_mutation_controls() -> None:
+    canonical = (ROOT / "scripts/native_dev.py").read_text(encoding="utf-8")
+    mutants = [mutation(canonical) for _, _, mutation in NATIVE_DATABASE_MUTATIONS]
+    assert all(mutant != canonical for mutant in mutants)
+    assert len(mutants) == len(set(mutants))
+    assert _native_database_identity_results(canonical) == {
+        "database_identity": True,
+        "credential_identity": True,
+        "target_guard": True,
+        "redaction": True,
+        "seed_identity": True,
+        "serve_identity": True,
+        "image_build": True,
+    }
+    noop = canonical.replace("obsolete native database builder", "replacement")
+    assert noop == canonical
+    compound = NATIVE_DATABASE_MUTATIONS[2][2](
+        NATIVE_DATABASE_MUTATIONS[-1][2](canonical)
+    )
+    failed = {
+        name
+        for name, passed in _native_database_identity_results(compound).items()
+        if not passed
+    }
+    assert failed == {"database_identity", "image_build"}
 
 
 @pytest.mark.parametrize(
