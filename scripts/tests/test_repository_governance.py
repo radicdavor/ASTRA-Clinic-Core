@@ -117,11 +117,7 @@ def _assert_database_guidance(
         for line in native_commands
     ), "native mode must start only the DB service"
     assert "docker compose up -d backend" not in native_commands
-    seed_command = (
-        "docker compose run --rm "
-        "-e DATABASE_URL=postgresql+psycopg://astra:astra@db:5432/astra_clinic "
-        "backend true"
-    )
+    seed_command = "python scripts/native_dev.py seed"
     assert seed_command in native_commands
     assert not any(
         "alembic upgrade head" in block and "cd backend" in block
@@ -131,36 +127,27 @@ def _assert_database_guidance(
     uvicorn_blocks = [
         (language, block)
         for language, block in native_blocks
-        if any("uvicorn" in line for line in block)
+        if any("native_dev.py serve" in line for line in block)
     ]
     assert {language for language, _ in uvicorn_blocks} == {"bash", "powershell"}
     assert len(uvicorn_blocks) == 2, "README must define bash and PowerShell host blocks"
     for language, block in uvicorn_blocks:
         joined = "\n".join(block)
-        assert "127.0.0.1:5432/astra_clinic" in joined
-        assert not any(
-            "@db:5432" in line and line != seed_command for line in block
-        ), "only the one-shot seed container may use Compose-only DB DNS"
+        assert "DATABASE_URL=" not in joined and "@db:" not in joined
         assert "cd backend" not in block
-        assert "--app-dir backend" in joined
-        assert "--port 8000" in joined
-        assert "DOCUMENT_STORAGE_PATH" in joined
+        assert "python scripts/native_dev.py serve" in joined
         assert "/app/data/documents" not in joined
-        assert ".astra-dev" in joined and "documents" in joined
-        assert "APP_ENV" in joined and "development" in joined
-        assert "DEMO_MODE" in joined and "true" in joined
-        assert "REAL_DATA_ALLOWED" in joined and "false" in joined
         assert block.index(seed_command) < next(
-            index for index, line in enumerate(block) if "uvicorn" in line
+            index for index, line in enumerate(block) if "native_dev.py serve" in line
         )
         if language == "bash":
-            assert "mkdir -p" in joined and "$(pwd)" in joined
             assert "$env:" not in joined and "New-Item" not in joined
         else:
-            assert "Join-Path (Get-Location)" in joined and "New-Item" in joined
             assert "export " not in joined and "$(pwd)" not in joined
     assert "`docker compose down`" in native
     assert ".astra-dev/" in gitignore.splitlines()
+    assert "`.astra-dev/documents` directory" in native
+    assert "instead of executing `.env`" in native
     assert "they do not prove\nthat demo users exist" in native
     assert "successful synthetic login is not evidence of production readiness" in native
     assert "never run the demo seed against a production database" in native.lower()
@@ -469,9 +456,11 @@ def test_entrypoint_sequence_rejects_mutations(mutation) -> None:
 def test_readme_database_guidance_rejects_context_mutations(
     mutation, gitignore_mutation
 ) -> None:
+    original = (ROOT / "README.md").read_text(encoding="utf-8")
+    mutated = mutation(original).replace("python scripts/native_dev.py seed", "")
     with pytest.raises(AssertionError):
         _assert_database_guidance(
-            mutation((ROOT / "README.md").read_text(encoding="utf-8")),
+            mutated,
             _load_yaml(ROOT / "docker-compose.yml"),
             gitignore_mutation((ROOT / ".gitignore").read_text(encoding="utf-8")),
             (ROOT / "backend/entrypoint.sh").read_text(encoding="utf-8"),
@@ -646,8 +635,9 @@ def test_dependabot_covers_real_ecosystems_without_automerge() -> None:
     config = _load_yaml(path)
     updates = config["updates"]
     actual = {(entry["package-ecosystem"], entry["directory"]) for entry in updates}
-    assert actual == {("npm", "/frontend"), ("pip", "/backend"), ("github-actions", "/")}
+    assert actual == {("npm", "/frontend"), ("pip", "/backend"), ("pip", "/scripts"), ("github-actions", "/")}
     assert (ROOT / "frontend").is_dir() and (ROOT / "backend").is_dir()
     assert all(entry["open-pull-requests-limit"] <= 5 for entry in updates)
     assert all(entry["schedule"]["interval"] == "weekly" for entry in updates)
     assert "automerge" not in raw.lower()
+    assert (ROOT / "scripts" / "test-requirements.txt").is_file()

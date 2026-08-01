@@ -139,15 +139,9 @@ Linux/bash:
 python -m venv .venv
 source .venv/bin/activate
 pip install -r backend/requirements.txt -r scripts/test-requirements.txt
-export APP_ENV=development
-export DEMO_MODE=true
-export REAL_DATA_ALLOWED=false
-export DATABASE_URL=postgresql+psycopg://astra:astra@127.0.0.1:5432/astra_clinic
-mkdir -p "$(pwd)/.astra-dev/documents"
-export DOCUMENT_STORAGE_PATH="$(pwd)/.astra-dev/documents"
 docker compose up -d db
-docker compose run --rm -e DATABASE_URL=postgresql+psycopg://astra:astra@db:5432/astra_clinic backend true
-python -m uvicorn app.main:app --reload --app-dir backend --port 8000
+python scripts/native_dev.py seed
+python scripts/native_dev.py serve
 ```
 
 Windows PowerShell:
@@ -156,17 +150,15 @@ Windows PowerShell:
 python -m venv .venv
 .venv\Scripts\Activate.ps1
 pip install -r backend/requirements.txt -r scripts/test-requirements.txt
-$env:APP_ENV = "development"
-$env:DEMO_MODE = "true"
-$env:REAL_DATA_ALLOWED = "false"
-$env:DATABASE_URL = "postgresql+psycopg://astra:astra@127.0.0.1:5432/astra_clinic"
-$storage = Join-Path (Get-Location) ".astra-dev\documents"
-New-Item -ItemType Directory -Force -Path $storage | Out-Null
-$env:DOCUMENT_STORAGE_PATH = $storage
 docker compose up -d db
-docker compose run --rm -e DATABASE_URL=postgresql+psycopg://astra:astra@db:5432/astra_clinic backend true
-python -m uvicorn app.main:app --reload --app-dir backend --port 8000
+python scripts/native_dev.py seed
+python scripts/native_dev.py serve
 ```
+
+The helper reads the resolved Compose model instead of executing `.env` or
+maintaining a second DSN. It percent-encodes the resolved database, user and
+password, uses the published loopback port for native Uvicorn, creates the
+ignored `.astra-dev/documents` directory, and never prints the connection URL.
 
 `/health` and `/ready` verify process and schema readiness; they do not prove
 that demo users exist. After the seed step, sign in with the synthetic demo

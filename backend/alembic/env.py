@@ -8,7 +8,16 @@ from app.core.database import Base
 from app.models import domain  # noqa: F401
 
 config = context.config
-config.set_main_option("sqlalchemy.url", get_settings().database_url)
+
+
+def configparser_safe_url(database_url: str) -> str:
+    """Escape interpolation markers only at Alembic's ConfigParser boundary."""
+    return database_url.replace("%", "%%")
+
+
+config.set_main_option(
+    "sqlalchemy.url", configparser_safe_url(get_settings().database_url)
+)
 
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
