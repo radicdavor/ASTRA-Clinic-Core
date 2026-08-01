@@ -234,10 +234,13 @@ See the [test strategy](docs/test-strategy.md) and
 
 ## Dependencies
 
-Dependency declarations are maintained in `backend/requirements.txt`,
-`frontend/package.json`, `frontend/package-lock.json` and GitHub Actions
-workflow references. Dependabot proposes bounded updates but never merges them
-automatically. See [dependency management](docs/dependency-management.md).
+Dependency surfaces include `backend/requirements.txt`, `frontend/package.json`,
+`frontend/package-lock.json`, CI tooling in `scripts/test-requirements.txt`, and
+GitHub Actions workflow references. This is a concise overview; the
+[canonical dependency management inventory](docs/dependency-management.md) is
+the only complete human-readable inventory and schedule. Dependabot opens
+bounded update pull requests, but it neither approves nor merges them. Every
+proposal requires human owner review.
 
 Known advisories remain visible until a compatible update and relevant tests
 close them. Static reachability analysis can inform urgency but does not replace

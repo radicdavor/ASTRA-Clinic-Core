@@ -149,6 +149,8 @@ DEPENDABOT_INVENTORY_HEADER = (
     "interval",
     "day",
 )
+README_DEPENDENCY_HEADING = "## Dependencies"
+README_DEPENDENCY_CANONICAL_HREF = "docs/dependency-management.md"
 
 
 def _construct_mapping(loader: UniqueKeyLoader, node: yaml.MappingNode, deep: bool = False):
@@ -296,6 +298,124 @@ def _assert_dependency_inventory_parity(config: dict, markdown: str) -> None:
     dimensions = _dependency_inventory_dimensions(config, markdown)
     failed = sorted(name for name, valid in dimensions.items() if not valid)
     assert not failed, f"Dependabot inventory parity failed: {failed}"
+
+
+def _markdown_section(markdown: str, heading: str) -> str:
+    without_comments = re.sub(r"<!--.*?-->", "", markdown, flags=re.DOTALL)
+    heading_pattern = rf"(?m)^{re.escape(heading)}\s*$"
+    matches = list(re.finditer(heading_pattern, without_comments))
+    assert len(matches) == 1, f"expected exactly one {heading!r} section"
+    start = matches[0].end()
+    level = len(heading.split()[0])
+    next_heading = re.search(rf"(?m)^#{{1,{level}}}\s+", without_comments[start:])
+    end = start + next_heading.start() if next_heading else len(without_comments)
+    return without_comments[start:end]
+
+
+def _replace_in_readme_dependency_section(
+    readme: str, old: str, new: str
+) -> str:
+    heading_pattern = rf"(?m)^{re.escape(README_DEPENDENCY_HEADING)}\s*$"
+    matches = list(re.finditer(heading_pattern, readme))
+    assert len(matches) == 1
+    start = matches[0].end()
+    next_heading = re.search(r"(?m)^#{1,2}\s+", readme[start:])
+    end = start + next_heading.start() if next_heading else len(readme)
+    section = readme[start:end]
+    assert old in section, f"dependency-section mutation fixture not found: {old!r}"
+    return readme[:start] + section.replace(old, new, 1) + readme[end:]
+
+
+def _readme_dependency_dimensions(
+    readme: str,
+    canonical_markdown: str,
+    *,
+    tracked: set[str] | None = None,
+) -> dict[str, bool]:
+    try:
+        section = _markdown_section(readme, README_DEPENDENCY_HEADING)
+    except AssertionError:
+        return {name: False for name in (
+            "section", "scripts", "canonical_link", "surfaces", "summary",
+            "policy", "schedule", "contradictions",
+        )}
+
+    documented = _documented_dependabot_inventory(canonical_markdown)
+    canonical_surfaces = {surface for row in documented for surface in row.surfaces}
+    if tracked is None:
+        tracked = set(
+            subprocess.run(
+                ["git", "ls-files"], cwd=ROOT, check=True, capture_output=True, text=True
+            ).stdout.splitlines()
+        )
+
+    links = re.findall(r"\[([^\]]+)\]\(([^)]+)\)", section)
+    canonical_links = [
+        (label, href) for label, href in links if href == README_DEPENDENCY_CANONICAL_HREF
+    ]
+    canonical_target = ROOT / README_DEPENDENCY_CANONICAL_HREF
+    code_paths = {
+        value
+        for value in re.findall(r"`([^`]+)`", section)
+        if "/" in value and not value.startswith(("http://", "https://"))
+    }
+    required_paths = {
+        "backend/requirements.txt",
+        "frontend/package.json",
+        "frontend/package-lock.json",
+        "scripts/test-requirements.txt",
+    }
+    concrete_paths_valid = all(
+        path in canonical_surfaces and (ROOT / path).is_file() and path in tracked
+        for path in code_paths
+    )
+    lower = section.lower()
+    has_table = any(line.strip().startswith("|") for line in section.splitlines())
+    complete_language = "only complete human-readable inventory and schedule" in lower
+    policy = (
+        "dependabot opens" in lower
+        and "neither approves nor merges" in lower
+        and "human owner review" in lower
+    )
+    prohibited_policy = any(
+        phrase in lower
+        for phrase in (
+            "automerge is enabled",
+            "automatically approves",
+            "owner review is not required",
+            "does not require owner review",
+        )
+    )
+    schedule_claimed = bool(re.search(r"\b(daily|weekly|monthly|monday|tuesday|wednesday|thursday|friday)\b", lower))
+    return {
+        "section": bool(section.strip()),
+        "scripts": "CI tooling in `scripts/test-requirements.txt`" in section,
+        "canonical_link": len(canonical_links) == 1
+        and "dependency" in canonical_links[0][0].lower()
+        and canonical_target.is_file()
+        and README_DEPENDENCY_CANONICAL_HREF in tracked
+        and DEPENDABOT_INVENTORY_HEADING in canonical_markdown,
+        "surfaces": required_paths <= code_paths
+        and concrete_paths_valid
+        and "github actions" in lower,
+        "summary": complete_language and not has_table,
+        "policy": policy,
+        "schedule": not schedule_claimed,
+        "contradictions": not prohibited_policy,
+    }
+
+
+def _assert_readme_dependency_consistency(
+    readme: str,
+    canonical_markdown: str,
+    *,
+    tracked: set[str] | None = None,
+) -> None:
+    dimensions = _readme_dependency_dimensions(
+        readme, canonical_markdown, tracked=tracked
+    )
+    failed = sorted(name for name, valid in dimensions.items() if not valid)
+    assert not failed, f"README dependency consistency failed: {failed}"
 
 
 def _assert_native_dev_ci_contract(workflow: dict) -> None:
@@ -1472,3 +1592,148 @@ def test_dependabot_yaml_mutations_break_parity_or_validation() -> None:
 
     with pytest.raises(yaml.constructor.ConstructorError, match="duplicate key"):
         yaml.load("version: 2\nupdates: []\nupdates: []\n", Loader=UniqueKeyLoader)
+
+
+def test_readme_dependency_summary_matches_canonical_inventory() -> None:
+    config = _load_yaml(ROOT / ".github" / "dependabot.yml")
+    canonical = (ROOT / "docs" / "dependency-management.md").read_text(encoding="utf-8")
+    readme = (ROOT / "README.md").read_text(encoding="utf-8")
+
+    _assert_dependency_inventory_parity(config, canonical)
+    _assert_readme_dependency_consistency(readme, canonical)
+    section = _markdown_section(readme, README_DEPENDENCY_HEADING)
+    claimed_paths = set(re.findall(r"`([^`]+/[^`]+)`", section))
+    assert claimed_paths == {
+        "backend/requirements.txt",
+        "frontend/package.json",
+        "frontend/package-lock.json",
+        "scripts/test-requirements.txt",
+    }
+    assert "|" not in section
+
+
+@pytest.mark.parametrize(
+    ("case_id", "mutation", "failed_dimensions"),
+    [
+        ("missing-scripts-manifest", lambda text: text.replace(", CI tooling in `scripts/test-requirements.txt`", ""), {"scripts", "surfaces"}),
+        ("scripts-directory-typo", lambda text: _replace_in_readme_dependency_section(text, "scripts/test-requirements.txt", "script/test-requirements.txt"), {"scripts", "surfaces"}),
+        ("scripts-replaced-by-backend", lambda text: _replace_in_readme_dependency_section(text, "scripts/test-requirements.txt", "backend/requirements.txt"), {"scripts", "surfaces"}),
+        ("wrong-scripts-ecosystem", lambda text: text.replace("CI tooling in `scripts/test-requirements.txt`", "frontend npm tooling in `scripts/test-requirements.txt`", 1), {"scripts"}),
+        ("missing-canonical-link", lambda text: text.replace("[canonical dependency management inventory](docs/dependency-management.md)", "canonical dependency management inventory", 1), {"canonical_link"}),
+        ("nonexistent-canonical-link", lambda text: text.replace("docs/dependency-management.md", "docs/missing-dependency-management.md", 1), {"canonical_link"}),
+        ("wrong-canonical-link", lambda text: text.replace("docs/dependency-management.md", "docs/README.md", 1), {"canonical_link"}),
+        ("case-mismatched-link", lambda text: text.replace("docs/dependency-management.md", "docs/Dependency-Management.md", 1), {"canonical_link"}),
+        ("manifest-outside-section", lambda text: text.replace("CI tooling in `scripts/test-requirements.txt`, and", "CI tooling, and", 1) + "\n\nOutside: `scripts/test-requirements.txt`\n", {"scripts", "surfaces"}),
+        ("nonexistent-readme-manifest", lambda text: _replace_in_readme_dependency_section(text, "scripts/test-requirements.txt", "scripts/missing-requirements.txt"), {"scripts", "surfaces"}),
+        ("noncanonical-readme-manifest", lambda text: _replace_in_readme_dependency_section(text, "scripts/test-requirements.txt", "scripts/requirements.txt"), {"scripts", "surfaces"}),
+        ("stale-readme-schedule", lambda text: text.replace("This is a concise overview", "Updates run weekly. This is a concise overview", 1), {"schedule"}),
+        ("false-automerge", lambda text: text.replace("Dependabot opens\nbounded update pull requests, but it neither approves nor merges them", "Dependabot opens bounded update pull requests; automerge is enabled", 1), {"policy", "contradictions"}),
+        ("remove-owner-review", lambda text: text.replace("Every\nproposal requires human owner review", "Owner review is not required", 1), {"policy", "contradictions"}),
+        ("competing-full-table", lambda text: text.replace("Known advisories", "| Ecosystem | Directory |\n| --- | --- |\n| pip | /backend |\n\nKnown advisories", 1), {"summary"}),
+        ("duplicate-dependency-section", lambda text: text.replace("## Contributing", "## Dependencies\n\nContradictory inventory.\n\n## Contributing", 1), {"section", "scripts", "canonical_link", "surfaces", "summary", "policy", "schedule", "contradictions"}),
+    ],
+)
+def test_readme_dependency_summary_rejects_single_fault_mutations(
+    case_id: str, mutation: Callable[[str], str], failed_dimensions: set[str]
+) -> None:
+    canonical = (ROOT / "docs" / "dependency-management.md").read_text(encoding="utf-8")
+    readme = (ROOT / "README.md").read_text(encoding="utf-8")
+    mutated = mutation(readme)
+    assert mutated != readme, f"{case_id} mutation was ineffective"
+    dimensions = _readme_dependency_dimensions(mutated, canonical)
+    assert {name for name, valid in dimensions.items() if not valid} == failed_dimensions
+    with pytest.raises(AssertionError, match="README dependency consistency failed"):
+        _assert_readme_dependency_consistency(mutated, canonical)
+
+
+def test_readme_dependency_summary_rejects_comment_stuffing() -> None:
+    canonical = (ROOT / "docs" / "dependency-management.md").read_text(encoding="utf-8")
+    readme = (ROOT / "README.md").read_text(encoding="utf-8")
+    section = _markdown_section(readme, README_DEPENDENCY_HEADING)
+    without_scripts = readme.replace("CI tooling in `scripts/test-requirements.txt`, and", "CI tooling, and", 1)
+    comment_stuffed = without_scripts.replace(
+        README_DEPENDENCY_HEADING,
+        README_DEPENDENCY_HEADING + "\n\n<!-- CI tooling in `scripts/test-requirements.txt` -->",
+        1,
+    )
+    link_stuffed = readme.replace(
+        "[canonical dependency management inventory](docs/dependency-management.md)",
+        "<!-- [canonical dependency management inventory](docs/dependency-management.md) -->",
+        1,
+    )
+    assert "scripts/test-requirements.txt" in section
+    for mutated in (comment_stuffed, link_stuffed):
+        with pytest.raises(AssertionError, match="README dependency consistency failed"):
+            _assert_readme_dependency_consistency(mutated, canonical)
+
+
+def test_readme_dependency_summary_noop_compound_and_uniqueness_controls() -> None:
+    canonical = (ROOT / "docs" / "dependency-management.md").read_text(encoding="utf-8")
+    readme = (ROOT / "README.md").read_text(encoding="utf-8")
+    noop = readme.replace("not-present-in-readme", "still-not-present", 1)
+    assert noop == readme
+    _assert_readme_dependency_consistency(noop, canonical)
+
+    compound = _replace_in_readme_dependency_section(
+        readme, "scripts/test-requirements.txt", "scripts/missing.txt"
+    ).replace(
+        "Every\nproposal requires human owner review", "Owner review is not required", 1
+    )
+    failed = {name for name, valid in _readme_dependency_dimensions(compound, canonical).items() if not valid}
+    assert failed == {"scripts", "surfaces", "policy", "contradictions"}
+    assert len(failed) > 1
+
+    outputs = {
+        _replace_in_readme_dependency_section(
+            readme, "scripts/test-requirements.txt", replacement
+        )
+        for replacement in (
+            "script/test-requirements.txt",
+            "scripts/missing-requirements.txt",
+            "backend/requirements.txt",
+        )
+    }
+    assert readme not in outputs
+    assert len(outputs) == 3
+
+
+def test_readme_dependency_summary_rejects_untracked_manifest() -> None:
+    canonical = (ROOT / "docs" / "dependency-management.md").read_text(encoding="utf-8")
+    readme = (ROOT / "README.md").read_text(encoding="utf-8")
+    tracked = set(
+        subprocess.run(["git", "ls-files"], cwd=ROOT, check=True, capture_output=True, text=True).stdout.splitlines()
+    )
+    tracked.remove("scripts/test-requirements.txt")
+    dimensions = _readme_dependency_dimensions(readme, canonical, tracked=tracked)
+    assert {name for name, valid in dimensions.items() if not valid} == {"surfaces"}
+
+
+def test_readme_dependency_summary_rejects_canonical_drift() -> None:
+    config = _load_yaml(ROOT / ".github" / "dependabot.yml")
+    canonical = (ROOT / "docs" / "dependency-management.md").read_text(encoding="utf-8")
+    readme = (ROOT / "README.md").read_text(encoding="utf-8")
+
+    yaml_new_surface = copy.deepcopy(config)
+    yaml_new_surface["updates"].append(
+        {"package-ecosystem": "pip", "directory": "/", "schedule": {"interval": "weekly", "day": "monday"}}
+    )
+    with pytest.raises(AssertionError):
+        _assert_dependency_inventory_parity(yaml_new_surface, canonical)
+
+    canonical_changed_manifest = canonical.replace(
+        "scripts/test-requirements.txt", "scripts/requirements.txt"
+    )
+    with pytest.raises(AssertionError):
+        _assert_readme_dependency_consistency(readme, canonical_changed_manifest)
+
+    canonical_without_scripts = canonical.replace(
+        "| `pip` | `/scripts` | `scripts/test-requirements.txt` | Weekly | Monday |\n", "", 1
+    )
+    with pytest.raises(AssertionError):
+        _assert_readme_dependency_consistency(readme, canonical_without_scripts)
+
+    contradictory_readme = readme.replace(
+        "This is a concise overview", "This complete inventory runs daily"
+    )
+    with pytest.raises(AssertionError):
+        _assert_readme_dependency_consistency(contradictory_readme, canonical)
