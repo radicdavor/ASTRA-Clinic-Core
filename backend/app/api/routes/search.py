@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends
 from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
-from app.auth.dependencies import CurrentUserContext, require_active_clinic
+from app.auth.dependencies import CurrentUserContext, patient_ids_in_active_clinic_statement, require_active_clinic
 from app.core.database import get_db
 from app.models.domain import Appointment, Patient, Provider, Room, Service
 from app.schemas.common import ErrorResponse, SearchResponse
@@ -35,6 +35,7 @@ def search(q: str, db: Session = Depends(get_db), context: CurrentUserContext = 
             Patient.updated_at,
         )
             .where(
+                Patient.id.in_(patient_ids_in_active_clinic_statement(context.active_clinic_id)),
                 or_(Patient.first_name.ilike(like), Patient.last_name.ilike(like), Patient.oib.ilike(like)),
             )
             .limit(10)

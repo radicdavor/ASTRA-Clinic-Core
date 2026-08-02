@@ -5,7 +5,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session, joinedload
 
 from app.audit.service import audit, snapshot
-from app.auth.dependencies import TenantActorContext, require_tenant_clinic
+from app.auth.dependencies import TenantActorContext, get_patient_for_clinic, require_tenant_clinic
 from app.core.database import get_db
 from app.models.domain import Appointment, Patient, PatientClinicAssociation, Room
 from app.schemas.common import AITodayOut, AppointmentCreate, AppointmentOperationalOut, ErrorResponse, PatientCreate, PatientOut
@@ -33,6 +33,7 @@ def ai_create_patient(payload: PatientCreate, request: Request, db: Session = De
 def ai_create_appointment(payload: AppointmentCreate, request: Request, db: Session = Depends(get_db), context: TenantActorContext = Depends(require_tenant_clinic("ai.appointments.create"))):
     actor = context.actor
     data = payload.model_dump()
+    get_patient_for_clinic(db, data["patient_id"], context.clinic_id)
     room = db.scalar(select(Room).where(Room.id == data["room_id"], Room.clinic_id == context.clinic_id))
     if room is None:
         raise HTTPException(404, detail="Prostorija nije pronađena")

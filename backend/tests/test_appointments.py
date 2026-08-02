@@ -4,7 +4,7 @@ import pytest
 from fastapi import HTTPException
 from sqlalchemy import select
 
-from app.models.domain import Appointment, Clinic, ClinicMembership, PatientJourney, Permission, Role, User
+from app.models.domain import Appointment, Clinic, ClinicMembership, PatientClinicAssociation, PatientJourney, Permission, Role, User
 from app.core.security import hash_password
 from app.services.appointments import APPOINTMENT_STATUSES_BLOCKING_PATIENT_TIME, calculate_duration_minutes, validate_appointment_payload
 from tests.conftest import login_token
@@ -340,6 +340,7 @@ def test_create_appointment_api_blocks_cross_clinic_same_patient_overlap(client,
     room_b.clinic_id = clinic_b.id
     provider_b.clinic_id = clinic_b.id
     db.add(ClinicMembership(user_id=auth_setup["admin"].id, clinic_id=clinic_b.id, created_by_user_id=auth_setup["admin"].id))
+    db.add(PatientClinicAssociation(patient_id=p.id, clinic_id=clinic_b.id, created_by_user_id=auth_setup["admin"].id))
     db.commit()
     token = login_token(client, "admin@test.local")
 

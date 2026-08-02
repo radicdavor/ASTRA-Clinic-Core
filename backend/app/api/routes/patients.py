@@ -6,7 +6,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, joinedload
 
 from app.audit.service import audit, snapshot
-from app.auth.dependencies import Actor, CurrentUserContext, get_current_actor, get_scoped_patient, require_active_clinic
+from app.auth.dependencies import Actor, CurrentUserContext, get_current_actor, get_scoped_patient, patients_in_active_clinic_statement, require_active_clinic
 from app.core.database import get_db
 from app.models.domain import Appointment, ClinicalDocument, ClinicalDocumentAddendum, ClinicalEpisode, ClinicalFinding, ClinicalOpenQuestion, Invoice, Patient, PatientClinicAssociation
 from app.schemas.common import ClinicalEpisodeOut, ClinicalEvidenceTimelineListResponse, ClinicalFindingDetailResponse, ClinicalFindingListResponse, ClinicalFindingReadItem, ClinicalOpenQuestionDetailResponse, ClinicalOpenQuestionListResponse, ClinicalOpenQuestionReadItem, ErrorResponse, InvoiceOut, PatientAppointmentAvailabilityOut, PatientClinicalRecordItem, PatientClinicalRecordResponse, PatientCreate, PatientIdentityOut, PatientOut, PatientUpdate
@@ -178,7 +178,7 @@ def list_patients(
     db: Session = Depends(get_db),
     context: CurrentUserContext = Depends(require_active_clinic("patients.read")),
 ):
-    stmt = select(Patient).order_by(Patient.last_name, Patient.first_name, Patient.id).limit(limit)
+    stmt = patients_in_active_clinic_statement(context.active_clinic_id).order_by(Patient.last_name, Patient.first_name, Patient.id).limit(limit)
     if q:
         like = f"%{q}%"
         stmt = stmt.where(or_(Patient.first_name.ilike(like), Patient.last_name.ilike(like), Patient.phone.ilike(like), Patient.email.ilike(like), Patient.oib.ilike(like)))
@@ -211,7 +211,7 @@ def possible_patient_duplicates(
             conditions.append(and_(*name_match))
     if not conditions:
         return []
-    stmt = select(Patient).where(or_(*conditions)).order_by(Patient.last_name, Patient.first_name).limit(10)
+    stmt = patients_in_active_clinic_statement(context.active_clinic_id).where(or_(*conditions)).order_by(Patient.last_name, Patient.first_name).limit(10)
     return db.scalars(stmt).all()
 
 
@@ -222,9 +222,7 @@ def get_patient(
     db: Session = Depends(get_db),
     context: CurrentUserContext = Depends(require_active_clinic("patients.read")),
 ):
-    patient = db.get(Patient, patient_id)
-    if not patient:
-        raise HTTPException(404, detail="Pacijent nije pronađen")
+    patient = get_scoped_patient(db, patient_id, context)
     actor = context.actor
     audit(
         db, "patient.viewed", "Patient", patient.id, "Otvoren je operativni identitet pacijenta",
@@ -442,8 +440,7 @@ def patient_appointments(
     db: Session = Depends(get_db),
     context: CurrentUserContext = Depends(require_active_clinic("appointments.patient_availability.read")),
 ):
-    if not db.get(Patient, patient_id):
-        raise HTTPException(404, detail="Pacijent nije pronaden")
+    get_scoped_patient(db, patient_id, context)
     appointments = db.scalars(
         patient_appointment_availability_stmt(patient_id)
         .options(joinedload(Appointment.clinic), joinedload(Appointment.service), joinedload(Appointment.provider))

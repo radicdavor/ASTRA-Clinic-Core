@@ -158,6 +158,8 @@ def test_actual_patient_access_is_server_audited_once_per_request(client, db, au
     patient = Patient(first_name="Server", last_name="Audited")
     db.add(patient)
     db.flush()
+    db.add(PatientClinicAssociation(patient_id=patient.id, clinic_id=auth_setup["clinic"].id, active=True))
+    db.commit()
 
     for _ in range(2):
         response = client.get(f"/api/patients/{patient.id}", headers=_headers(client))

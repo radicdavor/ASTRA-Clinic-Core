@@ -73,7 +73,8 @@ Module 3 is closed for the authorized local/demo scope. Broader production valid
 The stacked remediation advances the single Alembic head to `0066` and closes
 the active-clinic billing, institution clinical-child provenance, audit
 projection, and API-key tenant-scope findings. Null or conflicting legacy
-provenance is deny-by-default. The safe global `Patient` directory remains an
+provenance is deny-by-default. The global `Patient` storage identity is exposed
+to operational directory/search routes only through an active clinic association; it remains an
 identity/deduplication surface and does not grant access to child records.
 
 Local evidence at the remediation HEAD: 147 fast backend tests, 737 full

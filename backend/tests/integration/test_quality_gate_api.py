@@ -78,10 +78,100 @@ def seed_clinic_objects(db, user: User | None = None):
     service = Service(name="API Service", duration_minutes=30, price=Decimal("100"))
     db.add_all([patient, institution, clinic, provider, room, service])
     db.flush()
+    db.add(PatientClinicAssociation(patient_id=patient.id, clinic_id=clinic.id, active=True))
     if user is not None:
         db.add(ClinicMembership(user_id=user.id, clinic_id=clinic.id, created_by_user_id=user.id))
         db.flush()
     return patient, provider, room, service
+
+
+def test_patient_operational_identity_is_clinic_scoped_in_postgresql(pg_client, pg_db):
+    institution_a = Institution(code="scope-a", name="Synthetic Scope Institution A", active=True)
+    institution_b = Institution(code="scope-b", name="Synthetic Scope Institution B", active=True)
+    clinic_a1 = Clinic(name="Synthetic Scope Clinic A1", institution=institution_a)
+    clinic_a2 = Clinic(name="Synthetic Scope Clinic A2", institution=institution_a)
+    clinic_b1 = Clinic(name="Synthetic Scope Clinic B1", institution=institution_b)
+    user = create_user_with_permissions(
+        pg_db,
+        "patient-scope-pg@test.local",
+        ["patients.read", "patients.write", "appointments.write", "ai.appointments.create"],
+    )
+    patients = [
+        Patient(first_name="Visible", last_name="Synthetic", oib="51000000001"),
+        Patient(first_name="SiblingSecret", last_name="Synthetic", oib="52000000002"),
+        Patient(first_name="ForeignSecret", last_name="Synthetic", oib="53000000003"),
+    ]
+    provider_obj = Provider(full_name="dr. Patient Scope", specialty="QA", clinic=clinic_a1)
+    room_obj = Room(name="Patient Scope Room", type="test", clinic=clinic_a1)
+    service_obj = Service(name="Patient Scope Service", duration_minutes=30, price=Decimal("100"))
+    pg_db.add_all([institution_a, institution_b, clinic_a1, clinic_a2, clinic_b1, *patients, provider_obj, room_obj, service_obj])
+    pg_db.flush()
+    pg_db.add_all(
+        [
+            ClinicMembership(user_id=user.id, clinic_id=clinic_a1.id, created_by_user_id=user.id),
+            PatientClinicAssociation(patient_id=patients[0].id, clinic_id=clinic_a1.id, active=True),
+            PatientClinicAssociation(patient_id=patients[1].id, clinic_id=clinic_a2.id, active=True),
+            PatientClinicAssociation(patient_id=patients[2].id, clinic_id=clinic_b1.id, active=True),
+        ]
+    )
+    raw_key = "synthetic_pg_patient_scope_key"
+    pg_db.add(
+        ApiKey(
+            name="Synthetic PostgreSQL patient scope",
+            key_hash=hash_api_key(raw_key),
+            scopes=["ai.appointments.create"],
+            clinic_id=clinic_a1.id,
+            institution_id=institution_a.id,
+            active=True,
+        )
+    )
+    pg_db.commit()
+    headers = {"Authorization": f"Bearer {login(pg_client, user.email)}", "X-Clinic-Id": str(clinic_a1.id)}
+
+    directory = pg_client.get("/api/patients?q=Synthetic", headers=headers)
+    sibling_detail = pg_client.get(f"/api/patients/{patients[1].id}", headers=headers)
+    foreign_detail = pg_client.get(f"/api/patients/{patients[2].id}", headers=headers)
+    missing_detail = pg_client.get("/api/patients/2147483647", headers=headers)
+    duplicate = pg_client.get("/api/patients/possible-duplicates?oib=53000000003", headers=headers)
+    before_name = patients[2].first_name
+    mutation = pg_client.patch(
+        f"/api/patients/{patients[2].id}",
+        headers=headers,
+        json={"first_name": "UnauthorizedMutation"},
+    )
+    appointment_count = pg_db.query(Appointment).count()
+    appointment_payload = {
+        "patient_id": patients[2].id,
+        "provider_id": provider_obj.id,
+        "room_id": room_obj.id,
+        "service_id": service_obj.id,
+        "date": "2026-07-28",
+        "start_time": "09:00",
+        "end_time": "09:30",
+        "duration_minutes": 30,
+        "status": "scheduled",
+        "source": "manual",
+    }
+    appointment = pg_client.post("/api/appointments", headers=headers, json=appointment_payload)
+    ai_appointment = pg_client.post(
+        "/api/ai/appointments/create",
+        headers={"X-ASTRA-API-Key": raw_key},
+        json={**appointment_payload, "source": "ai_agent"},
+    )
+
+    assert directory.status_code == duplicate.status_code == 200
+    assert [item["id"] for item in directory.json()] == [patients[0].id]
+    assert duplicate.json() == []
+    assert sibling_detail.status_code == foreign_detail.status_code == missing_detail.status_code == 404
+    assert sibling_detail.json() == foreign_detail.json() == missing_detail.json()
+    assert mutation.status_code == appointment.status_code == ai_appointment.status_code == 404
+    pg_db.refresh(patients[2])
+    assert patients[2].first_name == before_name
+    assert pg_db.query(Appointment).count() == appointment_count
+    assert pg_db.query(AuditLog).filter_by(entity_type="Patient", entity_id=patients[2].id, action="update").count() == 0
+    combined = directory.text + duplicate.text + sibling_detail.text + foreign_detail.text
+    assert "SiblingSecret" not in combined
+    assert "ForeignSecret" not in combined
 
 
 def test_postgresql_migrations_created_key_tables(pg_db):

@@ -1175,7 +1175,7 @@ class PatientOut(PatientCreate, ORMModel):
 
 
 class PatientIdentityOut(ORMModel):
-    """Global patient-directory projection. Free-text clinical/operational notes are never identity data."""
+    """Clinic-scoped operational identity projection. Free-text notes are never identity data."""
 
     id: int
     first_name: str

@@ -20,7 +20,7 @@ backend policy check.
 
 | Route group | Permission entry point | Scope | Author/status policy | Canonical loader or service |
 | --- | --- | --- | --- | --- |
-| patient directory and identity | `require_active_clinic("patients.read")` | global patient identity after active-clinic authorization | none | bounded patient query; identity is not duplicated per clinic |
+| patient directory and identity | `require_active_clinic("patients.read")` | active clinic association | unauthorized and nonexistent IDs share `404` | `patients_in_active_clinic_statement` / `get_scoped_patient`; storage identity is not duplicated per clinic |
 | clinic patient operations | `require_active_clinic(...)` | active clinic | operation-specific | `get_scoped_patient` / `patient_in_active_clinic_statement` |
 | appointments and schedule | `require_active_clinic(...)` | active clinic | appointment status/conflict service | clinic predicate in appointment query; route-local loaded appointment helpers remain where relationship shape differs |
 | patient journeys | `require_active_clinic(...)` | active clinic | transition state machine | clinic predicate in journey query / `get_scoped_journey` where a simple graph is sufficient |
@@ -41,6 +41,8 @@ The current minimal policy vocabulary is:
 - `require_permission`: permission gate;
 - `require_active_clinic`: permission plus active membership and clinic context;
 - `get_scoped_patient`: clinic-associated patient operation loader;
+- `get_patient_for_clinic`: the same canonical patient loader for a verified
+  clinic-scoped API-key or integration context;
 - `get_scoped_journey`: clinic-scoped journey loader;
 - `actor_is_medical_staff`: professional category plus institution-read permission;
 - `resolve_actor_institution_context`: explicit institution selection policy;
@@ -71,9 +73,9 @@ This removes two route-level implementations without changing write checks.
 - Institution clinical reads use `Actor`, not active-clinic context, because an
   authorized medical user may read clinical records across clinics in the same
   institution.
-- Patient identity search remains institution/global identity reuse after the
-  caller has an active clinic; clinical and financial associations remain
-  scoped.
+- Operational patient list, search, duplicate detection, detail and mutations
+  require an active association with the selected clinic. Institution-wide
+  continuity remains confined to explicit medical-staff clinical routes.
 - Permission and membership changes are evaluated per request. There is no
   long-lived authorization cache, so revocation remains immediate.
 - Existing permission-only legacy/readiness endpoints were not behaviorally

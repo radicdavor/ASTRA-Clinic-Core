@@ -55,6 +55,29 @@ def test_duplicate_oib_is_rejected(client, auth_setup):
     assert second.status_code == 409
 
 
+def test_foreign_clinic_identity_collision_is_generic_and_does_not_auto_associate(client, db, auth_setup):
+    foreign_clinic = Clinic(name="Foreign collision clinic")
+    foreign_patient = Patient(first_name="Foreign", last_name="Collision", oib="23232323232")
+    db.add_all([foreign_clinic, foreign_patient])
+    db.flush()
+    db.add(PatientClinicAssociation(patient_id=foreign_patient.id, clinic_id=foreign_clinic.id, active=True))
+    db.commit()
+
+    response = client.post(
+        "/api/patients",
+        headers=auth_headers(client),
+        json={"first_name": "Attempted", "last_name": "Duplicate", "oib": "23232323232"},
+    )
+
+    assert response.status_code == 409
+    assert "Foreign" not in response.text
+    assert "Collision" not in response.text
+    assert db.query(PatientClinicAssociation).filter_by(
+        patient_id=foreign_patient.id,
+        clinic_id=auth_setup["clinic"].id,
+    ).count() == 0
+
+
 def test_patient_search_includes_oib(client, auth_setup, sql_query_counter):
     headers = auth_headers(client)
     client.post("/api/patients", headers=headers, json={"first_name": "Search", "last_name": "Oib", "oib": "33333333333"})
@@ -68,9 +91,17 @@ def test_patient_search_includes_oib(client, auth_setup, sql_query_counter):
 
 
 def test_patient_directory_is_bounded_and_stably_ordered(client, db, auth_setup):
+    patients = [Patient(first_name=f"Ime {index:03d}", last_name="Ograniceni", phone=str(index)) for index in range(75)]
+    db.add_all(patients)
+    db.flush()
     db.add_all(
-        Patient(first_name=f"Ime {index:03d}", last_name="Ograniceni", phone=str(index))
-        for index in range(75)
+        PatientClinicAssociation(
+            patient_id=patient.id,
+            clinic_id=auth_setup["clinic"].id,
+            active=True,
+            created_by_user_id=auth_setup["admin"].id,
+        )
+        for patient in patients
     )
     db.commit()
 
@@ -82,7 +113,7 @@ def test_patient_directory_is_bounded_and_stably_ordered(client, db, auth_setup)
     assert client.get("/api/patients?limit=51", headers=auth_headers(client)).status_code == 422
 
 
-def test_global_patient_identity_reads_never_expose_cross_clinic_free_text_notes(client, db, auth_setup):
+def test_operational_patient_identity_reads_do_not_expose_cross_clinic_identity(client, db, auth_setup):
     foreign_clinic = Clinic(name="Foreign identity clinic")
     foreign_patient = Patient(
         first_name="Foreign",
@@ -103,10 +134,11 @@ def test_global_patient_identity_reads_never_expose_cross_clinic_free_text_notes
         headers=headers,
     )
 
-    assert directory.status_code == detail.status_code == duplicates.status_code == 200
-    assert "notes" not in directory.json()[0]
-    assert "notes" not in detail.json()
-    assert "notes" not in duplicates.json()[0]
+    assert directory.status_code == duplicates.status_code == 200
+    assert detail.status_code == 404
+    assert directory.json() == []
+    assert duplicates.json() == []
+    assert "Foreign" not in directory.text + detail.text + duplicates.text
     assert "CROSS_CLINIC_FREE_TEXT_SENTINEL" not in directory.text + detail.text + duplicates.text
 
 
