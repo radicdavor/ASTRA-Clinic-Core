@@ -5,7 +5,7 @@ from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api.routes import ai, appointments, audit, auth, catalog, catalog_governance, clinical_documents, clinical_forms, daily_dashboard, document_ingestion, episodes, intake, inventory, journey_activities, journey_check_in, journey_closure, journey_encounter, journey_preparation, journey_timeline, knowledge, laboratory, pathology, patient_clinical_summary, patient_journeys, patients, readiness, reception, reports, search, system, therapies, workflow
+from app.api.routes import ai, appointments, audit, auth, catalog, catalog_governance, clinical_documents, clinical_forms, daily_dashboard, document_ingestion, episodes, intake, inventory, journey_activities, journey_check_in, journey_closure, journey_encounter, journey_preparation, journey_timeline, knowledge, laboratory, pathology, patient_clinical_summary, patient_identity_reconciliation, patient_journeys, patients, readiness, reception, reports, search, system, therapies, workflow
 from app.core.config import get_settings
 from app.services.schema_readiness import check_configured_database_schema_readiness
 from app.services.request_ids import normalize_request_id
@@ -37,6 +37,7 @@ app.include_router(clinical_forms.router)
 app.include_router(document_ingestion.router)
 app.include_router(patient_clinical_summary.router)
 app.include_router(patients.router)
+app.include_router(patient_identity_reconciliation.router)
 app.include_router(appointments.router)
 app.include_router(reception.router)
 app.include_router(episodes.router)

@@ -1888,6 +1888,43 @@ export type PatientIdentityOut = {
   updated_at: string;
 };
 
+export type PatientIdentityReconciliationDecision = {
+  candidate_patient_id?: number | null;
+  reason: string;
+};
+
+export type PatientIdentityReconciliationReviewItem = {
+  candidates: Array<{
+}>;
+  created_at: string;
+  match_reasons: {
+};
+  request_id: string;
+  requesting_clinic_id: number;
+  requesting_institution_id: number;
+  status: string;
+  submitted_identity: {
+};
+  updated_at: string;
+};
+
+export type PatientIdentityReconciliationStatusOut = {
+  created_at: string;
+  request_id: string;
+  result_patient_id?: number | null;
+  status: string;
+  submitted_identity: {
+};
+  updated_at: string;
+};
+
+export type PatientIdentityReviewRequired = {
+  code?: string;
+  message?: string;
+  request_id: string;
+  status: string;
+};
+
 export type PatientKnowledgeItem = {
   display_kind?: string | null;
   requires_attention?: boolean;

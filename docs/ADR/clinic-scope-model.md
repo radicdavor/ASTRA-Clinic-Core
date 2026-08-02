@@ -100,10 +100,23 @@ duplicate search and appointment mutation routes require an active
 same institution does not inherit this operational access.
 
 An identity collision outside the active clinic fails closed without returning
-patient PII or creating an association. Linking an existing identity to another
-clinic is a separate, audited human workflow; it is never an implicit side
-effect of search or appointment creation. Explicit medical-staff clinical
-continuity routes retain their independently authorized institution scope.
+patient PII or creating an association. The create boundary produces an opaque,
+durable `PatientIdentityReconciliationRequest` when deterministic OIB,
+name-and-date-of-birth, date-of-birth-and-email, or date-of-birth-and-phone
+matching finds an installation-wide candidate. Requesters see only their
+submitted identity and request status; candidate identity, count, clinic and
+match reason remain hidden.
+
+Only a user with the explicit `patients.identity_reconciliation.review`
+permission can open the request-bound minimal comparison. The reviewer may
+approve one candidate link, confirm that the submitted identity is a distinct
+person, or reject insufficient evidence. Each final decision is transactional,
+audited and creates at most one Patient/clinic association. No search, request,
+appointment or AI action links identities automatically. Explicit
+medical-staff clinical continuity routes retain their independently authorized
+institution scope. This database-held identity snapshot uses the existing
+database access boundary; field-level encryption and production identity-proofing
+remain separate deployment decisions.
 
 ## Same-patient scheduling concurrency
 

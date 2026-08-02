@@ -14,12 +14,13 @@ from urllib.parse import parse_qsl, quote, unquote, urlencode, urlparse
 
 RECOVERY_SCHEMA_VERSION = 2
 RECOVERY_EVIDENCE_SCHEMA_VERSION = 1
-FINAL_ALEMBIC_REVISION = "0071_membership_taxonomy"
+FINAL_ALEMBIC_REVISION = "0072_patient_identity_reconciliation"
 SUPPORTED_BACKUP_REVISIONS = frozenset(
     {
         "0062_signed_report_addendum_integrity",
         "0069_legacy_document_trust",
         "0070_membership_correction",
+        "0071_membership_taxonomy",
         FINAL_ALEMBIC_REVISION,
     }
 )
@@ -55,11 +56,12 @@ CRITICAL_TABLES = (
     "audit_logs",
 )
 RECOVERY_TEST_IDS = (
-    "empty_database_to_0071",
+    "empty_database_to_0072",
     "0062_restore_and_roll_forward",
     "0069_restore_and_roll_forward",
     "0070_restore_and_roll_forward",
-    "0071_backup_restore",
+    "0071_restore_and_roll_forward",
+    "0072_backup_restore",
     "explicit_source_restored_final_revision",
     "semantic_checksums",
     "membership_fail_closed_recovery",

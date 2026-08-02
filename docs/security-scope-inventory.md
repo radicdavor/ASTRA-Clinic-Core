@@ -7,7 +7,7 @@ Branch: `fix/pr3-scope-and-audit-blockers`
 Base: `feature/full-stack-production-validation` at `5850342`
 
 This inventory is the route-level review record for the PR #3 authorization
-closure. The repository contains 272 FastAPI route decorators and 262
+closure. The repository contains 280 FastAPI route decorators and 270
 registered `/api` route-method pairs. Every route
 module was searched for direct ID loads, patient-only child queries, nullable
 tenant predicates, permission-only authorization, and client-controlled tenant
@@ -112,7 +112,14 @@ The negative matrix covers:
 The route families above are also exercised by PostgreSQL integration and
 DB-backed browser tests. Frontend hiding is never treated as authorization.
 
-The lightweight registry gate classifies all 262 current `/api` route-method
+Patient identity reconciliation requester status and cancellation routes are
+`ClinicOperationalContext`: they expose only an opaque request owned by the
+resolved clinic. The request-bound review queue, detail, and decision routes
+are `SystemSecurityAuditContext` and require the explicit
+`patients.identity_reconciliation.review` permission; they are not a global
+Patient search surface and do not grant a system-admin PHI bypass.
+
+The lightweight registry gate classifies all 270 current `/api` route-method
 pairs and fingerprints the sorted path, method and context projection. Any
 addition, removal, move or reclassification changes the fingerprint and fails
 CI until the route inventory is explicitly reviewed. This includes financial

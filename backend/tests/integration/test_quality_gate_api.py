@@ -1,14 +1,18 @@
 from decimal import Decimal
 from datetime import date, datetime, time, timedelta, timezone
+from concurrent.futures import ThreadPoolExecutor
 
 import pytest
+from fastapi import HTTPException, Request
 from sqlalchemy import inspect, select, text
 from sqlalchemy.exc import DBAPIError
 
-from app.auth.dependencies import hash_api_key
+from app.auth.dependencies import Actor, hash_api_key
 from app.core.security import hash_password
-from app.models.domain import ApiKey, Appointment, AuditLog, ClinicalDocument, ClinicalFormDefinition, ClinicalFormInstance, ClinicalFormVersion, Clinic, ClinicMembership, Institution, Invoice, InvoiceLine, JourneyActivity, JourneyCheckIn, Patient, PatientClinicAssociation, PatientJourney, Permission, Provider, Role, Room, Service, SignedClinicalReport, User, UserSession
+from app.models.domain import ApiKey, Appointment, AuditLog, ClinicalDocument, ClinicalFormDefinition, ClinicalFormInstance, ClinicalFormVersion, Clinic, ClinicMembership, Institution, Invoice, InvoiceLine, JourneyActivity, JourneyCheckIn, Patient, PatientClinicAssociation, PatientIdentityReconciliationRequest, PatientJourney, Permission, Provider, Role, Room, Service, SignedClinicalReport, User, UserSession
 from app.services.reports import report_digest
+from app.services.patient_identity_reconciliation import approve_link, finalize_without_patient, lock_pending
+from sqlalchemy.orm import Session
 
 
 pytestmark = pytest.mark.integration
@@ -67,6 +71,64 @@ def login(client, email: str) -> str:
     response = client.post("/auth/login", json={"email": email, "password": "secret"})
     assert response.status_code == 200
     return response.json()["access_token"]
+
+
+def test_patient_identity_reconciliation_is_durable_and_idempotent_in_postgresql(pg_client, pg_db):
+    institution_a = Institution(code="reconcile-a", name="Synthetic Reconcile Institution A", active=True)
+    institution_b = Institution(code="reconcile-b", name="Synthetic Reconcile Institution B", active=True)
+    clinic_a = Clinic(name="Synthetic Reconcile Clinic A", institution=institution_a)
+    clinic_b = Clinic(name="Synthetic Reconcile Clinic B", institution=institution_b)
+    pg_db.add_all([institution_a, institution_b, clinic_a, clinic_b]); pg_db.flush()
+    requester = create_institution_user(pg_db, "reconcile-requester@test.local", ["patients.read", "patients.write"], clinic_a, "administrative")
+    reviewer = create_user_with_permissions(pg_db, "reconcile-reviewer@test.local", ["patients.identity_reconciliation.review"])
+    foreign = Patient(first_name="Ana", last_name="Horvat", date_of_birth=date(1987, 4, 3), email="ana.reconcile@example.com")
+    pg_db.add(foreign); pg_db.flush()
+    pg_db.add(PatientClinicAssociation(patient_id=foreign.id, clinic_id=clinic_b.id, active=True)); pg_db.commit()
+    requester_headers = {"Authorization": f"Bearer {login(pg_client, requester.email)}", "X-Clinic-Id": str(clinic_a.id)}
+    payload = {"first_name": " ANA ", "last_name": "horvat", "date_of_birth": "1987-04-03", "email": "ANA.RECONCILE@example.com"}
+
+    first = pg_client.post("/api/patients", headers=requester_headers, json=payload)
+    retry = pg_client.post("/api/patients", headers=requester_headers, json=payload)
+    assert first.status_code == retry.status_code == 202
+    assert first.json()["request_id"] == retry.json()["request_id"]
+    assert pg_db.query(PatientIdentityReconciliationRequest).filter_by(status="pending_review").count() == 1
+    assert pg_db.query(Patient).count() == 1
+
+    reviewer_headers = {"Authorization": f"Bearer {login(pg_client, reviewer.email)}"}
+    request_id = first.json()["request_id"]
+    approved = pg_client.post(f"/api/patient-identity-reconciliations/review/{request_id}/approve-link", headers=reviewer_headers, json={"reason": "Verified synthetic identity evidence", "candidate_patient_id": foreign.id})
+    replay = pg_client.post(f"/api/patient-identity-reconciliations/review/{request_id}/approve-link", headers=reviewer_headers, json={"reason": "Verified synthetic identity evidence", "candidate_patient_id": foreign.id})
+    assert approved.status_code == 200
+    assert replay.status_code == 409
+    assert pg_db.query(PatientClinicAssociation).filter_by(patient_id=foreign.id, clinic_id=clinic_a.id).count() == 1
+    assert pg_db.query(Patient).count() == 1
+
+    second_foreign = Patient(first_name="Iva", last_name="Kovač", date_of_birth=date(1991, 5, 6), email="iva.reconcile@example.com")
+    pg_db.add(second_foreign); pg_db.flush(); pg_db.add(PatientClinicAssociation(patient_id=second_foreign.id, clinic_id=clinic_b.id, active=True)); pg_db.commit()
+    second = pg_client.post("/api/patients", headers=requester_headers, json={"first_name": "Iva", "last_name": "Kovač", "date_of_birth": "1991-05-06", "email": "iva.reconcile@example.com"})
+    second_id = second.json()["request_id"]
+
+    def decide(action: str) -> str:
+        with Session(pg_db.get_bind(), expire_on_commit=False) as session:
+            actor = Actor(actor_type="user", user=session.get(User, reviewer.id))
+            request = Request({"type": "http", "method": "POST", "path": "/synthetic-reconciliation-race", "headers": [], "client": ("127.0.0.1", 1)})
+            try:
+                item = lock_pending(session, second_id)
+                if action == "approve":
+                    approve_link(session, item, actor, request, "Concurrent synthetic approval", second_foreign.id)
+                else:
+                    finalize_without_patient(session, item, actor, request, "rejected_insufficient_evidence", "Concurrent synthetic rejection")
+                return "committed"
+            except HTTPException as exc:
+                session.rollback()
+                return f"conflict:{exc.status_code}"
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        outcomes = sorted(executor.map(decide, ("approve", "reject")))
+    assert outcomes == ["committed", "conflict:409"]
+    pg_db.expire_all()
+    final = pg_db.get(PatientIdentityReconciliationRequest, second_id)
+    assert final.status in {"approved_link", "rejected_insufficient_evidence"}
 
 
 def seed_clinic_objects(db, user: User | None = None):

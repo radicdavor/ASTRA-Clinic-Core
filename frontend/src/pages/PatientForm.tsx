@@ -4,7 +4,7 @@ import { api, notifyUser } from "../api/client";
 import { ActionButton } from "../components/ActionButton";
 import { DateInput } from "../components/DateInput";
 import { HelpHint } from "../components/HelpHint";
-import { Patient } from "../types";
+import { Patient, PatientIdentityReviewRequired } from "../types";
 import { formatPatientIdentity, formatPatientName } from "../utils/patientIdentity";
 
 export function PatientForm() {
@@ -73,7 +73,7 @@ export function PatientForm() {
       notifyUser("Pronadeni su moguci duplikati. Provjerite identitet pacijenta i potvrdite nastavak.", "error");
       return;
     }
-    const patient = await api<Patient>("/api/patients", {
+    const result = await api<Patient | PatientIdentityReviewRequired>("/api/patients", {
       method: "POST",
       body: JSON.stringify({
         first_name: form.first_name.trim(),
@@ -85,7 +85,11 @@ export function PatientForm() {
         notes: optionalText(form.notes)
       })
     });
-    navigate(returnTo === "appointment" ? `/appointments/new?patient_id=${patient.id}` : "/patients");
+    if (!("id" in result)) {
+      navigate(`/patient-identity-reconciliations/${result.request_id}`);
+      return;
+    }
+    navigate(returnTo === "appointment" ? `/appointments/new?patient_id=${result.id}` : "/patients");
   }
 
   return (

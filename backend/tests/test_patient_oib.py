@@ -69,7 +69,9 @@ def test_foreign_clinic_identity_collision_is_generic_and_does_not_auto_associat
         json={"first_name": "Attempted", "last_name": "Duplicate", "oib": "23232323232"},
     )
 
-    assert response.status_code == 409
+    assert response.status_code == 202
+    assert set(response.json()) == {"code", "request_id", "status", "message"}
+    assert response.json()["code"] == "patient_identity_review_required"
     assert "Foreign" not in response.text
     assert "Collision" not in response.text
     assert db.query(PatientClinicAssociation).filter_by(

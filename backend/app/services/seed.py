@@ -35,6 +35,7 @@ from app.models.domain import (
 PERMISSIONS = [
     "patients.read",
     "patients.write",
+    "patients.identity_reconciliation.review",
     "appointments.read",
     "appointments.write",
     "appointments.cancel",
@@ -129,7 +130,8 @@ PERMISSIONS = [
 ]
 
 ROLE_PERMISSIONS = {
-    "admin": PERMISSIONS,
+    "admin": [permission for permission in PERMISSIONS if permission != "patients.identity_reconciliation.review"],
+    "identity_reviewer": ["patients.identity_reconciliation.review"],
     "physician": ["patients.read", "patients.write", "appointments.read", "appointments.write", "appointments.patient_availability.read", "episodes.read", "episodes.write", "clinical_plans.read", "clinical_plans.write", "clinical_documents.read", "clinical_documents.write", "clinical_documents.review", "services.read", "inventory.read", "billing.read", "clinical_readiness.snapshots.read", "clinical_readiness.snapshots.write", "clinical_readiness.snapshots.supersede", "clinical_readiness.acknowledgments.read", "clinical_findings.read", "clinical_open_questions.read", "clinical_evidence_timeline.read", "workflow_tasks.read", "workflow_tasks.write", "knowledge_protocols.read", "knowledge_protocols.write", "knowledge_protocols.review", "journey.read", "journey.transition", "preparation.assign", "preparation.review", "documents.request", "documents.upload", "documents.view_source", "documents.review", "checkin.clinical_review", "encounter.read", "encounter.write", "encounter.complete", "summary.generate", "summary.review", "clinical_forms.read", "clinical_forms.sign", "activity_preparation.read", "activity_preparation.update", "activity_preparation.clinical_review", "procedure_interventions.read", "procedure_interventions.write", "pathology_cases.read", "pathology_cases.update", "pathology_results.receive", "pathology_results.review", "pathology_communication.decide", "reports.read", "reports.print", "reports.send", "reports.delivery_history", "audit.access_events.write"],
     "nurse": ["patients.read", "appointments.read", "appointments.write", "appointments.patient_availability.read", "episodes.read", "clinical_plans.read", "clinical_documents.read", "clinical_documents.write", "clinical_documents.review", "inventory.read", "inventory.write", "clinical_readiness.snapshots.read", "workflow_tasks.read", "workflow_tasks.write", "journey.read", "journey.transition", "preparation.assign", "documents.request", "documents.upload", "documents.scan", "documents.view_source", "documents.review", "checkin.update", "encounter.read", "consumables.record", "activity_preparation.read", "activity_preparation.update", "procedure_interventions.read", "pathology_cases.read", "reports.read", "audit.access_events.write"],
     "receptionist": ["patients.read", "patients.write", "appointments.read", "appointments.write", "appointments.patient_availability.read", "episodes.read", "clinical_plans.read", "clinical_documents.read", "services.read", "billing.read", "workflow_tasks.read", "workflow_tasks.write", "journey.read", "journey.create", "journey.transition", "preparation.assign", "documents.request", "documents.upload", "documents.scan", "documents.view_source", "checkin.update", "service_packages.read", "service_packages.schedule", "activity_preparation.read", "activity_preparation.update", "audit.access_events.write"],
@@ -143,6 +145,7 @@ ROLE_PROFESSIONAL_CATEGORIES = {
     "physician": "medical_staff",
     "nurse": "medical_staff",
     "document_reviewer": "medical_staff",
+    "identity_reviewer": "administrative",
 }
 
 MEDICAL_CLINICAL_DOCUMENT_PERMISSIONS = [

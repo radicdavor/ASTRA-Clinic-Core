@@ -4,7 +4,7 @@ from datetime import date, datetime, time
 from decimal import Decimal
 from enum import StrEnum
 
-from sqlalchemy import Boolean, CheckConstraint, Date, DateTime, DDL, ForeignKey, Integer, JSON, Numeric, String, Table, Text, Time, Column, UniqueConstraint, event, func
+from sqlalchemy import Boolean, CheckConstraint, Date, DateTime, DDL, ForeignKey, Index, Integer, JSON, Numeric, String, Table, Text, Time, Column, UniqueConstraint, event, func, text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
@@ -248,6 +248,54 @@ class PatientClinicAssociation(Base):
     patient: Mapped[Patient] = relationship(back_populates="clinic_associations")
     clinic: Mapped[Clinic] = relationship(back_populates="patient_associations")
     created_by: Mapped[User | None] = relationship()
+
+
+class PatientIdentityReconciliationRequest(TimestampMixin, Base):
+    __tablename__ = "patient_identity_reconciliation_requests"
+    __table_args__ = (
+        CheckConstraint(
+            "status in ('pending_review','approved_link','confirmed_distinct','rejected_insufficient_evidence','cancelled')",
+            name="ck_patient_identity_reconciliation_status",
+        ),
+        Index(
+            "uq_patient_identity_reconciliation_active",
+            "requesting_clinic_id",
+            "submitted_identity_fingerprint",
+            unique=True,
+            postgresql_where=text("status = 'pending_review'"),
+            sqlite_where=text("status = 'pending_review'"),
+        ),
+        Index("ix_patient_reconcile_status", "status"),
+        Index("ix_patient_reconcile_clinic", "requesting_clinic_id"),
+        Index("ix_patient_reconcile_institution", "requesting_institution_id"),
+        Index("ix_patient_reconcile_requester_user", "requested_by_user_id"),
+        Index("ix_patient_reconcile_requester_key", "requested_by_api_key_id"),
+        Index("ix_patient_reconcile_reviewer", "reviewed_by_user_id"),
+        Index("ix_patient_reconcile_fingerprint", "submitted_identity_fingerprint"),
+        Index("ix_patient_reconcile_result", "result_patient_id"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    schema_version: Mapped[int] = mapped_column(Integer, default=1, server_default="1")
+    requesting_institution_id: Mapped[int] = mapped_column(ForeignKey("institutions.id", ondelete="RESTRICT"))
+    requesting_clinic_id: Mapped[int] = mapped_column(ForeignKey("clinics.id", ondelete="RESTRICT"))
+    requested_by_user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="RESTRICT"))
+    requested_by_api_key_id: Mapped[int | None] = mapped_column(ForeignKey("api_keys.id", ondelete="RESTRICT"))
+    status: Mapped[str] = mapped_column(String(48), default="pending_review", server_default="pending_review")
+    submitted_identity_snapshot: Mapped[dict] = mapped_column(JSON)
+    submitted_identity_fingerprint: Mapped[str] = mapped_column(String(64))
+    candidate_patient_ids: Mapped[list] = mapped_column(JSON)
+    match_reasons: Mapped[dict] = mapped_column(JSON)
+    reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    reviewed_by_user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="RESTRICT"))
+    decision_reason: Mapped[str | None] = mapped_column(Text)
+    result_patient_id: Mapped[int | None] = mapped_column(ForeignKey("patients.id", ondelete="RESTRICT"))
+    version: Mapped[int] = mapped_column(Integer, default=1, server_default="1")
+
+    requesting_clinic: Mapped[Clinic] = relationship(foreign_keys=[requesting_clinic_id])
+    requested_by_user: Mapped[User | None] = relationship(foreign_keys=[requested_by_user_id])
+    reviewed_by_user: Mapped[User | None] = relationship(foreign_keys=[reviewed_by_user_id])
+    result_patient: Mapped[Patient | None] = relationship(foreign_keys=[result_patient_id])
 
 
 class Module(TimestampMixin, Base):

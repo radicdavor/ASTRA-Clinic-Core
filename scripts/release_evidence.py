@@ -16,7 +16,7 @@ except ModuleNotFoundError:  # Direct execution from the scripts directory.
 
 
 ROOT = Path(__file__).resolve().parents[1]
-EXPECTED_MIGRATION_HEAD = "0071_membership_taxonomy"
+EXPECTED_MIGRATION_HEAD = "0072_patient_identity_reconciliation"
 SCHEMA_VERSION = 1
 SHA_PATTERN = re.compile(r"^[0-9a-f]{40}$")
 CANONICAL_PRODUCER_RESULTS = {

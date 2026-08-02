@@ -1,6 +1,6 @@
 from datetime import date, datetime, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
 from sqlalchemy import and_, func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, joinedload
@@ -8,12 +8,13 @@ from sqlalchemy.orm import Session, joinedload
 from app.audit.service import audit, snapshot
 from app.auth.dependencies import Actor, CurrentUserContext, get_current_actor, get_scoped_patient, patients_in_active_clinic_statement, require_active_clinic
 from app.core.database import get_db
-from app.models.domain import Appointment, ClinicalDocument, ClinicalDocumentAddendum, ClinicalEpisode, ClinicalFinding, ClinicalOpenQuestion, Invoice, Patient, PatientClinicAssociation
-from app.schemas.common import ClinicalEpisodeOut, ClinicalEvidenceTimelineListResponse, ClinicalFindingDetailResponse, ClinicalFindingListResponse, ClinicalFindingReadItem, ClinicalOpenQuestionDetailResponse, ClinicalOpenQuestionListResponse, ClinicalOpenQuestionReadItem, ErrorResponse, InvoiceOut, PatientAppointmentAvailabilityOut, PatientClinicalRecordItem, PatientClinicalRecordResponse, PatientCreate, PatientIdentityOut, PatientOut, PatientUpdate
+from app.models.domain import Appointment, ClinicalDocument, ClinicalDocumentAddendum, ClinicalEpisode, ClinicalFinding, ClinicalOpenQuestion, Invoice, Patient, PatientClinicAssociation, PatientIdentityReconciliationRequest
+from app.schemas.common import ClinicalEpisodeOut, ClinicalEvidenceTimelineListResponse, ClinicalFindingDetailResponse, ClinicalFindingListResponse, ClinicalFindingReadItem, ClinicalOpenQuestionDetailResponse, ClinicalOpenQuestionListResponse, ClinicalOpenQuestionReadItem, ErrorResponse, InvoiceOut, PatientAppointmentAvailabilityOut, PatientClinicalRecordItem, PatientClinicalRecordResponse, PatientCreate, PatientIdentityOut, PatientIdentityReviewRequired, PatientOut, PatientUpdate
 from app.services.clinical_evidence_timeline import list_patient_clinical_evidence_timeline
 from app.services.appointments import minimal_appointment_conflict, patient_appointment_availability_stmt
 from app.services.clinical_document_access import clinical_document_capabilities, institution_scoped_clinical_record_metadata_statement, resolve_actor_institution_context
 from app.services.clinical_scope import authorized_institution_id
+from app.services.patient_identity_reconciliation import create_patient_or_reconciliation
 
 ERROR_RESPONSES = {400: {"model": ErrorResponse}, 401: {"model": ErrorResponse}, 403: {"model": ErrorResponse}, 404: {"model": ErrorResponse}, 409: {"model": ErrorResponse}, 422: {"model": ErrorResponse}}
 
@@ -153,22 +154,19 @@ def open_question_detail_response(question: ClinicalOpenQuestion) -> ClinicalOpe
     )
 
 
-@router.post("/patients", response_model=PatientOut)
+@router.post("/patients", response_model=PatientOut | PatientIdentityReviewRequired)
 def create_patient(
     payload: PatientCreate,
     request: Request,
+    response: Response,
     db: Session = Depends(get_db),
     context: CurrentUserContext = Depends(require_active_clinic("patients.write")),
 ):
-    patient = Patient(**payload.model_dump())
-    db.add(patient)
-    flush_or_conflict(db)
-    db.add(PatientClinicAssociation(patient_id=patient.id, clinic_id=context.active_clinic_id, active=True, created_by_user_id=context.user.id))
-    audit(db, "create", "Patient", patient.id, f"{patient.first_name} {patient.last_name}", context.actor.user_id, context.actor.actor_type, context.actor.api_key_id, None, snapshot(patient), request)
-    audit(db, "patient_clinic_association_create", "PatientClinicAssociation", None, "Pacijent povezan s aktivnom klinikom", context.actor.user_id, context.actor.actor_type, context.actor.api_key_id, None, {"patient_id": patient.id, "clinic_id": context.active_clinic_id}, request)
-    commit_or_conflict(db)
-    db.refresh(patient)
-    return patient
+    result = create_patient_or_reconciliation(db, payload, context.active_clinic_id, context.active_clinic.institution_id, context.actor, request)
+    if isinstance(result, PatientIdentityReconciliationRequest):
+        response.status_code = status.HTTP_202_ACCEPTED
+        return PatientIdentityReviewRequired(request_id=result.id, status=result.status)
+    return result
 
 
 @router.get("/patients", response_model=list[PatientIdentityOut])
