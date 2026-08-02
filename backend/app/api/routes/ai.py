@@ -1,38 +1,45 @@
 from datetime import date, time, timedelta
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session, joinedload
 
 from app.audit.service import audit, snapshot
-from app.auth.dependencies import TenantActorContext, require_tenant_clinic
+from app.auth.dependencies import TenantActorContext, get_patient_for_clinic, require_tenant_clinic
 from app.core.database import get_db
-from app.models.domain import Appointment, Patient, PatientClinicAssociation, Room
-from app.schemas.common import AITodayOut, AppointmentCreate, AppointmentOperationalOut, ErrorResponse, PatientCreate, PatientOut
+from app.models.domain import Appointment, PatientIdentityReconciliationRequest, Room
+from app.schemas.common import AITodayOut, AppointmentCreate, AppointmentOperationalOut, ErrorResponse, PatientCreate, PatientIdentityReconciliationStatusOut, PatientIdentityReviewRequired, PatientOut
+from app.api.routes.patient_identity_reconciliation import requester_item, requester_out
 from app.services.appointments import BLOCKING_STATUSES, create_appointment_with_journey, resolve_appointment_episode_reference
+from app.services.patient_identity_reconciliation import create_patient_or_reconciliation
 
 ERROR_RESPONSES = {400: {"model": ErrorResponse}, 401: {"model": ErrorResponse}, 403: {"model": ErrorResponse}, 404: {"model": ErrorResponse}, 409: {"model": ErrorResponse}, 422: {"model": ErrorResponse}}
 
 router = APIRouter(prefix="/api/ai", tags=["ai"], responses=ERROR_RESPONSES)
 
 
-@router.post("/patients/create", response_model=PatientOut)
-def ai_create_patient(payload: PatientCreate, request: Request, db: Session = Depends(get_db), context: TenantActorContext = Depends(require_tenant_clinic("ai.patients.create"))):
-    actor = context.actor
-    patient = Patient(**payload.model_dump())
-    db.add(patient)
-    db.flush()
-    db.add(PatientClinicAssociation(patient_id=patient.id, clinic_id=context.clinic_id, active=True))
-    audit(db, "create", "Patient", patient.id, "AI kreirao pacijenta", actor.user_id, actor.actor_type, actor.api_key_id, None, snapshot(patient), request)
+@router.post("/patients/create", response_model=PatientOut | PatientIdentityReviewRequired)
+def ai_create_patient(payload: PatientCreate, request: Request, response: Response, db: Session = Depends(get_db), context: TenantActorContext = Depends(require_tenant_clinic("ai.patients.create"))):
+    result = create_patient_or_reconciliation(db, payload, context.clinic_id, context.institution_id, context.actor, request)
+    if isinstance(result, PatientIdentityReconciliationRequest):
+        response.status_code = status.HTTP_202_ACCEPTED
+        return PatientIdentityReviewRequired(request_id=result.id, status=result.status)
+    return result
+
+
+@router.get("/patient-identity-reconciliations/{request_id}", response_model=PatientIdentityReconciliationStatusOut)
+def ai_reconciliation_status(request_id: str, request: Request, db: Session = Depends(get_db), context: TenantActorContext = Depends(require_tenant_clinic("ai.patients.create"))):
+    item = requester_item(db, request_id, context.clinic_id)
+    audit(db, "patient_identity.status_viewed", "PatientIdentityReconciliationRequest", None, "Otvoren status zahtjeva za pregled identiteta", context.actor.user_id, context.actor.actor_type, context.actor.api_key_id, None, {"request_id": item.id, "status": item.status}, request, scope_type="clinic", clinic_id=context.clinic_id, institution_id=context.institution_id)
     db.commit()
-    db.refresh(patient)
-    return patient
+    return requester_out(item)
 
 
 @router.post("/appointments/create", response_model=AppointmentOperationalOut)
 def ai_create_appointment(payload: AppointmentCreate, request: Request, db: Session = Depends(get_db), context: TenantActorContext = Depends(require_tenant_clinic("ai.appointments.create"))):
     actor = context.actor
     data = payload.model_dump()
+    get_patient_for_clinic(db, data["patient_id"], context.clinic_id)
     room = db.scalar(select(Room).where(Room.id == data["room_id"], Room.clinic_id == context.clinic_id))
     if room is None:
         raise HTTPException(404, detail="Prostorija nije pronađena")

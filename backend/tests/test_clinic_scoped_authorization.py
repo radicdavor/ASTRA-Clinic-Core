@@ -1,10 +1,13 @@
 from datetime import date, datetime, time
 from decimal import Decimal
 
+from app.auth.dependencies import hash_api_key
 from app.models.domain import (
+    ApiKey,
     Appointment,
     Clinic,
     ClinicMembership,
+    Institution,
     JourneyActivity,
     Patient,
     PatientClinicAssociation,
@@ -44,7 +47,7 @@ def seed_two_clinic_patients(db, auth_setup):
     return clinic_a, clinic_b, patient_a, patient_b
 
 
-def test_user_with_one_membership_can_use_global_patient_directory(client, db, auth_setup):
+def test_patient_directory_returns_only_active_clinic_patients(client, db, auth_setup):
     _, _, patient_a, patient_b = seed_two_clinic_patients(db, auth_setup)
 
     response = client.get("/api/patients", headers=auth_headers(client))
@@ -52,19 +55,42 @@ def test_user_with_one_membership_can_use_global_patient_directory(client, db, a
     assert response.status_code == 200
     ids = {item["id"] for item in response.json()}
     assert patient_a.id in ids
-    assert patient_b.id in ids
+    assert patient_b.id not in ids
 
 
-def test_direct_patient_identity_from_other_clinic_is_visible_for_fast_entry(client, db, auth_setup):
+def test_direct_patient_identity_from_other_clinic_is_not_enumerable(client, db, auth_setup):
     _, _, _, patient_b = seed_two_clinic_patients(db, auth_setup)
 
     response = client.get(f"/api/patients/{patient_b.id}", headers=auth_headers(client))
 
-    assert response.status_code == 200
-    assert response.json()["id"] == patient_b.id
+    missing = client.get("/api/patients/2147483647", headers=auth_headers(client))
+    assert response.status_code == missing.status_code == 404
+    assert response.json() == missing.json()
 
 
-def test_cross_clinic_patient_appointments_are_visible_for_conflict_check(client, db, auth_setup):
+def test_inactive_patient_clinic_association_does_not_grant_operational_access(client, db, auth_setup):
+    patient_obj = Patient(first_name="Inactive", last_name="Association")
+    db.add(patient_obj)
+    db.flush()
+    db.add(
+        PatientClinicAssociation(
+            patient_id=patient_obj.id,
+            clinic_id=auth_setup["clinic"].id,
+            active=False,
+            created_by_user_id=auth_setup["admin"].id,
+        )
+    )
+    db.commit()
+
+    directory = client.get("/api/patients?q=Inactive", headers=auth_headers(client))
+    detail = client.get(f"/api/patients/{patient_obj.id}", headers=auth_headers(client))
+
+    assert directory.status_code == 200
+    assert directory.json() == []
+    assert detail.status_code == 404
+
+
+def test_cross_clinic_patient_appointments_require_scoped_patient_first(client, db, auth_setup):
     _, clinic_b, _, patient_b = seed_two_clinic_patients(db, auth_setup)
     provider = Provider(full_name="Dr. Other", active=True)
     service = Service(name="Other Service", duration_minutes=30, price=Decimal("80.00"), active=True)
@@ -87,12 +113,7 @@ def test_cross_clinic_patient_appointments_are_visible_for_conflict_check(client
 
     response = client.get(f"/api/patients/{patient_b.id}/appointments", headers=auth_headers(client))
 
-    assert response.status_code == 200
-    payload = response.json()
-    assert [item["appointment_id"] for item in payload] == [appointment_b.id]
-    assert payload[0]["clinic"]["id"] == clinic_b.id
-    assert "notes" not in payload[0]
-    assert "price" not in payload[0]
+    assert response.status_code == 404
 
 
 def test_cross_clinic_patient_billing_context_remains_scoped(client, db, auth_setup):
@@ -103,7 +124,7 @@ def test_cross_clinic_patient_billing_context_remains_scoped(client, db, auth_se
     assert response.status_code == 404
 
 
-def test_patient_search_uses_global_identity_directory(client, db, auth_setup):
+def test_patient_search_uses_active_clinic_identity_directory(client, db, auth_setup):
     _, _, patient_a, patient_b = seed_two_clinic_patients(db, auth_setup)
 
     response = client.get("/api/search?q=Clinic", headers=auth_headers(client))
@@ -111,7 +132,140 @@ def test_patient_search_uses_global_identity_directory(client, db, auth_setup):
     assert response.status_code == 200
     ids = {item["id"] for item in response.json()["patients"]}
     assert patient_a.id in ids
-    assert patient_b.id in ids
+    assert patient_b.id not in ids
+
+
+def test_operational_patient_identity_hides_sibling_and_foreign_institution(client, db, auth_setup):
+    clinic_a = auth_setup["clinic"]
+    sibling = Clinic(name="Sibling Clinic", institution_id=clinic_a.institution_id)
+    foreign_institution = Institution(code="SYNTH-B", name="Synthetic Institution B")
+    db.add_all([sibling, foreign_institution])
+    db.flush()
+    foreign = Clinic(name="Foreign Institution Clinic", institution_id=foreign_institution.id)
+    sibling_patient = Patient(first_name="SiblingSecret", last_name="Patient", oib="30000000003")
+    foreign_patient = Patient(first_name="ForeignSecret", last_name="Patient", oib="40000000004")
+    db.add_all([foreign, sibling_patient, foreign_patient])
+    db.flush()
+    db.add_all(
+        [
+            PatientClinicAssociation(patient_id=sibling_patient.id, clinic_id=sibling.id, active=True),
+            PatientClinicAssociation(patient_id=foreign_patient.id, clinic_id=foreign.id, active=True),
+        ]
+    )
+    db.commit()
+    headers = auth_headers(client)
+
+    directory = client.get("/api/patients?q=Secret", headers=headers)
+    search = client.get("/api/search?q=Secret", headers=headers)
+    sibling_detail = client.get(f"/api/patients/{sibling_patient.id}", headers=headers)
+    foreign_detail = client.get(f"/api/patients/{foreign_patient.id}", headers=headers)
+    missing_detail = client.get("/api/patients/2147483647", headers=headers)
+    sibling_duplicates = client.get(
+        "/api/patients/possible-duplicates?oib=30000000003", headers=headers
+    )
+    foreign_duplicates = client.get(
+        "/api/patients/possible-duplicates?oib=40000000004", headers=headers
+    )
+
+    assert directory.status_code == search.status_code == 200
+    assert directory.json() == []
+    assert search.json()["patients"] == []
+    assert sibling_duplicates.json() == foreign_duplicates.json() == []
+    assert sibling_detail.status_code == foreign_detail.status_code == missing_detail.status_code == 404
+    assert sibling_detail.json() == foreign_detail.json() == missing_detail.json()
+    combined = directory.text + search.text + sibling_detail.text + foreign_detail.text
+    assert "SiblingSecret" not in combined
+    assert "ForeignSecret" not in combined
+
+
+def test_cross_clinic_patient_mutations_fail_before_database_change(client, db, auth_setup):
+    _, _, _, patient_b = seed_two_clinic_patients(db, auth_setup)
+    before = (patient_b.first_name, patient_b.last_name, patient_b.phone)
+
+    response = client.patch(
+        f"/api/patients/{patient_b.id}",
+        headers=auth_headers(client),
+        json={"first_name": "UnauthorizedMutation", "phone": "999"},
+    )
+
+    assert response.status_code == 404
+    db.refresh(patient_b)
+    assert (patient_b.first_name, patient_b.last_name, patient_b.phone) == before
+
+
+def test_scheduling_routes_reject_cross_clinic_patient_before_insert(client, db, auth_setup):
+    _, _, _, patient_b = seed_two_clinic_patients(db, auth_setup)
+    clinic_a = auth_setup["clinic"]
+    provider = Provider(full_name="Dr. Active Clinic", clinic_id=clinic_a.id, active=True)
+    service = Service(name="Active Clinic Service", duration_minutes=30, price=Decimal("80.00"), active=True)
+    room = Room(name="Active Clinic Scheduling Room", clinic_id=clinic_a.id, active=True)
+    db.add_all([provider, service, room])
+    db.commit()
+    payload = {
+        "patient_id": patient_b.id,
+        "provider_id": provider.id,
+        "service_id": service.id,
+        "room_id": room.id,
+        "date": "2026-07-22",
+        "start_time": "09:00",
+        "end_time": "09:30",
+        "duration_minutes": 30,
+        "status": "scheduled",
+        "source": "manual",
+    }
+    before = db.query(Appointment).count()
+
+    for route in ("/api/appointments", "/api/intake/web/appointments", "/api/ai/appointments/create"):
+        response = client.post(route, headers=auth_headers(client), json=payload)
+        assert response.status_code == 404
+
+    assert db.query(Appointment).count() == before
+
+
+def test_clinic_api_key_cannot_schedule_patient_from_another_clinic(client, db, auth_setup):
+    _, _, _, patient_b = seed_two_clinic_patients(db, auth_setup)
+    clinic_a = auth_setup["clinic"]
+    provider = Provider(full_name="Dr. API Scope", clinic_id=clinic_a.id, active=True)
+    service = Service(name="API Scope Service", duration_minutes=30, price=Decimal("80.00"), active=True)
+    room = Room(name="API Scope Room", clinic_id=clinic_a.id, active=True)
+    raw_key = "synthetic_patient_scope_key"
+    db.add_all(
+        [
+            provider,
+            service,
+            room,
+            ApiKey(
+                name="Synthetic patient-scope scheduler",
+                key_hash=hash_api_key(raw_key),
+                scopes=["ai.appointments.create"],
+                clinic_id=clinic_a.id,
+                institution_id=clinic_a.institution_id,
+                active=True,
+            ),
+        ]
+    )
+    db.commit()
+    before = db.query(Appointment).count()
+
+    response = client.post(
+        "/api/ai/appointments/create",
+        headers={"X-ASTRA-API-Key": raw_key},
+        json={
+            "patient_id": patient_b.id,
+            "provider_id": provider.id,
+            "service_id": service.id,
+            "room_id": room.id,
+            "date": "2026-07-22",
+            "start_time": "10:00",
+            "end_time": "10:30",
+            "duration_minutes": 30,
+            "status": "scheduled",
+            "source": "ai_agent",
+        },
+    )
+
+    assert response.status_code == 404
+    assert db.query(Appointment).count() == before
 
 
 def test_user_with_multiple_memberships_must_select_active_clinic(client, db, auth_setup):

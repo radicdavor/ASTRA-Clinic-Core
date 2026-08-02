@@ -317,7 +317,12 @@ def seed() -> dict:
     with SessionLocal() as db:
         _PERMISSION_CACHE.clear()
         _PERMISSION_CACHE.update({item.name: item for item in db.scalars(select(Permission)).all()})
-        all_permissions = role(db, "e2e_admin", PERMISSIONS)
+        all_permissions = role(
+            db,
+            "e2e_admin",
+            [permission for permission in PERMISSIONS if permission != "patients.identity_reconciliation.review"],
+        )
+        identity_reviewer_role = role(db, "identity_reviewer", ["patients.identity_reconciliation.review"])
         receptionist_role = role(db, "e2e_receptionist", ["patients.read", "patients.write", "appointments.read", "appointments.write", "appointments.patient_availability.read", "services.read", "journey.read", "journey.transition", "checkin.update", "encounter.read", "audit.access_events.write"])
         dual_role = role(db, "e2e_dual", ["patients.read", "appointments.read", "appointments.write", "appointments.patient_availability.read", "services.read", "journey.read", "checkin.update", "encounter.read"])
         physician_role = role(
@@ -363,6 +368,7 @@ def seed() -> dict:
         reception_a = user(db, "e2e.reception.a@example.invalid", "E2E Recepcija A", receptionist_role)
         dual = user(db, "e2e.dual@example.invalid", "E2E Dvije Klinike", dual_role)
         system_admin = user(db, "e2e.system@example.invalid", "E2E System Admin", all_permissions)
+        identity_reviewer = user(db, "e2e.identity.reviewer@example.invalid", "E2E Identity Reviewer", identity_reviewer_role)
         physician_a = user(db, "e2e.physician.a@example.invalid", "dr. E2E Klinički A", physician_role)
         physician_b = user(db, "e2e.physician.b@example.invalid", "dr. E2E Klinički B", physician_reader_role)
         nurse_a = user(db, "e2e.nurse.a@example.invalid", "E2E Medicinska sestra", nurse_role)
@@ -398,13 +404,17 @@ def seed() -> dict:
         )
         only_b = patient(db, "E2E", "Samo B Pacijent", "e2e.patient.onlyb@example.invalid")
         paid_patient = patient(db, "E2E", "Placeni Pacijent", "e2e.patient.paid@example.invalid")
-        foreign_patient = patient(db, "E2E", "Druga Ustanova Pacijent", "e2e.patient.foreign@example.invalid")
+        foreign_patient = patient(db, "E2E", "Druga Ustanova Pacijent", "e2e.patient.foreign@example.com")
+        distinct_candidate = patient(db, "E2E", "Distinct Candidate", "e2e.patient.distinct@example.com")
+        rejected_candidate = patient(db, "E2E", "Rejected Candidate", "e2e.patient.rejected@example.com")
         db.flush()
         link_patient(db, shared, clinic_a, admin_a)
         link_patient(db, shared, clinic_b, admin_a)
         link_patient(db, only_b, clinic_b, admin_a)
         link_patient(db, paid_patient, clinic_a, admin_a)
         link_patient(db, foreign_patient, clinic_c, foreign_physician)
+        link_patient(db, distinct_candidate, clinic_c, foreign_physician)
+        link_patient(db, rejected_candidate, clinic_c, foreign_physician)
 
         local_episode = ClinicalEpisode(
             patient_id=shared.id,
@@ -684,13 +694,14 @@ def seed() -> dict:
                 "receptionA": reception_a.email,
                 "dual": dual.email,
                 "systemAdmin": system_admin.email,
+                "identityReviewer": identity_reviewer.email,
                 "physicianA": physician_a.email,
                 "physicianB": physician_b.email,
                 "nurseA": nurse_a.email,
                 "foreignPhysician": foreign_physician.email,
             },
             "clinics": {"a": clinic_a.id, "b": clinic_b.id, "foreign": clinic_c.id},
-            "patients": {"shared": shared.id, "onlyB": only_b.id, "paid": paid_patient.id, "foreign": foreign_patient.id},
+            "patients": {"shared": shared.id, "onlyB": only_b.id, "paid": paid_patient.id, "foreign": foreign_patient.id, "distinctCandidate": distinct_candidate.id, "rejectedCandidate": rejected_candidate.id},
             "journeys": {"a": a_journey.id, "b": b_journey.id, "onlyB": only_b_journey.id, "paid": paid_journey.id},
             "appointments": {"clinicBConflict": b_appt.id, "clinicAVisit": a_appt.id},
             "services": {"consult": consult.id, "gastro": gastro.id, "colon": colon.id},

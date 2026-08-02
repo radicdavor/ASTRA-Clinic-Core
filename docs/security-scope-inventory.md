@@ -7,7 +7,7 @@ Branch: `fix/pr3-scope-and-audit-blockers`
 Base: `feature/full-stack-production-validation` at `5850342`
 
 This inventory is the route-level review record for the PR #3 authorization
-closure. The repository contains 272 FastAPI route decorators and 262
+closure. The repository contains 280 FastAPI route decorators and 270
 registered `/api` route-method pairs. Every route
 module was searched for direct ID loads, patient-only child queries, nullable
 tenant predicates, permission-only authorization, and client-controlled tenant
@@ -39,8 +39,8 @@ path family was inspected.
 
 | Route family and methods | Object | Classification | Expected scope | Current loader/filter | Permission boundary | Foreign-object test group | Status |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| patient create/list/duplicates/identity detail and global search | Patient identity | global identity | authenticated identity workflow only | explicit identity column projection and typed DTO; narrative notes excluded | patient/scheduling permission | `test_patient_oib.py`, `test_pr3_fourth_security_operational_projections.py` | intentional global identity |
-| patient appointment availability | Appointment availability | global identity | global patient time-conflict metadata only | availability projection | scheduling permission | `test_appointments.py` | intentional global availability |
+| patient create/list/duplicates/identity detail and global search | Patient identity | clinic operations | active `PatientClinicAssociation`; foreign and missing IDs share `404` | canonical clinic-associated query/loader plus typed DTO; narrative notes excluded | patient/scheduling permission plus active clinic | `test_clinic_scoped_authorization.py`, `test_patient_oib.py` | enforced |
+| patient appointment availability | Appointment availability | clinic operations | patient must first resolve in active clinic; conflict evaluation may then span the global identity | availability projection after scoped patient loader | scheduling permission plus active clinic | `test_clinic_scoped_authorization.py`, `test_appointments.py` | enforced |
 | appointment CRUD, status and slot routes | Appointment | clinic operations | active clinic, except explicit global patient overlap check; unresolved rooms denied | exact active-clinic room validation and scoped appointment loader | appointment permission | `test_appointments.py` | enforced |
 | appointment clinical-readiness preview, snapshots and acknowledgments | Clinical readiness | institution clinical | medical-staff category plus route permission and appointment clinic scope | medical guard before object resolution; readiness service requires authorized medical actor | readiness/appointment permission plus medical category | `test_pr3_third_security_readiness.py`, `test_security_scope_route_registry.py` | enforced |
 | patient-journey CRUD and transition routes | PatientJourney | clinic operations | active clinic | journey parent loader plus narrow reception identity projection; no patient notes | journey permission | `test_patient_journeys.py`, `test_pr3_fourth_security_operational_projections.py` | enforced |
@@ -112,7 +112,14 @@ The negative matrix covers:
 The route families above are also exercised by PostgreSQL integration and
 DB-backed browser tests. Frontend hiding is never treated as authorization.
 
-The lightweight registry gate classifies all 262 current `/api` route-method
+Patient identity reconciliation requester status and cancellation routes are
+`ClinicOperationalContext`: they expose only an opaque request owned by the
+resolved clinic. The request-bound review queue, detail, and decision routes
+are `SystemSecurityAuditContext` and require the explicit
+`patients.identity_reconciliation.review` permission; they are not a global
+Patient search surface and do not grant a system-admin PHI bypass.
+
+The lightweight registry gate classifies all 270 current `/api` route-method
 pairs and fingerprints the sorted path, method and context projection. Any
 addition, removal, move or reclassification changes the fingerprint and fails
 CI until the route inventory is explicitly reviewed. This includes financial

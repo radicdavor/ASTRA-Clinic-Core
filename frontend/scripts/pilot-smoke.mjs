@@ -24,6 +24,99 @@ function unique(values) {
   return [...new Set(values)];
 }
 
+function stripComments(source) {
+  return source.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+}
+
+function patientCreateSubmitBody(source) {
+  const uncommented = stripComments(source);
+  const marker = "async function submit(event: FormEvent) {";
+  const markerIndex = uncommented.indexOf(marker);
+  if (markerIndex === -1) throw new Error("PatientForm submit handler is missing");
+
+  const bodyStart = markerIndex + marker.length;
+  let depth = 1;
+  for (let index = bodyStart; index < uncommented.length; index += 1) {
+    if (uncommented[index] === "{") depth += 1;
+    if (uncommented[index] === "}") depth -= 1;
+    if (depth === 0) return uncommented.slice(bodyStart, index);
+  }
+  throw new Error("PatientForm submit handler is not balanced");
+}
+
+function assertPatientCreateBookingContract(source) {
+  const submit = patientCreateSubmitBody(source);
+  const resultAssignment = "const result = await api<Patient | PatientIdentityReviewRequired>";
+  const reviewGuard = 'if (!("id" in result)) {';
+  const reviewNavigation = "`/patient-identity-reconciliations/${result.request_id}`";
+  const bookingNavigation = "`/appointments/new?patient_id=${result.id}`";
+  const staleBookingNavigation = "`/appointments/new?patient_id=${patient.id}`";
+
+  const resultIndex = submit.indexOf(resultAssignment);
+  const guardIndex = submit.indexOf(reviewGuard);
+  const reviewIndex = submit.indexOf(reviewNavigation);
+  const guardReturnIndex = submit.indexOf("return;", reviewIndex);
+  const bookingIndex = submit.indexOf(bookingNavigation);
+
+  if (resultIndex === -1) throw new Error("Patient create result assignment is missing");
+  if (guardIndex === -1) throw new Error("Patient identity-review success guard is missing");
+  if (reviewIndex === -1) throw new Error("Patient identity-review navigation is missing");
+  if (guardReturnIndex === -1 || guardReturnIndex > bookingIndex) {
+    throw new Error("Patient identity-review branch must return before booking navigation");
+  }
+  if (bookingIndex === -1) throw new Error("Successful patient create does not forward result.id to booking");
+  if (!(resultIndex < guardIndex && guardIndex < reviewIndex && reviewIndex < guardReturnIndex && guardReturnIndex < bookingIndex)) {
+    throw new Error("Patient create result, review guard, and booking navigation are out of order");
+  }
+  if (submit.includes(staleBookingNavigation)) {
+    throw new Error("Patient booking navigation must not read the pre-submit patient state");
+  }
+  if (/if\s*\(\s*false\s*\)[\s\S]*\/appointments\/new\?patient_id=\$\{result\.id\}/.test(submit)) {
+    throw new Error("Patient booking navigation must be reachable executable code");
+  }
+  if (submit.split(bookingNavigation).length !== 2) {
+    throw new Error("Patient booking navigation must have one canonical result.id forwarding path");
+  }
+}
+
+function assertPatientCreateContractMutations() {
+  const baseline = `async function submit(event: FormEvent) {
+    const result = await api<Patient | PatientIdentityReviewRequired>("/api/patients", {});
+    if (!("id" in result)) {
+      navigate(\`/patient-identity-reconciliations/\${result.request_id}\`);
+      return;
+    }
+    navigate(returnTo === "appointment" ? \`/appointments/new?patient_id=\${result.id}\` : "/patients");
+  }`;
+  assertPatientCreateBookingContract(baseline);
+
+  const mutants = [
+    ["stale pre-submit id", (value) => value.replace("${result.id}", "${patient.id}")],
+    ["missing review return", (value) => value.replace("      return;\n", "")],
+    ["comment stuffing", (value) => value.replace("    navigate(returnTo", "    // navigate(returnTo")],
+    ["dead booking branch", (value) => value.replace("    navigate(returnTo", "    if (false) navigate(returnTo")],
+    ["missing booking forwarding", (value) => value.replace("    navigate(returnTo === \"appointment\" ? `/appointments/new?patient_id=${result.id}` : \"/patients\");\n", "")],
+    [
+      "string stuffing outside submit",
+      (value) => `${value.replace("    navigate(returnTo === \"appointment\" ? `/appointments/new?patient_id=${result.id}` : \"/patients\");\n", "")}\nconst decoy = \`/appointments/new?patient_id=\${result.id}\`;`,
+    ],
+  ];
+  const outputs = new Set();
+  for (const [name, mutate] of mutants) {
+    const mutant = mutate(baseline);
+    if (mutant === baseline) throw new Error(`Patient create contract mutant is a no-op: ${name}`);
+    if (outputs.has(mutant)) throw new Error(`Duplicate patient create contract mutant: ${name}`);
+    outputs.add(mutant);
+    let rejected = false;
+    try {
+      assertPatientCreateBookingContract(mutant);
+    } catch {
+      rejected = true;
+    }
+    if (!rejected) throw new Error(`Patient create contract accepted mutant: ${name}`);
+  }
+}
+
 [
   "src/pages/Dashboard.tsx",
   "src/pages/AppointmentDetail.tsx",
@@ -213,7 +306,8 @@ assertIncludes("src/pages/AppointmentForm.tsx", "Klinicka epizoda");
 assertIncludes("src/pages/AppointmentForm.tsx", "Bez epizode");
 assertNotIncludes("src/pages/AppointmentForm.tsx", "Kreiraj novu epizodu");
 assertIncludes("src/pages/PatientForm.tsx", "return_to");
-assertIncludes("src/pages/PatientForm.tsx", "/appointments/new?patient_id=${patient.id}");
+assertPatientCreateBookingContract(read("src/pages/PatientForm.tsx"));
+assertPatientCreateContractMutations();
 assertIncludes("src/pages/PatientDetail.tsx", "WorkspaceHeader");
 assertIncludes("src/pages/PatientDetail.tsx", "/api/patients/${id}/clinical-documents");
 assertIncludes("src/pages/PatientDetail.tsx", "/api/patients/${id}/clinical-summary");

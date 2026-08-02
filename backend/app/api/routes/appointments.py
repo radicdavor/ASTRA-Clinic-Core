@@ -5,7 +5,7 @@ from sqlalchemy import or_, select
 from sqlalchemy.orm import Session, joinedload
 
 from app.audit.service import audit, snapshot
-from app.auth.dependencies import Actor, CurrentUserContext, actor_has_medical_staff_category, get_current_actor, require_active_clinic, require_medical_staff, require_permission
+from app.auth.dependencies import Actor, CurrentUserContext, actor_has_medical_staff_category, get_current_actor, get_scoped_patient, require_active_clinic, require_medical_staff, require_permission
 from app.core.database import get_db
 from app.models.domain import Appointment, ClinicalEpisode, ClinicalReadinessReviewAcknowledgment, ClinicalReadinessSnapshot, Patient, Provider, Room, Service
 from app.schemas.common import AppointmentCreate, AppointmentOperationalOut, AppointmentUpdate, ClinicalReadinessAcknowledgmentDetailResponse, ClinicalReadinessAcknowledgmentListResponse, ClinicalReadinessAcknowledgmentReadItem, ClinicalReadinessPreviewResponse, ClinicalReadinessSnapshotCaptureRequest, ClinicalReadinessSnapshotDetailResponse, ClinicalReadinessSnapshotHistoryItem, ClinicalReadinessSnapshotHistoryResponse, ClinicalReadinessSnapshotResponse, ClinicalReadinessSnapshotSupersedeRequest, ClinicalReadinessSnapshotSupersedeResponse, ErrorResponse
@@ -297,6 +297,7 @@ def create_appointment(
     context: CurrentUserContext = Depends(require_active_clinic("appointments.write")),
 ):
     data = payload.model_dump()
+    get_scoped_patient(db, data["patient_id"], context)
     room = db.get(Room, data["room_id"])
     if room is None:
         raise HTTPException(404, detail="Soba nije pronadena")
@@ -611,6 +612,7 @@ def update_appointment(
     appointment = db.get(Appointment, appointment_id)
     if not appointment or appointment.clinic_id != context.active_clinic_id:
         raise HTTPException(404, detail="Termin nije pronaden")
+    get_scoped_patient(db, appointment.patient_id, context)
     before = snapshot(appointment)
     update_data = payload.model_dump(exclude_unset=True)
     next_room_id = update_data.get("room_id", appointment.room_id)

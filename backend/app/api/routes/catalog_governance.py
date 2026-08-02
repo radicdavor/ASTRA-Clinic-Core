@@ -3,7 +3,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
 from app.audit.service import audit, snapshot
-from app.auth.dependencies import Actor, CurrentUserContext, require_active_clinic, require_permission
+from app.auth.dependencies import Actor, CurrentUserContext, get_scoped_patient, require_active_clinic, require_permission
 from app.core.database import get_db
 from app.models.domain import ClinicalFormDefinition, ClinicalFormVersion, PatientJourney, Provider, Room, ServiceFormBinding, ServicePackage, ServicePackageVersion
 from app.schemas.catalog_governance import FormBindingCreate, FormDefinitionCreate, FormVersionDraftCreate, PackageBookRequest, PackageCreate, PackageMaterializeRequest, PackageSchedulePreviewRequest, PackageVersionCreate
@@ -32,6 +32,7 @@ def list_packages(db: Session = Depends(get_db), actor: Actor = Depends(require_
 @router.post("/service-package-versions/{version_id}/schedule-preview")
 def schedule_preview(version_id: int, payload: PackageSchedulePreviewRequest, request: Request, db: Session = Depends(get_db), context: CurrentUserContext = Depends(require_active_clinic("service_packages.schedule"))):
     actor = context.actor
+    get_scoped_patient(db, payload.patient_id, context)
     validate_package_assignments_for_active_clinic(db, payload.assignments, context.active_clinic_id)
     version = db.scalar(select(ServicePackageVersion).options(selectinload(ServicePackageVersion.items)).where(ServicePackageVersion.id == version_id))
     if not version:
@@ -45,6 +46,7 @@ def schedule_preview(version_id: int, payload: PackageSchedulePreviewRequest, re
 @router.post("/service-package-versions/{version_id}/book", status_code=201)
 def book_published_package(version_id: int, payload: PackageBookRequest, request: Request, db: Session = Depends(get_db), context: CurrentUserContext = Depends(require_active_clinic("service_packages.schedule"))):
     actor = context.actor
+    get_scoped_patient(db, payload.patient_id, context)
     validate_package_assignments_for_active_clinic(db, payload.assignments, context.active_clinic_id)
     if payload.episode_id is not None:
         episode = get_institution_episode(db, payload.episode_id, context)

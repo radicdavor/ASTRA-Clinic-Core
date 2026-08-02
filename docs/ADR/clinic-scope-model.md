@@ -93,15 +93,38 @@ The original document remains unchanged and readable.
 
 ## Patient identity and scheduling visibility
 
-The patient identity directory is intentionally broader: patient lookup during scheduling and exam entry may search the shared patient identity table to avoid duplicate entry and speed up form filling.
+The `Patient` row remains the installation-wide storage identity, but it is not
+an installation-wide operational directory. Patient list, identity detail,
+duplicate search and appointment mutation routes require an active
+`PatientClinicAssociation` for the selected clinic. A sibling clinic in the
+same institution does not inherit this operational access.
 
-Patient appointment visibility is also broader for scheduling safety. Staff must be able to see that the same patient already has an appointment at another clinic so the patient cannot be booked in two places at the same time.
+An identity collision outside the active clinic fails closed without returning
+patient PII or creating an association. The create boundary produces an opaque,
+durable `PatientIdentityReconciliationRequest` when deterministic OIB,
+name-and-date-of-birth, date-of-birth-and-email, or date-of-birth-and-phone
+matching finds an installation-wide candidate. Requesters see only their
+submitted identity and request status; candidate identity, count, clinic and
+match reason remain hidden.
 
-This broader scheduling visibility does not grant access to that patient's clinical documents, journeys, invoices, results, encounter notes, or other clinic-scoped context. When a clinic books or otherwise starts work with an existing patient identity, the association with that clinic must be created through a controlled service path.
+Only a user with the explicit `patients.identity_reconciliation.review`
+permission can open the request-bound minimal comparison. The reviewer may
+approve one candidate link, confirm that the submitted identity is a distinct
+person, or reject insufficient evidence. Each final decision is transactional,
+audited and creates at most one Patient/clinic association. No search, request,
+appointment or AI action links identities automatically. Explicit
+medical-staff clinical continuity routes retain their independently authorized
+institution scope. This database-held identity snapshot uses the existing
+database access boundary; field-level encryption and production identity-proofing
+remain separate deployment decisions.
 
 ## Same-patient scheduling concurrency
 
-Patient-time conflict checks are intentionally global to the patient identity, not limited to the active clinic. A patient can be visible for booking in multiple clinics, but cannot physically attend overlapping appointments in different rooms or clinics.
+Patient-time conflict checks are intentionally global to the patient identity,
+but may run only after the operational route has resolved that identity through
+the active clinic association. Global conflict detection does not grant global
+identity visibility or permission to create an appointment for another clinic's
+patient.
 
 PostgreSQL scheduling writes acquire a transaction-scoped advisory lock keyed by patient ID before checking for overlapping blocking appointments. The lock serializes create and update attempts for the same patient across concurrent database transactions, so the conflict query and subsequent insert or update are evaluated as one critical section. The lock is released automatically on commit or rollback.
 

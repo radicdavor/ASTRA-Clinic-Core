@@ -269,25 +269,33 @@ def require_tenant_clinic(permission_name: str):
     return dependency
 
 
-def patient_in_active_clinic_statement(patient_id: int, clinic_id: int):
-    return (
-        select(Patient)
-        .join(PatientClinicAssociation, PatientClinicAssociation.patient_id == Patient.id)
-        .where(
-            Patient.id == patient_id,
-            PatientClinicAssociation.clinic_id == clinic_id,
-            PatientClinicAssociation.active.is_(True),
-        )
+def patient_ids_in_active_clinic_statement(clinic_id: int):
+    """Patient identities authorized for clinic-operational use."""
+    return select(PatientClinicAssociation.patient_id).where(
+        PatientClinicAssociation.clinic_id == clinic_id,
+        PatientClinicAssociation.active.is_(True),
     )
+
+
+def patients_in_active_clinic_statement(clinic_id: int):
+    return select(Patient).where(Patient.id.in_(patient_ids_in_active_clinic_statement(clinic_id)))
+
+
+def patient_in_active_clinic_statement(patient_id: int, clinic_id: int):
+    return patients_in_active_clinic_statement(clinic_id).where(Patient.id == patient_id)
+
+
+def get_patient_for_clinic(db: Session, patient_id: int, clinic_id: int) -> Patient:
+    patient = db.scalar(patient_in_active_clinic_statement(patient_id, clinic_id))
+    if patient is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Pacijent nije pronađen")
+    return patient
 
 
 def get_scoped_patient(db: Session, patient_id: int, context: CurrentUserContext) -> Patient:
     if context.active_clinic_id is None:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Aktivna klinika nije razriješena")
-    patient = db.scalar(patient_in_active_clinic_statement(patient_id, context.active_clinic_id))
-    if patient is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Pacijent nije pronađen")
-    return patient
+    return get_patient_for_clinic(db, patient_id, context.active_clinic_id)
 
 
 def get_scoped_journey(db: Session, journey_id: int, context: CurrentUserContext) -> PatientJourney:

@@ -1,4 +1,4 @@
-# Recovery contract for Alembic 0071
+# Recovery contract through Alembic 0072
 
 Status: draft pre-production recovery contract.
 
@@ -22,14 +22,15 @@ The recovery tools in a given Git commit support:
 - `0062_signed_report_addendum_integrity`;
 - `0069_legacy_document_trust`;
 - `0070_membership_correction`;
-- `0071_membership_taxonomy`.
+- `0071_membership_taxonomy`;
+- `0072_patient_identity_reconciliation`.
 
 The only final application/schema pair validated by this contract is the
-recovery PR commit with `0071_membership_taxonomy`. An older supported backup
+recovery PR commit with `0072_patient_identity_reconciliation`. An older supported backup
 is restored at its recorded revision and then rolled forward with the Alembic
 history from the recovery PR commit.
 
-Running an old application artifact against `0071` is not supported.
+Running an old application artifact against `0072` is not supported.
 
 ## Irreversible security corrections
 
@@ -133,7 +134,7 @@ For an actual synthetic restore add:
 --confirm-destructive RESTORE_SYNTHETIC_DISPOSABLE_DATABASE
 ```
 
-For `0062`, `0069`, or `0070` also add `--upgrade-head`.
+For `0062`, `0069`, `0070`, or `0071` also add `--upgrade-head`.
 
 The restore must prove:
 
@@ -142,7 +143,7 @@ The restore must prove:
    expected source revision;
 3. an older restore is upgraded through the official Alembic chain;
 4. exactly one final revision exists and equals
-   `0071_membership_taxonomy`.
+   `0072_patient_identity_reconciliation`.
 
 Missing, multiple, unknown, or mismatched revisions stop recovery.
 
@@ -208,10 +209,10 @@ The test uses only synthetic identities and content.
   artifact.
 - Interrupted migration/restore: keep the incomplete marker, isolate the
   target, and restart from a new empty target.
-- Failed application deploy with valid `0071`: do not downgrade security
+- Failed application deploy with valid `0072`: do not downgrade security
   corrections; roll forward the application.
 - Required rollback: restore a previously verified supported backup into a new
-  target, validate its recorded revision, then roll forward to `0071`.
+  target, validate its recorded revision, then roll forward to `0072`.
 
 Never restore over a persistent or non-empty database in this workflow.
 
@@ -277,9 +278,9 @@ record from the recovery matrix result that produced it.
 The workflow uses PostgreSQL 16 and executes:
 
 - recovery unit and negative tests;
-- empty database to `0071`;
-- `0062`, `0069`, and `0070` restore plus roll-forward;
-- current `0071` backup/restore;
+- empty database to `0072`;
+- `0062`, `0069`, `0070`, and `0071` restore plus roll-forward;
+- current `0072` backup/restore;
 - semantic, membership, provenance, trust, audit, application-smoke, corrupt
   backup, interrupted restore, and non-empty-target checks;
 - exact-SHA recovery evidence production and independent final validation.

@@ -1,14 +1,18 @@
 from decimal import Decimal
 from datetime import date, datetime, time, timedelta, timezone
+from concurrent.futures import ThreadPoolExecutor
 
 import pytest
+from fastapi import HTTPException, Request
 from sqlalchemy import inspect, select, text
 from sqlalchemy.exc import DBAPIError
 
-from app.auth.dependencies import hash_api_key
+from app.auth.dependencies import Actor, hash_api_key
 from app.core.security import hash_password
-from app.models.domain import ApiKey, Appointment, AuditLog, ClinicalDocument, ClinicalFormDefinition, ClinicalFormInstance, ClinicalFormVersion, Clinic, ClinicMembership, Institution, Invoice, InvoiceLine, JourneyActivity, JourneyCheckIn, Patient, PatientClinicAssociation, PatientJourney, Permission, Provider, Role, Room, Service, SignedClinicalReport, User, UserSession
+from app.models.domain import ApiKey, Appointment, AuditLog, ClinicalDocument, ClinicalFormDefinition, ClinicalFormInstance, ClinicalFormVersion, Clinic, ClinicMembership, Institution, Invoice, InvoiceLine, JourneyActivity, JourneyCheckIn, Patient, PatientClinicAssociation, PatientIdentityReconciliationRequest, PatientJourney, Permission, Provider, Role, Room, Service, SignedClinicalReport, User, UserSession
 from app.services.reports import report_digest
+from app.services.patient_identity_reconciliation import approve_link, finalize_without_patient, lock_pending
+from sqlalchemy.orm import Session
 
 
 pytestmark = pytest.mark.integration
@@ -69,6 +73,64 @@ def login(client, email: str) -> str:
     return response.json()["access_token"]
 
 
+def test_patient_identity_reconciliation_is_durable_and_idempotent_in_postgresql(pg_client, pg_db):
+    institution_a = Institution(code="reconcile-a", name="Synthetic Reconcile Institution A", active=True)
+    institution_b = Institution(code="reconcile-b", name="Synthetic Reconcile Institution B", active=True)
+    clinic_a = Clinic(name="Synthetic Reconcile Clinic A", institution=institution_a)
+    clinic_b = Clinic(name="Synthetic Reconcile Clinic B", institution=institution_b)
+    pg_db.add_all([institution_a, institution_b, clinic_a, clinic_b]); pg_db.flush()
+    requester = create_institution_user(pg_db, "reconcile-requester@test.local", ["patients.read", "patients.write"], clinic_a, "administrative")
+    reviewer = create_user_with_permissions(pg_db, "reconcile-reviewer@test.local", ["patients.identity_reconciliation.review"])
+    foreign = Patient(first_name="Ana", last_name="Horvat", date_of_birth=date(1987, 4, 3), email="ana.reconcile@example.com")
+    pg_db.add(foreign); pg_db.flush()
+    pg_db.add(PatientClinicAssociation(patient_id=foreign.id, clinic_id=clinic_b.id, active=True)); pg_db.commit()
+    requester_headers = {"Authorization": f"Bearer {login(pg_client, requester.email)}", "X-Clinic-Id": str(clinic_a.id)}
+    payload = {"first_name": " ANA ", "last_name": "horvat", "date_of_birth": "1987-04-03", "email": "ANA.RECONCILE@example.com"}
+
+    first = pg_client.post("/api/patients", headers=requester_headers, json=payload)
+    retry = pg_client.post("/api/patients", headers=requester_headers, json=payload)
+    assert first.status_code == retry.status_code == 202
+    assert first.json()["request_id"] == retry.json()["request_id"]
+    assert pg_db.query(PatientIdentityReconciliationRequest).filter_by(status="pending_review").count() == 1
+    assert pg_db.query(Patient).count() == 1
+
+    reviewer_headers = {"Authorization": f"Bearer {login(pg_client, reviewer.email)}"}
+    request_id = first.json()["request_id"]
+    approved = pg_client.post(f"/api/patient-identity-reconciliations/review/{request_id}/approve-link", headers=reviewer_headers, json={"reason": "Verified synthetic identity evidence", "candidate_patient_id": foreign.id})
+    replay = pg_client.post(f"/api/patient-identity-reconciliations/review/{request_id}/approve-link", headers=reviewer_headers, json={"reason": "Verified synthetic identity evidence", "candidate_patient_id": foreign.id})
+    assert approved.status_code == 200
+    assert replay.status_code == 409
+    assert pg_db.query(PatientClinicAssociation).filter_by(patient_id=foreign.id, clinic_id=clinic_a.id).count() == 1
+    assert pg_db.query(Patient).count() == 1
+
+    second_foreign = Patient(first_name="Iva", last_name="Kovač", date_of_birth=date(1991, 5, 6), email="iva.reconcile@example.com")
+    pg_db.add(second_foreign); pg_db.flush(); pg_db.add(PatientClinicAssociation(patient_id=second_foreign.id, clinic_id=clinic_b.id, active=True)); pg_db.commit()
+    second = pg_client.post("/api/patients", headers=requester_headers, json={"first_name": "Iva", "last_name": "Kovač", "date_of_birth": "1991-05-06", "email": "iva.reconcile@example.com"})
+    second_id = second.json()["request_id"]
+
+    def decide(action: str) -> str:
+        with Session(pg_db.get_bind(), expire_on_commit=False) as session:
+            actor = Actor(actor_type="user", user=session.get(User, reviewer.id))
+            request = Request({"type": "http", "method": "POST", "path": "/synthetic-reconciliation-race", "headers": [], "client": ("127.0.0.1", 1)})
+            try:
+                item = lock_pending(session, second_id)
+                if action == "approve":
+                    approve_link(session, item, actor, request, "Concurrent synthetic approval", second_foreign.id)
+                else:
+                    finalize_without_patient(session, item, actor, request, "rejected_insufficient_evidence", "Concurrent synthetic rejection")
+                return "committed"
+            except HTTPException as exc:
+                session.rollback()
+                return f"conflict:{exc.status_code}"
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        outcomes = sorted(executor.map(decide, ("approve", "reject")))
+    assert outcomes == ["committed", "conflict:409"]
+    pg_db.expire_all()
+    final = pg_db.get(PatientIdentityReconciliationRequest, second_id)
+    assert final.status in {"approved_link", "rejected_insufficient_evidence"}
+
+
 def seed_clinic_objects(db, user: User | None = None):
     patient = Patient(first_name="API", last_name="Patient")
     institution = Institution(code="api-test", name="API Test Institution", active=True)
@@ -78,10 +140,100 @@ def seed_clinic_objects(db, user: User | None = None):
     service = Service(name="API Service", duration_minutes=30, price=Decimal("100"))
     db.add_all([patient, institution, clinic, provider, room, service])
     db.flush()
+    db.add(PatientClinicAssociation(patient_id=patient.id, clinic_id=clinic.id, active=True))
     if user is not None:
         db.add(ClinicMembership(user_id=user.id, clinic_id=clinic.id, created_by_user_id=user.id))
         db.flush()
     return patient, provider, room, service
+
+
+def test_patient_operational_identity_is_clinic_scoped_in_postgresql(pg_client, pg_db):
+    institution_a = Institution(code="scope-a", name="Synthetic Scope Institution A", active=True)
+    institution_b = Institution(code="scope-b", name="Synthetic Scope Institution B", active=True)
+    clinic_a1 = Clinic(name="Synthetic Scope Clinic A1", institution=institution_a)
+    clinic_a2 = Clinic(name="Synthetic Scope Clinic A2", institution=institution_a)
+    clinic_b1 = Clinic(name="Synthetic Scope Clinic B1", institution=institution_b)
+    user = create_user_with_permissions(
+        pg_db,
+        "patient-scope-pg@test.local",
+        ["patients.read", "patients.write", "appointments.write", "ai.appointments.create"],
+    )
+    patients = [
+        Patient(first_name="Visible", last_name="Synthetic", oib="51000000001"),
+        Patient(first_name="SiblingSecret", last_name="Synthetic", oib="52000000002"),
+        Patient(first_name="ForeignSecret", last_name="Synthetic", oib="53000000003"),
+    ]
+    provider_obj = Provider(full_name="dr. Patient Scope", specialty="QA", clinic=clinic_a1)
+    room_obj = Room(name="Patient Scope Room", type="test", clinic=clinic_a1)
+    service_obj = Service(name="Patient Scope Service", duration_minutes=30, price=Decimal("100"))
+    pg_db.add_all([institution_a, institution_b, clinic_a1, clinic_a2, clinic_b1, *patients, provider_obj, room_obj, service_obj])
+    pg_db.flush()
+    pg_db.add_all(
+        [
+            ClinicMembership(user_id=user.id, clinic_id=clinic_a1.id, created_by_user_id=user.id),
+            PatientClinicAssociation(patient_id=patients[0].id, clinic_id=clinic_a1.id, active=True),
+            PatientClinicAssociation(patient_id=patients[1].id, clinic_id=clinic_a2.id, active=True),
+            PatientClinicAssociation(patient_id=patients[2].id, clinic_id=clinic_b1.id, active=True),
+        ]
+    )
+    raw_key = "synthetic_pg_patient_scope_key"
+    pg_db.add(
+        ApiKey(
+            name="Synthetic PostgreSQL patient scope",
+            key_hash=hash_api_key(raw_key),
+            scopes=["ai.appointments.create"],
+            clinic_id=clinic_a1.id,
+            institution_id=institution_a.id,
+            active=True,
+        )
+    )
+    pg_db.commit()
+    headers = {"Authorization": f"Bearer {login(pg_client, user.email)}", "X-Clinic-Id": str(clinic_a1.id)}
+
+    directory = pg_client.get("/api/patients?q=Synthetic", headers=headers)
+    sibling_detail = pg_client.get(f"/api/patients/{patients[1].id}", headers=headers)
+    foreign_detail = pg_client.get(f"/api/patients/{patients[2].id}", headers=headers)
+    missing_detail = pg_client.get("/api/patients/2147483647", headers=headers)
+    duplicate = pg_client.get("/api/patients/possible-duplicates?oib=53000000003", headers=headers)
+    before_name = patients[2].first_name
+    mutation = pg_client.patch(
+        f"/api/patients/{patients[2].id}",
+        headers=headers,
+        json={"first_name": "UnauthorizedMutation"},
+    )
+    appointment_count = pg_db.query(Appointment).count()
+    appointment_payload = {
+        "patient_id": patients[2].id,
+        "provider_id": provider_obj.id,
+        "room_id": room_obj.id,
+        "service_id": service_obj.id,
+        "date": "2026-07-28",
+        "start_time": "09:00",
+        "end_time": "09:30",
+        "duration_minutes": 30,
+        "status": "scheduled",
+        "source": "manual",
+    }
+    appointment = pg_client.post("/api/appointments", headers=headers, json=appointment_payload)
+    ai_appointment = pg_client.post(
+        "/api/ai/appointments/create",
+        headers={"X-ASTRA-API-Key": raw_key},
+        json={**appointment_payload, "source": "ai_agent"},
+    )
+
+    assert directory.status_code == duplicate.status_code == 200
+    assert [item["id"] for item in directory.json()] == [patients[0].id]
+    assert duplicate.json() == []
+    assert sibling_detail.status_code == foreign_detail.status_code == missing_detail.status_code == 404
+    assert sibling_detail.json() == foreign_detail.json() == missing_detail.json()
+    assert mutation.status_code == appointment.status_code == ai_appointment.status_code == 404
+    pg_db.refresh(patients[2])
+    assert patients[2].first_name == before_name
+    assert pg_db.query(Appointment).count() == appointment_count
+    assert pg_db.query(AuditLog).filter_by(entity_type="Patient", entity_id=patients[2].id, action="update").count() == 0
+    combined = directory.text + duplicate.text + sibling_detail.text + foreign_detail.text
+    assert "SiblingSecret" not in combined
+    assert "ForeignSecret" not in combined
 
 
 def test_postgresql_migrations_created_key_tables(pg_db):

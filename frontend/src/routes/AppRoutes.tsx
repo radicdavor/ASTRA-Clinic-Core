@@ -27,6 +27,8 @@ const Therapies = lazy(() => import("../pages/Therapies").then(module => ({ defa
 const Modules = lazy(() => import("../pages/Modules").then(module => ({ default: module.Modules })));
 const PatientDetail = lazy(() => import("../pages/PatientDetail").then(module => ({ default: module.PatientDetail })));
 const PatientForm = lazy(() => import("../pages/PatientForm").then(module => ({ default: module.PatientForm })));
+const PatientIdentityReconciliationStatus = lazy(() => import("../pages/PatientIdentityReconciliationStatus").then(module => ({ default: module.PatientIdentityReconciliationStatus })));
+const PatientIdentityReconciliationReviewPage = lazy(() => import("../pages/PatientIdentityReconciliationReview").then(module => ({ default: module.PatientIdentityReconciliationReviewPage })));
 const Patients = lazy(() => import("../pages/Patients").then(module => ({ default: module.Patients })));
 const PurchaseOrders = lazy(() => import("../pages/PurchaseOrders").then(module => ({ default: module.PurchaseOrders })));
 const Readiness = lazy(() => import("../pages/Readiness").then(module => ({ default: module.Readiness })));
@@ -74,6 +76,8 @@ export function AppRoutes() {
           <Route path="/" element={<DailyClinicDashboard />} />
           <Route path="/patients" element={<Patients />} />
           <Route path="/patients/new" element={<PatientForm />} />
+          <Route path="/patient-identity-reconciliations/:id" element={<PatientIdentityReconciliationStatus />} />
+          <Route path="/patient-identity-reconciliation-review" element={<PatientIdentityReconciliationReviewPage />} />
           <Route path="/patients/:id" element={<PatientDetail />} />
           <Route path="/reception" element={<Reception />} />
           <Route path="/episodes" element={<Episodes />} />

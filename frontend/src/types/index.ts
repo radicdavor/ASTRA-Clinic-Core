@@ -9,6 +9,29 @@ export type Patient = {
   notes?: string;
 };
 
+export type PatientIdentityReviewRequired = {
+  code: "patient_identity_review_required";
+  request_id: string;
+  status: "pending_review";
+  message: string;
+};
+
+export type PatientIdentityReconciliationStatus = {
+  request_id: string;
+  status: "pending_review" | "approved_link" | "confirmed_distinct" | "rejected_insufficient_evidence" | "cancelled";
+  submitted_identity: Record<string, string | number | null>;
+  result_patient_id?: number | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type PatientIdentityReconciliationReview = PatientIdentityReconciliationStatus & {
+  requesting_clinic_id: number;
+  requesting_institution_id: number;
+  candidates: Array<{ patient_id: number; first_name: string; last_name: string; date_of_birth?: string | null; oib_masked?: string | null; email_masked?: string | null; phone_masked?: string | null }>;
+  match_reasons: Record<string, string[]>;
+};
+
 export type Service = {
   id: number;
   name: string;

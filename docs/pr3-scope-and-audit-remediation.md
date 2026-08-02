@@ -44,8 +44,8 @@ clinical document ingestion, summaries, and evidence timelines.
 | Summaries, readiness, evidence timeline | derived clinical projection | exact permitted source set | source-linked institution validation | enforced |
 | Audit list | operational audit metadata | active clinic | clinic predicate plus safe DTO | enforced |
 | API-key AI intake | minimal integration data | key clinic and institution | `require_tenant_clinic` | enforced |
-| Shared patient search | identity/dedup fields | authenticated scheduling permission | global identity only; no child clinical data | intentional |
-| Patient appointment availability | time-conflict metadata | scheduling permission | global patient conflict visibility | intentional |
+| Patient search | identity/dedup fields | active-clinic patient permission | active clinic association; foreign matches return no PII | enforced |
+| Patient appointment availability | time-conflict metadata | scheduling permission plus active-clinic patient association | global conflict evaluation only after scoped identity resolution | enforced |
 
 ## Independent review follow-up
 
@@ -55,16 +55,17 @@ same-pattern blockers. They are closed as follows:
 - appointment patient identity is immutable after creation; correcting it
   requires cancellation and a new appointment, preventing every child record
   from retaining cross-patient clinical or financial provenance;
-- global patient directory, duplicate-search, and identity-detail responses use
-  a dedicated identity projection that never includes free-text notes;
+- patient directory, duplicate-search, and identity-detail responses use a
+  dedicated clinic-associated query and identity projection that never includes
+  foreign patient PII or free-text notes;
 - direct journey-activity creation accepts only the parent journey clinic's
   provider and room and writes that clinic to the child appointment;
 - financial audit projections include invoice total and payment amount, method,
   and timestamp while continuing to exclude notes and payment references.
 
-These restrictions preserve the intentional global patient identity and
-appointment-conflict workflows without making clinic-owned narrative or
-clinical data global.
+These restrictions preserve the global storage identity and cross-appointment
+conflict checks without turning that identity into a global operational
+directory. Institution continuity remains explicit and medical-staff-only.
 
 ## Migration behavior
 

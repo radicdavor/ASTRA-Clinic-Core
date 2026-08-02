@@ -221,6 +221,29 @@ def prepare_source(database: str, revision: str, storage: Path) -> None:
                 """,
                 (patient_id, institution_id),
             )
+            clinic_id = int(connection.execute("SELECT id FROM clinics WHERE name=%s", (f"{PREFIX}clinic-a",)).fetchone()[0])
+            requester_id = _user_id(connection, "provider")
+            connection.execute(
+                """
+                INSERT INTO patient_identity_reconciliation_requests
+                    (id, requesting_institution_id, requesting_clinic_id,
+                     requested_by_user_id, status, submitted_identity_snapshot,
+                     submitted_identity_fingerprint, candidate_patient_ids,
+                     match_reasons, version)
+                VALUES (%s, %s, %s, %s, 'pending_review', %s::json, %s,
+                        json_build_array(%s), %s::json, 1)
+                """,
+                (
+                    "00000000-0000-4000-8000-000000000072",
+                    institution_id,
+                    clinic_id,
+                    requester_id,
+                    json.dumps({"schema_version": 1, "first_name": "Synthetic", "last_name": "Recovery", "date_of_birth": "1990-01-01", "oib": None, "email": None, "phone": None}),
+                    "7" * 64,
+                    patient_id,
+                    json.dumps({str(patient_id): ["name_date_of_birth"]}),
+                ),
+            )
         connection.commit()
 
 
@@ -343,6 +366,26 @@ def verify_document_and_audit_recovery(database: str, request_id: str) -> None:
         )
         if false_events:
             raise RecoveryError("recovery_created_false_user_audit")
+
+
+def verify_reconciliation_recovery(database: str, source_revision: str) -> None:
+    with psycopg.connect(psycopg_url(database)) as connection:
+        table = connection.execute("SELECT to_regclass('public.patient_identity_reconciliation_requests')").fetchone()[0]
+        if table is None:
+            raise RecoveryError("reconciliation_table_missing")
+        constraint = connection.execute(
+            "SELECT count(*) FROM pg_indexes WHERE tablename='patient_identity_reconciliation_requests' AND indexname='uq_patient_identity_reconciliation_active'"
+        ).fetchone()[0]
+        if int(constraint) != 1:
+            raise RecoveryError("reconciliation_uniqueness_missing")
+        sentinel = connection.execute(
+            "SELECT status, submitted_identity_fingerprint FROM patient_identity_reconciliation_requests WHERE id='00000000-0000-4000-8000-000000000072'"
+        ).fetchone()
+        if source_revision == FINAL_ALEMBIC_REVISION:
+            if sentinel != ("pending_review", "7" * 64):
+                raise RecoveryError("reconciliation_recovery_mismatch")
+        elif sentinel is not None:
+            raise RecoveryError("reconciliation_false_sentinel")
 
 
 def run_application_smoke(database: str, storage: Path) -> None:
@@ -505,6 +548,7 @@ def run_revision_scenario(
         verify_document_and_audit_recovery(
             urls["target"], f"recovery-{revision}"
         )
+        verify_reconciliation_recovery(urls["target"], revision)
         run_application_smoke(urls["target"], target_storage)
 
         try:
@@ -670,7 +714,7 @@ def _run_with_verified_cleanup(
 
 def main() -> int:
     parser = argparse.ArgumentParser(
-        description="Run disposable PostgreSQL recovery validation for Alembic 0071"
+        description="Run disposable PostgreSQL recovery validation for Alembic 0072"
     )
     parser.add_argument(
         "--admin-database-url-env", default="RECOVERY_ADMIN_DATABASE_URL"

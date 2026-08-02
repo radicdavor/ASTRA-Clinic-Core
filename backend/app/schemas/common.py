@@ -1174,8 +1174,41 @@ class PatientOut(PatientCreate, ORMModel):
     updated_at: DateTimeType
 
 
+class PatientIdentityReviewRequired(BaseModel):
+    code: str = "patient_identity_review_required"
+    request_id: str
+    status: str
+    message: str = "Pacijent nije stvoren ni povezan. Zahtjev je poslan na kontrolirani pregled identiteta."
+
+
+class PatientIdentityReconciliationStatusOut(BaseModel):
+    request_id: str
+    status: str
+    submitted_identity: dict
+    result_patient_id: int | None = None
+    created_at: DateTimeType
+    updated_at: DateTimeType
+
+
+class PatientIdentityReconciliationReviewItem(BaseModel):
+    request_id: str
+    status: str
+    requesting_clinic_id: int
+    requesting_institution_id: int
+    submitted_identity: dict
+    candidates: list[dict]
+    match_reasons: dict
+    created_at: DateTimeType
+    updated_at: DateTimeType
+
+
+class PatientIdentityReconciliationDecision(BaseModel):
+    reason: str = Field(min_length=3, max_length=1000)
+    candidate_patient_id: int | None = None
+
+
 class PatientIdentityOut(ORMModel):
-    """Global patient-directory projection. Free-text clinical/operational notes are never identity data."""
+    """Clinic-scoped operational identity projection. Free-text notes are never identity data."""
 
     id: int
     first_name: str

@@ -38,6 +38,7 @@ const secondaryGroups: NavGroup[] = [
   ]},
   { label: "Financije", items: [{ to: "/invoices", label: "Računi", icon: FileText, roles: ["admin", "billing", "receptionist", "physician"] }] },
   { label: "Administracija", items: [
+    { to: "/patient-identity-reconciliation-review", label: "Pregled identiteta", icon: ShieldCheck, roles: ["identity_reviewer"] },
     { to: "/services", label: "Usluge", icon: Stethoscope, roles: all },
     { to: "/clinics", label: "Klinike i osoblje", icon: Building2, roles: all },
     { to: "/modules", label: "Moduli", icon: Settings, roles: all },

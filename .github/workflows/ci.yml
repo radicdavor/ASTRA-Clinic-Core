@@ -544,7 +544,7 @@ jobs:
             --document docs/RELEASE_CHECKLIST.md \
             --document docs/release-evidence-contract.md \
             --source-sha "$REMEDIATION_CHECKOUT_SHA" \
-            --migration-head "0071_membership_taxonomy"
+            --migration-head "0072_patient_identity_reconciliation"
       - name: Recheck source integrity
         id: recheck-source-before-canonical-upload
         shell: bash
